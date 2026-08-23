@@ -182,11 +182,14 @@ function logout() {
                 </Link>
 
                 <!-- Menu Tombol Penerima Manfaat -->
-                <button
-                    type="button"
+                <Link
+                    :href="route('penerima-manfaat.index')"
                     :title="isCollapsed ? 'Penerima Manfaat' : ''"
                     :class="[
-                        'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('penerima-manfaat.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                         isCollapsed
                             ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
                             : 'px-3.5 py-2.5 gap-3',
@@ -200,7 +203,16 @@ function logout() {
                         ]"
                         >Penerima Manfaat</span
                     >
-                </button>
+                    <div
+                        v-if="route().current('penerima-manfaat.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
             </div>
         </div>
 

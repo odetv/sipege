@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
@@ -28,6 +29,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::put('/dashboard/user-profile', [DashboardController::class, 'updateUserProfile'])->name('dashboard.user.update');
     Route::put('/dashboard/unit-sppg', [DashboardController::class, 'updateUnitSppg'])->name('dashboard.unit.update');
+
+    // Kelompok Penerima Manfaat
+    Route::resource('penerima-manfaat', KelompokPenerimaManfaatController::class);
 });
 
 Route::middleware('auth')->group(function () {

@@ -5,9 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class UnitSppg extends Model
+class RincianPenerimaManfaat extends Model
 {
     use HasFactory;
 
@@ -16,7 +15,7 @@ class UnitSppg extends Model
      *
      * @var string
      */
-    protected $table = 'unit_sppg';
+    protected $table = 'rincian_penerima_manfaat';
 
     /**
      * The attributes that aren't mass assignable.
@@ -33,25 +32,17 @@ class UnitSppg extends Model
     protected function casts(): array
     {
         return [
-            'tanggal_operasional' => 'date',
-            'latitude' => 'float',
-            'longitude' => 'float',
+            'jumlah_laki_laki' => 'integer',
+            'jumlah_perempuan' => 'integer',
+            'total' => 'integer',
         ];
     }
 
     /**
-     * Get the user that owns the unit SPPG.
+     * Get the kelompok penerima manfaat that owns the rincian.
      */
-    public function user(): BelongsTo
+    public function kelompok(): BelongsTo
     {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Get the kelompok penerima manfaat for the unit SPPG.
-     */
-    public function kelompokPenerimaManfaat(): HasMany
-    {
-        return $this->hasMany(KelompokPenerimaManfaat::class);
+        return $this->belongsTo(KelompokPenerimaManfaat::class, 'kelompok_penerima_manfaat_id');
     }
 }
