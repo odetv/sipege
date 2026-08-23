@@ -1,7 +1,14 @@
 <script setup>
 import { computed } from "vue";
 import { Link, router, usePage } from "@inertiajs/vue3";
-import { Building2, Home, LayoutDashboard, LogOut, X } from "lucide-vue-next";
+import {
+    Building2,
+    Home,
+    LayoutDashboard,
+    LogOut,
+    Users,
+    X,
+} from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
 
@@ -173,6 +180,27 @@ function logout() {
                         ]"
                     ></div>
                 </Link>
+
+                <!-- Menu Tombol Penerima Manfaat -->
+                <button
+                    type="button"
+                    :title="isCollapsed ? 'Penerima Manfaat' : ''"
+                    :class="[
+                        'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Users class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Penerima Manfaat</span
+                    >
+                </button>
             </div>
         </div>
 
