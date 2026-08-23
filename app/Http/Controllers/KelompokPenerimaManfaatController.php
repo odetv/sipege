@@ -43,7 +43,7 @@ class KelompokPenerimaManfaatController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('nama_kelompok', 'like', "%{$search}%")
                     ->orWhere('kode_identitas', 'like', "%{$search}%")
-                    ->orWhere('nama_kepala_sekolah', 'like', "%{$search}%")
+                    ->orWhere('nama_kepala', 'like', "%{$search}%")
                     ->orWhere('nama_pic', 'like', "%{$search}%")
                     ->orWhere('desa_kelurahan', 'like', "%{$search}%")
                     ->orWhere('kecamatan', 'like', "%{$search}%")
@@ -63,21 +63,26 @@ class KelompokPenerimaManfaatController extends Controller
 
         // Calculate all-time summary stats for this unit SPPG
         $allKelompok = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->get();
-        $stats = [
+        $summary = [
             'total_kelompok' => $allKelompok->count(),
+            'total_penerima' => (int) $allKelompok->sum('total_penerima'),
             'total_laki_laki' => (int) $allKelompok->sum('total_laki_laki'),
             'total_perempuan' => (int) $allKelompok->sum('total_perempuan'),
             'total_porsi_kecil' => (int) $allKelompok->sum('total_porsi_kecil'),
             'total_porsi_besar' => (int) $allKelompok->sum('total_porsi_besar'),
-            'total_penerima' => (int) $allKelompok->sum('total_penerima'),
         ];
 
         return Inertia::render('PenerimaManfaat/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
-            'stats' => $stats,
-            'filters' => $request->only(['search', 'kategori', 'jenis_kepemilikan']),
+            'stats' => $summary,
+            'summary' => $summary,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'kategori' => $request->input('kategori', ''),
+                'jenis_kepemilikan' => $request->input('jenis_kepemilikan', ''),
+            ],
         ]);
     }
 
@@ -90,7 +95,7 @@ class KelompokPenerimaManfaatController extends Controller
         $unitSppg = $user->unitSppg;
 
         if (!$unitSppg) {
-            return redirect()->route('dashboard')->with('error', 'Silakan lengkapi data Unit SPPG terlebih dahulu sebelum menambahkan Penerima Manfaat.');
+            return redirect()->route('dashboard')->with('error', 'Silakan lengkapi profil Unit SPPG terlebih dahulu.');
         }
 
         return Inertia::render('PenerimaManfaat/Create', [
@@ -117,9 +122,9 @@ class KelompokPenerimaManfaatController extends Controller
             'jenis_kepemilikan' => ['required', 'string', 'in:Negeri,Swasta'],
             'tipe_identitas' => ['required', 'string', 'in:NPSN,NSPP,NSM,NSNP,TPK,Lainnya'],
             'kode_identitas' => ['required', 'string', 'max:100'],
-            'nama_kepala_sekolah' => ['required', 'string', 'max:255'],
-            'email_kepala_sekolah' => ['required', 'email', 'max:255'],
-            'telepon_kepala_sekolah' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
+            'nama_kepala' => ['required', 'string', 'max:255'],
+            'email_kepala' => ['required', 'email', 'max:255'],
+            'telepon_kepala' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
             'nama_pic' => ['required', 'string', 'max:255'],
             'email_pic' => ['required', 'email', 'max:255'],
             'telepon_pic' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
@@ -141,11 +146,11 @@ class KelompokPenerimaManfaatController extends Controller
             'jenis_kepemilikan.required' => 'Jenis kepemilikan wajib dipilih.',
             'tipe_identitas.required' => 'Tipe identitas wajib dipilih.',
             'kode_identitas.required' => 'Kode identitas wajib diisi.',
-            'nama_kepala_sekolah.required' => 'Nama Kepala Sekolah / Pimpinan wajib diisi.',
-            'email_kepala_sekolah.required' => 'Email Kepala Sekolah / Pimpinan wajib diisi.',
-            'email_kepala_sekolah.email' => 'Format email Kepala Sekolah tidak valid.',
-            'telepon_kepala_sekolah.required' => 'Nomor telepon Kepala Sekolah wajib diisi.',
-            'telepon_kepala_sekolah.regex' => 'Format nomor telepon Kepala Sekolah harus diawali 62 (contoh: 6281234567890).',
+            'nama_kepala.required' => 'Nama Kepala Satuan / Pimpinan wajib diisi.',
+            'email_kepala.required' => 'Email Kepala Satuan / Pimpinan wajib diisi.',
+            'email_kepala.email' => 'Format email Kepala Satuan tidak valid.',
+            'telepon_kepala.required' => 'Nomor telepon Kepala Satuan wajib diisi.',
+            'telepon_kepala.regex' => 'Format nomor telepon Kepala Satuan harus diawali 62 (contoh: 6281234567890).',
             'nama_pic.required' => 'Nama PIC wajib diisi.',
             'email_pic.required' => 'Email PIC wajib diisi.',
             'email_pic.email' => 'Format email PIC tidak valid.',
@@ -188,9 +193,9 @@ class KelompokPenerimaManfaatController extends Controller
                 'jenis_kepemilikan' => $validated['jenis_kepemilikan'],
                 'tipe_identitas' => $validated['tipe_identitas'],
                 'kode_identitas' => $validated['kode_identitas'],
-                'nama_kepala_sekolah' => $validated['nama_kepala_sekolah'],
-                'email_kepala_sekolah' => $validated['email_kepala_sekolah'],
-                'telepon_kepala_sekolah' => $validated['telepon_kepala_sekolah'],
+                'nama_kepala' => $validated['nama_kepala'],
+                'email_kepala' => $validated['email_kepala'],
+                'telepon_kepala' => $validated['telepon_kepala'],
                 'nama_pic' => $validated['nama_pic'],
                 'email_pic' => $validated['email_pic'],
                 'telepon_pic' => $validated['telepon_pic'],
@@ -209,7 +214,8 @@ class KelompokPenerimaManfaatController extends Controller
                 'total_penerima' => $totalPenerima,
             ]);
 
-            foreach ($validated['rincian'] as $item) {
+            $sortedRincian = self::sortRincianArray($validated['rincian'], $validated['kategori']);
+            foreach ($sortedRincian as $item) {
                 $l = (int) ($item['jumlah_laki_laki'] ?? 0);
                 $p = (int) ($item['jumlah_perempuan'] ?? 0);
                 $jenisPorsi = self::determineJenisPorsi($item['sub_kategori'], $validated['kategori']);
@@ -247,6 +253,77 @@ class KelompokPenerimaManfaatController extends Controller
             'unitSppg' => $unitSppg,
             'kelompok' => $penerima_manfaat,
         ]);
+    }
+
+    /**
+     * Dapatkan daftar urutan resmi subkategori berdasarkan jenjang / kategori.
+     */
+    public static function getSubKategoriOrder(string $kategori): array
+    {
+        return match ($kategori) {
+            'TK', 'RA', 'PAUD' => [
+                'Pelajar',
+                'Pendukung (Guru)',
+                'Pendukung (Tenaga Kependidikan)',
+                'Pendukung (Satpam)',
+                'Pendukung (Lainnya)',
+            ],
+            'SD', 'MI' => [
+                'Kelas 1',
+                'Kelas 2',
+                'Kelas 3',
+                'Kelas 4',
+                'Kelas 5',
+                'Kelas 6',
+                'Pendukung (Guru)',
+                'Pendukung (Tenaga Kependidikan)',
+                'Pendukung (Satpam)',
+                'Pendukung (Lainnya)',
+            ],
+            'SMP', 'MTs' => [
+                'Kelas 7',
+                'Kelas 8',
+                'Kelas 9',
+                'Pendukung (Guru)',
+                'Pendukung (Tenaga Kependidikan)',
+                'Pendukung (Satpam)',
+                'Pendukung (Lainnya)',
+            ],
+            'SMA', 'SMK', 'MA', 'MAK' => [
+                'Kelas 10',
+                'Kelas 11',
+                'Kelas 12',
+                'Pendukung (Guru)',
+                'Pendukung (Tenaga Kependidikan)',
+                'Pendukung (Satpam)',
+                'Pendukung (Lainnya)',
+            ],
+            'Posyandu' => [
+                'Ibu Hamil',
+                'Ibu Menyusui',
+                'Balita',
+                'Pendukung (Lainnya)',
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * Urutkan array rincian sesuai urutan resmi kategori.
+     */
+    public static function sortRincianArray(array $rincianList, string $kategori): array
+    {
+        $order = self::getSubKategoriOrder($kategori);
+        usort($rincianList, function ($a, $b) use ($order) {
+            $subA = $a['sub_kategori'] ?? '';
+            $subB = $b['sub_kategori'] ?? '';
+            $posA = array_search($subA, $order);
+            $posB = array_search($subB, $order);
+            $idxA = $posA === false ? 999 : $posA;
+            $idxB = $posB === false ? 999 : $posB;
+            return $idxA <=> $idxB;
+        });
+        return $rincianList;
     }
 
     /**
@@ -312,9 +389,9 @@ class KelompokPenerimaManfaatController extends Controller
             'jenis_kepemilikan' => ['required', 'string', 'in:Negeri,Swasta'],
             'tipe_identitas' => ['required', 'string', 'in:NPSN,NSPP,NSM,NSNP,TPK,Lainnya'],
             'kode_identitas' => ['required', 'string', 'max:100'],
-            'nama_kepala_sekolah' => ['required', 'string', 'max:255'],
-            'email_kepala_sekolah' => ['required', 'email', 'max:255'],
-            'telepon_kepala_sekolah' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
+            'nama_kepala' => ['required', 'string', 'max:255'],
+            'email_kepala' => ['required', 'email', 'max:255'],
+            'telepon_kepala' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
             'nama_pic' => ['required', 'string', 'max:255'],
             'email_pic' => ['required', 'email', 'max:255'],
             'telepon_pic' => ['required', 'string', 'regex:/^62[0-9]{8,15}$/'],
@@ -336,11 +413,11 @@ class KelompokPenerimaManfaatController extends Controller
             'jenis_kepemilikan.required' => 'Jenis kepemilikan wajib dipilih.',
             'tipe_identitas.required' => 'Tipe identitas wajib dipilih.',
             'kode_identitas.required' => 'Kode identitas wajib diisi.',
-            'nama_kepala_sekolah.required' => 'Nama Kepala Sekolah / Pimpinan wajib diisi.',
-            'email_kepala_sekolah.required' => 'Email Kepala Sekolah / Pimpinan wajib diisi.',
-            'email_kepala_sekolah.email' => 'Format email Kepala Sekolah tidak valid.',
-            'telepon_kepala_sekolah.required' => 'Nomor telepon Kepala Sekolah wajib diisi.',
-            'telepon_kepala_sekolah.regex' => 'Format nomor telepon Kepala Sekolah harus diawali 62 (contoh: 6281234567890).',
+            'nama_kepala.required' => 'Nama Kepala Satuan / Pimpinan wajib diisi.',
+            'email_kepala.required' => 'Email Kepala Satuan / Pimpinan wajib diisi.',
+            'email_kepala.email' => 'Format email Kepala Satuan tidak valid.',
+            'telepon_kepala.required' => 'Nomor telepon Kepala Satuan wajib diisi.',
+            'telepon_kepala.regex' => 'Format nomor telepon Kepala Satuan harus diawali 62 (contoh: 6281234567890).',
             'nama_pic.required' => 'Nama PIC wajib diisi.',
             'email_pic.required' => 'Email PIC wajib diisi.',
             'email_pic.email' => 'Format email PIC tidak valid.',
@@ -382,9 +459,9 @@ class KelompokPenerimaManfaatController extends Controller
                 'jenis_kepemilikan' => $validated['jenis_kepemilikan'],
                 'tipe_identitas' => $validated['tipe_identitas'],
                 'kode_identitas' => $validated['kode_identitas'],
-                'nama_kepala_sekolah' => $validated['nama_kepala_sekolah'],
-                'email_kepala_sekolah' => $validated['email_kepala_sekolah'],
-                'telepon_kepala_sekolah' => $validated['telepon_kepala_sekolah'],
+                'nama_kepala' => $validated['nama_kepala'],
+                'email_kepala' => $validated['email_kepala'],
+                'telepon_kepala' => $validated['telepon_kepala'],
                 'nama_pic' => $validated['nama_pic'],
                 'email_pic' => $validated['email_pic'],
                 'telepon_pic' => $validated['telepon_pic'],
@@ -406,7 +483,8 @@ class KelompokPenerimaManfaatController extends Controller
             // Sync rincian: delete old and recreate
             $penerima_manfaat->rincian()->delete();
 
-            foreach ($validated['rincian'] as $item) {
+            $sortedRincian = self::sortRincianArray($validated['rincian'], $validated['kategori']);
+            foreach ($sortedRincian as $item) {
                 $l = (int) ($item['jumlah_laki_laki'] ?? 0);
                 $p = (int) ($item['jumlah_perempuan'] ?? 0);
                 $jenisPorsi = self::determineJenisPorsi($item['sub_kategori'], $validated['kategori']);

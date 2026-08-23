@@ -37,7 +37,7 @@ export const JENIS_PORSI_OPTIONS = [
 // Mapping default jenis porsi berdasarkan Sub Kategori & Jenjang
 export const SUB_KATEGORI_PORSI_MAP = {
     // TK / RA / PAUD
-    "Pelajar": "Porsi Kecil",
+    Pelajar: "Porsi Kecil",
 
     // SD / MI
     "Kelas 1": "Porsi Kecil",
@@ -60,7 +60,7 @@ export const SUB_KATEGORI_PORSI_MAP = {
     // Posyandu
     "Ibu Hamil": "Porsi Besar",
     "Ibu Menyusui": "Porsi Besar",
-    "Balita": "Porsi Kecil",
+    Balita: "Porsi Kecil",
 
     // Pendukung (Semua jenjang = Porsi Besar)
     "Pendukung (Guru)": "Porsi Besar",
@@ -163,4 +163,18 @@ export function getSubKategoriByKategori(kategori) {
                 "Pendukung (Lainnya)",
             ];
     }
+}
+
+export function sortRincianByKategori(rincianList, kategori) {
+    if (!Array.isArray(rincianList)) return [];
+    const order = getSubKategoriByKategori(kategori);
+    return [...rincianList].sort((a, b) => {
+        const subA = a.sub_kategori || "";
+        const subB = b.sub_kategori || "";
+        let indexA = order.indexOf(subA);
+        let indexB = order.indexOf(subB);
+        if (indexA === -1) indexA = 999;
+        if (indexB === -1) indexB = 999;
+        return indexA - indexB;
+    });
 }

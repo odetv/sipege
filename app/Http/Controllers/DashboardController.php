@@ -17,10 +17,19 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user()->load('unitSppg');
+        $unitSppg = $user->unitSppg;
+
+        $kelompokList = [];
+        if ($unitSppg) {
+            $kelompokList = \App\Models\KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
+                ->with('rincian')
+                ->get();
+        }
 
         return Inertia::render('Dashboard', [
             'user' => $user,
-            'unitSppg' => $user->unitSppg,
+            'unitSppg' => $unitSppg,
+            'kelompokList' => $kelompokList,
         ]);
     }
 

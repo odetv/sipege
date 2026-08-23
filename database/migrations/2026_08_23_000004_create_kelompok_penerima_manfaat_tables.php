@@ -19,9 +19,9 @@ return new class extends Migration
             $table->string('jenis_kepemilikan'); // Negeri, Swasta
             $table->string('tipe_identitas'); // NPSN, NSPP, NSM, NSNP, TPK, Lainnya
             $table->string('kode_identitas');
-            $table->string('nama_kepala_sekolah');
-            $table->string('email_kepala_sekolah');
-            $table->string('telepon_kepala_sekolah');
+            $table->string('nama_kepala');
+            $table->string('email_kepala');
+            $table->string('telepon_kepala');
             $table->string('nama_pic');
             $table->string('email_pic');
             $table->string('telepon_pic');

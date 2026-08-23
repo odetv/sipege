@@ -59,6 +59,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    kelompokList: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const activeTab = ref("overview");
@@ -3706,7 +3710,8 @@ function switchTab(tab) {
                         :unit-lng="unitSppg.longitude"
                         :unit-label="unitSppg.nama"
                         :unit-address="unitFullAddress"
-                        height="520px"
+                        :kelompok-list="kelompokList"
+                        height="540px"
                     />
                     <div
                         v-else

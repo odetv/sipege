@@ -31,10 +31,13 @@ import {
     ExternalLink,
     Plus,
     Utensils,
+    Calendar,
+    Clock,
 } from "lucide-vue-next";
 import {
     KATEGORI_OPTIONS,
     JENIS_KEPEMILIKAN_OPTIONS,
+    sortRincianByKategori,
 } from "@/Services/penerimaManfaatConfig";
 import { formatWilayahName, formatKabupatenName } from "@/Services/wilayah";
 
@@ -58,6 +61,8 @@ const props = defineProps({
             total_laki_laki: 0,
             total_perempuan: 0,
             total_penerima: 0,
+            total_porsi_kecil: 0,
+            total_porsi_besar: 0,
         }),
     },
     filters: {
@@ -126,7 +131,10 @@ function executeDelete() {
     if (!deletingKelompok.value) return;
     isDeleting.value = true;
     router.delete(
-        route("penerima-manfaat.destroy", deletingKelompok.value.uid || deletingKelompok.value.id),
+        route(
+            "penerima-manfaat.destroy",
+            deletingKelompok.value.uid || deletingKelompok.value.id,
+        ),
         {
             onFinish: () => {
                 isDeleting.value = false;
@@ -158,6 +166,37 @@ function getKategoriBadgeColor(kategori) {
         default:
             return "bg-slate-100 text-slate-700 border-slate-200";
     }
+}
+
+function formatDateTimeWita(dateString) {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
+
+    const dtf = new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Makassar",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+    });
+
+    const parts = dtf.formatToParts(date);
+    const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+
+    const weekday = getPart("weekday");
+    const day = getPart("day");
+    const month = getPart("month");
+    const year = getPart("year");
+    const hour = getPart("hour");
+    const minute = getPart("minute");
+    const second = getPart("second");
+
+    return `${weekday}, ${day} ${month} ${year}, ${hour}:${minute}:${second} WITA`;
 }
 </script>
 
@@ -227,38 +266,6 @@ function getKategoriBadgeColor(kategori) {
                     </CardContent>
                 </Card>
 
-                <!-- Total Penerima -->
-                <Card
-                    className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
-                >
-                    <CardContent
-                        className="p-5 flex items-center justify-between gap-3"
-                    >
-                        <div class="min-w-0 flex-1">
-                            <p class="text-xs font-medium text-slate-500">
-                                Total Penerima Manfaat
-                            </p>
-                            <h3
-                                class="text-2xl font-bold font-mono text-primary mt-1 truncate"
-                            >
-                                {{
-                                    stats.total_penerima.toLocaleString("id-ID")
-                                }}
-                            </h3>
-                            <p
-                                class="text-[11px] text-slate-400 mt-0.5 truncate"
-                            >
-                                Jiwa Penerima
-                            </p>
-                        </div>
-                        <div
-                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
-                        >
-                            <Users class="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-
                 <!-- Rincian Porsi -->
                 <Card
                     className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
@@ -271,14 +278,32 @@ function getKategoriBadgeColor(kategori) {
                                 Rincian Porsi
                             </p>
                             <div class="flex items-baseline gap-2 mt-1">
-                                <span class="text-xl font-bold font-mono text-amber-700">
-                                    {{ (stats.total_porsi_kecil || 0).toLocaleString("id-ID") }}
-                                    <span class="text-[10px] font-sans font-bold text-amber-600">Kecil</span>
+                                <span
+                                    class="text-xl font-bold font-mono text-amber-700"
+                                >
+                                    {{
+                                        (
+                                            stats.total_porsi_kecil || 0
+                                        ).toLocaleString("id-ID")
+                                    }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-amber-600"
+                                        >Kecil</span
+                                    >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span class="text-xl font-bold font-mono text-blue-700">
-                                    {{ (stats.total_porsi_besar || 0).toLocaleString("id-ID") }}
-                                    <span class="text-[10px] font-sans font-bold text-blue-600">Besar</span>
+                                <span
+                                    class="text-xl font-bold font-mono text-blue-700"
+                                >
+                                    {{
+                                        (
+                                            stats.total_porsi_besar || 0
+                                        ).toLocaleString("id-ID")
+                                    }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-blue-600"
+                                        >Besar</span
+                                    >
                                 </span>
                             </div>
                             <p
@@ -307,14 +332,32 @@ function getKategoriBadgeColor(kategori) {
                                 Rincian Gender
                             </p>
                             <div class="flex items-baseline gap-2 mt-1">
-                                <span class="text-xl font-bold font-mono text-sky-700">
-                                    {{ (stats.total_laki_laki || 0).toLocaleString("id-ID") }}
-                                    <span class="text-[10px] font-sans font-bold text-sky-600">L</span>
+                                <span
+                                    class="text-xl font-bold font-mono text-sky-700"
+                                >
+                                    {{
+                                        (
+                                            stats.total_laki_laki || 0
+                                        ).toLocaleString("id-ID")
+                                    }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-sky-600"
+                                        >L</span
+                                    >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span class="text-xl font-bold font-mono text-pink-700">
-                                    {{ (stats.total_perempuan || 0).toLocaleString("id-ID") }}
-                                    <span class="text-[10px] font-sans font-bold text-pink-600">P</span>
+                                <span
+                                    class="text-xl font-bold font-mono text-pink-700"
+                                >
+                                    {{
+                                        (
+                                            stats.total_perempuan || 0
+                                        ).toLocaleString("id-ID")
+                                    }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-pink-600"
+                                        >P</span
+                                    >
                                 </span>
                             </div>
                             <p
@@ -327,6 +370,38 @@ function getKategoriBadgeColor(kategori) {
                             class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
                         >
                             <User class="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Total Penerima -->
+                <Card
+                    className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+                >
+                    <CardContent
+                        className="p-5 flex items-center justify-between gap-3"
+                    >
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-medium text-slate-500">
+                                Total Penerima Manfaat
+                            </p>
+                            <h3
+                                class="text-2xl font-bold font-mono text-primary mt-1 truncate"
+                            >
+                                {{
+                                    stats.total_penerima.toLocaleString("id-ID")
+                                }}
+                            </h3>
+                            <p
+                                class="text-[11px] text-slate-400 mt-0.5 truncate"
+                            >
+                                Jiwa Penerima
+                            </p>
+                        </div>
+                        <div
+                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
+                        >
+                            <Users class="h-5 w-5" />
                         </div>
                     </CardContent>
                 </Card>
@@ -470,19 +545,19 @@ function getKategoriBadgeColor(kategori) {
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[240px]"
                                         >
-                                            Kelompok & Legalitas
+                                            Kelompok
                                         </th>
                                         <th
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[200px]"
                                         >
-                                            Kontak (KS & PIC)
+                                            Kontak
                                         </th>
                                         <th
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[220px]"
                                         >
-                                            Alamat & Wilayah
+                                            Alamat
                                         </th>
                                         <th
                                             scope="col"
@@ -494,13 +569,19 @@ function getKategoriBadgeColor(kategori) {
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-36"
                                         >
-                                            Porsi (K/B)
+                                            Porsi (PK/PB)
                                         </th>
                                         <th
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24"
                                         >
                                             Total
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[240px]"
+                                        >
+                                            Waktu Registrasi & Update
                                         </th>
                                         <th
                                             scope="col"
@@ -531,11 +612,6 @@ function getKategoriBadgeColor(kategori) {
                                                     class="flex items-center gap-1.5 flex-wrap"
                                                 >
                                                     <span
-                                                        class="font-bold text-slate-900 text-sm"
-                                                    >
-                                                        {{ item.nama_kelompok }}
-                                                    </span>
-                                                    <span
                                                         :class="[
                                                             'px-2 py-0.5 text-[10px] font-bold rounded-full border',
                                                             getKategoriBadgeColor(
@@ -560,6 +636,12 @@ function getKategoriBadgeColor(kategori) {
                                                     </span>
                                                 </div>
 
+                                                <p
+                                                    class="font-bold text-slate-900 text-sm leading-snug"
+                                                >
+                                                    {{ item.nama_kelompok }}
+                                                </p>
+
                                                 <div
                                                     class="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono"
                                                 >
@@ -576,7 +658,7 @@ function getKategoriBadgeColor(kategori) {
                                             </div>
                                         </td>
 
-                                        <!-- Kontak KS & PIC -->
+                                        <!-- Kontak -->
                                         <td class="py-4 px-5">
                                             <div class="space-y-2 text-[11px]">
                                                 <div>
@@ -587,9 +669,9 @@ function getKategoriBadgeColor(kategori) {
                                                             class="h-3 w-3 text-slate-400"
                                                         />
                                                         <span
-                                                            >KS:
+                                                            >Kepala:
                                                             {{
-                                                                item.nama_kepala_sekolah
+                                                                item.nama_kepala
                                                             }}</span
                                                         >
                                                     </p>
@@ -601,7 +683,7 @@ function getKategoriBadgeColor(kategori) {
                                                         />
                                                         <span
                                                             >+{{
-                                                                item.telepon_kepala_sekolah
+                                                                item.telepon_kepala
                                                             }}</span
                                                         >
                                                     </p>
@@ -725,15 +807,21 @@ function getKategoriBadgeColor(kategori) {
                                                     class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-semibold"
                                                     title="Porsi Kecil"
                                                 >
-                                                    K:
-                                                    {{ item.total_porsi_kecil ?? 0 }}
+                                                    PK:
+                                                    {{
+                                                        item.total_porsi_kecil ??
+                                                        0
+                                                    }}
                                                 </span>
                                                 <span
                                                     class="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-semibold"
                                                     title="Porsi Besar"
                                                 >
-                                                    B:
-                                                    {{ item.total_porsi_besar ?? 0 }}
+                                                    PB:
+                                                    {{
+                                                        item.total_porsi_besar ??
+                                                        0
+                                                    }}
                                                 </span>
                                             </div>
                                         </td>
@@ -745,6 +833,54 @@ function getKategoriBadgeColor(kategori) {
                                             >
                                                 {{ item.total_penerima }}
                                             </span>
+                                        </td>
+
+                                        <!-- Terdaftar Pada & Terakhir Diperbaharui -->
+                                        <td class="py-4 px-5">
+                                            <div
+                                                class="space-y-1.5 text-[11px]"
+                                            >
+                                                <div>
+                                                    <div
+                                                        class="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider"
+                                                    >
+                                                        <Calendar
+                                                            class="h-3 w-3 text-slate-400 shrink-0"
+                                                        />
+                                                        <span>Terdaftar:</span>
+                                                    </div>
+                                                    <p
+                                                        class="font-medium text-slate-800 leading-tight mt-0.5 whitespace-nowrap"
+                                                    >
+                                                        {{
+                                                            formatDateTimeWita(
+                                                                item.created_at,
+                                                            )
+                                                        }}
+                                                    </p>
+                                                </div>
+                                                <div
+                                                    class="pt-1.5 border-t border-slate-100"
+                                                >
+                                                    <div
+                                                        class="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider"
+                                                    >
+                                                        <Clock
+                                                            class="h-3 w-3 text-slate-400 shrink-0"
+                                                        />
+                                                        <span>Diperbarui:</span>
+                                                    </div>
+                                                    <p
+                                                        class="font-medium text-slate-800 leading-tight mt-0.5 whitespace-nowrap"
+                                                    >
+                                                        {{
+                                                            formatDateTimeWita(
+                                                                item.updated_at,
+                                                            )
+                                                        }}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </td>
 
                                         <!-- Aksi (Tombol Elegan) -->
@@ -787,7 +923,7 @@ function getKategoriBadgeColor(kategori) {
                                     <!-- Empty State (Dengan Padding Lega) -->
                                     <tr v-if="kelompokList.length === 0">
                                         <td
-                                            colspan="8"
+                                            colspan="9"
                                             class="py-16 px-6 text-center"
                                         >
                                             <div
@@ -894,17 +1030,17 @@ function getKategoriBadgeColor(kategori) {
                                 <p
                                     class="text-[10px] font-bold text-slate-400 uppercase"
                                 >
-                                    Kepala Sekolah / Pimpinan
+                                    Kepala Satuan / Pimpinan
                                 </p>
                                 <p class="font-bold text-slate-900 mt-0.5">
-                                    {{ activeKelompok.nama_kepala_sekolah }}
+                                    {{ activeKelompok.nama_kepala }}
                                 </p>
                                 <p
                                     class="text-slate-600 text-[11px] mt-0.5 flex items-center gap-1"
                                 >
                                     <Mail class="h-3 w-3 text-slate-400" />
                                     <span>{{
-                                        activeKelompok.email_kepala_sekolah
+                                        activeKelompok.email_kepala
                                     }}</span>
                                 </p>
                                 <p
@@ -913,7 +1049,7 @@ function getKategoriBadgeColor(kategori) {
                                     <Phone class="h-3 w-3 text-slate-400" />
                                     <span
                                         >+{{
-                                            activeKelompok.telepon_kepala_sekolah
+                                            activeKelompok.telepon_kepala
                                         }}</span
                                     >
                                 </p>
@@ -1047,7 +1183,9 @@ function getKategoriBadgeColor(kategori) {
                             <span>Rincian Jumlah Penerima Manfaat</span>
                         </h4>
 
-                        <div class="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+                        <div
+                            class="flex flex-wrap items-center gap-1.5 text-xs font-mono"
+                        >
                             <span
                                 class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold"
                             >
@@ -1088,7 +1226,9 @@ function getKategoriBadgeColor(kategori) {
                                         No
                                     </th>
                                     <th class="py-2.5 px-4">Sub Kategori</th>
-                                    <th class="py-2.5 px-4 text-center w-28">Jenis Porsi</th>
+                                    <th class="py-2.5 px-4 text-center w-28">
+                                        Jenis Porsi
+                                    </th>
                                     <th class="py-2.5 px-4 text-center w-24">
                                         Laki-Laki
                                     </th>
@@ -1104,7 +1244,10 @@ function getKategoriBadgeColor(kategori) {
                                 <tr
                                     v-for="(
                                         rincian, idx
-                                    ) in activeKelompok.rincian"
+                                    ) in sortRincianByKategori(
+                                        activeKelompok.rincian,
+                                        activeKelompok.kategori,
+                                    )"
                                     :key="rincian.id || idx"
                                     class="hover:bg-slate-50/50"
                                 >
@@ -1120,7 +1263,10 @@ function getKategoriBadgeColor(kategori) {
                                     </td>
                                     <td class="py-2.5 px-4 text-center">
                                         <span
-                                            v-if="rincian.jenis_porsi === 'Porsi Kecil'"
+                                            v-if="
+                                                rincian.jenis_porsi ===
+                                                'Porsi Kecil'
+                                            "
                                             class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
                                         >
                                             Porsi Kecil
@@ -1182,24 +1328,44 @@ function getKategoriBadgeColor(kategori) {
 
                 <!-- Footer Modal -->
                 <div
-                    class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100"
+                    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100"
                 >
-                    <Link
-                        :href="
-                            route('penerima-manfaat.edit', activeKelompok.uid || activeKelompok.id)
-                        "
-                        class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
-                    >
-                        Edit Data Ini
-                    </Link>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        @click="closeDetail"
-                    >
-                        Tutup
-                    </Button>
+                    <div class="text-[11px] text-slate-500 space-y-0.5">
+                        <p>
+                            <span class="font-semibold text-slate-700"
+                                >Terdaftar:</span
+                            >
+                            {{ formatDateTimeWita(activeKelompok.created_at) }}
+                        </p>
+                        <p>
+                            <span class="font-semibold text-slate-700"
+                                >Terakhir Diperbarui:</span
+                            >
+                            {{ formatDateTimeWita(activeKelompok.updated_at) }}
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <Link
+                            :href="
+                                route(
+                                    'penerima-manfaat.edit',
+                                    activeKelompok.uid || activeKelompok.id,
+                                )
+                            "
+                            class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
+                        >
+                            Edit Data Ini
+                        </Link>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="closeDetail"
+                        >
+                            Tutup
+                        </Button>
+                    </div>
                 </div>
             </div>
         </Modal>

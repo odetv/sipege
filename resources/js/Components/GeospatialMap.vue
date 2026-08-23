@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import Button from '@/Components/ui/Button.vue';
@@ -12,6 +12,12 @@ import {
   Car,
   Clock,
   Loader2,
+  School,
+  Users,
+  MapPin,
+  Sparkles,
+  Utensils,
+  Layers,
 } from 'lucide-vue-next';
 
 // Fix leaflet default icon marker path issue
@@ -55,9 +61,13 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  kelompokList: {
+    type: Array,
+    default: () => [],
+  },
   height: {
     type: String,
-    default: '450px',
+    default: '540px',
   },
 });
 
@@ -73,47 +83,57 @@ let circleDomisili = null;
 let circleUnit = null;
 let resizeObserver = null;
 
+// Dynamic Penerima Manfaat Map Layers
+let kelompokLayerGroup = null;
+const kelompokMarkerMap = new Map();
+
 // Routing State
 const isRoutingLoading = ref(false);
 const roadDistance = ref(null); // in km
 const roadDuration = ref(null); // in seconds
 const roadCoordinates = ref([]);
 
-// Haversine formula to calculate accurate straight distance in kilometers
-const distanceKm = computed(() => {
-  const lat1 = Number(props.domisiliLat);
-  const lon1 = Number(props.domisiliLng);
-  const lat2 = Number(props.unitLat);
-  const lon2 = Number(props.unitLng);
+// Haversine formula calculation helper
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
 
-  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return 0;
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2)) return 0;
 
   const R = 6371; // Earth radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const dLat = ((nLat2 - nLat1) * Math.PI) / 180;
+  const dLon = ((nLon2 - nLon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos((nLat1 * Math.PI) / 180) *
+      Math.cos((nLat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Number((R * c).toFixed(2));
+}
+
+function formatDist(km) {
+  if (km < 1) {
+    return `${Math.round(km * 1000)} m`;
+  }
+  return `${km.toFixed(1)} km`;
+}
+
+// Distance from Domisili to Unit SPPG
+const distanceKm = computed(() => {
+  return calculateDistance(props.domisiliLat, props.domisiliLng, props.unitLat, props.unitLng);
 });
 
 const formattedStraightDistance = computed(() => {
-  if (distanceKm.value < 1) {
-    return `${Math.round(distanceKm.value * 1000)} meter`;
-  }
-  return `${distanceKm.value} km`;
+  return formatDist(distanceKm.value);
 });
 
 const formattedRoadDistance = computed(() => {
   if (roadDistance.value === null) return formattedStraightDistance.value;
-  if (roadDistance.value < 1) {
-    return `${Math.round(roadDistance.value * 1000)} meter`;
-  }
-  return `${roadDistance.value.toFixed(1)} km`;
+  return formatDist(roadDistance.value);
 });
 
 const formattedDuration = computed(() => {
@@ -125,6 +145,24 @@ const formattedDuration = computed(() => {
   const hours = Math.floor(mins / 60);
   const remainingMins = mins % 60;
   return `${hours} jam ${remainingMins} mnt`;
+});
+
+// Summary totals of connected penerima manfaat
+const validKelompokList = computed(() => {
+  if (!Array.isArray(props.kelompokList)) return [];
+  return props.kelompokList.filter((k) => k && k.latitude && k.longitude && !isNaN(Number(k.latitude)) && !isNaN(Number(k.longitude)));
+});
+
+const totalPenerimaJiwa = computed(() => {
+  return validKelompokList.value.reduce((sum, k) => sum + (Number(k.total_penerima) || 0), 0);
+});
+
+const totalPorsiKecil = computed(() => {
+  return validKelompokList.value.reduce((sum, k) => sum + (Number(k.total_porsi_kecil) || 0), 0);
+});
+
+const totalPorsiBesar = computed(() => {
+  return validKelompokList.value.reduce((sum, k) => sum + (Number(k.total_porsi_besar) || 0), 0);
 });
 
 // Custom Pins
@@ -151,20 +189,45 @@ const iconUnit = L.divIcon({
   className: 'custom-unit-marker',
   html: `
     <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-      <div style="background-color: #059669; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.4); border: 2.5px solid #ffffff;">
+      <div style="background-color: #059669; width: 38px; height: 38px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.5); border: 2.5px solid #ffffff;">
         <div style="transform: rotate(45deg); display: flex; align-items: center; justify-content: center;">
-          <svg style="width: 16px; height: 16px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <svg style="width: 18px; height: 18px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
         </div>
       </div>
-      <div style="background: #064e3b; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 9999px; margin-top: 4px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-        Unit SPPG
+      <div style="background: #064e3b; color: white; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 9999px; margin-top: 4px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.25);">
+        Unit SPPG (Pusat)
       </div>
     </div>
   `,
-  iconSize: [80, 56],
-  iconAnchor: [40, 36],
-  popupAnchor: [0, -36],
+  iconSize: [110, 58],
+  iconAnchor: [55, 38],
+  popupAnchor: [0, -38],
 });
+
+function createPenerimaIcon(nama, kategori) {
+  const isPosyandu = kategori === 'Posyandu';
+  const bgColor = isPosyandu ? '#e11d48' : '#d97706';
+  const labelBg = isPosyandu ? '#881337' : '#78350f';
+
+  return L.divIcon({
+    className: 'custom-penerima-marker',
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+        <div style="background-color: ${bgColor}; width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.28); border: 2px solid #ffffff;">
+          <div style="transform: rotate(45deg); display: flex; align-items: center; justify-content: center;">
+            <svg style="width: 15px; height: 15px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+          </div>
+        </div>
+        <div style="background: ${labelBg}; color: white; font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; margin-top: 3px; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.25); max-width: 120px; overflow: hidden; text-overflow: ellipsis;">
+          ${nama || 'Penerima'}
+        </div>
+      </div>
+    `,
+    iconSize: [120, 52],
+    iconAnchor: [60, 34],
+    popupAnchor: [0, -34],
+  });
+}
 
 function initMap() {
   if (!mapContainer.value) return;
@@ -187,6 +250,8 @@ function initMap() {
     maxZoom: 19,
   }).addTo(map);
 
+  kelompokLayerGroup = L.layerGroup().addTo(map);
+
   // Marker 1: Domisili
   markerDomisili = L.marker([lat1, lng1], { icon: iconDomisili })
     .addTo(map)
@@ -198,18 +263,18 @@ function initMap() {
       </div>
     `);
 
-  // Marker 2: Unit SPPG
+  // Marker 2: Unit SPPG (Pusat Distribusi)
   markerUnit = L.marker([lat2, lng2], { icon: iconUnit })
     .addTo(map)
     .bindPopup(`
       <div style="padding: 4px; font-family: inherit;">
-        <strong style="color: #059669; font-size: 13px; display: block; margin-bottom: 2px;">🏢 ${props.unitLabel}</strong>
+        <strong style="color: #059669; font-size: 13px; display: block; margin-bottom: 2px;">🏢 ${props.unitLabel} (Pusat SPPG)</strong>
         <p style="margin: 0; font-size: 11px; color: #475569;">${props.unitAddress || 'Lokasi operasional unit SPPG'}</p>
         <span style="font-family: monospace; font-size: 10px; color: #64748b; margin-top: 4px; display: block;">${lat2.toFixed(6)}, ${lng2.toFixed(6)}</span>
       </div>
     `);
 
-  // Garis Halus Geodesik (Radius Lurus)
+  // Garis Halus Geodesik (Radius Lurus Domisili -> Unit)
   straightPolyline = L.polyline(
     [
       [lat1, lng1],
@@ -249,10 +314,13 @@ function initMap() {
     fillOpacity: 0.08,
   }).addTo(map);
 
+  // Render Penerima Manfaat Markers & Connection Lines (Tarik Garis)
+  renderPenerimaManfaatNetwork();
+
   // Fetch and draw real road route
   fetchDrivingRoute();
 
-  // Fit bounds agar kedua titik dan rute terlihat sempurna
+  // Fit bounds agar semua titik terlihat sempurna
   fitBounds();
 
   // ResizeObserver untuk memastikan peta ter-render utuh saat tab aktif
@@ -267,6 +335,146 @@ function initMap() {
 
   setTimeout(invalidateSize, 100);
   setTimeout(invalidateSize, 300);
+}
+
+// Render connection lines and markers from Unit SPPG to each Penerima Manfaat
+function renderPenerimaManfaatNetwork() {
+  if (!map || !kelompokLayerGroup) return;
+
+  kelompokLayerGroup.clearLayers();
+  kelompokMarkerMap.clear();
+
+  const uLat = Number(props.unitLat);
+  const uLng = Number(props.unitLng);
+
+  if (isNaN(uLat) || isNaN(uLng)) return;
+
+  validKelompokList.value.forEach((kelompok) => {
+    const kLat = Number(kelompok.latitude);
+    const kLng = Number(kelompok.longitude);
+    const dist = calculateDistance(uLat, uLng, kLat, kLng);
+    const distFormatted = formatDist(dist);
+
+    // 1. Tarik Garis Sambungan dari Unit SPPG ke Penerima Manfaat (Multi-layer stylish line)
+    // Outer Casing line
+    L.polyline(
+      [
+        [uLat, uLng],
+        [kLat, kLng],
+      ],
+      {
+        color: '#92400e',
+        weight: 4,
+        opacity: 0.25,
+        lineCap: 'round',
+      }
+    ).addTo(kelompokLayerGroup);
+
+    // Inner Dashed Line (Amber/Gold Distribution Path)
+    const line = L.polyline(
+      [
+        [uLat, uLng],
+        [kLat, kLng],
+      ],
+      {
+        color: '#f59e0b',
+        weight: 2.5,
+        opacity: 0.9,
+        dashArray: '6, 6',
+        lineCap: 'round',
+      }
+    ).addTo(kelompokLayerGroup);
+
+    line.bindPopup(`
+      <div style="padding: 5px; font-family: inherit; text-align: center;">
+        <span style="font-size: 10px; color: #92400e; font-weight: 700; text-transform: uppercase;">Jalur Distribusi SPPG</span>
+        <strong style="color: #1e293b; font-size: 13px; display: block; margin: 2px 0;">📦 Unit SPPG ➔ ${kelompok.nama_kelompok}</strong>
+        <div style="display: flex; justify-content: center; gap: 8px; font-size: 11px; margin-top: 4px;">
+          <span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-weight: 700;">Jarak: ${distFormatted}</span>
+          <span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${kelompok.total_penerima} Jiwa</span>
+        </div>
+      </div>
+    `);
+
+    // Midpoint Distance Pill along the connection line
+    const midPoint = [(uLat + kLat) / 2, (uLng + kLng) / 2];
+    const distIcon = L.divIcon({
+      className: 'custom-kelompok-dist-badge',
+      html: `
+        <div style="background: #ffffff; color: #92400e; border: 1.5px solid #f59e0b; border-radius: 9999px; padding: 1.5px 6px; font-size: 9.5px; font-weight: 800; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.18); display: flex; align-items: center; gap: 3px;">
+          <span>📦</span>
+          <span>${distFormatted}</span>
+        </div>
+      `,
+      iconSize: [60, 20],
+      iconAnchor: [30, 10],
+    });
+
+    L.marker(midPoint, { icon: distIcon, interactive: false }).addTo(kelompokLayerGroup);
+
+    // 2. Soft Area Circle around Penerima Manfaat
+    L.circle([kLat, kLng], {
+      radius: 150,
+      color: '#d97706',
+      weight: 1,
+      fillColor: '#f59e0b',
+      fillOpacity: 0.08,
+    }).addTo(kelompokLayerGroup);
+
+    // 3. Marker Pin Penerima Manfaat
+    const marker = L.marker([kLat, kLng], {
+      icon: createPenerimaIcon(kelompok.nama_kelompok, kelompok.kategori),
+    })
+      .addTo(kelompokLayerGroup)
+      .bindPopup(`
+        <div style="padding: 5px; font-family: inherit; min-width: 200px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px;">
+            <strong style="color: #92400e; font-size: 13px;">🏫 ${kelompok.nama_kelompok}</strong>
+            <span style="font-size: 10px; font-weight: 800; background: #fef3c7; color: #92400e; padding: 1px 6px; border-radius: 4px;">
+              ${kelompok.kategori || ''} ${kelompok.jenis_kepemilikan || ''}
+            </span>
+          </div>
+
+          <p style="margin: 0; font-size: 11px; color: #475569; line-height: 1.3;">
+            ${kelompok.alamat_lengkap || `${kelompok.desa_kelurahan || ''}, ${kelompok.kecamatan || ''}`}
+          </p>
+
+          <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10.5px;">
+            <div style="background: #f8fafc; padding: 3px 5px; rounded: 4px;">
+              <span style="color: #64748b; display: block; font-size: 9.5px;">Jarak dari Unit:</span>
+              <strong style="color: #d97706;">📏 ${distFormatted}</strong>
+            </div>
+            <div style="background: #f8fafc; padding: 3px 5px; rounded: 4px;">
+              <span style="color: #64748b; display: block; font-size: 9.5px;">Total Penerima:</span>
+              <strong style="color: #0284c7;">👥 ${kelompok.total_penerima || 0} Jiwa</strong>
+            </div>
+            <div style="background: #fef3c7; padding: 3px 5px; rounded: 4px;">
+              <span style="color: #92400e; display: block; font-size: 9.5px;">Porsi Kecil:</span>
+              <strong style="color: #92400e;">🟡 ${kelompok.total_porsi_kecil || 0}</strong>
+            </div>
+            <div style="background: #eff6ff; padding: 3px 5px; rounded: 4px;">
+              <span style="color: #1e40af; display: block; font-size: 9.5px;">Porsi Besar:</span>
+              <strong style="color: #1e40af;">🔵 ${kelompok.total_porsi_besar || 0}</strong>
+            </div>
+          </div>
+        </div>
+      `);
+
+    kelompokMarkerMap.set(kelompok.id || kelompok.uid, marker);
+  });
+}
+
+function focusKelompok(kelompok) {
+  if (!map) return;
+  const kLat = Number(kelompok.latitude);
+  const kLng = Number(kelompok.longitude);
+  if (isNaN(kLat) || isNaN(kLng)) return;
+
+  map.flyTo([kLat, kLng], 16, { duration: 1 });
+  const marker = kelompokMarkerMap.get(kelompok.id || kelompok.uid);
+  if (marker) {
+    setTimeout(() => marker.openPopup(), 1000);
+  }
 }
 
 // Fetch Driving Route from OSRM (Open Source Routing Machine)
@@ -363,27 +571,34 @@ function renderRoadRoute(coords) {
 
 function fitBounds() {
   if (!map) return;
+
+  const points = [];
+
+  // 1. Domisili
+  const lat1 = Number(props.domisiliLat);
+  const lng1 = Number(props.domisiliLng);
+  if (!isNaN(lat1) && !isNaN(lng1)) points.push([lat1, lng1]);
+
+  // 2. Unit SPPG
+  const lat2 = Number(props.unitLat);
+  const lng2 = Number(props.unitLng);
+  if (!isNaN(lat2) && !isNaN(lng2)) points.push([lat2, lng2]);
+
+  // 3. Driving route coords
   if (roadCoordinates.value.length > 0) {
-    map.fitBounds(roadCoordinates.value, {
-      padding: [60, 60],
+    roadCoordinates.value.forEach((c) => points.push(c));
+  }
+
+  // 4. All Penerima Manfaat coords
+  validKelompokList.value.forEach((k) => {
+    points.push([Number(k.latitude), Number(k.longitude)]);
+  });
+
+  if (points.length > 0) {
+    map.fitBounds(points, {
+      padding: [50, 50],
       maxZoom: 16,
     });
-  } else {
-    const lat1 = Number(props.domisiliLat);
-    const lng1 = Number(props.domisiliLng);
-    const lat2 = Number(props.unitLat);
-    const lng2 = Number(props.unitLng);
-
-    map.fitBounds(
-      [
-        [lat1, lng1],
-        [lat2, lng2],
-      ],
-      {
-        padding: [60, 60],
-        maxZoom: 16,
-      }
-    );
   }
 }
 
@@ -392,6 +607,17 @@ function invalidateSize() {
     map.invalidateSize();
   }
 }
+
+watch(
+  () => props.kelompokList,
+  () => {
+    if (map) {
+      renderPenerimaManfaatNetwork();
+      fitBounds();
+    }
+  },
+  { deep: true }
+);
 
 defineExpose({
   refresh: () => {
@@ -418,17 +644,26 @@ onBeforeUnmount(() => {
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
     <!-- Left Column: Map Container (lg:col-span-7 xl:col-span-8) -->
     <div class="lg:col-span-7 xl:col-span-8 flex flex-col">
-      <div class="relative w-full h-full min-h-[400px] lg:min-h-[500px] rounded-xl border border-slate-200 shadow-xs overflow-hidden bg-slate-100 flex-1">
+      <div class="relative w-full h-full min-h-[460px] lg:min-h-[540px] rounded-xl border border-slate-200 shadow-xs overflow-hidden bg-slate-100 flex-1">
         <!-- Floating Top Right Action & Info -->
         <div
-          class="absolute top-3 right-3 flex items-center gap-2 select-none"
+          class="absolute top-3 right-3 flex items-center gap-2 select-none flex-wrap justify-end"
           style="z-index: 1000;"
         >
+          <!-- Floating Penerima Manfaat Counter Badge -->
+          <div
+            v-if="validKelompokList.length > 0"
+            class="bg-white/95 backdrop-blur-xs border border-amber-300 text-amber-950 px-3 py-1.5 rounded-lg shadow-md flex items-center gap-1.5 text-xs font-bold"
+          >
+            <School class="h-4 w-4 text-amber-600 shrink-0" />
+            <span>{{ validKelompokList.length }} Penerima Terhubung</span>
+          </div>
+
           <!-- Floating Road Distance Pill -->
           <div class="bg-white/95 backdrop-blur-xs border border-blue-200 text-blue-950 px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2 text-xs font-bold">
             <Loader2 v-if="isRoutingLoading" class="h-4 w-4 text-blue-600 animate-spin" />
             <Car v-else class="h-4 w-4 text-blue-600 shrink-0" />
-            <span>Rute Jalan:</span>
+            <span>Rute SPPG:</span>
             <span class="bg-blue-600 text-white px-2 py-0.5 rounded-md font-mono text-[11px]">
               {{ formattedRoadDistance }}
             </span>
@@ -444,7 +679,7 @@ onBeforeUnmount(() => {
             size="sm"
             @click="fitBounds"
             className="h-8 bg-white/95 hover:bg-white shadow-md text-xs flex items-center gap-1.5 border-slate-300 font-semibold cursor-pointer text-slate-800"
-            title="Pusatkan Peta ke Rute Penuh"
+            title="Pusatkan Peta ke Jaringan Penuh"
           >
             <Maximize2 class="h-3.5 w-3.5 text-primary" />
             <span>Pusatkan</span>
@@ -452,99 +687,126 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Leaflet Map Container -->
-        <div ref="mapContainer" class="w-full h-full min-h-[400px] lg:min-h-[500px] relative z-0"></div>
+        <div ref="mapContainer" class="w-full h-full min-h-[460px] lg:min-h-[540px] relative z-0"></div>
       </div>
     </div>
 
-    <!-- Right Column: 3 Stacked Cards (lg:col-span-5 xl:col-span-4) -->
-    <div class="lg:col-span-5 xl:col-span-4 flex flex-col justify-between gap-4">
+    <!-- Right Column: Stacked Cards (lg:col-span-5 xl:col-span-4) -->
+    <div class="lg:col-span-5 xl:col-span-4 flex flex-col justify-between gap-3.5">
       <!-- Card 1: Domisili Kepala SPPG -->
-      <div class="p-4 rounded-xl bg-white border border-blue-100 shadow-2xs space-y-2.5 flex-1 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2">
-              <div class="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                <User class="h-4 w-4" />
-              </div>
-              <span class="text-xs font-bold text-slate-900">Domisili Kepala SPPG</span>
+      <div class="p-3.5 rounded-xl bg-white border border-blue-100 shadow-2xs space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="h-6 w-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+              <User class="h-3.5 w-3.5" />
             </div>
-            <Badge variant="info" className="text-[10px] py-0">Titik Awal</Badge>
+            <span class="text-xs font-bold text-slate-900">Domisili Kepala SPPG</span>
           </div>
-          <p class="text-xs text-slate-600 font-medium line-clamp-2 leading-relaxed">
-            {{ domisiliAddress || 'Alamat domisili' }}
-          </p>
+          <Badge variant="info" className="text-[10px] py-0">Titik Awal</Badge>
         </div>
-        <div class="pt-2 text-[11px] font-mono text-slate-500 flex justify-between border-t border-slate-100">
-          <span>Koordinat:</span>
-          <span class="font-semibold text-slate-700">{{ Number(domisiliLat).toFixed(6) }}, {{ Number(domisiliLng).toFixed(6) }}</span>
-        </div>
+        <p class="text-xs text-slate-600 font-medium line-clamp-1 leading-relaxed">
+          {{ domisiliAddress || 'Alamat domisili' }}
+        </p>
       </div>
 
       <!-- Card 2: Unit SPPG -->
-      <div class="p-4 rounded-xl bg-white border border-emerald-100 shadow-2xs space-y-2.5 flex-1 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2">
-              <div class="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <Building2 class="h-4 w-4" />
-              </div>
-              <span class="text-xs font-bold text-slate-900">Lokasi Unit SPPG</span>
+      <div class="p-3.5 rounded-xl bg-white border border-emerald-100 shadow-2xs space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="h-6 w-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Building2 class="h-3.5 w-3.5" />
             </div>
-            <Badge variant="success" className="text-[10px] py-0">Titik Tujuan</Badge>
+            <span class="text-xs font-bold text-slate-900">Lokasi Unit SPPG (Pusat Distribusi)</span>
           </div>
-          <p class="text-xs text-slate-600 font-medium line-clamp-2 leading-relaxed">
-            {{ unitAddress || 'Alamat operasional unit SPPG' }}
-          </p>
+          <Badge variant="success" className="text-[10px] py-0">Titik Pusat</Badge>
         </div>
-        <div class="pt-2 text-[11px] font-mono text-slate-500 flex justify-between border-t border-slate-100">
-          <span>Koordinat:</span>
-          <span class="font-semibold text-slate-700">{{ Number(unitLat).toFixed(6) }}, {{ Number(unitLng).toFixed(6) }}</span>
+        <p class="text-xs text-slate-600 font-medium line-clamp-1 leading-relaxed">
+          {{ unitAddress || 'Alamat operasional unit SPPG' }}
+        </p>
+      </div>
+
+      <!-- Card 3: Analisis Rute & Jarak Riil (Domisili -> Unit) -->
+      <div class="p-3.5 rounded-xl bg-gradient-to-br from-blue-50/80 via-indigo-50/40 to-white border border-blue-200 shadow-2xs space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <Navigation class="h-3.5 w-3.5 text-blue-700" />
+            <span class="text-xs font-bold text-blue-950">Rute Kepala SPPG ke Unit</span>
+          </div>
+          <span class="text-[10px] font-bold text-blue-700 bg-blue-100/90 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+            <Car class="h-3 w-3" />
+            Jalan Riil
+          </span>
+        </div>
+
+        <div class="bg-white p-2.5 rounded-lg border border-blue-100 shadow-2xs flex items-center justify-between">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-black text-blue-700">{{ formattedRoadDistance }}</span>
+            <span class="text-[11px] text-slate-500 font-medium">via rute jalan</span>
+          </div>
+          <div v-if="formattedDuration" class="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+            <Clock class="h-3 w-3 text-blue-600" />
+            <span>~{{ formattedDuration }}</span>
+          </div>
         </div>
       </div>
 
-      <!-- Card 3: Analisis Rute & Jarak Riil -->
-      <div class="p-4 rounded-xl bg-gradient-to-br from-blue-50/80 via-indigo-50/40 to-white border border-blue-200 shadow-2xs space-y-3 flex-1 flex flex-col justify-between">
+      <!-- Card 4: Jaringan Distribusi Penerima Manfaat (Tarik Garis) -->
+      <div class="p-3.5 rounded-xl bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-white border border-amber-200 shadow-2xs space-y-3 flex-1 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
-              <div class="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                <Navigation class="h-4 w-4" />
+              <div class="h-6 w-6 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center">
+                <School class="h-3.5 w-3.5" />
               </div>
-              <span class="text-xs font-bold text-blue-950">Analisis Rute & Jarak</span>
+              <span class="text-xs font-bold text-amber-950">Jaringan Penerima Manfaat</span>
             </div>
-            <span class="text-[10px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <Car class="h-3 w-3" />
-              Jalan Riil
+            <span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+              {{ validKelompokList.length }} Titik Terhubung
             </span>
           </div>
 
-          <!-- Metrik 1: Rute Jalan Riil -->
-          <div class="bg-white p-3 rounded-lg border border-blue-100 shadow-2xs mb-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-baseline gap-1.5">
-                <span class="text-2xl font-black text-blue-700">{{ formattedRoadDistance }}</span>
-                <span class="text-xs text-slate-500 font-medium">via rute jalan</span>
-              </div>
-              <div v-if="formattedDuration" class="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
-                <Clock class="h-3.5 w-3.5 text-blue-600" />
-                <span>~{{ formattedDuration }}</span>
-              </div>
+          <!-- Total Ringkasan Porsi & Jiwa -->
+          <div class="grid grid-cols-3 gap-2 text-center mb-2.5">
+            <div class="bg-white p-2 rounded-lg border border-amber-100 shadow-2xs">
+              <span class="text-[10px] text-slate-500 font-medium block">Total Jiwa</span>
+              <strong class="text-sm font-bold font-mono text-primary">{{ totalPenerimaJiwa.toLocaleString('id-ID') }}</strong>
+            </div>
+            <div class="bg-white p-2 rounded-lg border border-amber-100 shadow-2xs">
+              <span class="text-[10px] text-amber-700 font-medium block">Porsi Kecil</span>
+              <strong class="text-sm font-bold font-mono text-amber-700">{{ totalPorsiKecil.toLocaleString('id-ID') }}</strong>
+            </div>
+            <div class="bg-white p-2 rounded-lg border border-amber-100 shadow-2xs">
+              <span class="text-[10px] text-blue-700 font-medium block">Porsi Besar</span>
+              <strong class="text-sm font-bold font-mono text-blue-700">{{ totalPorsiBesar.toLocaleString('id-ID') }}</strong>
             </div>
           </div>
 
-          <!-- Metrik 2: Jarak Lurus (Geodesik) -->
-          <div class="flex items-center justify-between text-xs text-slate-600 px-1 py-0.5">
-            <span class="flex items-center gap-1">
-              <span class="inline-block w-2.5 h-0.5 border-b-2 border-dashed border-indigo-500"></span>
-              Jarak Garis Lurus (Radius):
-            </span>
-            <span class="font-bold text-indigo-700">{{ formattedStraightDistance }}</span>
+          <!-- List Kelompok Terhubung dengan Jarak -->
+          <div v-if="validKelompokList.length > 0" class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            <button
+              v-for="k in validKelompokList"
+              :key="k.id || k.uid"
+              type="button"
+              @click="focusKelompok(k)"
+              class="w-full text-left p-2 rounded-lg bg-white/90 hover:bg-amber-50/80 border border-amber-100/80 transition-all flex items-center justify-between text-xs cursor-pointer group shadow-2xs"
+            >
+              <div class="min-w-0 flex-1 pr-2">
+                <p class="font-bold text-slate-800 truncate group-hover:text-amber-700">{{ k.nama_kelompok }}</p>
+                <p class="text-[10px] text-slate-400 font-mono">{{ k.kategori }} • {{ k.total_penerima }} penerima</p>
+              </div>
+              <span class="text-[10.5px] font-mono font-bold text-amber-700 bg-amber-50 group-hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">
+                📏 {{ formatDist(calculateDistance(unitLat, unitLng, k.latitude, k.longitude)) }}
+              </span>
+            </button>
           </div>
-
-          <p class="text-[11px] text-slate-500 leading-snug mt-2">
-            Garis biru mengikuti liku jalan raya sesungguhnya (rute berkendara), sedangkan garis putus-putus ungu menunjukkan radius lurus pemindahan.
+          <p v-else class="text-xs text-slate-400 italic text-center py-2">
+            Belum ada kelompok penerima manfaat dengan titik koordinat terdaftar.
           </p>
         </div>
+
+        <p class="text-[10.5px] text-slate-500 leading-snug">
+          Garis putus-putus kuning/emas ditarik langsung dari Unit SPPG ke tiap titik penerima manfaat untuk memetakan radius distribusi.
+        </p>
       </div>
     </div>
   </div>
@@ -556,7 +818,9 @@ onBeforeUnmount(() => {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   padding: 4px;
 }
-:deep(.custom-distance-badge) {
+:deep(.custom-distance-badge),
+:deep(.custom-kelompok-dist-badge) {
   pointer-events: none;
 }
 </style>
+

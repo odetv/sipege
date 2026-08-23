@@ -40,6 +40,7 @@ import {
     JENIS_PORSI_OPTIONS,
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
+    sortRincianByKategori,
 } from "@/Services/penerimaManfaatConfig";
 import {
     getProvinces,
@@ -79,9 +80,9 @@ const form = useForm({
     jenis_kepemilikan: props.kelompok.jenis_kepemilikan || "Negeri",
     tipe_identitas: props.kelompok.tipe_identitas || "NPSN",
     kode_identitas: props.kelompok.kode_identitas || "",
-    nama_kepala_sekolah: props.kelompok.nama_kepala_sekolah || "",
-    email_kepala_sekolah: props.kelompok.email_kepala_sekolah || "",
-    telepon_kepala_sekolah: props.kelompok.telepon_kepala_sekolah || "",
+    nama_kepala: props.kelompok.nama_kepala || "",
+    email_kepala: props.kelompok.email_kepala || "",
+    telepon_kepala: props.kelompok.telepon_kepala || "",
     nama_pic: props.kelompok.nama_pic || "",
     email_pic: props.kelompok.email_pic || "",
     telepon_pic: props.kelompok.telepon_pic || "",
@@ -93,15 +94,23 @@ const form = useForm({
     alamat_lengkap: props.kelompok.alamat_lengkap || "",
     latitude: props.kelompok.latitude ? Number(props.kelompok.latitude) : null,
     longitude: props.kelompok.longitude ? Number(props.kelompok.longitude) : null,
-    rincian: Array.isArray(props.kelompok.rincian)
-        ? props.kelompok.rincian.map((r) => ({
-              id: r.id,
-              sub_kategori: r.sub_kategori,
-              jenis_porsi: r.jenis_porsi || getJenisPorsiBySubKategori(r.sub_kategori, props.kelompok.kategori),
-              jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
-              jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
-          }))
-        : [],
+    rincian: sortRincianByKategori(
+        Array.isArray(props.kelompok.rincian)
+            ? props.kelompok.rincian.map((r) => ({
+                  id: r.id,
+                  sub_kategori: r.sub_kategori,
+                  jenis_porsi:
+                      r.jenis_porsi ||
+                      getJenisPorsiBySubKategori(
+                          r.sub_kategori,
+                          props.kelompok.kategori
+                      ),
+                  jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
+                  jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
+              }))
+            : [],
+        props.kelompok.kategori
+    ),
 });
 
 // Region dropdowns state & Loading states
@@ -121,9 +130,9 @@ const selectedDistrictCode = ref("");
 const selectedVillageCode = ref("");
 
 // Helper phone inputs (tanpa 62)
-const rawTeleponKS = ref(
-    form.telepon_kepala_sekolah
-        ? form.telepon_kepala_sekolah.replace(/^62/, "")
+const rawTeleponKepala = ref(
+    form.telepon_kepala
+        ? form.telepon_kepala.replace(/^62/, "")
         : ""
 );
 const rawTeleponPIC = ref(
@@ -141,16 +150,41 @@ function cleanPhone(newVal) {
     return cleaned;
 }
 
-watch(rawTeleponKS, (newVal) => {
+// Client-side Errors State
+const clientErrors = ref({});
+
+function getFieldError(fieldName) {
+    return form.errors[fieldName] || clientErrors.value[fieldName] || "";
+}
+
+function clearFieldError(fieldName) {
+    if (clientErrors.value[fieldName]) {
+        delete clientErrors.value[fieldName];
+    }
+    if (form.errors[fieldName]) {
+        form.clearErrors(fieldName);
+    }
+}
+
+watch(rawTeleponKepala, (newVal) => {
     const cleaned = cleanPhone(newVal);
-    rawTeleponKS.value = cleaned;
-    form.telepon_kepala_sekolah = cleaned ? `62${cleaned}` : "";
+    rawTeleponKepala.value = cleaned;
+    form.telepon_kepala = cleaned ? `62${cleaned}` : "";
+    clearFieldError("telepon_kepala");
 });
 
 watch(rawTeleponPIC, (newVal) => {
     const cleaned = cleanPhone(newVal);
     rawTeleponPIC.value = cleaned;
     form.telepon_pic = cleaned ? `62${cleaned}` : "";
+    clearFieldError("telepon_pic");
+});
+
+watch([() => form.latitude, () => form.longitude], ([lat, lng]) => {
+    if (lat !== null && lng !== null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+        clearFieldError("latitude");
+        clearFieldError("longitude");
+    }
 });
 
 function cleanKabupatenName(name) {
@@ -180,6 +214,8 @@ function getAvailableSubKategoriForRow(currentRowIdx) {
 function onSubKategoriChange(item) {
     if (item.sub_kategori) {
         item.jenis_porsi = getJenisPorsiBySubKategori(item.sub_kategori, form.kategori);
+        form.rincian = sortRincianByKategori(form.rincian, form.kategori);
+        clearFieldError("rincian");
     }
 }
 
@@ -201,6 +237,9 @@ function addCustomSubkategori() {
         jumlah_laki_laki: 0,
         jumlah_perempuan: 0,
     });
+
+    form.rincian = sortRincianByKategori(form.rincian, form.kategori);
+    clearFieldError("rincian");
 }
 
 function removeSubkategori(index) {
@@ -209,7 +248,7 @@ function removeSubkategori(index) {
 
 function resetSubkategoriToCategoryDefaults() {
     const subList = getSubKategoriByKategori(form.kategori);
-    form.rincian = subList.map((sub) => {
+    const updated = subList.map((sub) => {
         const existing = form.rincian.find((r) => r.sub_kategori === sub);
         return {
             sub_kategori: sub,
@@ -218,6 +257,8 @@ function resetSubkategoriToCategoryDefaults() {
             jumlah_perempuan: existing ? existing.jumlah_perempuan : 0,
         };
     });
+    form.rincian = sortRincianByKategori(updated, form.kategori);
+    clearFieldError("rincian");
 }
 
 // Grand totals computed
@@ -331,6 +372,7 @@ onMounted(async () => {
 });
 
 async function onProvinceChange() {
+    clearFieldError("provinsi");
     const prov = provinceList.value.find(
         (p) => p.code === selectedProvinceCode.value
     );
@@ -360,6 +402,7 @@ async function onProvinceChange() {
 }
 
 async function onRegencyChange() {
+    clearFieldError("kabupaten");
     const reg = regencyList.value.find(
         (r) => r.code === selectedRegencyCode.value
     );
@@ -386,6 +429,7 @@ async function onRegencyChange() {
 }
 
 async function onDistrictChange() {
+    clearFieldError("kecamatan");
     const dist = districtList.value.find(
         (d) => d.code === selectedDistrictCode.value
     );
@@ -409,21 +453,153 @@ async function onDistrictChange() {
 }
 
 function onVillageChange() {
+    clearFieldError("desa_kelurahan");
     const vil = villageList.value.find(
         (v) => v.code === selectedVillageCode.value
     );
     form.desa_kelurahan = vil ? vil.name : "";
     if (vil?.postal_code) {
         form.kode_pos = vil.postal_code;
+        clearFieldError("kode_pos");
     }
 }
 
-// Submit Update Form
+// Client-side Validation Functions
+function validateForm() {
+    clientErrors.value = {};
+    const errs = {};
+
+    // 1. Identitas & Legalitas
+    if (!form.nama_kelompok || !form.nama_kelompok.trim()) {
+        errs.nama_kelompok = "Nama kelompok penerima manfaat wajib diisi.";
+    } else if (form.nama_kelompok.trim().length < 3) {
+        errs.nama_kelompok = "Nama kelompok minimal harus 3 karakter.";
+    }
+
+    if (!form.kategori) {
+        errs.kategori = "Pilih kategori jenjang / lembaga.";
+    }
+
+    if (!form.jenis_kepemilikan) {
+        errs.jenis_kepemilikan = "Pilih jenis kepemilikan.";
+    }
+
+    if (!form.tipe_identitas) {
+        errs.tipe_identitas = "Pilih tipe nomor identitas legalitas.";
+    }
+
+    if (!form.kode_identitas || !form.kode_identitas.trim()) {
+        errs.kode_identitas = "Nomor / kode identitas legalitas wajib diisi.";
+    }
+
+    // 2. Kontak Kepala Satuan
+    if (!form.nama_kepala || !form.nama_kepala.trim()) {
+        errs.nama_kepala = "Nama Kepala Satuan / Pimpinan wajib diisi.";
+    }
+
+    if (!form.email_kepala || !form.email_kepala.trim()) {
+        errs.email_kepala = "Email Kepala Satuan / Pimpinan wajib diisi.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_kepala.trim())) {
+        errs.email_kepala = "Format email Kepala Satuan tidak valid.";
+    }
+
+    if (!form.telepon_kepala) {
+        errs.telepon_kepala = "Nomor WhatsApp Kepala Satuan / Pimpinan wajib diisi.";
+    } else if (!/^62[0-9]{8,15}$/.test(form.telepon_kepala)) {
+        errs.telepon_kepala = "Format nomor telepon tidak valid (contoh: +62 81234567890).";
+    }
+
+    // 3. Kontak PIC
+    if (!form.nama_pic || !form.nama_pic.trim()) {
+        errs.nama_pic = "Nama lengkap PIC wajib diisi.";
+    }
+
+    if (!form.email_pic || !form.email_pic.trim()) {
+        errs.email_pic = "Email PIC wajib diisi.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_pic.trim())) {
+        errs.email_pic = "Format email PIC tidak valid.";
+    }
+
+    if (!form.telepon_pic) {
+        errs.telepon_pic = "Nomor WhatsApp PIC wajib diisi.";
+    } else if (!/^62[0-9]{8,15}$/.test(form.telepon_pic)) {
+        errs.telepon_pic = "Format nomor telepon tidak valid (contoh: +62 81234567890).";
+    }
+
+    // 4. Wilayah & Alamat
+    if (!form.provinsi) {
+        errs.provinsi = "Pilih provinsi lokasi kelompok.";
+    }
+    if (!form.kabupaten) {
+        errs.kabupaten = "Pilih kabupaten / kota lokasi kelompok.";
+    }
+    if (!form.kecamatan) {
+        errs.kecamatan = "Pilih kecamatan lokasi kelompok.";
+    }
+    if (!form.desa_kelurahan) {
+        errs.desa_kelurahan = "Pilih desa / kelurahan lokasi kelompok.";
+    }
+
+    if (!form.kode_pos || !form.kode_pos.toString().trim()) {
+        errs.kode_pos = "Kode pos wajib diisi.";
+    } else if (!/^[0-9]{5}$/.test(form.kode_pos.toString().trim())) {
+        errs.kode_pos = "Kode pos harus berupa tepat 5 digit angka.";
+    }
+
+    if (!form.alamat_lengkap || !form.alamat_lengkap.trim()) {
+        errs.alamat_lengkap = "Alamat lengkap kelompok wajib diisi.";
+    }
+
+    // 5. Titik Koordinat Peta
+    if (form.latitude === null || form.longitude === null || isNaN(Number(form.latitude)) || isNaN(Number(form.longitude))) {
+        errs.latitude = "Titik koordinat pada peta wajib ditentukan.";
+        errs.longitude = "Titik koordinat pada peta wajib ditentukan.";
+    }
+
+    // 6. Rincian Penerima Manfaat
+    if (!Array.isArray(form.rincian) || form.rincian.length === 0) {
+        errs.rincian = "Rincian jumlah penerima manfaat wajib diisi minimal 1 subkategori.";
+    } else {
+        const hasInvalidSub = form.rincian.some((r) => !r.sub_kategori);
+        if (hasInvalidSub) {
+            errs.rincian = "Semua baris rincian harus memiliki subkategori yang valid.";
+        }
+    }
+
+    clientErrors.value = errs;
+    return Object.keys(errs).length === 0;
+}
+
+// Focus field pertama yang error
+function focusFirstError() {
+    const errorKeys = Object.keys(clientErrors.value);
+    if (errorKeys.length === 0) return;
+
+    const firstKey = errorKeys[0];
+    const el = document.getElementById(firstKey);
+    if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (typeof el.focus === "function") {
+            el.focus();
+        }
+    }
+}
+
+// Submit handler
 function submitForm() {
-    form.put(route("penerima-manfaat.update", props.kelompok.uid || props.kelompok.id), {
+    if (!validateForm()) {
+        nextTick(() => {
+            focusFirstError();
+        });
+        return;
+    }
+
+    form.put(route("penerima-manfaat.update", props.kelompok.uid), {
         preserveScroll: true,
-        onError: (errors) => {
-            console.error("Validation error:", errors);
+        onError: () => {
+            nextTick(() => {
+                focusFirstError();
+            });
         },
     });
 }
@@ -432,37 +608,31 @@ function submitForm() {
 <template>
     <AppLayout
         title="Edit Kelompok Penerima Manfaat"
-        subtitle="Perbarui data legalitas, narahubung, dan rincian penerima manfaat"
+        :subtitle="`Perbarui informasi profil dan rincian penerima manfaat`"
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head :title="`Edit ${form.nama_kelompok} - SIPEGE`" />
-
-        <div class="max-w-6xl mx-auto space-y-6 pb-12">
-            <!-- Top Navigation Bar -->
-            <div class="flex items-center justify-between gap-4">
-                <Link
-                    :href="route('penerima-manfaat.index')"
-                    class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-primary transition-colors cursor-pointer"
-                >
-                    <ArrowLeft class="h-4 w-4" />
-                    <span>Kembali ke Daftar Kelompok</span>
-                </Link>
-
+        <div class="max-w-6xl mx-auto space-y-6">
+            <!-- Top Actions Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
                 <div class="flex items-center gap-3">
-                    <button
-                        type="button"
-                        @click="submitForm"
-                        :disabled="form.processing"
-                        class="inline-flex items-center justify-center gap-2 h-11 px-6 min-w-[160px] text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
+                    <Link
+                        :href="route('penerima-manfaat.index')"
+                        class="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-600 transition-colors shadow-2xs"
                     >
-                        <Save class="h-4 w-4" />
-                        <span>{{ form.processing ? "Menyimpan Perubahan..." : "Simpan Perubahan" }}</span>
-                    </button>
+                        <ArrowLeft class="h-4 w-4" />
+                    </Link>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 leading-tight">
+                            Edit Data Kelompok
+                        </h2>
+                        <p class="text-xs text-slate-600 font-semibold mt-0.5">
+                            {{ kelompok.nama_kelompok }}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Form Container -->
             <form @submit.prevent="submitForm" class="space-y-6">
                 <!-- 1. IDENTITAS & LEGALITAS KELOMPOK -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
@@ -473,7 +643,7 @@ function submitForm() {
                             </div>
                             <div>
                                 <CardTitle className="text-base font-bold text-slate-900">
-                                    1. Identitas & Legalitas Kelompok
+                                    1. Identitas Kelompok
                                 </CardTitle>
                                 <CardDescription className="text-xs text-slate-500 mt-0.5">
                                     Informasi nama lembaga, jenjang kategori, status kepemilikan, dan nomor kode legalitas.
@@ -491,27 +661,30 @@ function submitForm() {
                                 <input
                                     id="nama_kelompok"
                                     v-model="form.nama_kelompok"
+                                    @input="clearFieldError('nama_kelompok')"
                                     type="text"
                                     placeholder="Contoh: SD Negeri 1 Singaraja / Posyandu Melati Indah"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                    :class="{ 'border-rose-400': form.errors.nama_kelompok }"
+                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_kelompok') }"
                                     required
                                 />
-                                <p v-if="form.errors.nama_kelompok" class="text-xs text-rose-500 font-medium">
-                                    {{ form.errors.nama_kelompok }}
+                                <p v-if="getFieldError('nama_kelompok')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                    <span>{{ getFieldError('nama_kelompok') }}</span>
                                 </p>
                             </div>
 
                             <!-- Kategori -->
                             <div class="space-y-1.5">
                                 <Label for="kategori" class="text-xs font-semibold text-slate-700">
-                                    Kategori Jenjang / Lembaga <span class="text-rose-500">*</span>
+                                    Kategori Jenjang / Satuan <span class="text-rose-500">*</span>
                                 </Label>
                                 <select
                                     id="kategori"
                                     v-model="form.kategori"
+                                    @change="clearFieldError('kategori')"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400': form.errors.kategori }"
+                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kategori') }"
                                     required
                                 >
                                     <option value="" disabled>Pilih Kategori Jenjang...</option>
@@ -523,8 +696,9 @@ function submitForm() {
                                         {{ kat.value }}
                                     </option>
                                 </select>
-                                <p v-if="form.errors.kategori" class="text-xs text-rose-500 font-medium">
-                                    {{ form.errors.kategori }}
+                                <p v-if="getFieldError('kategori')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                    <span>{{ getFieldError('kategori') }}</span>
                                 </p>
                             </div>
 
@@ -536,8 +710,9 @@ function submitForm() {
                                 <select
                                     id="jenis_kepemilikan"
                                     v-model="form.jenis_kepemilikan"
+                                    @change="clearFieldError('jenis_kepemilikan')"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400': form.errors.jenis_kepemilikan }"
+                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('jenis_kepemilikan') }"
                                     required
                                 >
                                     <option value="" disabled>Pilih Jenis Kepemilikan...</option>
@@ -549,8 +724,9 @@ function submitForm() {
                                         {{ j.label }}
                                     </option>
                                 </select>
-                                <p v-if="form.errors.jenis_kepemilikan" class="text-xs text-rose-500 font-medium">
-                                    {{ form.errors.jenis_kepemilikan }}
+                                <p v-if="getFieldError('jenis_kepemilikan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                    <span>{{ getFieldError('jenis_kepemilikan') }}</span>
                                 </p>
                             </div>
 
@@ -562,8 +738,9 @@ function submitForm() {
                                 <select
                                     id="tipe_identitas"
                                     v-model="form.tipe_identitas"
+                                    @change="clearFieldError('tipe_identitas')"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400': form.errors.tipe_identitas }"
+                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('tipe_identitas') }"
                                     required
                                 >
                                     <option value="" disabled>Pilih Tipe Identitas...</option>
@@ -575,34 +752,37 @@ function submitForm() {
                                         {{ t.value }}
                                     </option>
                                 </select>
-                                <p v-if="form.errors.tipe_identitas" class="text-xs text-rose-500 font-medium">
-                                    {{ form.errors.tipe_identitas }}
+                                <p v-if="getFieldError('tipe_identitas')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                    <span>{{ getFieldError('tipe_identitas') }}</span>
                                 </p>
                             </div>
 
                             <!-- Kode Identitas -->
                             <div class="space-y-1.5">
                                 <Label for="kode_identitas" class="text-xs font-semibold text-slate-700">
-                                    Kode / Nomor Identitas ({{ form.tipe_identitas || "Legalitas" }}) <span class="text-rose-500">*</span>
+                                    Kode / Nomor Identitas ({{ form.tipe_identitas || "-" }}) <span class="text-rose-500">*</span>
                                 </Label>
                                 <input
                                     id="kode_identitas"
                                     v-model="form.kode_identitas"
+                                    @input="clearFieldError('kode_identitas')"
                                     type="text"
                                     placeholder="Contoh: 50101234 (Nomor NPSN / NSPP / NSM / Izin)"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                    :class="{ 'border-rose-400': form.errors.kode_identitas }"
+                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kode_identitas') }"
                                     required
                                 />
-                                <p v-if="form.errors.kode_identitas" class="text-xs text-rose-500 font-medium">
-                                    {{ form.errors.kode_identitas }}
+                                <p v-if="getFieldError('kode_identitas')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                    <span>{{ getFieldError('kode_identitas') }}</span>
                                 </p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- 2. KONTAK PENANGGUNG JAWAB (KS & PIC) -->
+                <!-- 2. KONTAK SATUAN -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
                     <CardHeader className="border-b border-slate-100 p-5 bg-slate-50/50">
                         <div class="flex items-center gap-2.5">
@@ -611,10 +791,10 @@ function submitForm() {
                             </div>
                             <div>
                                 <CardTitle className="text-base font-bold text-slate-900">
-                                    2. Kontak Penanggung Jawab (KS & PIC)
+                                    2. Kontak Satuan
                                 </CardTitle>
                                 <CardDescription className="text-xs text-slate-500 mt-0.5">
-                                    Data narahubung resmi Kepala Sekolah / Pimpinan dan Person In Charge (PIC) lapangan.
+                                    Data narahubung resmi Kepala Satuan / Pimpinan dan Person In Charge (PIC) lapangan.
                                 </CardDescription>
                             </div>
                         </div>
@@ -624,74 +804,78 @@ function submitForm() {
                         <div class="space-y-3">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-bold uppercase tracking-wider text-slate-700">
-                                    A. Data Kepala Sekolah / Pimpinan Lembaga
+                                    A. Data Kepala / Pimpinan Satuan
                                 </span>
                                 <div class="flex-1 border-t border-slate-200"></div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="space-y-1.5">
-                                    <Label for="nama_kepala_sekolah" class="text-xs font-semibold text-slate-700">
-                                        Nama Kepala Sekolah <span class="text-rose-500">*</span>
+                                    <Label for="nama_kepala" class="text-xs font-semibold text-slate-700">
+                                        Nama Kepala Satuan <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
-                                        id="nama_kepala_sekolah"
-                                        v-model="form.nama_kepala_sekolah"
+                                        id="nama_kepala"
+                                        v-model="form.nama_kepala"
+                                        @input="clearFieldError('nama_kepala')"
                                         type="text"
-                                        placeholder="Nama Kepala Sekolah beserta gelar"
+                                        placeholder="Nama Lengkap Kepala Satuan"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400': form.errors.nama_kepala_sekolah }"
+                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_kepala') }"
                                         required
                                     />
-                                    <p v-if="form.errors.nama_kepala_sekolah" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.nama_kepala_sekolah }}
+                                    <p v-if="getFieldError('nama_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('nama_kepala') }}</span>
                                     </p>
                                 </div>
 
                                 <div class="space-y-1.5">
-                                    <Label for="email_kepala_sekolah" class="text-xs font-semibold text-slate-700">
-                                        Email Kepala Sekolah <span class="text-rose-500">*</span>
+                                    <Label for="email_kepala" class="text-xs font-semibold text-slate-700">
+                                        Email Kepala Satuan <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
-                                        id="email_kepala_sekolah"
-                                        v-model="form.email_kepala_sekolah"
+                                        id="email_kepala"
+                                        v-model="form.email_kepala"
+                                        @input="clearFieldError('email_kepala')"
                                         type="email"
-                                        placeholder="kepsek@sekolah.sch.id"
+                                        placeholder="kepala@domain.com"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400': form.errors.email_kepala_sekolah }"
+                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('email_kepala') }"
                                         required
                                     />
-                                    <p v-if="form.errors.email_kepala_sekolah" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.email_kepala_sekolah }}
+                                    <p v-if="getFieldError('email_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('email_kepala') }}</span>
                                     </p>
                                 </div>
 
-                                <!-- WhatsApp KS (Format +62) -->
+                                <!-- WhatsApp Kepala Satuan (Format +62) -->
                                 <div class="space-y-1.5">
-                                    <Label for="telepon_kepala_sekolah" class="text-xs font-semibold text-slate-700">
-                                        Nomor WhatsApp KS <span class="text-rose-500">*</span>
+                                    <Label for="telepon_kepala" class="text-xs font-semibold text-slate-700">
+                                        Nomor Telp Kepala Satuan <span class="text-rose-500">*</span>
                                     </Label>
                                     <div class="flex rounded-lg shadow-2xs">
                                         <span class="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-700 font-bold text-xs select-none">
                                             +62
                                         </span>
                                         <input
-                                            id="telepon_kepala_sekolah"
-                                            v-model="rawTeleponKS"
+                                            id="telepon_kepala"
+                                            v-model="rawTeleponKepala"
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
                                             class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400': form.errors.telepon_kepala_sekolah }"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('telepon_kepala') }"
                                             required
                                         />
                                     </div>
-                                    <p v-if="form.errors.telepon_kepala_sekolah" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.telepon_kepala_sekolah }}
+                                    <p v-if="getFieldError('telepon_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('telepon_kepala') }}</span>
                                     </p>
                                 </div>
                             </div>
                         </div>
-
                         <!-- PIC Section -->
                         <div class="space-y-3">
                             <div class="flex items-center gap-2">
@@ -709,14 +893,16 @@ function submitForm() {
                                     <input
                                         id="nama_pic"
                                         v-model="form.nama_pic"
+                                        @input="clearFieldError('nama_pic')"
                                         type="text"
                                         placeholder="Nama PIC penanggung jawab"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400': form.errors.nama_pic }"
+                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_pic') }"
                                         required
                                     />
-                                    <p v-if="form.errors.nama_pic" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.nama_pic }}
+                                    <p v-if="getFieldError('nama_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('nama_pic') }}</span>
                                     </p>
                                 </div>
 
@@ -727,14 +913,16 @@ function submitForm() {
                                     <input
                                         id="email_pic"
                                         v-model="form.email_pic"
+                                        @input="clearFieldError('email_pic')"
                                         type="email"
                                         placeholder="pic@domain.com"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400': form.errors.email_pic }"
+                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('email_pic') }"
                                         required
                                     />
-                                    <p v-if="form.errors.email_pic" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.email_pic }}
+                                    <p v-if="getFieldError('email_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('email_pic') }}</span>
                                     </p>
                                 </div>
 
@@ -753,12 +941,13 @@ function submitForm() {
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
                                             class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400': form.errors.telepon_pic }"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('telepon_pic') }"
                                             required
                                         />
                                     </div>
-                                    <p v-if="form.errors.telepon_pic" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.telepon_pic }}
+                                    <p v-if="getFieldError('telepon_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('telepon_pic') }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -801,6 +990,7 @@ function submitForm() {
                                             @change="onProvinceChange"
                                             :disabled="isProvincesLoading"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('provinsi') }"
                                             required
                                         >
                                             <option value="">{{ isProvincesLoading ? 'Memuat Provinsi...' : 'Pilih Provinsi...' }}</option>
@@ -812,8 +1002,9 @@ function submitForm() {
                                                 {{ prov.name }}
                                             </option>
                                         </select>
-                                        <p v-if="form.errors.provinsi" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.provinsi }}
+                                        <p v-if="getFieldError('provinsi')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ getFieldError('provinsi') }}</span>
                                         </p>
                                     </div>
 
@@ -830,6 +1021,7 @@ function submitForm() {
                                             @change="onRegencyChange"
                                             :disabled="!selectedProvinceCode || isRegenciesLoading || regencyList.length === 0"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kabupaten') }"
                                             required
                                         >
                                             <option value="">{{ isRegenciesLoading ? 'Memuat Kabupaten...' : 'Pilih Kabupaten/Kota...' }}</option>
@@ -841,8 +1033,9 @@ function submitForm() {
                                                 {{ cleanKabupatenName(reg.name) }}
                                             </option>
                                         </select>
-                                        <p v-if="form.errors.kabupaten" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.kabupaten }}
+                                        <p v-if="getFieldError('kabupaten')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ getFieldError('kabupaten') }}</span>
                                         </p>
                                     </div>
 
@@ -859,6 +1052,7 @@ function submitForm() {
                                             @change="onDistrictChange"
                                             :disabled="!selectedRegencyCode || isDistrictsLoading || districtList.length === 0"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kecamatan') }"
                                             required
                                         >
                                             <option value="">{{ isDistrictsLoading ? 'Memuat Kecamatan...' : 'Pilih Kecamatan...' }}</option>
@@ -870,8 +1064,9 @@ function submitForm() {
                                                 {{ dist.name }}
                                             </option>
                                         </select>
-                                        <p v-if="form.errors.kecamatan" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.kecamatan }}
+                                        <p v-if="getFieldError('kecamatan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ getFieldError('kecamatan') }}</span>
                                         </p>
                                     </div>
 
@@ -888,6 +1083,7 @@ function submitForm() {
                                             @change="onVillageChange"
                                             :disabled="!selectedDistrictCode || isVillagesLoading || villageList.length === 0"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('desa_kelurahan') }"
                                             required
                                         >
                                             <option value="">{{ isVillagesLoading ? 'Memuat Desa...' : 'Pilih Desa/Kelurahan...' }}</option>
@@ -899,8 +1095,9 @@ function submitForm() {
                                                 {{ vil.name }}
                                             </option>
                                         </select>
-                                        <p v-if="form.errors.desa_kelurahan" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.desa_kelurahan }}
+                                        <p v-if="getFieldError('desa_kelurahan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ getFieldError('desa_kelurahan') }}</span>
                                         </p>
                                     </div>
 
@@ -912,15 +1109,17 @@ function submitForm() {
                                         <input
                                             id="kode_pos"
                                             v-model="form.kode_pos"
+                                            @input="clearFieldError('kode_pos')"
                                             type="text"
                                             maxlength="5"
                                             placeholder="5 digit angka"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400': form.errors.kode_pos }"
+                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kode_pos') }"
                                             required
                                         />
-                                        <p v-if="form.errors.kode_pos" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.kode_pos }}
+                                        <p v-if="getFieldError('kode_pos')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ getFieldError('kode_pos') }}</span>
                                         </p>
                                     </div>
                                 </div>
@@ -933,39 +1132,36 @@ function submitForm() {
                                     <textarea
                                         id="alamat_lengkap"
                                         v-model="form.alamat_lengkap"
+                                        @input="clearFieldError('alamat_lengkap')"
                                         rows="3"
                                         placeholder="Contoh: Jl. Mayor Metra No. 12, Banjar Dinas Anyar"
                                         class="w-full p-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 leading-relaxed"
-                                        :class="{ 'border-rose-400': form.errors.alamat_lengkap }"
+                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('alamat_lengkap') }"
                                         required
                                     ></textarea>
-                                    <p v-if="form.errors.alamat_lengkap" class="text-xs text-rose-500 font-medium">
-                                        {{ form.errors.alamat_lengkap }}
+                                    <p v-if="getFieldError('alamat_lengkap')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('alamat_lengkap') }}</span>
                                     </p>
                                 </div>
                             </div>
 
                             <!-- SISI KANAN: Map Picker Komponen (6 Kolom) -->
                             <div class="lg:col-span-6 space-y-2">
+                                <div id="latitude"></div>
                                 <MapPicker
                                     v-model:latitude="form.latitude"
                                     v-model:longitude="form.longitude"
                                     :default-center="defaultCenter"
                                     :default-zoom="form.latitude && form.longitude ? 14 : 10"
-                                    label="Titik Koordinat Lokasi Kelompok"
+                                    label="Titik Koordinat Lokasi Kelompok *"
                                     height="370px"
                                 />
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p v-if="form.errors.latitude" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.latitude }}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p v-if="form.errors.longitude" class="text-xs text-rose-500 font-medium">
-                                            {{ form.errors.longitude }}
-                                        </p>
-                                    </div>
+                                <div v-if="getFieldError('latitude') || getFieldError('longitude')">
+                                    <p class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                        <span>{{ getFieldError('latitude') || getFieldError('longitude') }}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -1009,6 +1205,15 @@ function submitForm() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-5 sm:p-6 space-y-5">
+                        <!-- Error Rincian -->
+                        <div
+                            v-if="getFieldError('rincian')"
+                            class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2.5 text-xs font-semibold"
+                        >
+                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+                            <span>{{ getFieldError('rincian') }}</span>
+                        </div>
+
                         <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                             <table class="w-full text-left text-xs border-collapse">
                                 <thead>
