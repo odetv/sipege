@@ -37,13 +37,6 @@ import {
     Search,
     Filter,
 } from "lucide-vue-next";
-import {
-    TKPI_2020_DATABASE,
-    STANDAR_AKG_BGN,
-    calculateGrossWeightKg,
-    calculateNutritionFromNetGram,
-    calculateItemFoodCostPerPortion,
-} from "@/Services/tkpi2020";
 
 const props = defineProps({
     user: {
@@ -273,6 +266,42 @@ const varianAlergiTelurBahan = computed(() => {
             },
         ]);
 });
+
+// Database Master TKPI 2020 (dari CSV backend props.tkpiList)
+const tkpiItems = ref(props.tkpiList || []);
+
+// Fungsi Kalkulasi MBG
+function calculateGrossWeightKg(netGram, totalPortions, bddPercent, bufferPercent) {
+    if (!netGram || !totalPortions) return 0;
+    const bddFactor = Math.max(0.1, (bddPercent || 100) / 100);
+    const bufferFactor = 1 + ((bufferPercent || 0) / 100);
+    const grossGramPerPortion = (netGram / bddFactor) * bufferFactor;
+    const totalGrossKg = (grossGramPerPortion * totalPortions) / 1000;
+    return Number(totalGrossKg.toFixed(2));
+}
+
+function calculateNutritionFromNetGram(itemTkpi, netGram) {
+    if (!itemTkpi || !netGram) {
+        return { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+    }
+    const factor = netGram / 100;
+    return {
+        energi: Number(((itemTkpi.energi || 0) * factor).toFixed(1)),
+        protein: Number(((itemTkpi.protein || 0) * factor).toFixed(1)),
+        lemak: Number(((itemTkpi.lemak || 0) * factor).toFixed(1)),
+        karbohidrat: Number(((itemTkpi.karbohidrat || 0) * factor).toFixed(1)),
+        serat: Number(((itemTkpi.serat || 0) * factor).toFixed(1)),
+    };
+}
+
+function calculateItemFoodCostPerPortion(netGram, bddPercent, bufferPercent, hargaPerKg) {
+    if (!netGram || !hargaPerKg) return 0;
+    const bddFactor = Math.max(0.1, (bddPercent || 100) / 100);
+    const bufferFactor = 1 + ((bufferPercent || 0) / 100);
+    const grossGram = (netGram / bddFactor) * bufferFactor;
+    const cost = (grossGram / 1000) * hargaPerKg;
+    return Math.round(cost);
+}
 
 // Pilihan Bahan Tambahan dari Master TKPI
 const selectedTkpiOption = ref("");
@@ -535,13 +564,8 @@ function handlePrintPo() {
 }
 
 // ==========================================
-// 5. STATE & LOGIKA TKPI 2020 & EXCEL PLACEHOLDER
+// 5. STATE & LOGIKA TKPI 2020 (PAGINASI & FILTER)
 // ==========================================
-const tkpiItems = ref(
-    props.tkpiList && props.tkpiList.length > 0
-        ? props.tkpiList
-        : TKPI_2020_DATABASE,
-);
 const tkpiSearchQuery = ref("");
 const tkpiCategoryFilter = ref("Semua");
 
