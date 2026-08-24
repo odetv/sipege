@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
+use App\Http\Controllers\KeuanganController;
+use App\Http\Controllers\LabelController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
@@ -32,6 +35,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Kelompok Penerima Manfaat
     Route::resource('penerima-manfaat', KelompokPenerimaManfaatController::class);
+
+    // Gizi SPPG
+    Route::get('/gizi', [GiziController::class, 'index'])->name('gizi.index');
+
+    // Keuangan SPPG
+    Route::get('/keuangan', [KeuanganController::class, 'index'])->name('keuangan.index');
+
+    // Label SPPG
+    Route::get('/label', [LabelController::class, 'index'])->name('label.index');
 });
 
 Route::middleware('auth')->group(function () {

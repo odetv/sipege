@@ -7,6 +7,9 @@ import {
     LayoutDashboard,
     LogOut,
     Users,
+    UtensilsCrossed,
+    Wallet,
+    Tag,
     X,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
@@ -149,6 +152,7 @@ function logout() {
                     Menu Utama
                 </p>
 
+                <!-- 1. Dashboard -->
                 <Link
                     :href="route('dashboard')"
                     :title="isCollapsed ? 'Dashboard' : ''"
@@ -181,7 +185,7 @@ function logout() {
                     ></div>
                 </Link>
 
-                <!-- Menu Tombol Penerima Manfaat -->
+                <!-- 2. Menu Penerima Manfaat -->
                 <Link
                     :href="route('penerima-manfaat.index')"
                     :title="isCollapsed ? 'Penerima Manfaat' : ''"
@@ -205,6 +209,105 @@ function logout() {
                     >
                     <div
                         v-if="route().current('penerima-manfaat.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 3. Menu Gizi -->
+                <Link
+                    :href="route('gizi.index')"
+                    :title="isCollapsed ? 'Gizi' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('gizi.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <UtensilsCrossed class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Gizi</span
+                    >
+                    <div
+                        v-if="route().current('gizi.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 4. Menu Keuangan -->
+                <Link
+                    :href="route('keuangan.index')"
+                    :title="isCollapsed ? 'Keuangan' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('keuangan.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Wallet class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Keuangan</span
+                    >
+                    <div
+                        v-if="route().current('keuangan.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 5. Menu Label -->
+                <Link
+                    :href="route('label.index')"
+                    :title="isCollapsed ? 'Label' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('label.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Tag class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Label</span
+                    >
+                    <div
+                        v-if="route().current('label.*')"
                         :class="[
                             'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
                             isCollapsed
