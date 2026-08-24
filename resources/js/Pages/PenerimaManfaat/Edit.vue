@@ -666,6 +666,8 @@ function submitForm() {
         :user="user"
         :unit-sppg="unitSppg"
     >
+        <Head title="Edit Kelompok Penerima Manfaat" />
+
         <div class="max-w-6xl mx-auto space-y-6">
             <!-- Top Actions Header -->
             <div

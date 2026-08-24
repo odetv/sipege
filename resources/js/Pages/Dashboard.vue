@@ -1120,7 +1120,7 @@ function switchTab(tab) {
 </script>
 
 <template>
-    <Head title="Dashboard SPPG - SIPEGE" />
+    <Head title="Dashboard SPPG" />
 
     <AppLayout
         :user="user"

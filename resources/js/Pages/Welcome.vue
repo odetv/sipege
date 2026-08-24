@@ -20,7 +20,7 @@ defineProps({
 </script>
 
 <template>
-    <Head title="SIPEGE - Sistem Pengelolaan SPPG" />
+    <Head title="Sistem Pengelolaan SPPG" />
 
     <div
         class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 flex flex-col justify-between text-slate-900"

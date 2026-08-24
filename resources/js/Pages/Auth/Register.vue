@@ -535,7 +535,8 @@ function validateStep1() {
     if (!form.kode_pos_domisili) {
         errors.kode_pos_domisili = "Kode pos domisili wajib diisi.";
     } else if (!/^\d{5}$/.test(form.kode_pos_domisili)) {
-        errors.kode_pos_domisili = "Kode pos domisili harus berupa 5 digit angka.";
+        errors.kode_pos_domisili =
+            "Kode pos domisili harus berupa 5 digit angka.";
     }
     if (!form.alamat_lengkap_domisili || !form.alamat_lengkap_domisili.trim()) {
         errors.alamat_lengkap_domisili = "Alamat lengkap domisili wajib diisi.";
@@ -690,7 +691,7 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Registrasi SPPG - SIPEGE" />
+    <Head title="Daftar ke Sistem" />
 
     <div
         class="min-h-screen bg-gradient-to-b from-slate-50 via-slate-100/60 to-blue-50/40 py-8 px-4 sm:px-6 lg:px-8"
@@ -1513,9 +1514,10 @@ function submit() {
                                                 : ''
                                         "
                                         @input="
-                                            form.kode_pos_ktp = form.kode_pos_ktp
-                                                .replace(/\D/g, '')
-                                                .slice(0, 5);
+                                            form.kode_pos_ktp =
+                                                form.kode_pos_ktp
+                                                    .replace(/\D/g, '')
+                                                    .slice(0, 5);
                                             clearFieldError('kode_pos_ktp');
                                         "
                                     />
@@ -1532,7 +1534,9 @@ function submit() {
 
                                 <!-- Alamat Lengkap KTP (wajib) -->
                                 <div class="space-y-1.5 sm:col-span-2">
-                                    <Label for="alamat_lengkap_ktp" :required="true"
+                                    <Label
+                                        for="alamat_lengkap_ktp"
+                                        :required="true"
                                         >Alamat Lengkap Sesuai KTP</Label
                                     >
                                     <textarea
@@ -1547,16 +1551,24 @@ function submit() {
                                                 ? 'border-destructive focus-visible:ring-destructive'
                                                 : 'border-input')
                                         "
-                                        @input="clearFieldError('alamat_lengkap_ktp')"
+                                        @input="
+                                            clearFieldError(
+                                                'alamat_lengkap_ktp',
+                                            )
+                                        "
                                     ></textarea>
                                     <p
-                                        v-if="getFieldError('alamat_lengkap_ktp')"
+                                        v-if="
+                                            getFieldError('alamat_lengkap_ktp')
+                                        "
                                         class="text-xs text-destructive font-medium flex items-center gap-1"
                                     >
                                         <AlertCircle
                                             class="h-3.5 w-3.5 shrink-0"
                                         />
-                                        {{ getFieldError("alamat_lengkap_ktp") }}
+                                        {{
+                                            getFieldError("alamat_lengkap_ktp")
+                                        }}
                                     </p>
                                 </div>
                             </div>
@@ -1813,7 +1825,9 @@ function submit() {
 
                                 <!-- Kode Pos Domisili (wajib) -->
                                 <div class="space-y-1.5 sm:col-span-2">
-                                    <Label for="kode_pos_domisili" :required="true"
+                                    <Label
+                                        for="kode_pos_domisili"
+                                        :required="true"
                                         >Kode Pos Domisili</Label
                                     >
                                     <Input
@@ -1827,14 +1841,19 @@ function submit() {
                                                 : ''
                                         "
                                         @input="
-                                            form.kode_pos_domisili = form.kode_pos_domisili
-                                                .replace(/\D/g, '')
-                                                .slice(0, 5);
-                                            clearFieldError('kode_pos_domisili');
+                                            form.kode_pos_domisili =
+                                                form.kode_pos_domisili
+                                                    .replace(/\D/g, '')
+                                                    .slice(0, 5);
+                                            clearFieldError(
+                                                'kode_pos_domisili',
+                                            );
                                         "
                                     />
                                     <p
-                                        v-if="getFieldError('kode_pos_domisili')"
+                                        v-if="
+                                            getFieldError('kode_pos_domisili')
+                                        "
                                         class="text-xs text-destructive font-medium flex items-center gap-1"
                                     >
                                         <AlertCircle
@@ -1846,7 +1865,9 @@ function submit() {
 
                                 <!-- Alamat Lengkap Domisili (wajib) -->
                                 <div class="space-y-1.5 sm:col-span-2">
-                                    <Label for="alamat_lengkap_domisili" :required="true"
+                                    <Label
+                                        for="alamat_lengkap_domisili"
+                                        :required="true"
                                         >Alamat Lengkap Domisili</Label
                                     >
                                     <textarea
@@ -1857,20 +1878,34 @@ function submit() {
                                         required
                                         :class="
                                             'flex w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ' +
-                                            (getFieldError('alamat_lengkap_domisili')
+                                            (getFieldError(
+                                                'alamat_lengkap_domisili',
+                                            )
                                                 ? 'border-destructive focus-visible:ring-destructive'
                                                 : 'border-input')
                                         "
-                                        @input="clearFieldError('alamat_lengkap_domisili')"
+                                        @input="
+                                            clearFieldError(
+                                                'alamat_lengkap_domisili',
+                                            )
+                                        "
                                     ></textarea>
                                     <p
-                                        v-if="getFieldError('alamat_lengkap_domisili')"
+                                        v-if="
+                                            getFieldError(
+                                                'alamat_lengkap_domisili',
+                                            )
+                                        "
                                         class="text-xs text-destructive font-medium flex items-center gap-1"
                                     >
                                         <AlertCircle
                                             class="h-3.5 w-3.5 shrink-0"
                                         />
-                                        {{ getFieldError("alamat_lengkap_domisili") }}
+                                        {{
+                                            getFieldError(
+                                                "alamat_lengkap_domisili",
+                                            )
+                                        }}
                                     </p>
                                 </div>
                             </div>
@@ -2780,10 +2815,21 @@ function submit() {
                                             >Alamat KTP:</span
                                         >
                                         <span class="text-right max-w-[65%]"
-                                            >{{ form.alamat_lengkap_ktp ? `${form.alamat_lengkap_ktp}, ` : '' }}Desa/Kelurahan {{ form.desa_kelurahan_ktp }},
+                                            >{{
+                                                form.alamat_lengkap_ktp
+                                                    ? `${form.alamat_lengkap_ktp}, `
+                                                    : ""
+                                            }}Desa/Kelurahan
+                                            {{ form.desa_kelurahan_ktp }},
                                             Kecamatan {{ form.kecamatan_ktp }},
-                                            Kabupaten/Kota {{ form.kabupaten_ktp }},
-                                            Provinsi {{ form.provinsi_ktp }}{{ form.kode_pos_ktp ? ` (${form.kode_pos_ktp})` : '' }}</span
+                                            Kabupaten/Kota
+                                            {{ form.kabupaten_ktp }}, Provinsi
+                                            {{ form.provinsi_ktp
+                                            }}{{
+                                                form.kode_pos_ktp
+                                                    ? ` (${form.kode_pos_ktp})`
+                                                    : ""
+                                            }}</span
                                         >
                                     </div>
                                     <div
@@ -2793,10 +2839,22 @@ function submit() {
                                             >Alamat Domisili:</span
                                         >
                                         <span class="text-right max-w-[65%]"
-                                            >{{ form.alamat_lengkap_domisili ? `${form.alamat_lengkap_domisili}, ` : '' }}Desa/Kelurahan {{ form.desa_kelurahan_domisili }},
-                                            Kecamatan {{ form.kecamatan_domisili }},
-                                            Kabupaten/Kota {{ form.kabupaten_domisili }},
-                                            Provinsi {{ form.provinsi_domisili }}{{ form.kode_pos_domisili ? ` (${form.kode_pos_domisili})` : '' }}</span
+                                            >{{
+                                                form.alamat_lengkap_domisili
+                                                    ? `${form.alamat_lengkap_domisili}, `
+                                                    : ""
+                                            }}Desa/Kelurahan
+                                            {{ form.desa_kelurahan_domisili }},
+                                            Kecamatan
+                                            {{ form.kecamatan_domisili }},
+                                            Kabupaten/Kota
+                                            {{ form.kabupaten_domisili }},
+                                            Provinsi {{ form.provinsi_domisili
+                                            }}{{
+                                                form.kode_pos_domisili
+                                                    ? ` (${form.kode_pos_domisili})`
+                                                    : ""
+                                            }}</span
                                         >
                                     </div>
                                     <div class="flex justify-between py-1">

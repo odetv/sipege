@@ -77,8 +77,17 @@ const customIcon = L.divIcon({
 });
 
 function invalidate() {
-  if (map) {
-    map.invalidateSize();
+  if (
+    map &&
+    map._container &&
+    map._mapPane &&
+    mapContainer.value &&
+    mapContainer.value.offsetWidth > 0 &&
+    mapContainer.value.offsetHeight > 0
+  ) {
+    try {
+      map.invalidateSize();
+    } catch (e) {}
   }
 }
 
@@ -156,9 +165,7 @@ function initMap() {
   // Auto-resize when element becomes visible or changes dimension
   if (window.ResizeObserver && mapContainer.value) {
     resizeObserver = new ResizeObserver(() => {
-      if (map) {
-        map.invalidateSize();
-      }
+      invalidate();
     });
     resizeObserver.observe(mapContainer.value);
   }

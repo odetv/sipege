@@ -207,7 +207,7 @@ function formatDateTimeWita(dateString) {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Penerima Manfaat - SIPEGE" />
+        <Head title="Penerima Manfaat" />
 
         <div class="space-y-6">
             <!-- Alert jika Unit SPPG belum dikonfigurasi -->

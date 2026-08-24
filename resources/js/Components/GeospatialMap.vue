@@ -177,7 +177,7 @@ const mapThemes = [
     },
 ];
 
-const currentMapTheme = ref("google_roadmap");
+const currentMapTheme = ref("osm");
 
 function switchMapTheme(themeId) {
     if (!map) return;
@@ -201,7 +201,7 @@ function switchMapTheme(themeId) {
 // ================= ROUTE MODE STATE =================
 // 'road' = Jalan Riil (Navigasi / Driving Route OSRM)
 // 'straight' = Garis Tegak Lurus / Geodesik
-const routeMode = ref("road");
+const routeMode = ref("straight");
 
 // ================= FILTER STATE =================
 // Default: munculkan semua koneksi & titik (Radius Bulat & Radius Riil default MATI)
@@ -602,18 +602,8 @@ function initMap() {
     // Fit bounds agar semua titik terlihat sempurna
     fitBounds();
 
-    // ResizeObserver untuk memastikan peta ter-render utuh saat tab aktif
-    if (window.ResizeObserver && mapContainer.value) {
-        resizeObserver = new ResizeObserver(() => {
-            if (map) {
-                map.invalidateSize();
-            }
-        });
-        resizeObserver.observe(mapContainer.value);
-    }
-
-    setTimeout(invalidateSize, 100);
-    setTimeout(invalidateSize, 300);
+    setTimeout(safeInvalidateSize, 100);
+    setTimeout(safeInvalidateSize, 300);
 }
 
 // ================= KEPALA SPPG -> UNIT SPPG ROUTE =================
@@ -1352,7 +1342,15 @@ function getKelompokDisplayDist(kelompok) {
 }
 
 function fitBounds() {
-    if (!map) return;
+    if (
+        !map ||
+        !map._container ||
+        !mapContainer.value ||
+        mapContainer.value.offsetWidth === 0 ||
+        mapContainer.value.offsetHeight === 0
+    ) {
+        return;
+    }
 
     const points = [];
 
@@ -1387,17 +1385,32 @@ function fitBounds() {
         });
     }
 
-    if (points.length > 0) {
-        map.fitBounds(points, {
-            padding: [50, 50],
-            maxZoom: 16,
-        });
+    try {
+        if (points.length > 0) {
+            map.fitBounds(points, {
+                padding: [50, 50],
+                maxZoom: 16,
+            });
+        }
+    } catch (e) {
+        // Safe catch if map is not ready
     }
 }
 
-function invalidateSize() {
-    if (map) {
-        map.invalidateSize();
+function safeInvalidateSize() {
+    if (
+        map &&
+        map._container &&
+        map._mapPane &&
+        mapContainer.value &&
+        mapContainer.value.offsetWidth > 0 &&
+        mapContainer.value.offsetHeight > 0
+    ) {
+        try {
+            map.invalidateSize();
+        } catch (e) {
+            // Suppress error when resizing unmounted/hidden map
+        }
     }
 }
 
@@ -1528,10 +1541,8 @@ watch(
         nextTick(() => {
             [50, 150, 300, 500, 800].forEach((delay) => {
                 setTimeout(() => {
-                    if (map) {
-                        map.invalidateSize();
-                        fitBounds();
-                    }
+                    safeInvalidateSize();
+                    fitBounds();
                 }, delay);
             });
         });
@@ -1563,7 +1574,7 @@ function handleClickOutside(event) {
 
 defineExpose({
     refresh: () => {
-        invalidateSize();
+        safeInvalidateSize();
         fitBounds();
     },
 });
@@ -1573,9 +1584,7 @@ onMounted(() => {
     document.addEventListener("click", handleClickOutside);
     if (window.ResizeObserver && mapContainer.value) {
         resizeObserver = new ResizeObserver(() => {
-            if (map) {
-                map.invalidateSize();
-            }
+            safeInvalidateSize();
         });
         resizeObserver.observe(mapContainer.value);
     }
@@ -1585,9 +1594,13 @@ onBeforeUnmount(() => {
     document.removeEventListener("click", handleClickOutside);
     if (resizeObserver) {
         resizeObserver.disconnect();
+        resizeObserver = null;
     }
     if (map) {
-        map.remove();
+        try {
+            map.remove();
+        } catch (e) {}
+        map = null;
     }
 });
 </script>

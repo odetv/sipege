@@ -46,7 +46,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Masuk ke Sistem - SIPEGE" />
+    <Head title="Masuk ke Sistem" />
 
     <div
         class="min-h-screen bg-gradient-to-b from-slate-50 via-slate-100/50 to-blue-50/30 flex flex-col justify-center items-center p-4 sm:p-6"
