@@ -203,7 +203,7 @@ function formatDateTimeWita(dateString) {
 <template>
     <AppLayout
         title="Penerima Manfaat"
-        subtitle="Kelola data kelompok dan rincian penerima manfaat SPPG"
+        subtitle="Kelola Data Kelompok dan Rincian Penerima Manfaat SPPG"
         :user="user"
         :unit-sppg="unitSppg"
     >
@@ -246,7 +246,7 @@ function formatDateTimeWita(dateString) {
                                 Total Kelompok
                             </p>
                             <h3
-                                class="text-2xl font-bold font-mono text-slate-900 mt-1 truncate"
+                                class="text-2xl font-bold text-slate-900 mt-1 truncate"
                             >
                                 {{
                                     stats.total_kelompok.toLocaleString("id-ID")
@@ -255,7 +255,7 @@ function formatDateTimeWita(dateString) {
                             <p
                                 class="text-[11px] text-slate-400 mt-0.5 truncate"
                             >
-                                Sekolah / Lembaga / Posyandu
+                                Satuan Penerima Manfaat
                             </p>
                         </div>
                         <div
@@ -278,9 +278,7 @@ function formatDateTimeWita(dateString) {
                                 Rincian Porsi
                             </p>
                             <div class="flex items-baseline gap-2 mt-1">
-                                <span
-                                    class="text-xl font-bold font-mono text-amber-700"
-                                >
+                                <span class="text-xl font-bold text-amber-700">
                                     {{
                                         (
                                             stats.total_porsi_kecil || 0
@@ -292,9 +290,7 @@ function formatDateTimeWita(dateString) {
                                     >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span
-                                    class="text-xl font-bold font-mono text-blue-700"
-                                >
+                                <span class="text-xl font-bold text-blue-700">
                                     {{
                                         (
                                             stats.total_porsi_besar || 0
@@ -332,9 +328,7 @@ function formatDateTimeWita(dateString) {
                                 Rincian Gender
                             </p>
                             <div class="flex items-baseline gap-2 mt-1">
-                                <span
-                                    class="text-xl font-bold font-mono text-sky-700"
-                                >
+                                <span class="text-xl font-bold text-sky-700">
                                     {{
                                         (
                                             stats.total_laki_laki || 0
@@ -346,9 +340,7 @@ function formatDateTimeWita(dateString) {
                                     >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span
-                                    class="text-xl font-bold font-mono text-pink-700"
-                                >
+                                <span class="text-xl font-bold text-pink-700">
                                     {{
                                         (
                                             stats.total_perempuan || 0
@@ -386,7 +378,7 @@ function formatDateTimeWita(dateString) {
                                 Total Penerima Manfaat
                             </p>
                             <h3
-                                class="text-2xl font-bold font-mono text-primary mt-1 truncate"
+                                class="text-2xl font-bold text-primary mt-1 truncate"
                             >
                                 {{
                                     stats.total_penerima.toLocaleString("id-ID")
@@ -395,7 +387,7 @@ function formatDateTimeWita(dateString) {
                             <p
                                 class="text-[11px] text-slate-400 mt-0.5 truncate"
                             >
-                                Jiwa Penerima
+                                Porsi Penerima Manfaat
                             </p>
                         </div>
                         <div
@@ -425,10 +417,9 @@ function formatDateTimeWita(dateString) {
                             <span>Daftar Kelompok Penerima Manfaat</span>
                         </CardTitle>
                         <CardDescription
-                            className="text-xs text-slate-500 mt-1 pl-10.5"
+                            className="text-xs text-slate-500 mt-1 pl-10.5 capitalize"
                         >
-                            Daftar seluruh sekolah, madrasah, lembaga
-                            pendidikan, dan posyandu penerima manfaat SPPG.
+                            Daftar seluruh satuan penerima manfaat SPPG
                         </CardDescription>
                     </div>
 
@@ -462,7 +453,7 @@ function formatDateTimeWita(dateString) {
                                     v-model="searchQuery"
                                     @keyup.enter="applyFilters"
                                     type="text"
-                                    placeholder="Cari kelompok, NPSN, KS, PIC, wilayah..."
+                                    placeholder="Cari Kelompok..."
                                     class="block w-full h-10 rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
                                 />
                             </div>
@@ -581,7 +572,7 @@ function formatDateTimeWita(dateString) {
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[240px]"
                                         >
-                                            Waktu Registrasi & Update
+                                            Waktu Daftar & Perbaharui
                                         </th>
                                         <th
                                             scope="col"
@@ -605,7 +596,7 @@ function formatDateTimeWita(dateString) {
                                             {{ index + 1 }}
                                         </td>
 
-                                        <!-- Kelompok & Identitas -->
+                                        <!-- Kelompok -->
                                         <td class="py-4 px-5">
                                             <div class="space-y-1.5">
                                                 <div
@@ -643,7 +634,7 @@ function formatDateTimeWita(dateString) {
                                                 </p>
 
                                                 <div
-                                                    class="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono"
+                                                    class="flex items-center gap-1.5 text-xs text-slate-500"
                                                 >
                                                     <span
                                                         class="font-semibold text-slate-600"
@@ -660,7 +651,7 @@ function formatDateTimeWita(dateString) {
 
                                         <!-- Kontak -->
                                         <td class="py-4 px-5">
-                                            <div class="space-y-2 text-[11px]">
+                                            <div class="space-y-2 text-xs">
                                                 <div>
                                                     <p
                                                         class="font-semibold text-slate-800 flex items-center gap-1"
@@ -676,7 +667,7 @@ function formatDateTimeWita(dateString) {
                                                         >
                                                     </p>
                                                     <p
-                                                        class="text-slate-500 flex items-center gap-1 font-mono text-[10px] mt-0.5"
+                                                        class="text-slate-500 flex items-center gap-1 mt-0.5"
                                                     >
                                                         <Phone
                                                             class="h-2.5 w-2.5 text-slate-400"
@@ -706,7 +697,7 @@ function formatDateTimeWita(dateString) {
                                                         >
                                                     </p>
                                                     <p
-                                                        class="text-slate-500 flex items-center gap-1 font-mono text-[10px] mt-0.5"
+                                                        class="text-slate-500 flex items-center gap-1 mt-0.5"
                                                     >
                                                         <Phone
                                                             class="h-2.5 w-2.5 text-slate-400"
@@ -740,38 +731,39 @@ function formatDateTimeWita(dateString) {
                                                             formatWilayahName(
                                                                 item.kecamatan,
                                                             )
-                                                        }}</span
-                                                    >
+                                                        }},
+                                                        {{
+                                                            formatKabupatenName(
+                                                                item.kabupaten,
+                                                            )
+                                                        }},
+                                                        {{
+                                                            formatWilayahName(
+                                                                item.provinsi,
+                                                            )
+                                                        }}
+                                                        ({{ item.kode_pos }})
+                                                    </span>
                                                 </p>
                                                 <p
-                                                    class="text-[11px] text-slate-500 leading-tight"
-                                                >
-                                                    {{
-                                                        formatKabupatenName(
-                                                            item.kabupaten,
-                                                        )
-                                                    }},
-                                                    {{
-                                                        formatWilayahName(
-                                                            item.provinsi,
-                                                        )
-                                                    }}
-                                                    ({{ item.kode_pos }})
-                                                </p>
-                                                <p
-                                                    class="text-[10px] font-mono text-slate-400"
+                                                    class="text-xs text-slate-500 leading-tight"
                                                 >
                                                     📍
-                                                    {{
-                                                        Number(
-                                                            item.latitude,
-                                                        ).toFixed(5)
-                                                    }},
-                                                    {{
-                                                        Number(
-                                                            item.longitude,
-                                                        ).toFixed(5)
-                                                    }}
+                                                    <a
+                                                        :href="`https://www.google.com/maps?q=${item.latitude},${item.longitude}`"
+                                                        target="_blank"
+                                                    >
+                                                        {{
+                                                            Number(
+                                                                item.latitude,
+                                                            ).toFixed(5)
+                                                        }},
+                                                        {{
+                                                            Number(
+                                                                item.longitude,
+                                                            ).toFixed(5)
+                                                        }}
+                                                    </a>
                                                 </p>
                                             </div>
                                         </td>
@@ -779,7 +771,7 @@ function formatDateTimeWita(dateString) {
                                         <!-- Penerima (L / P) -->
                                         <td class="py-4 px-4 text-center">
                                             <div
-                                                class="inline-flex items-center gap-1 text-[11px] font-mono"
+                                                class="inline-flex items-center gap-1 text-xs"
                                             >
                                                 <span
                                                     class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-semibold"
@@ -801,7 +793,7 @@ function formatDateTimeWita(dateString) {
                                         <!-- Porsi (Kecil / Besar) -->
                                         <td class="py-4 px-4 text-center">
                                             <div
-                                                class="inline-flex items-center gap-1 text-[11px] font-mono"
+                                                class="inline-flex items-center gap-1 text-xs"
                                             >
                                                 <span
                                                     class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-semibold"
@@ -829,7 +821,7 @@ function formatDateTimeWita(dateString) {
                                         <!-- Total Penerima -->
                                         <td class="py-4 px-4 text-center">
                                             <span
-                                                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 font-mono"
+                                                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20"
                                             >
                                                 {{ item.total_penerima }}
                                             </span>
@@ -995,7 +987,7 @@ function formatDateTimeWita(dateString) {
                                 {{ activeKelompok.jenis_kepemilikan }}
                             </span>
                         </div>
-                        <p class="text-xs text-slate-500 font-mono mt-1">
+                        <p class="text-xs text-slate-500 mt-1">
                             {{ activeKelompok.tipe_identitas }}:
                             {{ activeKelompok.kode_identitas }}
                         </p>
@@ -1004,7 +996,7 @@ function formatDateTimeWita(dateString) {
                     <button
                         type="button"
                         @click="closeDetail"
-                        class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+                        class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 cursor-pointer transition duration-150 ease-in-out"
                     >
                         ✕
                     </button>
@@ -1020,7 +1012,7 @@ function formatDateTimeWita(dateString) {
                             class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"
                         >
                             <User class="h-3.5 w-3.5 text-primary" />
-                            <span>Kontak Penanggung Jawab</span>
+                            <span>Kontak Satuan</span>
                         </h4>
 
                         <div class="space-y-2 text-xs">
@@ -1028,9 +1020,9 @@ function formatDateTimeWita(dateString) {
                                 class="p-2.5 rounded-lg bg-white border border-slate-200/70"
                             >
                                 <p
-                                    class="text-[10px] font-bold text-slate-400 uppercase"
+                                    class="text-[11px] font-bold text-slate-400 uppercase"
                                 >
-                                    Kepala Satuan / Pimpinan
+                                    Kepala Satuan
                                 </p>
                                 <p class="font-bold text-slate-900 mt-0.5">
                                     {{ activeKelompok.nama_kepala }}
@@ -1044,7 +1036,7 @@ function formatDateTimeWita(dateString) {
                                     }}</span>
                                 </p>
                                 <p
-                                    class="text-slate-600 font-mono text-[11px] mt-0.5 flex items-center gap-1"
+                                    class="text-slate-600 text-[11px] mt-0.5 flex items-center gap-1"
                                 >
                                     <Phone class="h-3 w-3 text-slate-400" />
                                     <span
@@ -1059,9 +1051,9 @@ function formatDateTimeWita(dateString) {
                                 class="p-2.5 rounded-lg bg-white border border-slate-200/70"
                             >
                                 <p
-                                    class="text-[10px] font-bold text-slate-400 uppercase"
+                                    class="text-[11px] font-bold text-slate-400 uppercase"
                                 >
-                                    Person In Charge (PIC)
+                                    PIC
                                 </p>
                                 <p class="font-bold text-slate-900 mt-0.5">
                                     {{ activeKelompok.nama_pic }}
@@ -1073,7 +1065,7 @@ function formatDateTimeWita(dateString) {
                                     <span>{{ activeKelompok.email_pic }}</span>
                                 </p>
                                 <p
-                                    class="text-slate-600 font-mono text-[11px] mt-0.5 flex items-center gap-1"
+                                    class="text-slate-600 text-[11px] mt-0.5 flex items-center gap-1"
                                 >
                                     <Phone class="h-3 w-3 text-slate-400" />
                                     <span
@@ -1104,28 +1096,24 @@ function formatDateTimeWita(dateString) {
                                 >
                                     Alamat Lengkap
                                 </p>
-                                <p
-                                    class="text-slate-800 mt-0.5 leading-relaxed"
-                                >
-                                    {{ activeKelompok.alamat_lengkap }}
-                                </p>
                                 <p class="text-[11px] text-slate-500 mt-1">
-                                    Desa
+                                    {{ activeKelompok.alamat_lengkap }},
+                                    Desa/Kelurahan
                                     {{
                                         formatWilayahName(
                                             activeKelompok.desa_kelurahan,
                                         )
-                                    }}, Kec.
+                                    }}, Kecamatan
                                     {{
                                         formatWilayahName(
                                             activeKelompok.kecamatan,
                                         )
-                                    }},
+                                    }}, Kabupaten
                                     {{
                                         formatKabupatenName(
                                             activeKelompok.kabupaten,
                                         )
-                                    }},
+                                    }}, Provinsi
                                     {{
                                         formatWilayahName(
                                             activeKelompok.provinsi,
@@ -1145,7 +1133,7 @@ function formatDateTimeWita(dateString) {
                                         Titik Koordinat
                                     </p>
                                     <p
-                                        class="font-mono text-xs font-bold text-slate-800 mt-0.5"
+                                        class="text-xs font-bold text-slate-800 mt-0.5"
                                     >
                                         {{
                                             Number(
@@ -1184,7 +1172,7 @@ function formatDateTimeWita(dateString) {
                         </h4>
 
                         <div
-                            class="flex flex-wrap items-center gap-1.5 text-xs font-mono"
+                            class="flex flex-wrap items-center gap-1.5 text-xs"
                         >
                             <span
                                 class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold"
@@ -1279,17 +1267,17 @@ function formatDateTimeWita(dateString) {
                                         </span>
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono font-medium text-sky-700"
+                                        class="py-2.5 px-4 text-center font-medium text-sky-700"
                                     >
                                         {{ rincian.jumlah_laki_laki }}
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono font-medium text-pink-700"
+                                        class="py-2.5 px-4 text-center font-medium text-pink-700"
                                     >
                                         {{ rincian.jumlah_perempuan }}
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono font-bold text-slate-900"
+                                        class="py-2.5 px-4 text-center font-bold text-slate-900"
                                     >
                                         {{ rincian.total }}
                                     </td>
@@ -1303,20 +1291,20 @@ function formatDateTimeWita(dateString) {
                                         colspan="3"
                                         class="py-2.5 px-4 text-right uppercase tracking-wider text-slate-600"
                                     >
-                                        Grand Total
+                                        Total Penerima Manfaat
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono text-sky-700"
+                                        class="py-2.5 px-4 text-center text-sky-700"
                                     >
                                         {{ activeKelompok.total_laki_laki }}
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono text-pink-700"
+                                        class="py-2.5 px-4 text-center text-pink-700"
                                     >
                                         {{ activeKelompok.total_perempuan }}
                                     </td>
                                     <td
-                                        class="py-2.5 px-4 text-center font-mono text-primary font-extrabold"
+                                        class="py-2.5 px-4 text-center text-primary font-extrabold"
                                     >
                                         {{ activeKelompok.total_penerima }}
                                     </td>
@@ -1355,7 +1343,7 @@ function formatDateTimeWita(dateString) {
                             "
                             class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
                         >
-                            Edit Data Ini
+                            Edit Data
                         </Link>
                         <Button
                             type="button"

@@ -134,8 +134,10 @@ function initMap() {
     attributionControl: false,
   }).setView([initialLat, initialLng], props.defaultZoom);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+  // Google Maps Standard Road Map Layer
+  L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
   }).addTo(map);
 
   // Always bind click event on map; gate it by !props.readonly inside the callback

@@ -438,7 +438,7 @@ function validateForm() {
     }
 
     if (!form.kategori) {
-        errs.kategori = "Pilih kategori jenjang / lembaga.";
+        errs.kategori = "Pilih kategori jenjang/lembaga.";
     }
 
     if (!form.jenis_kepemilikan) {
@@ -446,31 +446,26 @@ function validateForm() {
     }
 
     if (!form.tipe_identitas) {
-        errs.tipe_identitas = "Pilih tipe nomor identitas legalitas.";
+        errs.tipe_identitas = "Pilih tipe nomor identitas.";
     }
 
     if (!form.kode_identitas || !form.kode_identitas.trim()) {
-        errs.kode_identitas = "Nomor / kode identitas legalitas wajib diisi.";
+        errs.kode_identitas = "Nomor/kode identitas wajib diisi.";
     }
 
     // 2. Kontak Kepala Satuan
     if (!form.nama_kepala || !form.nama_kepala.trim()) {
-        errs.nama_kepala = "Nama Kepala Satuan / Pimpinan wajib diisi.";
+        errs.nama_kepala = "Nama Kepala Satuan wajib diisi.";
     }
 
     if (!form.email_kepala || !form.email_kepala.trim()) {
-        errs.email_kepala =
-            "Email Kepala Satuan / Pimpinan wajib diisi.";
-    } else if (
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_kepala.trim())
-    ) {
-        errs.email_kepala =
-            "Format email Kepala Satuan / Pimpinan tidak valid.";
+        errs.email_kepala = "Email Kepala Satuan wajib diisi.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_kepala.trim())) {
+        errs.email_kepala = "Format email Kepala Satuan tidak valid.";
     }
 
     if (!form.telepon_kepala) {
-        errs.telepon_kepala =
-            "Nomor WhatsApp Kepala Satuan / Pimpinan wajib diisi.";
+        errs.telepon_kepala = "Nomor Telp Kepala Satuan wajib diisi.";
     } else if (!/^62[0-9]{8,15}$/.test(form.telepon_kepala)) {
         errs.telepon_kepala =
             "Format nomor telepon tidak valid (contoh: +62 81234567890).";
@@ -488,7 +483,7 @@ function validateForm() {
     }
 
     if (!form.telepon_pic) {
-        errs.telepon_pic = "Nomor WhatsApp PIC wajib diisi.";
+        errs.telepon_pic = "Nomor Telp PIC wajib diisi.";
     } else if (!/^62[0-9]{8,15}$/.test(form.telepon_pic)) {
         errs.telepon_pic =
             "Format nomor telepon tidak valid (contoh: +62 81234567890).";
@@ -499,13 +494,13 @@ function validateForm() {
         errs.provinsi = "Pilih provinsi lokasi kelompok.";
     }
     if (!form.kabupaten) {
-        errs.kabupaten = "Pilih kabupaten / kota lokasi kelompok.";
+        errs.kabupaten = "Pilih kabupaten/kota lokasi kelompok.";
     }
     if (!form.kecamatan) {
         errs.kecamatan = "Pilih kecamatan lokasi kelompok.";
     }
     if (!form.desa_kelurahan) {
-        errs.desa_kelurahan = "Pilih desa / kelurahan lokasi kelompok.";
+        errs.desa_kelurahan = "Pilih desa/kelurahan lokasi kelompok.";
     }
 
     if (!form.kode_pos || !form.kode_pos.toString().trim()) {
@@ -832,7 +827,7 @@ function submitForm() {
                                     @input="clearFieldError('kode_identitas')"
                                     type="text"
                                     placeholder="Contoh: 50101234 (Nomor NPSN / NSPP / NSM / Izin)"
-                                    class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
+                                    class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                     :class="{
                                         'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
                                             getFieldError('kode_identitas'),
@@ -873,9 +868,7 @@ function submitForm() {
                                 <CardDescription
                                     className="text-xs text-slate-500 mt-0.5"
                                 >
-                                    Data narahubung resmi Kepala Satuan /
-                                    Pimpinan dan Person In Charge (PIC)
-                                    lapangan.
+                                    Data narahubung resmi Kepala Satuan dan PIC.
                                 </CardDescription>
                             </div>
                         </div>
@@ -906,26 +899,18 @@ function submitForm() {
                                     <input
                                         id="nama_kepala"
                                         v-model="form.nama_kepala"
-                                        @input="
-                                            clearFieldError(
-                                                'nama_kepala',
-                                            )
-                                        "
+                                        @input="clearFieldError('nama_kepala')"
                                         type="text"
                                         placeholder="Nama Lengkap Kepala Satuan"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                         :class="{
                                             'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
-                                                getFieldError(
-                                                    'nama_kepala',
-                                                ),
+                                                getFieldError('nama_kepala'),
                                         }"
                                         required
                                     />
                                     <p
-                                        v-if="
-                                            getFieldError('nama_kepala')
-                                        "
+                                        v-if="getFieldError('nama_kepala')"
                                         class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
                                     >
                                         <AlertCircle
@@ -948,37 +933,25 @@ function submitForm() {
                                     <input
                                         id="email_kepala"
                                         v-model="form.email_kepala"
-                                        @input="
-                                            clearFieldError(
-                                                'email_kepala',
-                                            )
-                                        "
+                                        @input="clearFieldError('email_kepala')"
                                         type="email"
                                         placeholder="kepala@domain.com"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                         :class="{
                                             'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
-                                                getFieldError(
-                                                    'email_kepala',
-                                                ),
+                                                getFieldError('email_kepala'),
                                         }"
                                         required
                                     />
                                     <p
-                                        v-if="
-                                            getFieldError(
-                                                'email_kepala',
-                                            )
-                                        "
+                                        v-if="getFieldError('email_kepala')"
                                         class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
                                     >
                                         <AlertCircle
                                             class="h-3.5 w-3.5 shrink-0"
                                         />
                                         <span>{{
-                                            getFieldError(
-                                                "email_kepala",
-                                            )
+                                            getFieldError("email_kepala")
                                         }}</span>
                                     </p>
                                 </div>
@@ -1003,7 +976,7 @@ function submitForm() {
                                             v-model="rawTeleponKepala"
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
-                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
+                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                             :class="{
                                                 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
                                                     getFieldError(
@@ -1014,20 +987,14 @@ function submitForm() {
                                         />
                                     </div>
                                     <p
-                                        v-if="
-                                            getFieldError(
-                                                'telepon_kepala',
-                                            )
-                                        "
+                                        v-if="getFieldError('telepon_kepala')"
                                         class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
                                     >
                                         <AlertCircle
                                             class="h-3.5 w-3.5 shrink-0"
                                         />
                                         <span>{{
-                                            getFieldError(
-                                                "telepon_kepala",
-                                            )
+                                            getFieldError("telepon_kepala")
                                         }}</span>
                                     </p>
                                 </div>
@@ -1136,7 +1103,7 @@ function submitForm() {
                                             v-model="rawTeleponPIC"
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
-                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
+                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                             :class="{
                                                 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
                                                     getFieldError(
@@ -1444,7 +1411,7 @@ function submitForm() {
                                             type="text"
                                             maxlength="5"
                                             placeholder="5 digit angka"
-                                            class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
+                                            class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
                                             :class="{
                                                 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
                                                     getFieldError('kode_pos'),
@@ -1557,10 +1524,9 @@ function submitForm() {
                                 <CardDescription
                                     className="text-xs text-slate-500 mt-0.5"
                                 >
-                                    Pemetaan jumlah penerima manfaat Laki-Laki &
-                                    Perempuan serta jenis porsi ({{
+                                    Pemetaan jumlah penerima manfaat ({{
                                         form.kategori ||
-                                        "Pilih Kategori Terlebih Dahulu"
+                                        "Pilih kategori terlebih dahulu"
                                     }}).
                                 </CardDescription>
                             </div>
@@ -1568,7 +1534,7 @@ function submitForm() {
 
                         <!-- Summary Badges (Termasuk Porsi Kecil & Porsi Besar) -->
                         <div
-                            class="flex flex-wrap items-center gap-2 self-start sm:self-auto font-mono text-xs"
+                            class="flex flex-wrap items-center gap-2 self-start sm:self-auto text-xs"
                         >
                             <span
                                 class="px-2.5 py-1 font-bold rounded-lg bg-amber-50 text-amber-800 border border-amber-200"
@@ -1726,7 +1692,7 @@ function submitForm() {
                                                 type="number"
                                                 min="0"
                                                 placeholder="0"
-                                                class="w-full h-10 text-center px-3 text-xs font-mono font-bold rounded-lg border border-sky-200 bg-sky-50/40 text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                                                class="w-full h-10 text-center px-3 text-xs font-bold rounded-lg border border-sky-200 bg-sky-50/40 text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                                             />
                                         </td>
 
@@ -1739,13 +1705,13 @@ function submitForm() {
                                                 type="number"
                                                 min="0"
                                                 placeholder="0"
-                                                class="w-full h-10 text-center px-3 text-xs font-mono font-bold rounded-lg border border-pink-200 bg-pink-50/40 text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500"
+                                                class="w-full h-10 text-center px-3 text-xs font-bold rounded-lg border border-pink-200 bg-pink-50/40 text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500"
                                             />
                                         </td>
 
                                         <!-- Subtotal -->
                                         <td
-                                            class="px-4 py-4 text-center font-mono font-extrabold text-xs text-slate-800"
+                                            class="px-4 py-4 text-center font-extrabold text-xs text-slate-800"
                                         >
                                             {{
                                                 (Number(
@@ -1790,20 +1756,20 @@ function submitForm() {
                                             colspan="3"
                                             class="px-6 py-4 text-right uppercase tracking-wider text-slate-600"
                                         >
-                                            Grand Total Penerima
+                                            Total Penerima Manfaat
                                         </td>
                                         <td
-                                            class="px-5 py-4 text-center font-mono text-sky-700 font-bold"
+                                            class="px-5 py-4 text-center text-sky-700 font-bold"
                                         >
                                             {{ totalLakiLaki }}
                                         </td>
                                         <td
-                                            class="px-5 py-4 text-center font-mono text-pink-700 font-bold"
+                                            class="px-5 py-4 text-center text-pink-700 font-bold"
                                         >
                                             {{ totalPerempuan }}
                                         </td>
                                         <td
-                                            class="px-4 py-4 text-center font-mono text-primary font-black text-sm"
+                                            class="px-4 py-4 text-center text-primary font-black text-sm"
                                         >
                                             {{ grandTotal }}
                                         </td>

@@ -68,7 +68,10 @@ const props = defineProps({
 
 const defaultCenter = computed(() => {
     if (props.kelompok?.latitude && props.kelompok?.longitude) {
-        return [Number(props.kelompok.latitude), Number(props.kelompok.longitude)];
+        return [
+            Number(props.kelompok.latitude),
+            Number(props.kelompok.longitude),
+        ];
     }
     return [-8.409518, 115.188916];
 });
@@ -93,7 +96,9 @@ const form = useForm({
     kode_pos: props.kelompok.kode_pos || "",
     alamat_lengkap: props.kelompok.alamat_lengkap || "",
     latitude: props.kelompok.latitude ? Number(props.kelompok.latitude) : null,
-    longitude: props.kelompok.longitude ? Number(props.kelompok.longitude) : null,
+    longitude: props.kelompok.longitude
+        ? Number(props.kelompok.longitude)
+        : null,
     rincian: sortRincianByKategori(
         Array.isArray(props.kelompok.rincian)
             ? props.kelompok.rincian.map((r) => ({
@@ -103,13 +108,13 @@ const form = useForm({
                       r.jenis_porsi ||
                       getJenisPorsiBySubKategori(
                           r.sub_kategori,
-                          props.kelompok.kategori
+                          props.kelompok.kategori,
                       ),
                   jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
                   jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
               }))
             : [],
-        props.kelompok.kategori
+        props.kelompok.kategori,
     ),
 });
 
@@ -131,12 +136,10 @@ const selectedVillageCode = ref("");
 
 // Helper phone inputs (tanpa 62)
 const rawTeleponKepala = ref(
-    form.telepon_kepala
-        ? form.telepon_kepala.replace(/^62/, "")
-        : ""
+    form.telepon_kepala ? form.telepon_kepala.replace(/^62/, "") : "",
 );
 const rawTeleponPIC = ref(
-    form.telepon_pic ? form.telepon_pic.replace(/^62/, "") : ""
+    form.telepon_pic ? form.telepon_pic.replace(/^62/, "") : "",
 );
 
 function cleanPhone(newVal) {
@@ -181,7 +184,12 @@ watch(rawTeleponPIC, (newVal) => {
 });
 
 watch([() => form.latitude, () => form.longitude], ([lat, lng]) => {
-    if (lat !== null && lng !== null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+    if (
+        lat !== null &&
+        lng !== null &&
+        !isNaN(Number(lat)) &&
+        !isNaN(Number(lng))
+    ) {
         clearFieldError("latitude");
         clearFieldError("longitude");
     }
@@ -207,22 +215,28 @@ function getAvailableSubKategoriForRow(currentRowIdx) {
         .filter(Boolean);
 
     return allOptions.filter(
-        (opt) => opt === currentVal || !selectedOthers.includes(opt)
+        (opt) => opt === currentVal || !selectedOthers.includes(opt),
     );
 }
 
 function onSubKategoriChange(item) {
     if (item.sub_kategori) {
-        item.jenis_porsi = getJenisPorsiBySubKategori(item.sub_kategori, form.kategori);
+        item.jenis_porsi = getJenisPorsiBySubKategori(
+            item.sub_kategori,
+            form.kategori,
+        );
         form.rincian = sortRincianByKategori(form.rincian, form.kategori);
         clearFieldError("rincian");
     }
 }
 
 const isAllSubkategoriAdded = computed(() => {
-    if (!form.kategori || currentCategorySubOptions.value.length === 0) return true;
+    if (!form.kategori || currentCategorySubOptions.value.length === 0)
+        return true;
     const selected = form.rincian.map((r) => r.sub_kategori).filter(Boolean);
-    return currentCategorySubOptions.value.every((opt) => selected.includes(opt));
+    return currentCategorySubOptions.value.every((opt) =>
+        selected.includes(opt),
+    );
 });
 
 function addCustomSubkategori() {
@@ -252,7 +266,9 @@ function resetSubkategoriToCategoryDefaults() {
         const existing = form.rincian.find((r) => r.sub_kategori === sub);
         return {
             sub_kategori: sub,
-            jenis_porsi: existing?.jenis_porsi || getJenisPorsiBySubKategori(sub, form.kategori),
+            jenis_porsi:
+                existing?.jenis_porsi ||
+                getJenisPorsiBySubKategori(sub, form.kategori),
             jumlah_laki_laki: existing ? existing.jumlah_laki_laki : 0,
             jumlah_perempuan: existing ? existing.jumlah_perempuan : 0,
         };
@@ -265,27 +281,53 @@ function resetSubkategoriToCategoryDefaults() {
 const totalLakiLaki = computed(() => {
     return form.rincian.reduce(
         (sum, item) => sum + (Number(item.jumlah_laki_laki) || 0),
-        0
+        0,
     );
 });
 
 const totalPerempuan = computed(() => {
     return form.rincian.reduce(
         (sum, item) => sum + (Number(item.jumlah_perempuan) || 0),
-        0
+        0,
     );
 });
 
 const totalPorsiKecil = computed(() => {
     return form.rincian
-        .filter((item) => (item.jenis_porsi || getJenisPorsiBySubKategori(item.sub_kategori, form.kategori)) === 'Porsi Kecil')
-        .reduce((sum, item) => sum + (Number(item.jumlah_laki_laki) || 0) + (Number(item.jumlah_perempuan) || 0), 0);
+        .filter(
+            (item) =>
+                (item.jenis_porsi ||
+                    getJenisPorsiBySubKategori(
+                        item.sub_kategori,
+                        form.kategori,
+                    )) === "Porsi Kecil",
+        )
+        .reduce(
+            (sum, item) =>
+                sum +
+                (Number(item.jumlah_laki_laki) || 0) +
+                (Number(item.jumlah_perempuan) || 0),
+            0,
+        );
 });
 
 const totalPorsiBesar = computed(() => {
     return form.rincian
-        .filter((item) => (item.jenis_porsi || getJenisPorsiBySubKategori(item.sub_kategori, form.kategori)) === 'Porsi Besar')
-        .reduce((sum, item) => sum + (Number(item.jumlah_laki_laki) || 0) + (Number(item.jumlah_perempuan) || 0), 0);
+        .filter(
+            (item) =>
+                (item.jenis_porsi ||
+                    getJenisPorsiBySubKategori(
+                        item.sub_kategori,
+                        form.kategori,
+                    )) === "Porsi Besar",
+        )
+        .reduce(
+            (sum, item) =>
+                sum +
+                (Number(item.jumlah_laki_laki) || 0) +
+                (Number(item.jumlah_perempuan) || 0),
+            0,
+        );
 });
 
 const grandTotal = computed(() => totalLakiLaki.value + totalPerempuan.value);
@@ -300,7 +342,7 @@ onMounted(async () => {
             const prov = provinceList.value.find(
                 (p) =>
                     p.name.toLowerCase() === form.provinsi.toLowerCase() ||
-                    p.name.toLowerCase().includes(form.provinsi.toLowerCase())
+                    p.name.toLowerCase().includes(form.provinsi.toLowerCase()),
             );
             if (prov) {
                 selectedProvinceCode.value = prov.code;
@@ -316,7 +358,7 @@ onMounted(async () => {
                                 .includes(form.kabupaten.toLowerCase()) ||
                             form.kabupaten
                                 .toLowerCase()
-                                .includes(r.name.toLowerCase())
+                                .includes(r.name.toLowerCase()),
                     );
                     if (reg) {
                         selectedRegencyCode.value = reg.code;
@@ -330,16 +372,18 @@ onMounted(async () => {
                                     d.name
                                         .toLowerCase()
                                         .includes(
-                                            form.kecamatan.toLowerCase()
+                                            form.kecamatan.toLowerCase(),
                                         ) ||
                                     form.kecamatan
                                         .toLowerCase()
-                                        .includes(d.name.toLowerCase())
+                                        .includes(d.name.toLowerCase()),
                             );
                             if (dist) {
                                 selectedDistrictCode.value = dist.code;
                                 isVillagesLoading.value = true;
-                                villageList.value = await getVillages(dist.code);
+                                villageList.value = await getVillages(
+                                    dist.code,
+                                );
                                 isVillagesLoading.value = false;
 
                                 if (form.desa_kelurahan) {
@@ -348,11 +392,11 @@ onMounted(async () => {
                                             v.name
                                                 .toLowerCase()
                                                 .includes(
-                                                    form.desa_kelurahan.toLowerCase()
+                                                    form.desa_kelurahan.toLowerCase(),
                                                 ) ||
                                             form.desa_kelurahan
                                                 .toLowerCase()
-                                                .includes(v.name.toLowerCase())
+                                                .includes(v.name.toLowerCase()),
                                     );
                                     if (vil) {
                                         selectedVillageCode.value = vil.code;
@@ -374,7 +418,7 @@ onMounted(async () => {
 async function onProvinceChange() {
     clearFieldError("provinsi");
     const prov = provinceList.value.find(
-        (p) => p.code === selectedProvinceCode.value
+        (p) => p.code === selectedProvinceCode.value,
     );
     form.provinsi = prov ? prov.name : "";
 
@@ -404,7 +448,7 @@ async function onProvinceChange() {
 async function onRegencyChange() {
     clearFieldError("kabupaten");
     const reg = regencyList.value.find(
-        (r) => r.code === selectedRegencyCode.value
+        (r) => r.code === selectedRegencyCode.value,
     );
     form.kabupaten = reg ? reg.name : "";
 
@@ -431,7 +475,7 @@ async function onRegencyChange() {
 async function onDistrictChange() {
     clearFieldError("kecamatan");
     const dist = districtList.value.find(
-        (d) => d.code === selectedDistrictCode.value
+        (d) => d.code === selectedDistrictCode.value,
     );
     form.kecamatan = dist ? dist.name : "";
 
@@ -455,7 +499,7 @@ async function onDistrictChange() {
 function onVillageChange() {
     clearFieldError("desa_kelurahan");
     const vil = villageList.value.find(
-        (v) => v.code === selectedVillageCode.value
+        (v) => v.code === selectedVillageCode.value,
     );
     form.desa_kelurahan = vil ? vil.name : "";
     if (vil?.postal_code) {
@@ -504,9 +548,11 @@ function validateForm() {
     }
 
     if (!form.telepon_kepala) {
-        errs.telepon_kepala = "Nomor WhatsApp Kepala Satuan / Pimpinan wajib diisi.";
+        errs.telepon_kepala =
+            "Nomor WhatsApp Kepala Satuan / Pimpinan wajib diisi.";
     } else if (!/^62[0-9]{8,15}$/.test(form.telepon_kepala)) {
-        errs.telepon_kepala = "Format nomor telepon tidak valid (contoh: +62 81234567890).";
+        errs.telepon_kepala =
+            "Format nomor telepon tidak valid (contoh: +62 81234567890).";
     }
 
     // 3. Kontak PIC
@@ -523,7 +569,8 @@ function validateForm() {
     if (!form.telepon_pic) {
         errs.telepon_pic = "Nomor WhatsApp PIC wajib diisi.";
     } else if (!/^62[0-9]{8,15}$/.test(form.telepon_pic)) {
-        errs.telepon_pic = "Format nomor telepon tidak valid (contoh: +62 81234567890).";
+        errs.telepon_pic =
+            "Format nomor telepon tidak valid (contoh: +62 81234567890).";
     }
 
     // 4. Wilayah & Alamat
@@ -551,18 +598,25 @@ function validateForm() {
     }
 
     // 5. Titik Koordinat Peta
-    if (form.latitude === null || form.longitude === null || isNaN(Number(form.latitude)) || isNaN(Number(form.longitude))) {
+    if (
+        form.latitude === null ||
+        form.longitude === null ||
+        isNaN(Number(form.latitude)) ||
+        isNaN(Number(form.longitude))
+    ) {
         errs.latitude = "Titik koordinat pada peta wajib ditentukan.";
         errs.longitude = "Titik koordinat pada peta wajib ditentukan.";
     }
 
     // 6. Rincian Penerima Manfaat
     if (!Array.isArray(form.rincian) || form.rincian.length === 0) {
-        errs.rincian = "Rincian jumlah penerima manfaat wajib diisi minimal 1 subkategori.";
+        errs.rincian =
+            "Rincian jumlah penerima manfaat wajib diisi minimal 1 subkategori.";
     } else {
         const hasInvalidSub = form.rincian.some((r) => !r.sub_kategori);
         if (hasInvalidSub) {
-            errs.rincian = "Semua baris rincian harus memiliki subkategori yang valid.";
+            errs.rincian =
+                "Semua baris rincian harus memiliki subkategori yang valid.";
         }
     }
 
@@ -608,13 +662,15 @@ function submitForm() {
 <template>
     <AppLayout
         title="Edit Kelompok Penerima Manfaat"
-        :subtitle="`Perbarui informasi profil dan rincian penerima manfaat`"
+        :subtitle="`Formulir Pembaharuan Kelompok Penerima Manfaat`"
         :user="user"
         :unit-sppg="unitSppg"
     >
         <div class="max-w-6xl mx-auto space-y-6">
             <!-- Top Actions Header -->
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
+            <div
+                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200"
+            >
                 <div class="flex items-center gap-3">
                     <Link
                         :href="route('penerima-manfaat.index')"
@@ -623,7 +679,9 @@ function submitForm() {
                         <ArrowLeft class="h-4 w-4" />
                     </Link>
                     <div>
-                        <h2 class="text-lg font-bold text-slate-900 leading-tight">
+                        <h2
+                            class="text-lg font-bold text-slate-900 leading-tight"
+                        >
                             Edit Data Kelompok
                         </h2>
                         <p class="text-xs text-slate-600 font-semibold mt-0.5">
@@ -636,17 +694,27 @@ function submitForm() {
             <form @submit.prevent="submitForm" class="space-y-6">
                 <!-- 1. IDENTITAS & LEGALITAS KELOMPOK -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
-                    <CardHeader className="border-b border-slate-100 p-5 bg-slate-50/50">
+                    <CardHeader
+                        className="border-b border-slate-100 p-5 bg-slate-50/50"
+                    >
                         <div class="flex items-center gap-2.5">
-                            <div class="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <div
+                                class="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"
+                            >
                                 <School class="h-4 w-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">
+                                <CardTitle
+                                    className="text-base font-bold text-slate-900"
+                                >
                                     1. Identitas Kelompok
                                 </CardTitle>
-                                <CardDescription className="text-xs text-slate-500 mt-0.5">
-                                    Informasi nama lembaga, jenjang kategori, status kepemilikan, dan nomor kode legalitas.
+                                <CardDescription
+                                    className="text-xs text-slate-500 mt-0.5"
+                                >
+                                    nformasi nama lembaga, jenjang kategori,
+                                    status kepemilikan, dan informasi legalitas
+                                    lainnya.
                                 </CardDescription>
                             </div>
                         </div>
@@ -655,8 +723,12 @@ function submitForm() {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- Nama Kelompok -->
                             <div class="space-y-1.5 md:col-span-2">
-                                <Label for="nama_kelompok" class="text-xs font-semibold text-slate-700">
-                                    Nama Kelompok Penerima Manfaat <span class="text-rose-500">*</span>
+                                <Label
+                                    for="nama_kelompok"
+                                    class="text-xs font-semibold text-slate-700"
+                                >
+                                    Nama Kelompok Penerima Manfaat
+                                    <span class="text-rose-500">*</span>
                                 </Label>
                                 <input
                                     id="nama_kelompok"
@@ -665,29 +737,46 @@ function submitForm() {
                                     type="text"
                                     placeholder="Contoh: SD Negeri 1 Singaraja / Posyandu Melati Indah"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_kelompok') }"
+                                    :class="{
+                                        'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                            getFieldError('nama_kelompok'),
+                                    }"
                                     required
                                 />
-                                <p v-if="getFieldError('nama_kelompok')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                <p
+                                    v-if="getFieldError('nama_kelompok')"
+                                    class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                >
                                     <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{ getFieldError('nama_kelompok') }}</span>
+                                    <span>{{
+                                        getFieldError("nama_kelompok")
+                                    }}</span>
                                 </p>
                             </div>
 
                             <!-- Kategori -->
                             <div class="space-y-1.5">
-                                <Label for="kategori" class="text-xs font-semibold text-slate-700">
-                                    Kategori Jenjang / Satuan <span class="text-rose-500">*</span>
+                                <Label
+                                    for="kategori"
+                                    class="text-xs font-semibold text-slate-700"
+                                >
+                                    Kategori Jenjang / Satuan
+                                    <span class="text-rose-500">*</span>
                                 </Label>
                                 <select
                                     id="kategori"
                                     v-model="form.kategori"
                                     @change="clearFieldError('kategori')"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kategori') }"
+                                    :class="{
+                                        'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                            getFieldError('kategori'),
+                                    }"
                                     required
                                 >
-                                    <option value="" disabled>Pilih Kategori Jenjang...</option>
+                                    <option value="" disabled>
+                                        Pilih Kategori Jenjang...
+                                    </option>
                                     <option
                                         v-for="kat in KATEGORI_OPTIONS"
                                         :key="kat.value"
@@ -696,26 +785,40 @@ function submitForm() {
                                         {{ kat.value }}
                                     </option>
                                 </select>
-                                <p v-if="getFieldError('kategori')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                <p
+                                    v-if="getFieldError('kategori')"
+                                    class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                >
                                     <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{ getFieldError('kategori') }}</span>
+                                    <span>{{ getFieldError("kategori") }}</span>
                                 </p>
                             </div>
 
                             <!-- Jenis Kepemilikan -->
                             <div class="space-y-1.5">
-                                <Label for="jenis_kepemilikan" class="text-xs font-semibold text-slate-700">
-                                    Jenis Kepemilikan <span class="text-rose-500">*</span>
+                                <Label
+                                    for="jenis_kepemilikan"
+                                    class="text-xs font-semibold text-slate-700"
+                                >
+                                    Jenis Kepemilikan
+                                    <span class="text-rose-500">*</span>
                                 </Label>
                                 <select
                                     id="jenis_kepemilikan"
                                     v-model="form.jenis_kepemilikan"
-                                    @change="clearFieldError('jenis_kepemilikan')"
+                                    @change="
+                                        clearFieldError('jenis_kepemilikan')
+                                    "
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('jenis_kepemilikan') }"
+                                    :class="{
+                                        'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                            getFieldError('jenis_kepemilikan'),
+                                    }"
                                     required
                                 >
-                                    <option value="" disabled>Pilih Jenis Kepemilikan...</option>
+                                    <option value="" disabled>
+                                        Pilih Jenis Kepemilikan...
+                                    </option>
                                     <option
                                         v-for="j in JENIS_KEPEMILIKAN_OPTIONS"
                                         :key="j.value"
@@ -724,26 +827,40 @@ function submitForm() {
                                         {{ j.label }}
                                     </option>
                                 </select>
-                                <p v-if="getFieldError('jenis_kepemilikan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                <p
+                                    v-if="getFieldError('jenis_kepemilikan')"
+                                    class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                >
                                     <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{ getFieldError('jenis_kepemilikan') }}</span>
+                                    <span>{{
+                                        getFieldError("jenis_kepemilikan")
+                                    }}</span>
                                 </p>
                             </div>
 
                             <!-- Tipe Identitas -->
                             <div class="space-y-1.5">
-                                <Label for="tipe_identitas" class="text-xs font-semibold text-slate-700">
-                                    Tipe Nomor Identitas <span class="text-rose-500">*</span>
+                                <Label
+                                    for="tipe_identitas"
+                                    class="text-xs font-semibold text-slate-700"
+                                >
+                                    Tipe Nomor Identitas
+                                    <span class="text-rose-500">*</span>
                                 </Label>
                                 <select
                                     id="tipe_identitas"
                                     v-model="form.tipe_identitas"
                                     @change="clearFieldError('tipe_identitas')"
                                     class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer"
-                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('tipe_identitas') }"
+                                    :class="{
+                                        'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                            getFieldError('tipe_identitas'),
+                                    }"
                                     required
                                 >
-                                    <option value="" disabled>Pilih Tipe Identitas...</option>
+                                    <option value="" disabled>
+                                        Pilih Tipe Identitas...
+                                    </option>
                                     <option
                                         v-for="t in TIPE_IDENTITAS_OPTIONS"
                                         :key="t.value"
@@ -752,16 +869,26 @@ function submitForm() {
                                         {{ t.value }}
                                     </option>
                                 </select>
-                                <p v-if="getFieldError('tipe_identitas')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                <p
+                                    v-if="getFieldError('tipe_identitas')"
+                                    class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                >
                                     <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{ getFieldError('tipe_identitas') }}</span>
+                                    <span>{{
+                                        getFieldError("tipe_identitas")
+                                    }}</span>
                                 </p>
                             </div>
 
                             <!-- Kode Identitas -->
                             <div class="space-y-1.5">
-                                <Label for="kode_identitas" class="text-xs font-semibold text-slate-700">
-                                    Kode / Nomor Identitas ({{ form.tipe_identitas || "-" }}) <span class="text-rose-500">*</span>
+                                <Label
+                                    for="kode_identitas"
+                                    class="text-xs font-semibold text-slate-700"
+                                >
+                                    Kode / Nomor Identitas ({{
+                                        form.tipe_identitas || "-"
+                                    }}) <span class="text-rose-500">*</span>
                                 </Label>
                                 <input
                                     id="kode_identitas"
@@ -769,13 +896,21 @@ function submitForm() {
                                     @input="clearFieldError('kode_identitas')"
                                     type="text"
                                     placeholder="Contoh: 50101234 (Nomor NPSN / NSPP / NSM / Izin)"
-                                    class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                    :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kode_identitas') }"
+                                    class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
+                                    :class="{
+                                        'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                            getFieldError('kode_identitas'),
+                                    }"
                                     required
                                 />
-                                <p v-if="getFieldError('kode_identitas')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
+                                <p
+                                    v-if="getFieldError('kode_identitas')"
+                                    class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                >
                                     <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{ getFieldError('kode_identitas') }}</span>
+                                    <span>{{
+                                        getFieldError("kode_identitas")
+                                    }}</span>
                                 </p>
                             </div>
                         </div>
@@ -784,17 +919,25 @@ function submitForm() {
 
                 <!-- 2. KONTAK SATUAN -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
-                    <CardHeader className="border-b border-slate-100 p-5 bg-slate-50/50">
+                    <CardHeader
+                        className="border-b border-slate-100 p-5 bg-slate-50/50"
+                    >
                         <div class="flex items-center gap-2.5">
-                            <div class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                            <div
+                                class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"
+                            >
                                 <User class="h-4 w-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">
+                                <CardTitle
+                                    className="text-base font-bold text-slate-900"
+                                >
                                     2. Kontak Satuan
                                 </CardTitle>
-                                <CardDescription className="text-xs text-slate-500 mt-0.5">
-                                    Data narahubung resmi Kepala Satuan / Pimpinan dan Person In Charge (PIC) lapangan.
+                                <CardDescription
+                                    className="text-xs text-slate-500 mt-0.5"
+                                >
+                                    Data narahubung resmi Kepala Satuan dan PIC.
                                 </CardDescription>
                             </div>
                         </div>
@@ -803,16 +946,24 @@ function submitForm() {
                         <!-- KS Section -->
                         <div class="space-y-3">
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                <span
+                                    class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                >
                                     A. Data Kepala / Pimpinan Satuan
                                 </span>
-                                <div class="flex-1 border-t border-slate-200"></div>
+                                <div
+                                    class="flex-1 border-t border-slate-200"
+                                ></div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="space-y-1.5">
-                                    <Label for="nama_kepala" class="text-xs font-semibold text-slate-700">
-                                        Nama Kepala Satuan <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="nama_kepala"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Nama Kepala Satuan
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
                                         id="nama_kepala"
@@ -821,18 +972,32 @@ function submitForm() {
                                         type="text"
                                         placeholder="Nama Lengkap Kepala Satuan"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_kepala') }"
+                                        :class="{
+                                            'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                getFieldError('nama_kepala'),
+                                        }"
                                         required
                                     />
-                                    <p v-if="getFieldError('nama_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('nama_kepala') }}</span>
+                                    <p
+                                        v-if="getFieldError('nama_kepala')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("nama_kepala")
+                                        }}</span>
                                     </p>
                                 </div>
 
                                 <div class="space-y-1.5">
-                                    <Label for="email_kepala" class="text-xs font-semibold text-slate-700">
-                                        Email Kepala Satuan <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="email_kepala"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Email Kepala Satuan
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
                                         id="email_kepala"
@@ -841,22 +1006,38 @@ function submitForm() {
                                         type="email"
                                         placeholder="kepala@domain.com"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('email_kepala') }"
+                                        :class="{
+                                            'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                getFieldError('email_kepala'),
+                                        }"
                                         required
                                     />
-                                    <p v-if="getFieldError('email_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('email_kepala') }}</span>
+                                    <p
+                                        v-if="getFieldError('email_kepala')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("email_kepala")
+                                        }}</span>
                                     </p>
                                 </div>
 
                                 <!-- WhatsApp Kepala Satuan (Format +62) -->
                                 <div class="space-y-1.5">
-                                    <Label for="telepon_kepala" class="text-xs font-semibold text-slate-700">
-                                        Nomor Telp Kepala Satuan <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="telepon_kepala"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Nomor Telp Kepala Satuan
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <div class="flex rounded-lg shadow-2xs">
-                                        <span class="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-700 font-bold text-xs select-none">
+                                        <span
+                                            class="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-700 font-bold text-xs select-none"
+                                        >
                                             +62
                                         </span>
                                         <input
@@ -864,14 +1045,26 @@ function submitForm() {
                                             v-model="rawTeleponKepala"
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
-                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('telepon_kepala') }"
+                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError(
+                                                        'telepon_kepala',
+                                                    ),
+                                            }"
                                             required
                                         />
                                     </div>
-                                    <p v-if="getFieldError('telepon_kepala')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('telepon_kepala') }}</span>
+                                    <p
+                                        v-if="getFieldError('telepon_kepala')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("telepon_kepala")
+                                        }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -879,16 +1072,24 @@ function submitForm() {
                         <!-- PIC Section -->
                         <div class="space-y-3">
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                <span
+                                    class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                >
                                     B. Data Person In Charge (PIC) / Narahubung
                                 </span>
-                                <div class="flex-1 border-t border-slate-200"></div>
+                                <div
+                                    class="flex-1 border-t border-slate-200"
+                                ></div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="space-y-1.5">
-                                    <Label for="nama_pic" class="text-xs font-semibold text-slate-700">
-                                        Nama Lengkap PIC <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="nama_pic"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Nama Lengkap PIC
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
                                         id="nama_pic"
@@ -897,18 +1098,32 @@ function submitForm() {
                                         type="text"
                                         placeholder="Nama PIC penanggung jawab"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('nama_pic') }"
+                                        :class="{
+                                            'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                getFieldError('nama_pic'),
+                                        }"
                                         required
                                     />
-                                    <p v-if="getFieldError('nama_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('nama_pic') }}</span>
+                                    <p
+                                        v-if="getFieldError('nama_pic')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("nama_pic")
+                                        }}</span>
                                     </p>
                                 </div>
 
                                 <div class="space-y-1.5">
-                                    <Label for="email_pic" class="text-xs font-semibold text-slate-700">
-                                        Email PIC <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="email_pic"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Email PIC
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <input
                                         id="email_pic"
@@ -917,22 +1132,38 @@ function submitForm() {
                                         type="email"
                                         placeholder="pic@domain.com"
                                         class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
-                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('email_pic') }"
+                                        :class="{
+                                            'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                getFieldError('email_pic'),
+                                        }"
                                         required
                                     />
-                                    <p v-if="getFieldError('email_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('email_pic') }}</span>
+                                    <p
+                                        v-if="getFieldError('email_pic')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("email_pic")
+                                        }}</span>
                                     </p>
                                 </div>
 
                                 <!-- WhatsApp PIC (Format +62) -->
                                 <div class="space-y-1.5">
-                                    <Label for="telepon_pic" class="text-xs font-semibold text-slate-700">
-                                        Nomor WhatsApp PIC <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="telepon_pic"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Nomor WhatsApp PIC
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <div class="flex rounded-lg shadow-2xs">
-                                        <span class="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-700 font-bold text-xs select-none">
+                                        <span
+                                            class="inline-flex items-center px-3.5 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-700 font-bold text-xs select-none"
+                                        >
                                             +62
                                         </span>
                                         <input
@@ -940,14 +1171,26 @@ function submitForm() {
                                             v-model="rawTeleponPIC"
                                             type="text"
                                             placeholder="81234567890 (tanpa 0 di depan)"
-                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('telepon_pic') }"
+                                            class="flex-1 h-11 px-3 text-xs rounded-r-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError(
+                                                        'telepon_pic',
+                                                    ),
+                                            }"
                                             required
                                         />
                                     </div>
-                                    <p v-if="getFieldError('telepon_pic')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('telepon_pic') }}</span>
+                                    <p
+                                        v-if="getFieldError('telepon_pic')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("telepon_pic")
+                                        }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -957,32 +1200,51 @@ function submitForm() {
 
                 <!-- 3. WILAYAH & TITIK LOKASI PETA (SPLIT 2 BAGIAN) -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
-                    <CardHeader className="border-b border-slate-100 p-5 bg-slate-50/50">
+                    <CardHeader
+                        className="border-b border-slate-100 p-5 bg-slate-50/50"
+                    >
                         <div class="flex items-center gap-2.5">
-                            <div class="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                            <div
+                                class="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"
+                            >
                                 <MapPin class="h-4 w-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">
+                                <CardTitle
+                                    className="text-base font-bold text-slate-900"
+                                >
                                     3. Wilayah & Titik Lokasi Peta
                                 </CardTitle>
-                                <CardDescription className="text-xs text-slate-500 mt-0.5">
-                                    Alamat administrasi wilayah dan penentuan titik koordinat geografis di peta.
+                                <CardDescription
+                                    className="text-xs text-slate-500 mt-0.5"
+                                >
+                                    Alamat administrasi wilayah dan penentuan
+                                    titik koordinat geografis di peta.
                                 </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="p-5 sm:p-6">
-                        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <div
+                            class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+                        >
                             <!-- SISI KIRI: Form Input Wilayah & Alamat Lengkap (6 Kolom) -->
                             <div class="lg:col-span-6 space-y-4">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                                >
                                     <!-- Provinsi -->
                                     <div class="space-y-1.5 sm:col-span-2">
-                                        <Label for="provinsi" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <Label
+                                            for="provinsi"
+                                            class="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                                        >
                                             <span>Provinsi</span>
                                             <span class="text-rose-500">*</span>
-                                            <Loader2 v-if="isProvincesLoading" class="h-3.5 w-3.5 animate-spin text-primary ml-1" />
+                                            <Loader2
+                                                v-if="isProvincesLoading"
+                                                class="h-3.5 w-3.5 animate-spin text-primary ml-1"
+                                            />
                                         </Label>
                                         <select
                                             id="provinsi"
@@ -990,10 +1252,19 @@ function submitForm() {
                                             @change="onProvinceChange"
                                             :disabled="isProvincesLoading"
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-800 cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('provinsi') }"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError('provinsi'),
+                                            }"
                                             required
                                         >
-                                            <option value="">{{ isProvincesLoading ? 'Memuat Provinsi...' : 'Pilih Provinsi...' }}</option>
+                                            <option value="">
+                                                {{
+                                                    isProvincesLoading
+                                                        ? "Memuat Provinsi..."
+                                                        : "Pilih Provinsi..."
+                                                }}
+                                            </option>
                                             <option
                                                 v-for="prov in provinceList"
                                                 :key="prov.code"
@@ -1002,60 +1273,114 @@ function submitForm() {
                                                 {{ prov.name }}
                                             </option>
                                         </select>
-                                        <p v-if="getFieldError('provinsi')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                            <span>{{ getFieldError('provinsi') }}</span>
+                                        <p
+                                            v-if="getFieldError('provinsi')"
+                                            class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                        >
+                                            <AlertCircle
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                getFieldError("provinsi")
+                                            }}</span>
                                         </p>
                                     </div>
 
                                     <!-- Kabupaten/Kota (Hanya Menampilkan Nama Langsung) -->
                                     <div class="space-y-1.5">
-                                        <Label for="kabupaten" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <Label
+                                            for="kabupaten"
+                                            class="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                                        >
                                             <span>Kabupaten / Kota</span>
                                             <span class="text-rose-500">*</span>
-                                            <Loader2 v-if="isRegenciesLoading" class="h-3.5 w-3.5 animate-spin text-primary ml-1" />
+                                            <Loader2
+                                                v-if="isRegenciesLoading"
+                                                class="h-3.5 w-3.5 animate-spin text-primary ml-1"
+                                            />
                                         </Label>
                                         <select
                                             id="kabupaten"
                                             v-model="selectedRegencyCode"
                                             @change="onRegencyChange"
-                                            :disabled="!selectedProvinceCode || isRegenciesLoading || regencyList.length === 0"
+                                            :disabled="
+                                                !selectedProvinceCode ||
+                                                isRegenciesLoading ||
+                                                regencyList.length === 0
+                                            "
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kabupaten') }"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError('kabupaten'),
+                                            }"
                                             required
                                         >
-                                            <option value="">{{ isRegenciesLoading ? 'Memuat Kabupaten...' : 'Pilih Kabupaten/Kota...' }}</option>
+                                            <option value="">
+                                                {{
+                                                    isRegenciesLoading
+                                                        ? "Memuat Kabupaten..."
+                                                        : "Pilih Kabupaten/Kota..."
+                                                }}
+                                            </option>
                                             <option
                                                 v-for="reg in regencyList"
                                                 :key="reg.code"
                                                 :value="reg.code"
                                             >
-                                                {{ cleanKabupatenName(reg.name) }}
+                                                {{
+                                                    cleanKabupatenName(reg.name)
+                                                }}
                                             </option>
                                         </select>
-                                        <p v-if="getFieldError('kabupaten')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                            <span>{{ getFieldError('kabupaten') }}</span>
+                                        <p
+                                            v-if="getFieldError('kabupaten')"
+                                            class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                        >
+                                            <AlertCircle
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                getFieldError("kabupaten")
+                                            }}</span>
                                         </p>
                                     </div>
 
                                     <!-- Kecamatan -->
                                     <div class="space-y-1.5">
-                                        <Label for="kecamatan" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <Label
+                                            for="kecamatan"
+                                            class="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                                        >
                                             <span>Kecamatan</span>
                                             <span class="text-rose-500">*</span>
-                                            <Loader2 v-if="isDistrictsLoading" class="h-3.5 w-3.5 animate-spin text-primary ml-1" />
+                                            <Loader2
+                                                v-if="isDistrictsLoading"
+                                                class="h-3.5 w-3.5 animate-spin text-primary ml-1"
+                                            />
                                         </Label>
                                         <select
                                             id="kecamatan"
                                             v-model="selectedDistrictCode"
                                             @change="onDistrictChange"
-                                            :disabled="!selectedRegencyCode || isDistrictsLoading || districtList.length === 0"
+                                            :disabled="
+                                                !selectedRegencyCode ||
+                                                isDistrictsLoading ||
+                                                districtList.length === 0
+                                            "
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kecamatan') }"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError('kecamatan'),
+                                            }"
                                             required
                                         >
-                                            <option value="">{{ isDistrictsLoading ? 'Memuat Kecamatan...' : 'Pilih Kecamatan...' }}</option>
+                                            <option value="">
+                                                {{
+                                                    isDistrictsLoading
+                                                        ? "Memuat Kecamatan..."
+                                                        : "Pilih Kecamatan..."
+                                                }}
+                                            </option>
                                             <option
                                                 v-for="dist in districtList"
                                                 :key="dist.code"
@@ -1064,29 +1389,57 @@ function submitForm() {
                                                 {{ dist.name }}
                                             </option>
                                         </select>
-                                        <p v-if="getFieldError('kecamatan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                            <span>{{ getFieldError('kecamatan') }}</span>
+                                        <p
+                                            v-if="getFieldError('kecamatan')"
+                                            class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                        >
+                                            <AlertCircle
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                getFieldError("kecamatan")
+                                            }}</span>
                                         </p>
                                     </div>
 
                                     <!-- Desa/Kelurahan -->
                                     <div class="space-y-1.5">
-                                        <Label for="desa_kelurahan" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <Label
+                                            for="desa_kelurahan"
+                                            class="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                                        >
                                             <span>Desa / Kelurahan</span>
                                             <span class="text-rose-500">*</span>
-                                            <Loader2 v-if="isVillagesLoading" class="h-3.5 w-3.5 animate-spin text-primary ml-1" />
+                                            <Loader2
+                                                v-if="isVillagesLoading"
+                                                class="h-3.5 w-3.5 animate-spin text-primary ml-1"
+                                            />
                                         </Label>
                                         <select
                                             id="desa_kelurahan"
                                             v-model="selectedVillageCode"
                                             @change="onVillageChange"
-                                            :disabled="!selectedDistrictCode || isVillagesLoading || villageList.length === 0"
+                                            :disabled="
+                                                !selectedDistrictCode ||
+                                                isVillagesLoading ||
+                                                villageList.length === 0
+                                            "
                                             class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-slate-50 disabled:text-slate-400 text-slate-800 cursor-pointer"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('desa_kelurahan') }"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError(
+                                                        'desa_kelurahan',
+                                                    ),
+                                            }"
                                             required
                                         >
-                                            <option value="">{{ isVillagesLoading ? 'Memuat Desa...' : 'Pilih Desa/Kelurahan...' }}</option>
+                                            <option value="">
+                                                {{
+                                                    isVillagesLoading
+                                                        ? "Memuat Desa..."
+                                                        : "Pilih Desa/Kelurahan..."
+                                                }}
+                                            </option>
                                             <option
                                                 v-for="vil in villageList"
                                                 :key="vil.code"
@@ -1095,16 +1448,29 @@ function submitForm() {
                                                 {{ vil.name }}
                                             </option>
                                         </select>
-                                        <p v-if="getFieldError('desa_kelurahan')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                            <span>{{ getFieldError('desa_kelurahan') }}</span>
+                                        <p
+                                            v-if="
+                                                getFieldError('desa_kelurahan')
+                                            "
+                                            class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                        >
+                                            <AlertCircle
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                getFieldError("desa_kelurahan")
+                                            }}</span>
                                         </p>
                                     </div>
 
                                     <!-- Kode Pos -->
                                     <div class="space-y-1.5">
-                                        <Label for="kode_pos" class="text-xs font-semibold text-slate-700">
-                                            Kode Pos <span class="text-rose-500">*</span>
+                                        <Label
+                                            for="kode_pos"
+                                            class="text-xs font-semibold text-slate-700"
+                                        >
+                                            Kode Pos
+                                            <span class="text-rose-500">*</span>
                                         </Label>
                                         <input
                                             id="kode_pos"
@@ -1113,35 +1479,61 @@ function submitForm() {
                                             type="text"
                                             maxlength="5"
                                             placeholder="5 digit angka"
-                                            class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 font-mono"
-                                            :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('kode_pos') }"
+                                            class="w-full h-11 px-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900"
+                                            :class="{
+                                                'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                    getFieldError('kode_pos'),
+                                            }"
                                             required
                                         />
-                                        <p v-if="getFieldError('kode_pos')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                            <span>{{ getFieldError('kode_pos') }}</span>
+                                        <p
+                                            v-if="getFieldError('kode_pos')"
+                                            class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                        >
+                                            <AlertCircle
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                getFieldError("kode_pos")
+                                            }}</span>
                                         </p>
                                     </div>
                                 </div>
 
                                 <!-- Alamat Lengkap -->
                                 <div class="space-y-1.5">
-                                    <Label for="alamat_lengkap" class="text-xs font-semibold text-slate-700">
-                                        Alamat Lengkap (Jalan / Dusun / RT / RW) <span class="text-rose-500">*</span>
+                                    <Label
+                                        for="alamat_lengkap"
+                                        class="text-xs font-semibold text-slate-700"
+                                    >
+                                        Alamat Lengkap (Jalan / Dusun / RT / RW)
+                                        <span class="text-rose-500">*</span>
                                     </Label>
                                     <textarea
                                         id="alamat_lengkap"
                                         v-model="form.alamat_lengkap"
-                                        @input="clearFieldError('alamat_lengkap')"
+                                        @input="
+                                            clearFieldError('alamat_lengkap')
+                                        "
                                         rows="3"
                                         placeholder="Contoh: Jl. Mayor Metra No. 12, Banjar Dinas Anyar"
                                         class="w-full p-3.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 leading-relaxed"
-                                        :class="{ 'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500': getFieldError('alamat_lengkap') }"
+                                        :class="{
+                                            'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500':
+                                                getFieldError('alamat_lengkap'),
+                                        }"
                                         required
                                     ></textarea>
-                                    <p v-if="getFieldError('alamat_lengkap')" class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('alamat_lengkap') }}</span>
+                                    <p
+                                        v-if="getFieldError('alamat_lengkap')"
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("alamat_lengkap")
+                                        }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -1153,14 +1545,30 @@ function submitForm() {
                                     v-model:latitude="form.latitude"
                                     v-model:longitude="form.longitude"
                                     :default-center="defaultCenter"
-                                    :default-zoom="form.latitude && form.longitude ? 14 : 10"
+                                    :default-zoom="
+                                        form.latitude && form.longitude
+                                            ? 14
+                                            : 10
+                                    "
                                     label="Titik Koordinat Lokasi Kelompok *"
                                     height="370px"
                                 />
-                                <div v-if="getFieldError('latitude') || getFieldError('longitude')">
-                                    <p class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ getFieldError('latitude') || getFieldError('longitude') }}</span>
+                                <div
+                                    v-if="
+                                        getFieldError('latitude') ||
+                                        getFieldError('longitude')
+                                    "
+                                >
+                                    <p
+                                        class="text-xs text-rose-500 font-medium flex items-center gap-1 mt-1"
+                                    >
+                                        <AlertCircle
+                                            class="h-3.5 w-3.5 shrink-0"
+                                        />
+                                        <span>{{
+                                            getFieldError("latitude") ||
+                                            getFieldError("longitude")
+                                        }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -1170,36 +1578,58 @@ function submitForm() {
 
                 <!-- 4. RINCIAN JUMLAH PENERIMA MANFAAT -->
                 <Card className="bg-white border-slate-200/80 shadow-xs">
-                    <CardHeader className="border-b border-slate-100 p-5 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <CardHeader
+                        className="border-b border-slate-100 p-5 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    >
                         <div class="flex items-center gap-2.5">
-                            <div class="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <div
+                                class="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"
+                            >
                                 <Users class="h-4 w-4" />
                             </div>
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">
+                                <CardTitle
+                                    className="text-base font-bold text-slate-900"
+                                >
                                     4. Rincian Jumlah Penerima Manfaat
                                 </CardTitle>
-                                <CardDescription className="text-xs text-slate-500 mt-0.5">
-                                    Pemetaan jumlah penerima manfaat Laki-Laki & Perempuan serta jenis porsi ({{ form.kategori }}).
+                                <CardDescription
+                                    className="text-xs text-slate-500 mt-0.5"
+                                >
+                                    Pemetaan jumlah penerima manfaat ({{
+                                        form.kategori
+                                    }}).
                                 </CardDescription>
                             </div>
                         </div>
 
                         <!-- Summary Badges (Termasuk Porsi Kecil & Porsi Besar) -->
-                        <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto font-mono text-xs">
-                            <span class="px-2.5 py-1 font-bold rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+                        <div
+                            class="flex flex-wrap items-center gap-2 self-start sm:self-auto text-xs"
+                        >
+                            <span
+                                class="px-2.5 py-1 font-bold rounded-lg bg-amber-50 text-amber-800 border border-amber-200"
+                            >
                                 Porsi Kecil: {{ totalPorsiKecil }}
                             </span>
-                            <span class="px-2.5 py-1 font-bold rounded-lg bg-blue-50 text-blue-800 border border-blue-200">
+                            <span
+                                class="px-2.5 py-1 font-bold rounded-lg bg-blue-50 text-blue-800 border border-blue-200"
+                            >
                                 Porsi Besar: {{ totalPorsiBesar }}
                             </span>
-                            <span class="px-2.5 py-1 font-bold rounded-lg bg-sky-50 text-sky-700 border border-sky-200">
+                            <span
+                                class="px-2.5 py-1 font-bold rounded-lg bg-sky-50 text-sky-700 border border-sky-200"
+                            >
                                 L: {{ totalLakiLaki }}
                             </span>
-                            <span class="px-2.5 py-1 font-bold rounded-lg bg-pink-50 text-pink-700 border border-pink-200">
+                            <span
+                                class="px-2.5 py-1 font-bold rounded-lg bg-pink-50 text-pink-700 border border-pink-200"
+                            >
                                 P: {{ totalPerempuan }}
                             </span>
-                            <span class="px-3.5 py-1 font-extrabold rounded-lg bg-primary text-white shadow-xs">
+                            <span
+                                class="px-3.5 py-1 font-extrabold rounded-lg bg-primary text-white shadow-xs"
+                            >
                                 Total: {{ grandTotal }}
                             </span>
                         </div>
@@ -1210,30 +1640,56 @@ function submitForm() {
                             v-if="getFieldError('rincian')"
                             class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2.5 text-xs font-semibold"
                         >
-                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
-                            <span>{{ getFieldError('rincian') }}</span>
+                            <AlertCircle
+                                class="h-4 w-4 shrink-0 text-rose-600"
+                            />
+                            <span>{{ getFieldError("rincian") }}</span>
                         </div>
 
-                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                            <table class="w-full text-left text-xs border-collapse">
+                        <div
+                            class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
+                        >
+                            <table
+                                class="w-full text-left text-xs border-collapse"
+                            >
                                 <thead>
-                                    <tr class="h-14 bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                                        <th class="px-4 py-4 w-12 text-center">No</th>
-                                        <th class="px-5 py-4 min-w-[200px]">Sub Kategori Penerima</th>
-                                        <th class="px-4 py-4 w-36 text-center">Jenis Porsi</th>
-                                        <th class="px-5 py-4 text-center w-36">Laki-Laki (L)</th>
-                                        <th class="px-5 py-4 text-center w-36">Perempuan (P)</th>
-                                        <th class="px-4 py-4 text-center w-28">Subtotal</th>
-                                        <th class="px-4 py-4 text-center w-12"></th>
+                                    <tr
+                                        class="h-14 bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider"
+                                    >
+                                        <th class="px-4 py-4 w-12 text-center">
+                                            No
+                                        </th>
+                                        <th class="px-5 py-4 min-w-[200px]">
+                                            Sub Kategori Penerima
+                                        </th>
+                                        <th class="px-4 py-4 w-36 text-center">
+                                            Jenis Porsi
+                                        </th>
+                                        <th class="px-5 py-4 text-center w-36">
+                                            Laki-Laki (L)
+                                        </th>
+                                        <th class="px-5 py-4 text-center w-36">
+                                            Perempuan (P)
+                                        </th>
+                                        <th class="px-4 py-4 text-center w-28">
+                                            Subtotal
+                                        </th>
+                                        <th
+                                            class="px-4 py-4 text-center w-12"
+                                        ></th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 bg-white">
+                                <tbody
+                                    class="divide-y divide-slate-100 bg-white"
+                                >
                                     <tr
                                         v-for="(item, idx) in form.rincian"
                                         :key="idx"
                                         class="hover:bg-slate-50/60 transition-colors h-16"
                                     >
-                                        <td class="px-4 py-4 text-center font-medium text-slate-400">
+                                        <td
+                                            class="px-4 py-4 text-center font-medium text-slate-400"
+                                        >
                                             {{ idx + 1 }}
                                         </td>
 
@@ -1241,13 +1697,19 @@ function submitForm() {
                                         <td class="px-5 py-4">
                                             <select
                                                 v-model="item.sub_kategori"
-                                                @change="onSubKategoriChange(item)"
+                                                @change="
+                                                    onSubKategoriChange(item)
+                                                "
                                                 class="w-full h-10 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-medium text-slate-800 cursor-pointer"
                                                 required
                                             >
-                                                <option value="" disabled>Pilih Sub Kategori...</option>
+                                                <option value="" disabled>
+                                                    Pilih Sub Kategori...
+                                                </option>
                                                 <option
-                                                    v-for="opt in getAvailableSubKategoriForRow(idx)"
+                                                    v-for="opt in getAvailableSubKategoriForRow(
+                                                        idx,
+                                                    )"
                                                     :key="opt"
                                                     :value="opt"
                                                 >
@@ -1259,7 +1721,12 @@ function submitForm() {
                                         <!-- Jenis Porsi (Fixed Badge Berdasarkan Subkategori) -->
                                         <td class="px-4 py-4 text-center">
                                             <span
-                                                v-if="getJenisPorsiBySubKategori(item.sub_kategori, form.kategori) === 'Porsi Kecil'"
+                                                v-if="
+                                                    getJenisPorsiBySubKategori(
+                                                        item.sub_kategori,
+                                                        form.kategori,
+                                                    ) === 'Porsi Kecil'
+                                                "
                                                 class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs select-none"
                                             >
                                                 Porsi Kecil
@@ -1275,28 +1742,41 @@ function submitForm() {
                                         <!-- Input Laki-Laki -->
                                         <td class="px-5 py-4 text-center">
                                             <input
-                                                v-model.number="item.jumlah_laki_laki"
+                                                v-model.number="
+                                                    item.jumlah_laki_laki
+                                                "
                                                 type="number"
                                                 min="0"
                                                 placeholder="0"
-                                                class="w-full h-10 text-center px-3 text-xs font-mono font-bold rounded-lg border border-sky-200 bg-sky-50/40 text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                                                class="w-full h-10 text-center px-3 text-xs font-bold rounded-lg border border-sky-200 bg-sky-50/40 text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                                             />
                                         </td>
 
                                         <!-- Input Perempuan -->
                                         <td class="px-5 py-4 text-center">
                                             <input
-                                                v-model.number="item.jumlah_perempuan"
+                                                v-model.number="
+                                                    item.jumlah_perempuan
+                                                "
                                                 type="number"
                                                 min="0"
                                                 placeholder="0"
-                                                class="w-full h-10 text-center px-3 text-xs font-mono font-bold rounded-lg border border-pink-200 bg-pink-50/40 text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500"
+                                                class="w-full h-10 text-center px-3 text-xs font-bold rounded-lg border border-pink-200 bg-pink-50/40 text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500"
                                             />
                                         </td>
 
                                         <!-- Subtotal -->
-                                        <td class="px-4 py-4 text-center font-mono font-extrabold text-xs text-slate-800">
-                                            {{ (Number(item.jumlah_laki_laki) || 0) + (Number(item.jumlah_perempuan) || 0) }}
+                                        <td
+                                            class="px-4 py-4 text-center font-extrabold text-xs text-slate-800"
+                                        >
+                                            {{
+                                                (Number(
+                                                    item.jumlah_laki_laki,
+                                                ) || 0) +
+                                                (Number(
+                                                    item.jumlah_perempuan,
+                                                ) || 0)
+                                            }}
                                         </td>
 
                                         <!-- Hapus Baris -->
@@ -1313,24 +1793,40 @@ function submitForm() {
                                     </tr>
 
                                     <tr v-if="form.rincian.length === 0">
-                                        <td colspan="7" class="py-10 text-center text-slate-400 text-xs">
-                                            Belum ada baris subkategori. Klik tombol di bawah untuk menambah baris.
+                                        <td
+                                            colspan="7"
+                                            class="py-10 text-center text-slate-400 text-xs"
+                                        >
+                                            Belum ada baris subkategori. Klik
+                                            tombol di bawah untuk menambah
+                                            baris.
                                         </td>
                                     </tr>
                                 </tbody>
 
                                 <tfoot>
-                                    <tr class="h-14 bg-slate-50 font-bold border-t border-slate-200 text-xs">
-                                        <td colspan="3" class="px-6 py-4 text-right uppercase tracking-wider text-slate-600">
-                                            Grand Total Penerima
+                                    <tr
+                                        class="h-14 bg-slate-50 font-bold border-t border-slate-200 text-xs"
+                                    >
+                                        <td
+                                            colspan="3"
+                                            class="px-6 py-4 text-right uppercase tracking-wider text-slate-600"
+                                        >
+                                            Total Penerima Manfaat
                                         </td>
-                                        <td class="px-5 py-4 text-center font-mono text-sky-700 font-bold">
+                                        <td
+                                            class="px-5 py-4 text-center text-sky-700 font-bold"
+                                        >
                                             {{ totalLakiLaki }}
                                         </td>
-                                        <td class="px-5 py-4 text-center font-mono text-pink-700 font-bold">
+                                        <td
+                                            class="px-5 py-4 text-center text-pink-700 font-bold"
+                                        >
                                             {{ totalPerempuan }}
                                         </td>
-                                        <td class="px-4 py-4 text-center font-mono text-primary font-black text-sm">
+                                        <td
+                                            class="px-4 py-4 text-center text-primary font-black text-sm"
+                                        >
                                             {{ grandTotal }}
                                         </td>
                                         <td></td>
@@ -1340,13 +1836,19 @@ function submitForm() {
                         </div>
 
                         <!-- Action Buttons di Bawah Tabel -->
-                        <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-3 pt-2"
+                        >
                             <button
                                 type="button"
                                 @click="addCustomSubkategori"
                                 :disabled="isAllSubkategoriAdded"
                                 class="inline-flex items-center justify-center gap-2 h-11 px-5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                                :title="isAllSubkategoriAdded ? 'Semua sub kategori untuk jenjang ini telah ditambahkan' : 'Tambah baris sub kategori lainnya'"
+                                :title="
+                                    isAllSubkategoriAdded
+                                        ? 'Semua sub kategori untuk jenjang ini telah ditambahkan'
+                                        : 'Tambah baris sub kategori lainnya'
+                                "
                             >
                                 <Plus class="h-3.5 w-3.5" />
                                 <span>Tambah Baris Sub Kategori Lainnya</span>
@@ -1358,14 +1860,20 @@ function submitForm() {
                                 class="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                             >
                                 <RotateCcw class="h-3.5 w-3.5" />
-                                <span>Reset Rincian ke Default ({{ form.kategori }})</span>
+                                <span
+                                    >Reset Rincian ke Default ({{
+                                        form.kategori
+                                    }})</span
+                                >
                             </button>
                         </div>
                     </CardContent>
                 </Card>
 
                 <!-- Bottom Submit Button -->
-                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                <div
+                    class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200"
+                >
                     <Link
                         :href="route('penerima-manfaat.index')"
                         class="inline-flex items-center justify-center h-11 px-6 min-w-[100px] text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
@@ -1378,7 +1886,11 @@ function submitForm() {
                         class="inline-flex items-center justify-center gap-2 h-11 px-6 min-w-[180px] text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
                     >
                         <Save class="h-4 w-4" />
-                        <span>{{ form.processing ? "Menyimpan..." : "Simpan Perubahan" }}</span>
+                        <span>{{
+                            form.processing
+                                ? "Menyimpan..."
+                                : "Simpan Perubahan"
+                        }}</span>
                     </button>
                 </div>
             </form>
