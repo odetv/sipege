@@ -59,12 +59,17 @@ class KelompokPenerimaManfaatController extends Controller
             $query->where('jenis_kepemilikan', $request->input('jenis_kepemilikan'));
         }
 
-        $kelompokList = $query->latest()->get();
+        $kelompokList = $query->orderBy('id', 'asc')->get();
 
         // Calculate all-time summary stats for this unit SPPG
         $allKelompok = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->get();
+        $totalPosyandu = $allKelompok->where('kategori', 'Posyandu')->count();
+        $totalSekolah = $allKelompok->where('kategori', '!=', 'Posyandu')->count();
+
         $summary = [
             'total_kelompok' => $allKelompok->count(),
+            'total_sekolah' => $totalSekolah,
+            'total_posyandu' => $totalPosyandu,
             'total_penerima' => (int) $allKelompok->sum('total_penerima'),
             'total_laki_laki' => (int) $allKelompok->sum('total_laki_laki'),
             'total_perempuan' => (int) $allKelompok->sum('total_perempuan'),
@@ -136,6 +141,11 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap' => ['required', 'string'],
             'latitude' => ['required', 'numeric'],
             'longitude' => ['required', 'numeric'],
+            'jumlah_kader' => ['nullable', 'required_if:kategori,Posyandu', 'integer', 'min:1'],
+            'alergi_porsi_kecil' => ['nullable', 'integer', 'min:0'],
+            'alergi_porsi_besar' => ['nullable', 'integer', 'min:0'],
+            'keterangan_alergi' => ['nullable', 'array'],
+            'keterangan_alergi.*' => ['nullable', 'string', 'max:255'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
@@ -160,6 +170,8 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap.required' => 'Alamat lengkap wajib diisi.',
             'latitude.required' => 'Titik koordinat (Latitude) wajib ditentukan.',
             'longitude.required' => 'Titik koordinat (Longitude) wajib ditentukan.',
+            'jumlah_kader.required_if' => 'Jumlah kader posyandu wajib diisi minimal 1 orang.',
+            'jumlah_kader.min' => 'Jumlah kader posyandu minimal 1 orang.',
             'rincian.required' => 'Rincian jumlah penerima manfaat wajib diisi.',
         ]);
 
@@ -186,6 +198,12 @@ class KelompokPenerimaManfaatController extends Controller
 
             $totalPenerima = $totalLakiLaki + $totalPerempuan;
 
+            $alergiData = self::processAlergiData(
+                $validated['keterangan_alergi'] ?? [],
+                $validated['alergi_porsi_kecil'] ?? 0,
+                $validated['alergi_porsi_besar'] ?? 0
+            );
+
             $kelompok = KelompokPenerimaManfaat::create([
                 'unit_sppg_id' => $unitSppg->id,
                 'nama_kelompok' => $validated['nama_kelompok'],
@@ -207,11 +225,15 @@ class KelompokPenerimaManfaatController extends Controller
                 'alamat_lengkap' => $validated['alamat_lengkap'],
                 'latitude' => $validated['latitude'],
                 'longitude' => $validated['longitude'],
+                'jumlah_kader' => $validated['kategori'] === 'Posyandu' ? (int) ($validated['jumlah_kader'] ?? 0) : 0,
                 'total_laki_laki' => $totalLakiLaki,
                 'total_perempuan' => $totalPerempuan,
                 'total_porsi_kecil' => $totalPorsiKecil,
                 'total_porsi_besar' => $totalPorsiBesar,
                 'total_penerima' => $totalPenerima,
+                'alergi_porsi_kecil' => $alergiData['alergi_porsi_kecil'],
+                'alergi_porsi_besar' => $alergiData['alergi_porsi_besar'],
+                'keterangan_alergi' => $alergiData['keterangan_alergi'],
             ]);
 
             $sortedRincian = self::sortRincianArray($validated['rincian'], $validated['kategori']);
@@ -403,6 +425,11 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap' => ['required', 'string'],
             'latitude' => ['required', 'numeric'],
             'longitude' => ['required', 'numeric'],
+            'jumlah_kader' => ['nullable', 'required_if:kategori,Posyandu', 'integer', 'min:1'],
+            'alergi_porsi_kecil' => ['nullable', 'integer', 'min:0'],
+            'alergi_porsi_besar' => ['nullable', 'integer', 'min:0'],
+            'keterangan_alergi' => ['nullable', 'array'],
+            'keterangan_alergi.*' => ['nullable', 'string', 'max:255'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
@@ -427,6 +454,8 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap.required' => 'Alamat lengkap wajib diisi.',
             'latitude.required' => 'Titik koordinat (Latitude) wajib ditentukan.',
             'longitude.required' => 'Titik koordinat (Longitude) wajib ditentukan.',
+            'jumlah_kader.required_if' => 'Jumlah kader posyandu wajib diisi minimal 1 orang.',
+            'jumlah_kader.min' => 'Jumlah kader posyandu minimal 1 orang.',
             'rincian.required' => 'Rincian jumlah penerima manfaat wajib diisi.',
         ]);
 
@@ -453,6 +482,12 @@ class KelompokPenerimaManfaatController extends Controller
 
             $totalPenerima = $totalLakiLaki + $totalPerempuan;
 
+            $alergiData = self::processAlergiData(
+                $validated['keterangan_alergi'] ?? [],
+                $validated['alergi_porsi_kecil'] ?? 0,
+                $validated['alergi_porsi_besar'] ?? 0
+            );
+
             $penerima_manfaat->update([
                 'nama_kelompok' => $validated['nama_kelompok'],
                 'kategori' => $validated['kategori'],
@@ -473,11 +508,15 @@ class KelompokPenerimaManfaatController extends Controller
                 'alamat_lengkap' => $validated['alamat_lengkap'],
                 'latitude' => $validated['latitude'],
                 'longitude' => $validated['longitude'],
+                'jumlah_kader' => $validated['kategori'] === 'Posyandu' ? (int) ($validated['jumlah_kader'] ?? 0) : 0,
                 'total_laki_laki' => $totalLakiLaki,
                 'total_perempuan' => $totalPerempuan,
                 'total_porsi_kecil' => $totalPorsiKecil,
                 'total_porsi_besar' => $totalPorsiBesar,
                 'total_penerima' => $totalPenerima,
+                'alergi_porsi_kecil' => $alergiData['alergi_porsi_kecil'],
+                'alergi_porsi_besar' => $alergiData['alergi_porsi_besar'],
+                'keterangan_alergi' => $alergiData['keterangan_alergi'],
             ]);
 
             // Sync rincian: delete old and recreate
@@ -518,5 +557,46 @@ class KelompokPenerimaManfaatController extends Controller
         $penerima_manfaat->delete();
 
         return redirect()->route('penerima-manfaat.index')->with('success', 'Kelompok Penerima Manfaat berhasil dihapus.');
+    }
+
+    /**
+     * Process, validate, and compute allergy totals per allergen item.
+     */
+    protected static function processAlergiData(?array $alergiList, $directPK = 0, $directPB = 0): array
+    {
+        $cleanedList = [];
+        $totalPK = 0;
+        $totalPB = 0;
+
+        if (!empty($alergiList) && is_array($alergiList)) {
+            foreach ($alergiList as $item) {
+                if (is_array($item) && !empty($item['jenis_alergi'])) {
+                    $pk = max(0, (int) ($item['porsi_kecil'] ?? 0));
+                    $pb = max(0, (int) ($item['porsi_besar'] ?? 0));
+                    $totalPK += $pk;
+                    $totalPB += $pb;
+                    $cleanedList[] = [
+                        'jenis_alergi' => trim($item['jenis_alergi']),
+                        'porsi_kecil' => $pk,
+                        'porsi_besar' => $pb,
+                    ];
+                } elseif (is_string($item) && trim($item) !== '') {
+                    $cleanedList[] = [
+                        'jenis_alergi' => trim($item),
+                        'porsi_kecil' => 0,
+                        'porsi_besar' => 0,
+                    ];
+                }
+            }
+        }
+
+        $finalPK = $totalPK > 0 ? $totalPK : max(0, (int) $directPK);
+        $finalPB = $totalPB > 0 ? $totalPB : max(0, (int) $directPB);
+
+        return [
+            'keterangan_alergi' => $cleanedList,
+            'alergi_porsi_kecil' => $finalPK,
+            'alergi_porsi_besar' => $finalPB,
+        ];
     }
 }

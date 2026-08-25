@@ -34,6 +34,28 @@ export const JENIS_PORSI_OPTIONS = [
     { value: "Porsi Besar", label: "Porsi Besar" },
 ];
 
+export const ALERGI_OPTIONS = [
+    { value: "Telur", label: "Telur" },
+    { value: "Susu Sapi / Laktosa", label: "Susu Sapi / Laktosa" },
+    { value: "Kacang Tanah & Pohon", label: "Kacang Tanah / Kacang Pohon" },
+    { value: "Ikan Laut / Seafood", label: "Ikan Laut / Seafood" },
+    { value: "Udang & Krustasea", label: "Udang / Kepiting / Krustasea" },
+    { value: "Gandum / Gluten", label: "Gandum / Gluten" },
+    { value: "Kedelai / Soja", label: "Kedelai / Produk Kedelai" },
+    { value: "Cokelat", label: "Cokelat" },
+    { value: "Daging Ayam / Unggas", label: "Daging Ayam / Unggas" },
+    { value: "Daging Sapi", label: "Daging Sapi" },
+    { value: "Lainnya", label: "Lainnya" },
+];
+
+export const ANGGARAN_PORSI_MAP = {
+    "Porsi Kecil": 8000,
+    "Porsi Besar": 10000,
+};
+
+export const BUDGET_PLAFON_PK = 8000; // Rp 8.000 / porsi
+export const BUDGET_PLAFON_PB = 10000; // Rp 10.000 / porsi
+
 // Mapping default jenis porsi berdasarkan Sub Kategori & Jenjang
 export const SUB_KATEGORI_PORSI_MAP = {
     // TK / RA / PAUD

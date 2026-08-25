@@ -56,9 +56,15 @@ class KelompokPenerimaManfaat extends Model
         return [
             'latitude' => 'float',
             'longitude' => 'float',
+            'jumlah_kader' => 'integer',
             'total_laki_laki' => 'integer',
             'total_perempuan' => 'integer',
             'total_penerima' => 'integer',
+            'total_porsi_kecil' => 'integer',
+            'total_porsi_besar' => 'integer',
+            'alergi_porsi_kecil' => 'integer',
+            'alergi_porsi_besar' => 'integer',
+            'keterangan_alergi' => 'array',
         ];
     }
 

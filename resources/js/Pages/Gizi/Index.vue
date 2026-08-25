@@ -36,6 +36,7 @@ import {
     Table,
     Search,
     Filter,
+    HeartPulse,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -271,10 +272,15 @@ const varianAlergiTelurBahan = computed(() => {
 const tkpiItems = ref(props.tkpiList || []);
 
 // Fungsi Kalkulasi MBG
-function calculateGrossWeightKg(netGram, totalPortions, bddPercent, bufferPercent) {
+function calculateGrossWeightKg(
+    netGram,
+    totalPortions,
+    bddPercent,
+    bufferPercent,
+) {
     if (!netGram || !totalPortions) return 0;
     const bddFactor = Math.max(0.1, (bddPercent || 100) / 100);
-    const bufferFactor = 1 + ((bufferPercent || 0) / 100);
+    const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossGramPerPortion = (netGram / bddFactor) * bufferFactor;
     const totalGrossKg = (grossGramPerPortion * totalPortions) / 1000;
     return Number(totalGrossKg.toFixed(2));
@@ -294,10 +300,15 @@ function calculateNutritionFromNetGram(itemTkpi, netGram) {
     };
 }
 
-function calculateItemFoodCostPerPortion(netGram, bddPercent, bufferPercent, hargaPerKg) {
+function calculateItemFoodCostPerPortion(
+    netGram,
+    bddPercent,
+    bufferPercent,
+    hargaPerKg,
+) {
     if (!netGram || !hargaPerKg) return 0;
     const bddFactor = Math.max(0.1, (bddPercent || 100) / 100);
-    const bufferFactor = 1 + ((bufferPercent || 0) / 100);
+    const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossGram = (netGram / bddFactor) * bufferFactor;
     const cost = (grossGram / 1000) * hargaPerKg;
     return Math.round(cost);
@@ -1014,8 +1025,11 @@ const tkpiCategoryList = computed(() => {
                                 >
                                     {{ stats.total_kelompok }}
                                     <span
-                                        class="text-xs font-medium text-slate-500"
-                                        >Unit</span
+                                        class="text-xs font-semibold text-slate-600"
+                                        >({{ stats.total_sekolah || 0 }}
+                                        Sekolah /
+                                        {{ stats.total_posyandu || 0 }}
+                                        Posyandu)</span
                                     >
                                 </h3>
                             </div>
@@ -1197,11 +1211,67 @@ const tkpiCategoryList = computed(() => {
                                         {{ k.total_penerima || 0 }}
                                     </td>
                                     <td class="p-3.5">
+                                        <div
+                                            v-if="
+                                                (k.alergi_porsi_kecil > 0 ||
+                                                k.alergi_porsi_besar > 0)
+                                            "
+                                            class="space-y-1.5"
+                                        >
+                                            <span
+                                                class="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded shadow-2xs"
+                                            >
+                                                <HeartPulse
+                                                    class="h-3 w-3 text-rose-600"
+                                                />
+                                                <span
+                                                    >{{
+                                                        (k.alergi_porsi_kecil ||
+                                                            0) +
+                                                        (k.alergi_porsi_besar ||
+                                                            0)
+                                                    }}
+                                                    ({{
+                                                        k.alergi_porsi_kecil ||
+                                                        0
+                                                    }}
+                                                    PK /
+                                                    {{
+                                                        k.alergi_porsi_besar ||
+                                                        0
+                                                    }}
+                                                    PB)</span
+                                                >
+                                            </span>
+                                            <div
+                                                v-if="
+                                                    k.keterangan_alergi &&
+                                                    k.keterangan_alergi.length >
+                                                        0
+                                                "
+                                                class="flex items-center gap-1 flex-wrap"
+                                            >
+                                                <span
+                                                    v-for="(
+                                                        al, idx
+                                                    ) in k.keterangan_alergi"
+                                                    :key="idx"
+                                                    class="text-[10px] font-semibold text-slate-700 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded"
+                                                >
+                                                    {{
+                                                        typeof al === "string"
+                                                            ? al
+                                                            : `${al.jenis_alergi}: ${(al.porsi_kecil || 0) + (al.porsi_besar || 0)}`
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
                                         <span
+                                            v-else
                                             class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded"
                                         >
                                             <CheckCircle2 class="h-3 w-3" />
-                                            Standar Normal
+                                            Standar Normal (0 Alergi)
                                         </span>
                                     </td>
                                 </tr>

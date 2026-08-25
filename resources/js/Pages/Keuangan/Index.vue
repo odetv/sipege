@@ -52,8 +52,8 @@ const props = defineProps({
             total_penerima: 0,
             total_porsi_kecil: 0,
             total_porsi_besar: 0,
-            cost_porsi_kecil: 12000,
-            cost_porsi_besar: 15000,
+            cost_porsi_kecil: 8000,
+            cost_porsi_besar: 10000,
             estimasi_harian_pk: 0,
             estimasi_harian_pb: 0,
             estimasi_harian_total: 0,
@@ -297,8 +297,8 @@ function formatRupiah(amount) {
                                 <span class="font-bold text-amber-700">{{ formatRupiah(summary.estimasi_harian_pk) }}</span>
                             </div>
                             <div class="flex items-center justify-between text-xs py-1">
-                                <span class="text-slate-600 font-medium">Alokasi Biaya Bulanan (22 Hari):</span>
-                                <span class="font-bold text-amber-800">{{ formatRupiah(summary.estimasi_harian_pk * 22) }}</span>
+                                <span class="text-slate-600 font-medium">Alokasi Biaya Bulanan (20 Hari):</span>
+                                <span class="font-bold text-amber-800">{{ formatRupiah(summary.estimasi_harian_pk * 20) }}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -325,8 +325,8 @@ function formatRupiah(amount) {
                                 <span class="font-bold text-indigo-700">{{ formatRupiah(summary.estimasi_harian_pb) }}</span>
                             </div>
                             <div class="flex items-center justify-between text-xs py-1">
-                                <span class="text-slate-600 font-medium">Alokasi Biaya Bulanan (22 Hari):</span>
-                                <span class="font-bold text-indigo-800">{{ formatRupiah(summary.estimasi_harian_pb * 22) }}</span>
+                                <span class="text-slate-600 font-medium">Alokasi Biaya Bulanan (20 Hari):</span>
+                                <span class="font-bold text-indigo-800">{{ formatRupiah(summary.estimasi_harian_pb * 20) }}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -435,7 +435,7 @@ function formatRupiah(amount) {
                                     <th class="p-3.5">Porsi Kecil (PK)</th>
                                     <th class="p-3.5">Porsi Besar (PB)</th>
                                     <th class="p-3.5">Biaya Harian</th>
-                                    <th class="p-3.5">Biaya Bulanan (22 Hari)</th>
+                                    <th class="p-3.5">Biaya Bulanan (20 Hari)</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 text-slate-800">
@@ -452,7 +452,7 @@ function formatRupiah(amount) {
                                         {{ formatRupiah((k.total_porsi_kecil || 0) * summary.cost_porsi_kecil + (k.total_porsi_besar || 0) * summary.cost_porsi_besar) }}
                                     </td>
                                     <td class="p-3.5 font-bold text-slate-900">
-                                        {{ formatRupiah(((k.total_porsi_kecil || 0) * summary.cost_porsi_kecil + (k.total_porsi_besar || 0) * summary.cost_porsi_besar) * 22) }}
+                                        {{ formatRupiah(((k.total_porsi_kecil || 0) * summary.cost_porsi_kecil + (k.total_porsi_besar || 0) * summary.cost_porsi_besar) * 20) }}
                                     </td>
                                 </tr>
                                 <tr v-if="kelompokList.length === 0">

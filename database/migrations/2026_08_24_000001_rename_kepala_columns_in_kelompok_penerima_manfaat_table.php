@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('kelompok_penerima_manfaat', function (Blueprint $table) {
-            $table->renameColumn('nama_kepala_sekolah', 'nama_kepala');
-            $table->renameColumn('email_kepala_sekolah', 'email_kepala');
-            $table->renameColumn('telepon_kepala_sekolah', 'telepon_kepala');
+            if (Schema::hasColumn('kelompok_penerima_manfaat', 'nama_kepala_sekolah')) {
+                $table->renameColumn('nama_kepala_sekolah', 'nama_kepala');
+            }
+            if (Schema::hasColumn('kelompok_penerima_manfaat', 'email_kepala_sekolah')) {
+                $table->renameColumn('email_kepala_sekolah', 'email_kepala');
+            }
+            if (Schema::hasColumn('kelompok_penerima_manfaat', 'telepon_kepala_sekolah')) {
+                $table->renameColumn('telepon_kepala_sekolah', 'telepon_kepala');
+            }
         });
     }
 

@@ -32,14 +32,14 @@ class KeuanganController extends Controller
             $totalPorsiBesar = $kelompokList->sum('total_porsi_besar');
         }
 
-        // Estimasi Biaya Standar per Porsi (dalam Rupiah)
-        $costPorsiKecil = 12000;
-        $costPorsiBesar = 15000;
+        // Estimasi Biaya Standar per Porsi BGN (dalam Rupiah)
+        $costPorsiKecil = 8000;
+        $costPorsiBesar = 10000;
 
         $estimasiHarianPK = $totalPorsiKecil * $costPorsiKecil;
         $estimasiHarianPB = $totalPorsiBesar * $costPorsiBesar;
         $estimasiHarianTotal = $estimasiHarianPK + $estimasiHarianPB;
-        $estimasiBulanan = $estimasiHarianTotal * 22; // 22 hari operasional sekolah/bulan
+        $estimasiBulanan = $estimasiHarianTotal * 20; // 20 hari operasional sekolah/bulan
 
         return Inertia::render('Keuangan/Index', [
             'user' => $user,

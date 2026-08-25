@@ -49,6 +49,8 @@ class GiziController extends Controller
             'tkpiList' => $this->getTkpiData(),
             'stats' => [
                 'total_kelompok' => count($kelompokList),
+                'total_sekolah' => $kelompokList->where('kategori', '!=', 'Posyandu')->count(),
+                'total_posyandu' => $kelompokList->where('kategori', 'Posyandu')->count(),
                 'total_penerima' => $totalPenerima,
                 'total_porsi_kecil' => $totalPorsiKecil,
                 'total_porsi_besar' => $totalPorsiBesar,

@@ -121,9 +121,7 @@ const submit = () => {
                 <form @submit.prevent="submit" class="space-y-4">
                     <!-- Email Input -->
                     <div class="space-y-1.5">
-                        <Label for="email" :required="true"
-                            >Email</Label
-                        >
+                        <Label for="email" :required="true">Email</Label>
                         <div class="relative">
                             <div
                                 class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"
@@ -242,9 +240,9 @@ const submit = () => {
         <!-- Demo user info helper -->
         <div class="mt-6 text-center text-xs text-slate-400 max-w-sm">
             <p>
-                Akun Demo Seeder:
-                <span class="font-mono text-slate-600">admin@sppg.id</span> /
-                <span class="font-mono text-slate-600">password123</span>
+                Akun Demo:
+                <span class="font-mono text-slate-600">admin@sipege.com</span> /
+                <span class="font-mono text-slate-600">Password@123</span>
             </p>
         </div>
     </div>

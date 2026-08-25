@@ -32,12 +32,14 @@ import {
     RotateCcw,
     Loader2,
     Utensils,
+    HeartPulse,
 } from "lucide-vue-next";
 import {
     KATEGORI_OPTIONS,
     JENIS_KEPEMILIKAN_OPTIONS,
     TIPE_IDENTITAS_OPTIONS,
     JENIS_PORSI_OPTIONS,
+    ALERGI_OPTIONS,
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
@@ -76,6 +78,24 @@ const defaultCenter = computed(() => {
     return [-8.409518, 115.188916];
 });
 
+function normalizeAlergiData(data) {
+    if (!Array.isArray(data)) return [];
+    return data.map((item) => {
+        if (typeof item === "string") {
+            return {
+                jenis_alergi: item,
+                porsi_kecil: 0,
+                porsi_besar: 0,
+            };
+        }
+        return {
+            jenis_alergi: item.jenis_alergi || "",
+            porsi_kecil: Number(item.porsi_kecil) || 0,
+            porsi_besar: Number(item.porsi_besar) || 0,
+        };
+    });
+}
+
 // Form state
 const form = useForm({
     nama_kelompok: props.kelompok.nama_kelompok || "",
@@ -99,6 +119,12 @@ const form = useForm({
     longitude: props.kelompok.longitude
         ? Number(props.kelompok.longitude)
         : null,
+    jumlah_kader:
+        Number(props.kelompok.jumlah_kader) ||
+        (props.kelompok.kategori === "Posyandu" ? 5 : 0),
+    alergi_porsi_kecil: Number(props.kelompok.alergi_porsi_kecil) || 0,
+    alergi_porsi_besar: Number(props.kelompok.alergi_porsi_besar) || 0,
+    keterangan_alergi: normalizeAlergiData(props.kelompok.keterangan_alergi),
     rincian: sortRincianByKategori(
         Array.isArray(props.kelompok.rincian)
             ? props.kelompok.rincian.map((r) => ({
@@ -118,6 +144,99 @@ const form = useForm({
     ),
 });
 
+// Helper state & functions untuk data alergi per jenis
+const customAlergiInput = ref("");
+const showCustomAlergiInput = ref(false);
+
+const totalAlergiPK = computed(() => {
+    if (!Array.isArray(form.keterangan_alergi)) return 0;
+    return form.keterangan_alergi.reduce(
+        (sum, item) => sum + (Number(item.porsi_kecil) || 0),
+        0,
+    );
+});
+
+const totalAlergiPB = computed(() => {
+    if (!Array.isArray(form.keterangan_alergi)) return 0;
+    return form.keterangan_alergi.reduce(
+        (sum, item) => sum + (Number(item.porsi_besar) || 0),
+        0,
+    );
+});
+
+const grandTotalAlergi = computed(() => {
+    return totalAlergiPK.value + totalAlergiPB.value;
+});
+
+// Sync total porsi alergi PK & PB ke form payload
+watch([totalAlergiPK, totalAlergiPB], ([pk, pb]) => {
+    form.alergi_porsi_kecil = pk;
+    form.alergi_porsi_besar = pb;
+});
+
+function isAlergiSelected(jenis) {
+    if (jenis === "Lainnya") return showCustomAlergiInput.value;
+    if (!Array.isArray(form.keterangan_alergi)) return false;
+    return form.keterangan_alergi.some(
+        (item) => item.jenis_alergi === jenis,
+    );
+}
+
+function toggleAlergi(jenis) {
+    if (jenis === "Lainnya") {
+        showCustomAlergiInput.value = !showCustomAlergiInput.value;
+        return;
+    }
+    if (!Array.isArray(form.keterangan_alergi)) form.keterangan_alergi = [];
+    const idx = form.keterangan_alergi.findIndex(
+        (item) => item.jenis_alergi === jenis,
+    );
+    if (idx > -1) {
+        form.keterangan_alergi.splice(idx, 1);
+    } else {
+        form.keterangan_alergi.push({
+            jenis_alergi: jenis,
+            porsi_kecil: 0,
+            porsi_besar: 0,
+        });
+    }
+}
+
+function getSelectableAlergiOptions(currentVal) {
+    const options = ALERGI_OPTIONS.filter((o) => o.value !== "Lainnya").map(
+        (o) => ({
+            value: o.value,
+            label: o.label,
+        }),
+    );
+    if (currentVal && !options.some((o) => o.value === currentVal)) {
+        options.push({ value: currentVal, label: `${currentVal} (Kustom)` });
+    }
+    return options;
+}
+
+function addCustomAlergi() {
+    const val = customAlergiInput.value.trim();
+    if (!val) return;
+    if (!Array.isArray(form.keterangan_alergi)) form.keterangan_alergi = [];
+    const exists = form.keterangan_alergi.some(
+        (item) => item.jenis_alergi.toLowerCase() === val.toLowerCase(),
+    );
+    if (!exists) {
+        form.keterangan_alergi.push({
+            jenis_alergi: val,
+            porsi_kecil: 0,
+            porsi_besar: 0,
+        });
+    }
+    customAlergiInput.value = "";
+}
+
+function removeAlergi(idx) {
+    if (!Array.isArray(form.keterangan_alergi)) return;
+    form.keterangan_alergi.splice(idx, 1);
+}
+
 // Region dropdowns state & Loading states
 const provinceList = ref([]);
 const regencyList = ref([]);
@@ -135,12 +254,8 @@ const selectedDistrictCode = ref("");
 const selectedVillageCode = ref("");
 
 // Helper phone inputs (tanpa 62)
-const rawTeleponKepala = ref(
-    form.telepon_kepala ? form.telepon_kepala.replace(/^62/, "") : "",
-);
-const rawTeleponPIC = ref(
-    form.telepon_pic ? form.telepon_pic.replace(/^62/, "") : "",
-);
+const rawTeleponKepala = ref(cleanPhone(form.telepon_kepala));
+const rawTeleponPIC = ref(cleanPhone(form.telepon_pic));
 
 function cleanPhone(newVal) {
     let cleaned = (newVal || "").toString().replace(/\D/g, "");
@@ -536,6 +651,18 @@ function validateForm() {
         errs.kode_identitas = "Nomor / kode identitas legalitas wajib diisi.";
     }
 
+    if (form.kategori === "Posyandu") {
+        if (
+            form.jumlah_kader === null ||
+            form.jumlah_kader === "" ||
+            isNaN(Number(form.jumlah_kader)) ||
+            Number(form.jumlah_kader) < 1
+        ) {
+            errs.jumlah_kader =
+                "Jumlah kader posyandu wajib diisi minimal 1 orang.";
+        }
+    }
+
     // 2. Kontak Kepala Satuan
     if (!form.nama_kepala || !form.nama_kepala.trim()) {
         errs.nama_kepala = "Nama Kepala Satuan / Pimpinan wajib diisi.";
@@ -914,6 +1041,69 @@ function submitForm() {
                                         getFieldError("kode_identitas")
                                     }}</span>
                                 </p>
+                            </div>
+
+                            <!-- Khusus Kategori Posyandu: Jumlah Kader Posyandu -->
+                            <div
+                                v-if="form.kategori === 'Posyandu'"
+                                class="sm:col-span-2 p-4 rounded-xl bg-blue-50/80 border border-blue-200"
+                            >
+                                <div
+                                    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                >
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="p-1 rounded-md bg-blue-100 text-blue-700">
+                                                <Users class="h-4 w-4" />
+                                            </span>
+                                            <label
+                                                for="jumlah_kader"
+                                                class="text-xs font-bold text-blue-950"
+                                            >
+                                                Jumlah Kader Posyandu
+                                            </label>
+                                            <span
+                                                class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-200/70 text-blue-800"
+                                            >
+                                                Penanggung Jawab
+                                            </span>
+                                        </div>
+                                        <p
+                                            class="text-[11px] text-blue-700/90 leading-relaxed"
+                                        >
+                                            Kader bertindak sebagai penanggung jawab & pengelola posyandu (<strong>tidak dihitung</strong> sebagai Penerima Manfaat / PM).
+                                        </p>
+                                    </div>
+                                    <div class="w-full sm:w-44 shrink-0">
+                                        <div class="relative flex items-center">
+                                            <input
+                                                id="jumlah_kader"
+                                                v-model.number="form.jumlah_kader"
+                                                @input="clearFieldError('jumlah_kader')"
+                                                type="number"
+                                                min="1"
+                                                placeholder="Contoh: 5"
+                                                class="w-full h-10 pl-3 pr-14 text-xs font-bold text-slate-800 bg-white rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-right shadow-2xs"
+                                                :class="{
+                                                    'border-rose-400 focus:ring-rose-400/20 focus:border-rose-500 bg-rose-50/20':
+                                                        getFieldError('jumlah_kader'),
+                                                }"
+                                            />
+                                            <span
+                                                class="absolute right-3 pointer-events-none text-xs text-slate-400 font-medium select-none"
+                                            >
+                                                Kader
+                                            </span>
+                                        </div>
+                                        <p
+                                            v-if="getFieldError('jumlah_kader')"
+                                            class="text-[11px] text-rose-500 font-semibold flex items-center gap-1 mt-1 text-right justify-end"
+                                        >
+                                            <AlertCircle class="h-3 w-3 shrink-0" />
+                                            <span>{{ getFieldError("jumlah_kader") }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </CardContent>
@@ -1868,6 +2058,338 @@ function submitForm() {
                                     }})</span
                                 >
                             </button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- 5. DATA ALERGI MAKANAN & KEBUTUHAN KHUSUS -->
+                <Card className="bg-white border-slate-200/80 shadow-xs">
+                    <CardHeader
+                        className="border-b border-slate-100 p-5 bg-slate-50/50"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"
+                                >
+                                    <HeartPulse class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <CardTitle
+                                        className="text-base font-bold text-slate-900"
+                                    >
+                                        5. Data Alergi Makanan & Kebutuhan Khusus
+                                    </CardTitle>
+                                    <CardDescription
+                                        className="text-xs text-slate-500 mt-0.5"
+                                    >
+                                        Klasifikasi jumlah porsi makanan khusus
+                                        alergi (Porsi Kecil & Porsi Besar) yang
+                                        dirinci per satuan jenis alergen.
+                                    </CardDescription>
+                                </div>
+                            </div>
+
+                            <!-- Summary Badges Total Alergi -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span
+                                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs"
+                                >
+                                    PK: {{ totalAlergiPK }}
+                                </span>
+                                <span
+                                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs"
+                                >
+                                    PB: {{ totalAlergiPB }}
+                                </span>
+                                <span
+                                    class="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                >
+                                    Total: {{ grandTotalAlergi }}
+                                </span>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-5 sm:p-6 space-y-6">
+                        <!-- Pilihan Cepat Jenis Alergen -->
+                        <div class="space-y-3">
+                            <div>
+                                <Label class="text-xs font-bold text-slate-800">
+                                    Pilih Jenis Alergi / Pantangan Makanan
+                                </Label>
+                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                    Klik tombol di bawah untuk menambah jenis
+                                    alergi ke tabel rincian porsi di bawah ini:
+                                </p>
+                            </div>
+
+                            <!-- Tag Pills List -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button
+                                    v-for="al in ALERGI_OPTIONS"
+                                    :key="al.value"
+                                    type="button"
+                                    @click="toggleAlergi(al.value)"
+                                    :class="[
+                                        'px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5',
+                                        isAlergiSelected(al.value)
+                                            ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-2xs font-bold'
+                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+                                    ]"
+                                >
+                                    <CheckCircle2
+                                        v-if="isAlergiSelected(al.value)"
+                                        class="h-3.5 w-3.5 text-rose-600 shrink-0"
+                                    />
+                                    <span>{{ al.label }}</span>
+                                </button>
+                            </div>
+
+                            <!-- Input Kustom Alergi Lainnya (Hanya muncul jika pill 'Lainnya' dipilih) -->
+                            <div
+                                v-if="showCustomAlergiInput"
+                                class="pt-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200"
+                            >
+                                <div>
+                                    <Label
+                                        class="text-xs font-bold text-slate-800"
+                                    >
+                                        Tambah Alergen Khusus / Catatan Tambahan (Kustom)
+                                    </Label>
+                                    <p class="text-[11px] text-slate-500 mt-0.5">
+                                        Ketik nama alergi/pantangan khusus lalu klik Tambah untuk memasukkannya ke tabel:
+                                    </p>
+                                </div>
+                                <div
+                                    class="flex items-stretch gap-2 max-w-lg"
+                                >
+                                    <input
+                                        v-model="customAlergiInput"
+                                        @keyup.enter.prevent="addCustomAlergi"
+                                        type="text"
+                                        placeholder="Ketik nama pantangan lain (misal: Kiwi, Madu, Gandum)..."
+                                        class="flex-1 h-10 px-3.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all text-slate-900 shadow-2xs"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="addCustomAlergi"
+                                        class="h-10 px-5 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer shrink-0 shadow-2xs inline-flex items-center justify-center"
+                                    >
+                                        Tambah
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TABEL KLASIFIKASI JUMLAH PORSI PER SATUAN JENIS ALERGI -->
+                        <div class="space-y-2 pt-2 border-t border-slate-100">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <Label
+                                        class="text-xs font-bold text-slate-900"
+                                    >
+                                        Rincian Jumlah Porsi per Satuan Jenis
+                                        Alergi
+                                    </Label>
+                                    <p
+                                        class="text-[11px] text-slate-500 mt-0.5"
+                                    >
+                                        Tentukan jenis alergi serta jumlah porsi kecil (PK) dan
+                                        porsi besar (PB) untuk masing-masing baris.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Tabel jika ada alergi yang dipilih -->
+                            <div
+                                v-if="
+                                    form.keterangan_alergi &&
+                                    form.keterangan_alergi.length > 0
+                                "
+                                class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs mt-3"
+                            >
+                                <table
+                                    class="w-full text-left text-xs border-collapse"
+                                >
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase"
+                                        >
+                                            <th
+                                                class="py-3 px-4 w-12 text-center"
+                                            >
+                                                No
+                                            </th>
+                                            <th class="py-3 px-4 min-w-[220px]">
+                                                Jenis Alergi / Pantangan
+                                            </th>
+                                            <th
+                                                class="py-3 px-4 text-center w-40"
+                                            >
+                                                Porsi Kecil (PK)
+                                            </th>
+                                            <th
+                                                class="py-3 px-4 text-center w-40"
+                                            >
+                                                Porsi Besar (PB)
+                                            </th>
+                                            <th
+                                                class="py-3 px-4 text-center w-32"
+                                            >
+                                                Subtotal
+                                            </th>
+                                            <th
+                                                class="py-3 px-4 text-center w-16"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody
+                                        class="divide-y divide-slate-100 bg-white"
+                                    >
+                                        <tr
+                                            v-for="(
+                                                item, idx
+                                            ) in form.keterangan_alergi"
+                                            :key="idx"
+                                            class="hover:bg-slate-50/60 transition-colors"
+                                        >
+                                            <td
+                                                class="py-3 px-4 text-center text-slate-400 font-semibold"
+                                            >
+                                                {{ idx + 1 }}
+                                            </td>
+                                            <td class="py-2.5 px-4 min-w-[220px]">
+                                                <div
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <span
+                                                        class="inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 shrink-0"
+                                                    ></span>
+                                                    <select
+                                                        v-model="item.jenis_alergi"
+                                                        class="w-full h-9 px-2.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all cursor-pointer shadow-2xs"
+                                                    >
+                                                        <option
+                                                            v-for="al in getSelectableAlergiOptions(item.jenis_alergi)"
+                                                            :key="al.value"
+                                                            :value="al.value"
+                                                        >
+                                                            {{ al.label }}
+                                                        </option>
+                                                    </select>
+                                                </div>
+                                            </td>
+                                            <td class="py-2.5 px-4 text-center">
+                                                <div
+                                                    class="flex items-center justify-center"
+                                                >
+                                                    <input
+                                                        v-model.number="
+                                                            item.porsi_kecil
+                                                        "
+                                                        type="number"
+                                                        min="0"
+                                                        placeholder="0"
+                                                        class="w-24 h-9 px-2.5 text-center text-xs font-bold rounded-lg border border-amber-200 bg-amber-50/30 text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td class="py-2.5 px-4 text-center">
+                                                <div
+                                                    class="flex items-center justify-center"
+                                                >
+                                                    <input
+                                                        v-model.number="
+                                                            item.porsi_besar
+                                                        "
+                                                        type="number"
+                                                        min="0"
+                                                        placeholder="0"
+                                                        class="w-24 h-9 px-2.5 text-center text-xs font-bold rounded-lg border border-blue-200 bg-blue-50/30 text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-4 text-center">
+                                                <span
+                                                    class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-slate-100 text-slate-800"
+                                                >
+                                                    {{
+                                                        (Number(
+                                                            item.porsi_kecil,
+                                                        ) || 0) +
+                                                        (Number(
+                                                            item.porsi_besar,
+                                                        ) || 0)
+                                                    }}
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-4 text-center">
+                                                <button
+                                                    type="button"
+                                                    @click="removeAlergi(idx)"
+                                                    class="h-8 w-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                                    title="Hapus Jenis Alergi"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr
+                                            class="bg-slate-50 font-bold border-t border-slate-200 text-xs"
+                                        >
+                                            <td
+                                                colspan="2"
+                                                class="py-3 px-4 text-right uppercase tracking-wider text-slate-600"
+                                            >
+                                                Total Porsi Alergi
+                                                Terklasifikasi
+                                            </td>
+                                            <td
+                                                class="py-3 px-4 text-center text-amber-800 font-extrabold"
+                                            >
+                                                {{ totalAlergiPK }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-4 text-center text-blue-800 font-extrabold"
+                                            >
+                                                {{ totalAlergiPB }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-4 text-center text-rose-700 font-black text-sm"
+                                            >
+                                                {{ grandTotalAlergi }}
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <!-- State Kosong jika belum memilih alergi -->
+                            <div
+                                v-else
+                                class="p-6 rounded-xl bg-slate-50/70 border border-dashed border-slate-200 text-center space-y-1.5 mt-2"
+                            >
+                                <HeartPulse
+                                    class="h-6 w-6 text-slate-300 mx-auto"
+                                />
+                                <p class="text-xs font-semibold text-slate-600">
+                                    Belum ada jenis alergi yang ditambahkan
+                                </p>
+                                <p
+                                    class="text-[11px] text-slate-400 max-w-md mx-auto"
+                                >
+                                    Klik pilihan jenis alergi di atas jika ada
+                                    penerima manfaat yang memerlukan menu diet
+                                    khusus / bebas alergen.
+                                </p>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

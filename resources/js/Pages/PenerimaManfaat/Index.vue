@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { Head, Link, router } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/ui/Card.vue";
@@ -33,6 +33,19 @@ import {
     Utensils,
     Calendar,
     Clock,
+    XCircle,
+    Baby,
+    BookOpen,
+    GraduationCap,
+    UserCheck,
+    Briefcase,
+    Heart,
+    Smile,
+    ShieldCheck,
+    HeartHandshake,
+    Landmark,
+    Columns3,
+    Check,
 } from "lucide-vue-next";
 import {
     KATEGORI_OPTIONS,
@@ -75,6 +88,309 @@ const searchQuery = ref(props.filters.search || "");
 const selectedKategori = ref(props.filters.kategori || "");
 const selectedKepemilikan = ref(props.filters.jenis_kepemilikan || "");
 
+// Hitung total sekolah dan total posyandu
+const totalSekolahCount = computed(() => {
+    if (props.stats && props.stats.total_sekolah !== undefined) {
+        return props.stats.total_sekolah;
+    }
+    return (props.kelompokList || []).filter((k) => k.kategori !== "Posyandu")
+        .length;
+});
+
+const totalPosyanduCount = computed(() => {
+    if (props.stats && props.stats.total_posyandu !== undefined) {
+        return props.stats.total_posyandu;
+    }
+    return (props.kelompokList || []).filter((k) => k.kategori === "Posyandu")
+        .length;
+});
+
+// Instant Reactive Filter (0ms Latency, Tanpa Loading/Roundtrip Server)
+const filteredKelompokList = computed(() => {
+    const list = props.kelompokList || [];
+    const query = searchQuery.value.trim().toLowerCase();
+    const kategori = selectedKategori.value;
+    const kepemilikan = selectedKepemilikan.value;
+
+    return list.filter((item) => {
+        // 1. Filter Kategori
+        if (kategori && item.kategori !== kategori) {
+            return false;
+        }
+
+        // 2. Filter Kepemilikan (Status)
+        if (kepemilikan && item.jenis_kepemilikan !== kepemilikan) {
+            return false;
+        }
+
+        // 3. Filter Pencarian Teks
+        if (query) {
+            const nama = (item.nama_kelompok || "").toLowerCase();
+            const kode = (item.kode_identitas || "").toLowerCase();
+            const tipe = (item.tipe_identitas || "").toLowerCase();
+            const kepala = (item.nama_kepala || "").toLowerCase();
+            const telpKepala = (item.telepon_kepala || "").toLowerCase();
+            const emailKepala = (item.email_kepala || "").toLowerCase();
+            const pic = (item.nama_pic || "").toLowerCase();
+            const telpPic = (item.telepon_pic || "").toLowerCase();
+            const emailPic = (item.email_pic || "").toLowerCase();
+            const alamat = (item.alamat_lengkap || "").toLowerCase();
+            const desa = (item.desa_kelurahan || "").toLowerCase();
+            const kecamatan = (item.kecamatan || "").toLowerCase();
+            const kab = (item.kabupaten || "").toLowerCase();
+            const alergi = Array.isArray(item.keterangan_alergi)
+                ? item.keterangan_alergi
+                      .map((a) =>
+                          typeof a === "string" ? a : a?.jenis_alergi || "",
+                      )
+                      .join(" ")
+                      .toLowerCase()
+                : "";
+
+            const isMatch =
+                nama.includes(query) ||
+                kode.includes(query) ||
+                tipe.includes(query) ||
+                kepala.includes(query) ||
+                telpKepala.includes(query) ||
+                emailKepala.includes(query) ||
+                pic.includes(query) ||
+                telpPic.includes(query) ||
+                emailPic.includes(query) ||
+                alamat.includes(query) ||
+                desa.includes(query) ||
+                kecamatan.includes(query) ||
+                kab.includes(query) ||
+                alergi.includes(query);
+
+            if (!isMatch) return false;
+        }
+
+        return true;
+    });
+});
+
+// Perhitungan Statistik 10 Kategori / Klasifikasi & Subtotal Sekolah/Posyandu
+const categoryStats = computed(() => {
+    const list = Array.isArray(props.kelompokList) ? props.kelompokList : [];
+
+    const categories = {
+        tk_ra: { label: "TK / RA", total: 0, pk: 0, pb: 0, color: "emerald", icon: Smile },
+        sd_mi_1_3: { label: "SD / MI 1-3", fullLabel: "SD / MI (Kelas 1-3)", total: 0, pk: 0, pb: 0, color: "blue", icon: BookOpen },
+        sd_mi_4_6: { label: "SD / MI 4-6", fullLabel: "SD / MI (Kelas 4-6)", total: 0, pk: 0, pb: 0, color: "indigo", icon: GraduationCap },
+        smp_mts: { label: "SMP / MTs", total: 0, pk: 0, pb: 0, color: "sky", icon: School },
+        sma_smk_ma: { label: "SMA / SMK / MA", total: 0, pk: 0, pb: 0, color: "violet", icon: GraduationCap },
+        guru: { label: "Guru", total: 0, pk: 0, pb: 0, color: "amber", icon: UserCheck },
+        tendik: { label: "Tenaga Kependidikan", total: 0, pk: 0, pb: 0, color: "slate", icon: Briefcase },
+        balita: { label: "Balita", total: 0, pk: 0, pb: 0, color: "rose", icon: Baby },
+        bumil: { label: "Bumil", fullLabel: "Ibu Hamil", total: 0, pk: 0, pb: 0, color: "pink", icon: Heart },
+        busui: { label: "Busui", fullLabel: "Ibu Menyusui", total: 0, pk: 0, pb: 0, color: "purple", icon: HeartHandshake },
+    };
+
+    let totalSekolahPM = 0;
+    let totalSekolahPK = 0;
+    let totalSekolahPB = 0;
+    let totalPosyanduPM = 0;
+    let totalPosyanduPK = 0;
+    let totalPosyanduPB = 0;
+
+    for (const kpm of list) {
+        const isPos = kpm.kategori === "Posyandu";
+        const pmTot = Number(kpm.total_penerima) || 0;
+        const pkTot = Number(kpm.total_porsi_kecil) || 0;
+        const pbTot = Number(kpm.total_porsi_besar) || 0;
+
+        if (isPos) {
+            totalPosyanduPM += pmTot;
+            totalPosyanduPK += pkTot;
+            totalPosyanduPB += pbTot;
+        } else {
+            totalSekolahPM += pmTot;
+            totalSekolahPK += pkTot;
+            totalSekolahPB += pbTot;
+        }
+
+        const rincianList = Array.isArray(kpm.rincian) ? kpm.rincian : [];
+        for (const r of rincianList) {
+            const tot = Number(r.total) || (Number(r.jumlah_laki_laki) || 0) + (Number(r.jumlah_perempuan) || 0);
+            const porsi = r.jenis_porsi;
+            const sub = r.sub_kategori || "";
+            const kat = kpm.kategori || "";
+
+            let targetKey = null;
+
+            if (["TK", "RA", "PAUD"].includes(kat) && sub === "Pelajar") {
+                targetKey = "tk_ra";
+            } else if (["Kelas 1", "Kelas 2", "Kelas 3"].includes(sub) && ["SD", "MI"].includes(kat)) {
+                targetKey = "sd_mi_1_3";
+            } else if (["Kelas 4", "Kelas 5", "Kelas 6"].includes(sub) && ["SD", "MI"].includes(kat)) {
+                targetKey = "sd_mi_4_6";
+            } else if (["Kelas 7", "Kelas 8", "Kelas 9"].includes(sub) || (["SMP", "MTs"].includes(kat) && sub.startsWith("Kelas"))) {
+                targetKey = "smp_mts";
+            } else if (["Kelas 10", "Kelas 11", "Kelas 12"].includes(sub) || (["SMA", "SMK", "MA", "MAK"].includes(kat) && sub.startsWith("Kelas"))) {
+                targetKey = "sma_smk_ma";
+            } else if (sub.includes("Guru")) {
+                targetKey = "guru";
+            } else if (sub.includes("Tenaga Kependidikan") || sub.includes("Satpam") || (sub.includes("Pendukung") && !sub.includes("Guru"))) {
+                targetKey = "tendik";
+            } else if (sub === "Balita") {
+                targetKey = "balita";
+            } else if (sub === "Ibu Hamil") {
+                targetKey = "bumil";
+            } else if (sub === "Ibu Menyusui") {
+                targetKey = "busui";
+            }
+
+            if (targetKey && categories[targetKey]) {
+                categories[targetKey].total += tot;
+                if (porsi === "Porsi Kecil") {
+                    categories[targetKey].pk += tot;
+                } else {
+                    categories[targetKey].pb += tot;
+                }
+            }
+        }
+    }
+
+    return {
+        categories,
+        sekolahPM: { total: totalSekolahPM, pk: totalSekolahPK, pb: totalSekolahPB },
+        posyanduPM: { total: totalPosyanduPM, pk: totalPosyanduPK, pb: totalPosyanduPB },
+    };
+});
+
+// Pengelompokan Kategori untuk Visual Wrapper Card yang Terstruktur
+const categoryGroups = computed(() => {
+    const raw = categoryStats.value.categories;
+    return [
+        {
+            key: "tk_ra",
+            title: "TK / RA",
+            badge: "PAUD",
+            spanClass: "col-span-1 md:col-span-1 lg:col-span-1",
+            gridClass: "grid-cols-1",
+            total: raw.tk_ra.total,
+            pk: raw.tk_ra.pk,
+            pb: raw.tk_ra.pb,
+            cards: [
+                { ...raw.tk_ra, displayTitle: "Pelajar TK / RA" },
+            ],
+        },
+        {
+            key: "sd_mi",
+            title: "SD / MI",
+            badge: "Sekolah Dasar",
+            spanClass: "col-span-1 md:col-span-2 lg:col-span-2",
+            gridClass: "grid-cols-1 sm:grid-cols-2",
+            total: raw.sd_mi_1_3.total + raw.sd_mi_4_6.total,
+            pk: raw.sd_mi_1_3.pk + raw.sd_mi_4_6.pk,
+            pb: raw.sd_mi_1_3.pb + raw.sd_mi_4_6.pb,
+            cards: [
+                { ...raw.sd_mi_1_3, displayTitle: "Kelas 1 - 3" },
+                { ...raw.sd_mi_4_6, displayTitle: "Kelas 4 - 6" },
+            ],
+        },
+        {
+            key: "smp_mts",
+            title: "SMP / MTs",
+            badge: "Menengah Pertama",
+            spanClass: "col-span-1 md:col-span-1 lg:col-span-1",
+            gridClass: "grid-cols-1",
+            total: raw.smp_mts.total,
+            pk: raw.smp_mts.pk,
+            pb: raw.smp_mts.pb,
+            cards: [
+                { ...raw.smp_mts, displayTitle: "Kelas 7 - 9" },
+            ],
+        },
+        {
+            key: "sma_smk_ma",
+            title: "SMA / SMK / MA",
+            badge: "Menengah Atas",
+            spanClass: "col-span-1 md:col-span-1 lg:col-span-1",
+            gridClass: "grid-cols-1",
+            total: raw.sma_smk_ma.total,
+            pk: raw.sma_smk_ma.pk,
+            pb: raw.sma_smk_ma.pb,
+            cards: [
+                { ...raw.sma_smk_ma, displayTitle: "Kelas 10 - 12" },
+            ],
+        },
+        {
+            key: "ptk",
+            title: "Pendidik & Tenaga Kependidikan",
+            badge: "Tenaga Sekolah",
+            spanClass: "col-span-1 md:col-span-2 lg:col-span-2",
+            gridClass: "grid-cols-1 sm:grid-cols-2",
+            total: raw.guru.total + raw.tendik.total,
+            pk: raw.guru.pk + raw.tendik.pk,
+            pb: raw.guru.pb + raw.tendik.pb,
+            cards: [
+                { ...raw.guru, displayTitle: "Guru" },
+                { ...raw.tendik, displayTitle: "Tenaga Kependidikan" },
+            ],
+        },
+        {
+            key: "posyandu",
+            title: "Sasaran Posyandu",
+            badge: "Ibu & Anak",
+            spanClass: "col-span-1 md:col-span-2 lg:col-span-3",
+            gridClass: "grid-cols-1 sm:grid-cols-3",
+            total: raw.balita.total + raw.bumil.total + raw.busui.total,
+            pk: raw.balita.pk + raw.bumil.pk + raw.busui.pk,
+            pb: raw.balita.pb + raw.bumil.pb + raw.busui.pb,
+            cards: [
+                { ...raw.balita, displayTitle: "Balita" },
+                { ...raw.bumil, displayTitle: "Ibu Hamil" },
+                { ...raw.busui, displayTitle: "Ibu Menyusui" },
+            ],
+        },
+    ];
+});
+
+// State & Konfigurasi Visibilitas Kolom Tabel (Default Tampilkan Semua Kolom)
+const isColumnDropdownOpen = ref(false);
+
+const COLUMN_DEFINITIONS = [
+    { key: "no", label: "No", default: true },
+    { key: "kelompok", label: "Kelompok", default: true },
+    { key: "kontak", label: "Kontak", default: true },
+    { key: "alamat", label: "Alamat", default: true },
+    { key: "gender", label: "Gender (L/P)", default: true },
+    { key: "porsi", label: "Porsi (PK/PB)", default: true },
+    { key: "total", label: "Total Porsi", default: true },
+    { key: "waktu", label: "Waktu Daftar & Perbaharui", default: true },
+    { key: "aksi", label: "Aksi", default: true },
+];
+
+const visibleColumns = ref({
+    no: true,
+    kelompok: true,
+    kontak: true,
+    alamat: true,
+    gender: true,
+    porsi: true,
+    total: true,
+    waktu: true,
+    aksi: true,
+});
+
+const visibleColumnCount = computed(() => {
+    return Object.values(visibleColumns.value).filter(Boolean).length;
+});
+
+function toggleAllColumns(val) {
+    COLUMN_DEFINITIONS.forEach((col) => {
+        visibleColumns.value[col.key] = val;
+    });
+}
+
+function resetColumns() {
+    COLUMN_DEFINITIONS.forEach((col) => {
+        visibleColumns.value[col.key] = col.default;
+    });
+}
+
 // Detail Modal state
 const isDetailOpen = ref(false);
 const activeKelompok = ref(null);
@@ -85,26 +401,14 @@ const deletingKelompok = ref(null);
 const isDeleting = ref(false);
 
 function applyFilters() {
-    router.get(
-        route("penerima-manfaat.index"),
-        {
-            search: searchQuery.value || undefined,
-            kategori: selectedKategori.value || undefined,
-            jenis_kepemilikan: selectedKepemilikan.value || undefined,
-        },
-        {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-        },
-    );
+    // Fungsi ini tetap disediakan untuk keyboard enter / tombol, 
+    // namun filter sudah otomatis berjalan instan secara realtime via computed
 }
 
 function resetFilters() {
     searchQuery.value = "";
     selectedKategori.value = "";
     selectedKepemilikan.value = "";
-    applyFilters();
 }
 
 function openDetail(item) {
@@ -232,53 +536,105 @@ function formatDateTimeWita(dateString) {
                 </div>
             </div>
 
-            <!-- ================= 4 METRIC STAT CARDS (ALL UNIFORM BLUE THEME) ================= -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- Total Kelompok -->
+            <!-- ================= 5 RINGKASAN UTAMA METRIC CARDS ================= -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+                <!-- 1. Total Kelompok -->
                 <Card
                     className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
                 >
                     <CardContent
-                        className="p-5 flex items-center justify-between gap-3"
+                        className="p-4 sm:p-5 flex items-center justify-between gap-3"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs font-medium text-slate-500">
+                            <p class="text-xs font-medium text-slate-500 truncate">
                                 Total Kelompok
                             </p>
-                            <h3
-                                class="text-2xl font-bold text-slate-900 mt-1 truncate"
-                            >
-                                {{
-                                    stats.total_kelompok.toLocaleString("id-ID")
-                                }}
-                            </h3>
+                            <div class="flex items-baseline gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                                <span class="text-lg sm:text-xl font-bold text-blue-700">
+                                    {{ totalSekolahCount.toLocaleString("id-ID") }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-blue-600"
+                                        >Sekolah</span
+                                    >
+                                </span>
+                                <span class="text-slate-300 font-light">/</span>
+                                <span class="text-lg sm:text-xl font-bold text-emerald-700">
+                                    {{ totalPosyanduCount.toLocaleString("id-ID") }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-emerald-600"
+                                        >Posyandu</span
+                                    >
+                                </span>
+                            </div>
                             <p
                                 class="text-[11px] text-slate-400 mt-0.5 truncate"
                             >
-                                Satuan Penerima Manfaat
+                                Total: <strong class="text-slate-700">{{ (stats.total_kelompok || (props.kelompokList ? props.kelompokList.length : 0)).toLocaleString("id-ID") }}</strong> Satuan PM
                             </p>
                         </div>
                         <div
-                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
+                            class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
                         >
                             <School class="h-5 w-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Rincian Porsi -->
+                <!-- 2. PM Sekolah & Posyandu -->
                 <Card
                     className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
                 >
                     <CardContent
-                        className="p-5 flex items-center justify-between gap-3"
+                        className="p-4 sm:p-5 flex items-center justify-between gap-3"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs font-medium text-slate-500">
+                            <p class="text-xs font-medium text-slate-500 truncate">
+                                PM Sekolah & Posyandu
+                            </p>
+                            <div class="flex items-baseline gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                                <span class="text-lg sm:text-xl font-bold text-blue-700">
+                                    {{ categoryStats.sekolahPM.total.toLocaleString("id-ID") }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-blue-600"
+                                        >Sekolah</span
+                                    >
+                                </span>
+                                <span class="text-slate-300 font-light">/</span>
+                                <span class="text-lg sm:text-xl font-bold text-emerald-700">
+                                    {{ categoryStats.posyanduPM.total.toLocaleString("id-ID") }}
+                                    <span
+                                        class="text-[10px] font-sans font-bold text-emerald-600"
+                                        >Posyandu</span
+                                    >
+                                </span>
+                            </div>
+                            <p
+                                class="text-[11px] text-slate-400 mt-0.5 truncate"
+                            >
+                                Total: <strong class="text-slate-700">{{ (categoryStats.sekolahPM.total + categoryStats.posyanduPM.total).toLocaleString("id-ID") }}</strong> Porsi
+                            </p>
+                        </div>
+                        <div
+                            class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0 shadow-2xs"
+                        >
+                            <Building2 class="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- 3. Rincian Porsi -->
+                <Card
+                    className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+                >
+                    <CardContent
+                        className="p-4 sm:p-5 flex items-center justify-between gap-3"
+                    >
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-medium text-slate-500 truncate">
                                 Rincian Porsi
                             </p>
-                            <div class="flex items-baseline gap-2 mt-1">
-                                <span class="text-xl font-bold text-amber-700">
+                            <div class="flex items-baseline gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                                <span class="text-lg sm:text-xl font-bold text-amber-700">
                                     {{
                                         (
                                             stats.total_porsi_kecil || 0
@@ -290,7 +646,7 @@ function formatDateTimeWita(dateString) {
                                     >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span class="text-xl font-bold text-blue-700">
+                                <span class="text-lg sm:text-xl font-bold text-blue-700">
                                     {{
                                         (
                                             stats.total_porsi_besar || 0
@@ -309,26 +665,26 @@ function formatDateTimeWita(dateString) {
                             </p>
                         </div>
                         <div
-                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
+                            class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
                         >
                             <Utensils class="h-5 w-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Rincian Gender -->
+                <!-- 4. Rincian Gender -->
                 <Card
                     className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
                 >
                     <CardContent
-                        className="p-5 flex items-center justify-between gap-3"
+                        className="p-4 sm:p-5 flex items-center justify-between gap-3"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs font-medium text-slate-500">
+                            <p class="text-xs font-medium text-slate-500 truncate">
                                 Rincian Gender
                             </p>
-                            <div class="flex items-baseline gap-2 mt-1">
-                                <span class="text-xl font-bold text-sky-700">
+                            <div class="flex items-baseline gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                                <span class="text-lg sm:text-xl font-bold text-sky-700">
                                     {{
                                         (
                                             stats.total_laki_laki || 0
@@ -340,7 +696,7 @@ function formatDateTimeWita(dateString) {
                                     >
                                 </span>
                                 <span class="text-slate-300 font-light">/</span>
-                                <span class="text-xl font-bold text-pink-700">
+                                <span class="text-lg sm:text-xl font-bold text-pink-700">
                                     {{
                                         (
                                             stats.total_perempuan || 0
@@ -359,29 +715,29 @@ function formatDateTimeWita(dateString) {
                             </p>
                         </div>
                         <div
-                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
+                            class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
                         >
                             <User class="h-5 w-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Total Penerima -->
+                <!-- 5. Total Penerima -->
                 <Card
                     className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
                 >
                     <CardContent
-                        className="p-5 flex items-center justify-between gap-3"
+                        className="p-4 sm:p-5 flex items-center justify-between gap-3"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs font-medium text-slate-500">
+                            <p class="text-xs font-medium text-slate-500 truncate">
                                 Total Penerima Manfaat
                             </p>
                             <h3
-                                class="text-2xl font-bold text-primary mt-1 truncate"
+                                class="text-xl sm:text-2xl font-bold text-primary mt-1 truncate"
                             >
                                 {{
-                                    stats.total_penerima.toLocaleString("id-ID")
+                                    (stats.total_penerima || 0).toLocaleString("id-ID")
                                 }}
                             </h3>
                             <p
@@ -391,12 +747,113 @@ function formatDateTimeWita(dateString) {
                             </p>
                         </div>
                         <div
-                            class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
+                            class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs"
                         >
                             <Users class="h-5 w-5" />
                         </div>
                     </CardContent>
                 </Card>
+            </div>
+
+            <!-- ================= 10 KLASIFIKASI PENERIMA MANFAAT (TERBUNGKUS PER KATEGORI) ================= -->
+            <div class="space-y-3.5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-0.5">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <span>Klasifikasi Penerima Manfaat</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/60">
+                            10 Jenis Terklasifikasi
+                        </span>
+                    </h3>
+                    <span class="text-[11px] text-slate-400 font-medium">
+                        Dikelompokkan Berdasarkan Jenjang & Kategori Sasaran
+                    </span>
+                </div>
+
+                <!-- Grid Group Kategori -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+                    <div
+                        v-for="group in categoryGroups"
+                        :key="group.key"
+                        :class="[
+                            'p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:shadow-xs hover:border-slate-300',
+                            group.spanClass,
+                        ]"
+                    >
+                        <!-- Header Wrapper Kategori -->
+                        <div class="flex items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-100">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="h-2 w-2 rounded-full bg-blue-600 shrink-0"></span>
+                                <h4 class="text-xs font-bold text-slate-900 truncate">
+                                    {{ group.title }}
+                                </h4>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200/70">
+                                    {{ group.total.toLocaleString("id-ID") }} Porsi
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Sub-cards di dalam kategori -->
+                        <div :class="['grid gap-2.5 flex-1', group.gridClass]">
+                            <div
+                                v-for="(card, cIdx) in group.cards"
+                                :key="cIdx"
+                                class="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-blue-300 hover:shadow-2xs transition-all flex flex-col justify-between gap-2.5 group"
+                            >
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-[11px] font-bold text-slate-700 truncate" :title="card.displayTitle || card.label">
+                                            {{ card.displayTitle || card.label }}
+                                        </p>
+                                        <div class="flex items-baseline gap-1 mt-0.5">
+                                            <span class="text-lg sm:text-xl font-black text-slate-900 group-hover:text-blue-700 transition-colors">
+                                                {{ card.total.toLocaleString("id-ID") }}
+                                            </span>
+                                            <span class="text-[10px] font-medium text-slate-400">Porsi</span>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="h-7 w-7 rounded-lg bg-white text-blue-600 border border-slate-200/80 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-blue-200 group-hover:bg-blue-50 transition-colors"
+                                    >
+                                        <component :is="card.icon" class="h-3.5 w-3.5" />
+                                    </div>
+                                </div>
+
+                                <!-- Modern Elegant PK & PB Badges -->
+                                <div class="pt-2 border-t border-slate-200/60 flex items-center gap-1.5 w-full">
+                                    <!-- Badge PK -->
+                                    <div
+                                        class="flex items-center justify-between gap-1 flex-1 min-w-0 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-900 shadow-2xs"
+                                        title="Porsi Kecil"
+                                    >
+                                        <span class="inline-flex items-center gap-1 font-bold text-amber-700 text-[10px] shrink-0">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                            PK
+                                        </span>
+                                        <span class="font-extrabold text-amber-950 font-mono text-[11px] truncate">
+                                            {{ card.pk.toLocaleString("id-ID") }}
+                                        </span>
+                                    </div>
+
+                                    <!-- Badge PB -->
+                                    <div
+                                        class="flex items-center justify-between gap-1 flex-1 min-w-0 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900 shadow-2xs"
+                                        title="Porsi Besar"
+                                    >
+                                        <span class="inline-flex items-center gap-1 font-bold text-blue-700 text-[10px] shrink-0">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                            PB
+                                        </span>
+                                        <span class="font-extrabold text-blue-950 font-mono text-[11px] truncate">
+                                            {{ card.pb.toLocaleString("id-ID") }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ================= MAIN DATA CARD ================= -->
@@ -435,15 +892,15 @@ function formatDateTimeWita(dateString) {
                 </CardHeader>
 
                 <CardContent className="p-5 sm:p-6 space-y-6">
-                    <!-- ================= FILTER & SEARCH BAR (3 KOLOM HORIZONTAL DI DESKTOP) ================= -->
+                    <!-- ================= FILTER & SEARCH BAR ================= -->
                     <div
                         class="bg-slate-50/80 p-4 rounded-xl border border-slate-200/80"
                     >
                         <div
-                            class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center"
+                            class="flex flex-col md:flex-row md:items-center md:justify-between gap-3"
                         >
-                            <!-- Kolom 1: Pencarian -->
-                            <div class="relative w-full">
+                            <!-- Kiri: Pencarian Instan (Proporsional tidak terlalu lebar) -->
+                            <div class="relative w-full md:w-72 lg:w-80 shrink-0">
                                 <div
                                     class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5"
                                 >
@@ -451,57 +908,131 @@ function formatDateTimeWita(dateString) {
                                 </div>
                                 <input
                                     v-model="searchQuery"
-                                    @keyup.enter="applyFilters"
                                     type="text"
-                                    placeholder="Cari Kelompok..."
-                                    class="block w-full h-10 rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
+                                    placeholder="Cari nama kelompok, NPSN, PIC, dll..."
+                                    class="block w-full h-10 rounded-lg border border-slate-200 bg-white pl-10 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
                                 />
-                            </div>
-
-                            <!-- Kolom 2: Filter Kategori -->
-                            <div class="w-full">
-                                <select
-                                    v-model="selectedKategori"
-                                    @change="applyFilters"
-                                    class="w-full h-10 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 shadow-2xs cursor-pointer"
-                                >
-                                    <option value="">Semua Kategori</option>
-                                    <option
-                                        v-for="kat in KATEGORI_OPTIONS"
-                                        :key="kat.value"
-                                        :value="kat.value"
-                                    >
-                                        {{ kat.value }}
-                                    </option>
-                                </select>
-                            </div>
-
-                            <!-- Kolom 3: Filter Status + Tombol Filter & Reset -->
-                            <div class="flex items-center gap-2 w-full">
-                                <select
-                                    v-model="selectedKepemilikan"
-                                    @change="applyFilters"
-                                    class="flex-1 min-w-0 h-10 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 shadow-2xs cursor-pointer"
-                                >
-                                    <option value="">Semua Status</option>
-                                    <option
-                                        v-for="j in JENIS_KEPEMILIKAN_OPTIONS"
-                                        :key="j.value"
-                                        :value="j.value"
-                                    >
-                                        {{ j.label }}
-                                    </option>
-                                </select>
-
                                 <button
+                                    v-if="searchQuery"
                                     type="button"
-                                    @click="applyFilters"
-                                    class="h-10 px-4 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                                    @click="searchQuery = ''"
+                                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                    title="Bersihkan Pencarian"
                                 >
-                                    <Filter class="h-3.5 w-3.5" />
-                                    <span>Filter</span>
+                                    <XCircle class="h-4 w-4" />
                                 </button>
+                            </div>
 
+                            <!-- Kanan: Filter Kategori, Filter Status, Opsi Kolom, Reset Filter -->
+                            <div
+                                class="flex items-center gap-2.5 flex-wrap justify-start md:justify-end w-full md:w-auto"
+                            >
+                                <!-- Filter Kategori -->
+                                <div class="w-full sm:w-44 lg:w-48">
+                                    <select
+                                        v-model="selectedKategori"
+                                        class="w-full h-10 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 shadow-2xs cursor-pointer"
+                                    >
+                                        <option value="">Semua Kategori</option>
+                                        <option
+                                            v-for="kat in KATEGORI_OPTIONS"
+                                            :key="kat.value"
+                                            :value="kat.value"
+                                        >
+                                            {{ kat.value }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Filter Status -->
+                                <div class="w-full sm:w-36 lg:w-40">
+                                    <select
+                                        v-model="selectedKepemilikan"
+                                        class="w-full h-10 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 shadow-2xs cursor-pointer"
+                                    >
+                                        <option value="">Semua Status</option>
+                                        <option
+                                            v-for="j in JENIS_KEPEMILIKAN_OPTIONS"
+                                            :key="j.value"
+                                            :value="j.value"
+                                        >
+                                            {{ j.label }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Dropdown Visibilitas Kolom Tabel -->
+                                <div class="relative">
+                                    <button
+                                        type="button"
+                                        @click="isColumnDropdownOpen = !isColumnDropdownOpen"
+                                        class="h-10 px-3 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                                        :class="{ 'ring-2 ring-primary/20 border-primary text-primary': isColumnDropdownOpen }"
+                                        title="Pilih kolom yang ingin ditampilkan"
+                                    >
+                                        <Columns3 class="h-3.5 w-3.5 text-slate-500" />
+                                        <span>Kolom</span>
+                                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
+                                            {{ visibleColumnCount }}
+                                        </span>
+                                    </button>
+
+                                    <!-- Backdrop penutup dropdown jika klik di luar -->
+                                    <div
+                                        v-if="isColumnDropdownOpen"
+                                        class="fixed inset-0 z-40"
+                                        @click="isColumnDropdownOpen = false"
+                                    ></div>
+
+                                    <!-- Panel Menu Checklist Kolom -->
+                                    <div
+                                        v-if="isColumnDropdownOpen"
+                                        class="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-2.5"
+                                    >
+                                        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                                            <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                                <Columns3 class="h-3.5 w-3.5 text-primary" />
+                                                Tampilkan Kolom
+                                            </span>
+                                            <div class="flex items-center gap-1 text-[11px]">
+                                                <button
+                                                    type="button"
+                                                    @click="toggleAllColumns(true)"
+                                                    class="text-primary hover:underline font-semibold cursor-pointer"
+                                                >
+                                                    Semua
+                                                </button>
+                                                <span class="text-slate-300">|</span>
+                                                <button
+                                                    type="button"
+                                                    @click="resetColumns"
+                                                    class="text-slate-500 hover:underline cursor-pointer"
+                                                >
+                                                    Reset
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-1 max-h-64 overflow-y-auto pr-0.5">
+                                            <label
+                                                v-for="col in COLUMN_DEFINITIONS"
+                                                :key="col.key"
+                                                class="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-xs select-none"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    v-model="visibleColumns[col.key]"
+                                                    class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20 cursor-pointer"
+                                                />
+                                                <span :class="visibleColumns[col.key] ? 'font-semibold text-slate-800' : 'text-slate-400'">
+                                                    {{ col.label }}
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tombol Reset Filter -->
                                 <button
                                     type="button"
                                     @click="resetFilters"
@@ -527,54 +1058,63 @@ function formatDateTimeWita(dateString) {
                                 >
                                     <tr>
                                         <th
+                                            v-if="visibleColumns.no"
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-12"
                                         >
                                             No
                                         </th>
                                         <th
+                                            v-if="visibleColumns.kelompok"
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[240px]"
                                         >
                                             Kelompok
                                         </th>
                                         <th
+                                            v-if="visibleColumns.kontak"
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[200px]"
                                         >
                                             Kontak
                                         </th>
                                         <th
+                                            v-if="visibleColumns.alamat"
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[220px]"
                                         >
                                             Alamat
                                         </th>
                                         <th
+                                            v-if="visibleColumns.gender"
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-32"
                                         >
                                             Gender (L/P)
                                         </th>
                                         <th
+                                            v-if="visibleColumns.porsi"
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-36"
                                         >
                                             Porsi (PK/PB)
                                         </th>
                                         <th
+                                            v-if="visibleColumns.total"
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-24"
                                         >
                                             Total
                                         </th>
                                         <th
+                                            v-if="visibleColumns.waktu"
                                             scope="col"
                                             class="py-4 px-5 text-left text-[11px] font-bold text-slate-600 uppercase tracking-wider min-w-[240px]"
                                         >
                                             Waktu Daftar & Perbaharui
                                         </th>
                                         <th
+                                            v-if="visibleColumns.aksi"
                                             scope="col"
                                             class="py-4 px-4 text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider w-28"
                                         >
@@ -586,18 +1126,20 @@ function formatDateTimeWita(dateString) {
                                     class="divide-y divide-slate-100 bg-white"
                                 >
                                     <tr
-                                        v-for="(item, index) in kelompokList"
+                                        v-for="(item, index) in filteredKelompokList"
                                         :key="item.id"
                                         class="hover:bg-slate-50/60 transition-colors"
                                     >
+                                        <!-- No -->
                                         <td
+                                            v-if="visibleColumns.no"
                                             class="py-4 px-4 text-center font-medium text-slate-400"
                                         >
                                             {{ index + 1 }}
                                         </td>
 
                                         <!-- Kelompok -->
-                                        <td class="py-4 px-5">
+                                        <td v-if="visibleColumns.kelompok" class="py-4 px-5">
                                             <div class="space-y-1.5">
                                                 <div
                                                     class="flex items-center gap-1.5 flex-wrap"
@@ -625,6 +1167,13 @@ function formatDateTimeWita(dateString) {
                                                             item.jenis_kepemilikan
                                                         }}
                                                     </span>
+                                                    <span
+                                                        v-if="item.kategori === 'Posyandu' && item.jumlah_kader"
+                                                        class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-sky-50 text-sky-700 border border-sky-200"
+                                                        title="Jumlah kader penanggung jawab posyandu (tidak masuk hitungan PM)"
+                                                    >
+                                                        {{ item.jumlah_kader }} Kader
+                                                    </span>
                                                 </div>
 
                                                 <p
@@ -650,7 +1199,7 @@ function formatDateTimeWita(dateString) {
                                         </td>
 
                                         <!-- Kontak -->
-                                        <td class="py-4 px-5">
+                                        <td v-if="visibleColumns.kontak" class="py-4 px-5">
                                             <div class="space-y-2 text-xs">
                                                 <div>
                                                     <p
@@ -713,7 +1262,7 @@ function formatDateTimeWita(dateString) {
                                         </td>
 
                                         <!-- Wilayah & Alamat -->
-                                        <td class="py-4 px-5">
+                                        <td v-if="visibleColumns.alamat" class="py-4 px-5">
                                             <div class="space-y-1">
                                                 <p
                                                     class="font-medium text-slate-800 flex items-center gap-1"
@@ -769,57 +1318,71 @@ function formatDateTimeWita(dateString) {
                                         </td>
 
                                         <!-- Penerima (L / P) -->
-                                        <td class="py-4 px-4 text-center">
+                                        <td v-if="visibleColumns.gender" class="py-4 px-4 text-center">
                                             <div
-                                                class="inline-flex items-center gap-1 text-xs"
+                                                class="inline-grid grid-cols-2 gap-1 text-xs min-w-[100px]"
                                             >
                                                 <span
-                                                    class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-semibold"
+                                                    class="py-0.5 px-1.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-bold whitespace-nowrap text-center flex items-center justify-center"
                                                     title="Laki-Laki"
                                                 >
-                                                    L:
-                                                    {{ item.total_laki_laki }}
+                                                    L: {{ item.total_laki_laki }}
                                                 </span>
                                                 <span
-                                                    class="px-2 py-0.5 rounded bg-pink-50 text-pink-700 border border-pink-200 font-semibold"
+                                                    class="py-0.5 px-1.5 rounded bg-pink-50 text-pink-700 border border-pink-200 font-bold whitespace-nowrap text-center flex items-center justify-center"
                                                     title="Perempuan"
                                                 >
-                                                    P:
-                                                    {{ item.total_perempuan }}
+                                                    P: {{ item.total_perempuan }}
                                                 </span>
                                             </div>
                                         </td>
 
-                                        <!-- Porsi (Kecil / Besar) -->
-                                        <td class="py-4 px-4 text-center">
+                                        <!-- Porsi (Kecil / Besar) & Alergi -->
+                                        <td v-if="visibleColumns.porsi" class="py-4 px-4 text-center">
                                             <div
-                                                class="inline-flex items-center gap-1 text-xs"
+                                                class="inline-flex flex-col gap-1 min-w-[120px]"
                                             >
-                                                <span
-                                                    class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-semibold"
-                                                    title="Porsi Kecil"
+                                                <!-- Baris PK & PB (Bagi 2 Sama Lebar & 1 Baris) -->
+                                                <div
+                                                    class="grid grid-cols-2 gap-1 text-xs"
                                                 >
-                                                    PK:
-                                                    {{
-                                                        item.total_porsi_kecil ??
-                                                        0
-                                                    }}
-                                                </span>
-                                                <span
-                                                    class="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-semibold"
-                                                    title="Porsi Besar"
+                                                    <span
+                                                        class="py-0.5 px-1.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold whitespace-nowrap text-center flex items-center justify-center"
+                                                        title="Porsi Kecil"
+                                                    >
+                                                        PK: {{ item.total_porsi_kecil ?? 0 }}
+                                                    </span>
+                                                    <span
+                                                        class="py-0.5 px-1.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold whitespace-nowrap text-center flex items-center justify-center"
+                                                        title="Porsi Besar"
+                                                    >
+                                                        PB: {{ item.total_porsi_besar ?? 0 }}
+                                                    </span>
+                                                </div>
+
+                                                <!-- Baris Alergi (Rata Kanan-Kiri Penuh Sejajar PK+PB) -->
+                                                <div
+                                                    v-if="
+                                                        (item.alergi_porsi_kecil > 0 ||
+                                                        item.alergi_porsi_besar > 0)
+                                                    "
+                                                    class="w-full"
                                                 >
-                                                    PB:
-                                                    {{
-                                                        item.total_porsi_besar ??
-                                                        0
-                                                    }}
-                                                </span>
+                                                    <span
+                                                        class="w-full py-0.5 px-1.5 rounded text-[10.5px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center justify-center gap-1 whitespace-nowrap text-center shadow-2xs"
+                                                        :title="`Alergi Makanan: ${item.alergi_porsi_kecil || 0} PK, ${item.alergi_porsi_besar || 0} PB`"
+                                                    >
+                                                        <HeartPulse
+                                                            class="h-3 w-3 text-rose-600 shrink-0"
+                                                        />
+                                                        <span>Alergi: {{ (item.alergi_porsi_kecil || 0) + (item.alergi_porsi_besar || 0) }}</span>
+                                                    </span>
+                                                </div>
                                             </div>
                                         </td>
 
                                         <!-- Total Penerima -->
-                                        <td class="py-4 px-4 text-center">
+                                        <td v-if="visibleColumns.total" class="py-4 px-4 text-center">
                                             <span
                                                 class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20"
                                             >
@@ -828,7 +1391,7 @@ function formatDateTimeWita(dateString) {
                                         </td>
 
                                         <!-- Terdaftar Pada & Terakhir Diperbaharui -->
-                                        <td class="py-4 px-5">
+                                        <td v-if="visibleColumns.waktu" class="py-4 px-5">
                                             <div
                                                 class="space-y-1.5 text-[11px]"
                                             >
@@ -876,7 +1439,7 @@ function formatDateTimeWita(dateString) {
                                         </td>
 
                                         <!-- Aksi (Tombol Elegan) -->
-                                        <td class="py-4 px-4 text-center">
+                                        <td v-if="visibleColumns.aksi" class="py-4 px-4 text-center">
                                             <div
                                                 class="flex items-center justify-center gap-1.5"
                                             >
@@ -913,12 +1476,48 @@ function formatDateTimeWita(dateString) {
                                     </tr>
 
                                     <!-- Empty State (Dengan Padding Lega) -->
-                                    <tr v-if="kelompokList.length === 0">
+                                    <tr v-if="filteredKelompokList.length === 0">
                                         <td
-                                            colspan="9"
+                                            :colspan="visibleColumnCount || 1"
                                             class="py-16 px-6 text-center"
                                         >
+                                            <!-- Kasus 1: Ada data tetapi terfilter -->
                                             <div
+                                                v-if="kelompokList.length > 0"
+                                                class="flex flex-col items-center justify-center max-w-md mx-auto space-y-4"
+                                            >
+                                                <div
+                                                    class="h-16 w-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shadow-xs"
+                                                >
+                                                    <Search class="h-8 w-8 text-amber-500" />
+                                                </div>
+                                                <div class="space-y-1">
+                                                    <h3
+                                                        class="text-sm font-bold text-slate-900"
+                                                    >
+                                                        Tidak Ada Kelompok yang Cocok
+                                                    </h3>
+                                                    <p
+                                                        class="text-xs text-slate-500 max-w-sm leading-relaxed"
+                                                    >
+                                                        Tidak ada data yang sesuai dengan kata kunci pencarian atau kombinasi filter saat ini.
+                                                    </p>
+                                                    <div class="pt-2">
+                                                        <button
+                                                            type="button"
+                                                            @click="resetFilters"
+                                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
+                                                        >
+                                                            <RotateCcw class="h-3.5 w-3.5" />
+                                                            <span>Reset Filter</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Kasus 2: Database benar-benar kosong -->
+                                            <div
+                                                v-else
                                                 class="flex flex-col items-center justify-center max-w-md mx-auto space-y-4"
                                             >
                                                 <div
@@ -986,6 +1585,13 @@ function formatDateTimeWita(dateString) {
                             >
                                 {{ activeKelompok.jenis_kepemilikan }}
                             </span>
+                            <span
+                                v-if="activeKelompok.kategori === 'Posyandu' && activeKelompok.jumlah_kader"
+                                class="px-2 py-0.5 text-xs font-bold rounded-full bg-sky-50 text-sky-700 border border-sky-200"
+                                title="Jumlah kader penanggung jawab (tidak dihitung sebagai PM)"
+                            >
+                                {{ activeKelompok.jumlah_kader }} Kader
+                            </span>
                         </div>
                         <p class="text-xs text-slate-500 mt-1">
                             {{ activeKelompok.tipe_identitas }}:
@@ -1016,13 +1622,32 @@ function formatDateTimeWita(dateString) {
                         </h4>
 
                         <div class="space-y-2 text-xs">
+                            <!-- Khusus Posyandu: Jumlah Kader Card -->
+                            <div
+                                v-if="activeKelompok.kategori === 'Posyandu'"
+                                class="p-2.5 rounded-lg bg-sky-50/80 border border-sky-200 flex items-center justify-between"
+                            >
+                                <div>
+                                    <p class="text-[11px] font-bold text-sky-900 uppercase flex items-center gap-1.5">
+                                        <Users class="h-3 w-3 text-sky-600" />
+                                        <span>Kader Posyandu</span>
+                                    </p>
+                                    <p class="text-[10px] text-sky-700 mt-0.5">
+                                        Penanggung jawab (tidak dihitung PM)
+                                    </p>
+                                </div>
+                                <span class="px-2.5 py-1 text-xs font-extrabold rounded-lg bg-sky-600 text-white shadow-2xs">
+                                    {{ activeKelompok.jumlah_kader || 0 }} Orang
+                                </span>
+                            </div>
+
                             <div
                                 class="p-2.5 rounded-lg bg-white border border-slate-200/70"
                             >
                                 <p
                                     class="text-[11px] font-bold text-slate-400 uppercase"
                                 >
-                                    Kepala Satuan
+                                    Kepala Satuan / Pengelola
                                 </p>
                                 <p class="font-bold text-slate-900 mt-0.5">
                                     {{ activeKelompok.nama_kepala }}
@@ -1053,7 +1678,7 @@ function formatDateTimeWita(dateString) {
                                 <p
                                     class="text-[11px] font-bold text-slate-400 uppercase"
                                 >
-                                    PIC
+                                    PIC (Petugas Lapangan)
                                 </p>
                                 <p class="font-bold text-slate-900 mt-0.5">
                                     {{ activeKelompok.nama_pic }}
@@ -1312,6 +1937,126 @@ function formatDateTimeWita(dateString) {
                             </tfoot>
                         </table>
                     </div>
+                </div>
+
+                <!-- DATA ALERGI MAKANAN DI MODAL -->
+                <div
+                    class="p-4 rounded-xl bg-rose-50/50 border border-rose-200/70 space-y-3"
+                >
+                    <div
+                        class="flex items-center justify-between flex-wrap gap-2"
+                    >
+                        <h4
+                            class="text-xs font-bold uppercase tracking-wider text-rose-900 flex items-center gap-1.5"
+                        >
+                            <HeartPulse class="h-4 w-4 text-rose-600" />
+                            <span>Data Alergi Makanan & Kebutuhan Khusus</span>
+                        </h4>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span
+                                class="px-2 py-0.5 rounded text-xs font-bold bg-amber-100/80 text-amber-900 border border-amber-200"
+                            >
+                                PK: {{ activeKelompok.alergi_porsi_kecil || 0 }}
+                            </span>
+                            <span
+                                class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100/80 text-blue-900 border border-blue-200"
+                            >
+                                PB: {{ activeKelompok.alergi_porsi_besar || 0 }}
+                            </span>
+                            <span
+                                class="px-2.5 py-0.5 rounded-full text-xs font-black bg-white text-rose-700 border border-rose-200 shadow-2xs"
+                            >
+                                Total:
+                                {{
+                                    (activeKelompok.alergi_porsi_kecil || 0) +
+                                    (activeKelompok.alergi_porsi_besar || 0)
+                                }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Tabel Klasifikasi Alergi per Satuan Jenis -->
+                    <div
+                        v-if="
+                            activeKelompok.keterangan_alergi &&
+                            activeKelompok.keterangan_alergi.length > 0
+                        "
+                        class="border border-rose-200/80 rounded-lg overflow-hidden bg-white mt-2"
+                    >
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr
+                                    class="bg-rose-100/50 text-rose-900 font-bold text-[10.5px] uppercase border-b border-rose-200/70"
+                                >
+                                    <th class="py-2 px-3 w-10 text-center">No</th>
+                                    <th class="py-2 px-3">Jenis Alergi / Pantangan</th>
+                                    <th class="py-2 px-3 text-center w-32">
+                                        Porsi Kecil (PK)
+                                    </th>
+                                    <th class="py-2 px-3 text-center w-32">
+                                        Porsi Besar (PB)
+                                    </th>
+                                    <th class="py-2 px-3 text-center w-28">
+                                        Subtotal
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-rose-100/60 text-slate-800">
+                                <tr
+                                    v-for="(al, idx) in activeKelompok.keterangan_alergi"
+                                    :key="idx"
+                                    class="hover:bg-rose-50/30"
+                                >
+                                    <td
+                                        class="py-2 px-3 text-center text-slate-400 font-medium"
+                                    >
+                                        {{ idx + 1 }}
+                                    </td>
+                                    <td class="py-2 px-3 font-semibold text-slate-900">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                            <span>{{
+                                                typeof al === "string"
+                                                    ? al
+                                                    : al.jenis_alergi
+                                            }}</span>
+                                        </div>
+                                    </td>
+                                    <td
+                                        class="py-2 px-3 text-center font-bold text-amber-800"
+                                    >
+                                        {{
+                                            typeof al === "string"
+                                                ? "-"
+                                                : (al.porsi_kecil || 0)
+                                        }}
+                                    </td>
+                                    <td
+                                        class="py-2 px-3 text-center font-bold text-blue-800"
+                                    >
+                                        {{
+                                            typeof al === "string"
+                                                ? "-"
+                                                : (al.porsi_besar || 0)
+                                        }}
+                                    </td>
+                                    <td
+                                        class="py-2 px-3 text-center font-extrabold text-slate-900"
+                                    >
+                                        {{
+                                            typeof al === "string"
+                                                ? "-"
+                                                : (Number(al.porsi_kecil) || 0) +
+                                                  (Number(al.porsi_besar) || 0)
+                                        }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="text-xs text-slate-400 italic">
+                        Tidak ada riwayat alergi makanan khusus yang dilaporkan pada kelompok ini.
+                    </p>
                 </div>
 
                 <!-- Footer Modal -->
