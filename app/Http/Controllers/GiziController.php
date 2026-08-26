@@ -10,9 +10,49 @@ use Inertia\Response;
 class GiziController extends Controller
 {
     /**
-     * Tampilkan halaman perencanaan & analisis gizi SPPG.
+     * Tampilkan halaman utama gizi (default ke sub menu TKPI).
      */
     public function index(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'tkpi');
+    }
+
+    /**
+     * Sub-menu 1: TKPI 2020 (Database Komposisi Pangan Indonesia).
+     */
+    public function tkpi(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'tkpi');
+    }
+
+    /**
+     * Sub-menu 2: Analisa PM (Analisa Penerima Manfaat & Porsi Sasaran).
+     */
+    public function analisaPm(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'analisa-pm');
+    }
+
+    /**
+     * Sub-menu 3: Buat Menu (Penyusunan Resep, Evaluasi AKG, Food Cost & PO).
+     */
+    public function buatMenu(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'buat-menu');
+    }
+
+    /**
+     * Sub-menu 4: Kalender Menu (Jadwal & Siklus Menu Harian MBG).
+     */
+    public function kalenderMenu(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'kalender-menu');
+    }
+
+    /**
+     * Helper render view Gizi dengan data lengkap dan activeTab.
+     */
+    private function renderGiziView(Request $request, string $activeTab): Response
     {
         $user = $request->user()->load('unitSppg');
         $unitSppg = $user->unitSppg;
@@ -47,6 +87,7 @@ class GiziController extends Controller
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
             'tkpiList' => $this->getTkpiData(),
+            'activeTab' => $activeTab,
             'stats' => [
                 'total_kelompok' => count($kelompokList),
                 'total_sekolah' => $kelompokList->where('kategori', '!=', 'Posyandu')->count(),

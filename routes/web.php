@@ -36,8 +36,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Kelompok Penerima Manfaat
     Route::resource('penerima-manfaat', KelompokPenerimaManfaatController::class);
 
-    // Gizi SPPG
-    Route::get('/gizi', [GiziController::class, 'index'])->name('gizi.index');
+    // Gizi SPPG (dengan sub-menu TKPI, Analisa PM, Buat Menu, Kalender Menu)
+    Route::prefix('gizi')->name('gizi.')->group(function () {
+        Route::get('/', [GiziController::class, 'index'])->name('index');
+        Route::get('/tkpi', [GiziController::class, 'tkpi'])->name('tkpi');
+        Route::get('/analisa-pm', [GiziController::class, 'analisaPm'])->name('analisa-pm');
+        Route::get('/buat-menu', [GiziController::class, 'buatMenu'])->name('buat-menu');
+        Route::get('/kalender-menu', [GiziController::class, 'kalenderMenu'])->name('kalender-menu');
+    });
 
     // Keuangan SPPG
     Route::get('/keuangan', [KeuanganController::class, 'index'])->name('keuangan.index');

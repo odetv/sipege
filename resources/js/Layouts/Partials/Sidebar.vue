@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { Link, router, usePage } from "@inertiajs/vue3";
 import {
     Building2,
@@ -11,6 +11,11 @@ import {
     Wallet,
     Tag,
     X,
+    ChevronDown,
+    Database,
+    BarChart3,
+    Utensils,
+    CalendarDays,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -35,6 +40,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:isMobileOpen", "update:isCollapsed"]);
+
+const isGiziExpanded = ref(true);
+
+function toggleGiziMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+        isGiziExpanded.value = true;
+    } else {
+        isGiziExpanded.value = !isGiziExpanded.value;
+    }
+}
 
 const page = usePage();
 const currentUser = computed(() => {
@@ -218,38 +234,102 @@ function logout() {
                     ></div>
                 </Link>
 
-                <!-- 3. Menu Gizi -->
-                <Link
-                    :href="route('gizi.index')"
-                    :title="isCollapsed ? 'Gizi' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('gizi.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <UtensilsCrossed class="h-4 w-4 shrink-0" />
-                    <span
+                <!-- 3. Menu Gizi (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Gizi Button -->
+                    <button
+                        type="button"
+                        @click="toggleGiziMenu"
+                        :title="isCollapsed ? 'Gizi' : ''"
                         :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Gizi</span
-                    >
-                    <div
-                        v-if="route().current('gizi.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            route().current('gizi.*')
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
                         ]"
-                    ></div>
-                </Link>
+                    >
+                        <UtensilsCrossed class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Gizi</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isGiziExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items (TKPI, Analisa PM, Buat Menu, Kalender Menu) -->
+                    <div
+                        v-if="!isCollapsed && isGiziExpanded"
+                        class="pl-4 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: TKPI -->
+                        <Link
+                            :href="route('gizi.tkpi')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.tkpi') || (route().current('gizi.index') && (page.props.activeTab === 'tkpi' || !page.props.activeTab))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Database class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">TKPI</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Analisa PM -->
+                        <Link
+                            :href="route('gizi.analisa-pm')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.analisa-pm') || (route().current('gizi.index') && page.props.activeTab === 'analisa-pm')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <BarChart3 class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Analisa PM</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Buat Menu -->
+                        <Link
+                            :href="route('gizi.buat-menu')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.buat-menu') || (route().current('gizi.index') && page.props.activeTab === 'buat-menu')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Utensils class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Buat Menu</span>
+                        </Link>
+
+                        <!-- Sub-menu 4: Kalender Menu -->
+                        <Link
+                            :href="route('gizi.kalender-menu')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.kalender-menu') || (route().current('gizi.index') && page.props.activeTab === 'kalender-menu')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kalender Menu</span>
+                        </Link>
+                    </div>
+                </div>
 
                 <!-- 4. Menu Keuangan -->
                 <Link
