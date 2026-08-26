@@ -19,6 +19,8 @@ import {
     CheckCircle2,
     XCircle,
     AlertCircle,
+    AlertTriangle,
+    Lightbulb,
     Printer,
     Send,
     Plus,
@@ -43,11 +45,22 @@ import {
     ChevronRight,
     ChevronDown,
     Utensils,
-    ChefHat,
-    Eye,
     CalendarCheck,
+    ShieldCheck,
+    FileText,
+    ArrowRight,
+    UserCheck,
+    UserX,
+    X,
+    Info,
 } from "lucide-vue-next";
-import { ALERGI_OPTIONS } from "@/Services/penerimaManfaatConfig";
+import Modal from "@/Components/Modal.vue";
+import {
+    ALERGI_OPTIONS,
+    getSubKategoriByKategori,
+    getJenisPorsiBySubKategori,
+    sortRincianByKategori,
+} from "@/Services/penerimaManfaatConfig";
 
 const props = defineProps({
     user: {
@@ -138,28 +151,33 @@ function selectSubMenu(menu) {
     }
 }
 
-// Sub-Tab di dalam modul Buat Menu
-const buatMenuSubTab = ref("pre_order");
+// Sub-Tab di dalam modul Buat Menu (Diawali dengan Step 1: Work Order)
+const buatMenuSubTab = ref("work_order");
 const buatMenuSubTabs = [
     {
+        id: "work_order",
+        label: "1. Work Order Produksi",
+        icon: FileSpreadsheet,
+    },
+    {
         id: "pre_order",
-        label: "1. Formulasi Resep & Pre-Order",
+        label: "2. Formulasi Resep & Pre-Order",
         icon: ClipboardList,
     },
     {
         id: "hasil_akg",
-        label: "2. Evaluasi Standar AKG BGN",
+        label: "3. Evaluasi Standar AKG BGN",
         icon: Activity,
     },
     {
         id: "hasil_food_cost",
-        label: "3. Analisis Food Cost & Plafon",
+        label: "4. Analisis Food Cost & Plafon",
         icon: Coins,
     },
     {
         id: "order",
-        label: "4. Approval Order Akuntan",
-        icon: FileSpreadsheet,
+        label: "5. Approval Order Akuntan",
+        icon: ShieldCheck,
     },
 ];
 
@@ -474,10 +492,265 @@ const jadwalMenuBulan = ref([
 ]);
 
 // ==========================================
-// 1. STATE PRE-ORDER (AHLI GIZI)
+// 1. STATE WORK ORDER & PRE-ORDER (AHLI GIZI)
 // ==========================================
-const namaMenuAktif = ref("");
+const woNo = ref(
+    "WO-MBG-" +
+        new Date().toISOString().slice(0, 10).replace(/-/g, "") +
+        "-001",
+);
 const tanggalRencana = ref(new Date().toISOString().split("T")[0]);
+const namaMenuAktif = ref("");
+const woStatus = ref("draft"); // 'draft' | 'in_progress' | 'completed'
+
+function normalizeAlergiItems(data, pkAlergi = 0, pbAlergi = 0) {
+    if (Array.isArray(data) && data.length > 0) {
+        return data.map((item) => {
+            if (typeof item === "string") {
+                return {
+                    jenis_alergi: item,
+                    porsi_kecil: Number(pkAlergi) || 0,
+                    porsi_besar: Number(pbAlergi) || 0,
+                };
+            }
+            return {
+                jenis_alergi: item.jenis_alergi || "Lainnya",
+                porsi_kecil: Number(item.porsi_kecil) || 0,
+                porsi_besar: Number(item.porsi_besar) || 0,
+            };
+        });
+    }
+    if (Number(pkAlergi) > 0 || Number(pbAlergi) > 0) {
+        return [
+            {
+                jenis_alergi: "Alergi Khusus",
+                porsi_kecil: Number(pkAlergi) || 0,
+                porsi_besar: Number(pbAlergi) || 0,
+            },
+        ];
+    }
+    return [];
+}
+
+function normalizeKelompokForWo(k) {
+    const subCats = getSubKategoriByKategori(k.kategori);
+    let rincianArr = [];
+    if (Array.isArray(k.rincian) && k.rincian.length > 0) {
+        rincianArr = k.rincian.map((r) => ({
+            id: r.id,
+            sub_kategori: r.sub_kategori,
+            jenis_porsi:
+                r.jenis_porsi ||
+                getJenisPorsiBySubKategori(r.sub_kategori, k.kategori),
+            jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
+            jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
+            total:
+                (Number(r.jumlah_laki_laki) || 0) +
+                (Number(r.jumlah_perempuan) || 0),
+        }));
+    } else {
+        rincianArr = subCats.map((sub) => {
+            const jp = getJenisPorsiBySubKategori(sub, k.kategori);
+            return {
+                id: null,
+                sub_kategori: sub,
+                jenis_porsi: jp,
+                jumlah_laki_laki: 0,
+                jumlah_perempuan: 0,
+                total: 0,
+            };
+        });
+    }
+
+    // Hitung total PK & PB dari rincian jika ada
+    const calcPK = rincianArr
+        .filter((r) => r.jenis_porsi === "Porsi Kecil")
+        .reduce((sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0), 0);
+    const calcPB = rincianArr
+        .filter((r) => r.jenis_porsi === "Porsi Besar")
+        .reduce((sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0), 0);
+
+    const pk = calcPK > 0 ? calcPK : Number(k.total_porsi_kecil) || 0;
+    const pb = calcPB > 0 ? calcPB : Number(k.total_porsi_besar) || 0;
+
+    const normAlergi = normalizeAlergiItems(
+        k.keterangan_alergi,
+        k.alergi_porsi_kecil,
+        k.alergi_porsi_besar,
+    );
+    const sumAlergiPk = normAlergi.reduce((s, a) => s + (Number(a.porsi_kecil) || 0), 0);
+    const sumAlergiPb = normAlergi.reduce((s, a) => s + (Number(a.porsi_besar) || 0), 0);
+
+    return {
+        id: k.id,
+        nama_kelompok: k.nama_kelompok,
+        kategori: k.kategori,
+        desa_kelurahan: k.desa_kelurahan,
+        kecamatan: k.kecamatan,
+        status_menerima:
+            k.status_menerima !== undefined ? k.status_menerima : true,
+        rincian: sortRincianByKategori(rincianArr, k.kategori),
+        total_porsi_kecil: pk,
+        total_porsi_besar: pb,
+        total_penerima: pk + pb,
+        alergi_porsi_kecil: sumAlergiPk > 0 ? sumAlergiPk : Number(k.alergi_porsi_kecil) || 0,
+        alergi_porsi_besar: sumAlergiPb > 0 ? sumAlergiPb : Number(k.alergi_porsi_besar) || 0,
+        keterangan_alergi: normAlergi,
+    };
+}
+
+// Daftar Kelompok Sasaran Terjadwal untuk Work Order Ini
+const woKelompokList = ref(props.kelompokList.map(normalizeKelompokForWo));
+
+function handleResetWoKelompokList() {
+    woKelompokList.value = props.kelompokList.map(normalizeKelompokForWo);
+}
+
+function handleToggleStatusMenerima(k) {
+    k.status_menerima = !k.status_menerima;
+}
+
+// State & Method Modal Edit Detail PM per Sub-Sub Kategori
+const showModalEditPm = ref(false);
+const editingKelompok = ref(null);
+const editFormRincian = ref([]);
+const editFormKeteranganAlergi = ref([]);
+
+function handleOpenModalEditPm(kelompok) {
+    editingKelompok.value = kelompok;
+    editFormRincian.value = JSON.parse(
+        JSON.stringify(kelompok.rincian || []),
+    );
+    editFormKeteranganAlergi.value = JSON.parse(
+        JSON.stringify(kelompok.keterangan_alergi || []),
+    );
+    showModalEditPm.value = true;
+}
+
+const modalTotalPk = computed(() => {
+    return editFormRincian.value
+        .filter((r) => r.jenis_porsi === "Porsi Kecil")
+        .reduce(
+            (sum, r) =>
+                sum +
+                ((Number(r.jumlah_laki_laki) || 0) +
+                    (Number(r.jumlah_perempuan) || 0)),
+            0,
+        );
+});
+
+const modalTotalPb = computed(() => {
+    return editFormRincian.value
+        .filter((r) => r.jenis_porsi === "Porsi Besar")
+        .reduce(
+            (sum, r) =>
+                sum +
+                ((Number(r.jumlah_laki_laki) || 0) +
+                    (Number(r.jumlah_perempuan) || 0)),
+            0,
+        );
+});
+
+const modalTotalPm = computed(() => {
+    return modalTotalPk.value + modalTotalPb.value;
+});
+
+const modalTotalAlergiPk = computed(() => {
+    return editFormKeteranganAlergi.value.reduce(
+        (sum, item) => sum + (Math.max(0, Number(item.porsi_kecil)) || 0),
+        0,
+    );
+});
+
+const modalTotalAlergiPb = computed(() => {
+    return editFormKeteranganAlergi.value.reduce(
+        (sum, item) => sum + (Math.max(0, Number(item.porsi_besar)) || 0),
+        0,
+    );
+});
+
+const modalGrandTotalAlergi = computed(() => {
+    return modalTotalAlergiPk.value + modalTotalAlergiPb.value;
+});
+
+function handleSimpanEditDetailPm() {
+    if (!editingKelompok.value) return;
+
+    // Update data rincian
+    editingKelompok.value.rincian = editFormRincian.value.map((r) => ({
+        ...r,
+        jumlah_laki_laki: Math.max(0, Number(r.jumlah_laki_laki) || 0),
+        jumlah_perempuan: Math.max(0, Number(r.jumlah_perempuan) || 0),
+        total:
+            Math.max(0, Number(r.jumlah_laki_laki) || 0) +
+            Math.max(0, Number(r.jumlah_perempuan) || 0),
+    }));
+
+    // Update data rincian alergi
+    editingKelompok.value.keterangan_alergi = editFormKeteranganAlergi.value.map((a) => ({
+        jenis_alergi: a.jenis_alergi || "Lainnya",
+        porsi_kecil: Math.max(0, Number(a.porsi_kecil) || 0),
+        porsi_besar: Math.max(0, Number(a.porsi_besar) || 0),
+    }));
+
+    editingKelompok.value.total_porsi_kecil = modalTotalPk.value;
+    editingKelompok.value.total_porsi_besar = modalTotalPb.value;
+    editingKelompok.value.total_penerima = modalTotalPm.value;
+    editingKelompok.value.alergi_porsi_kecil = modalTotalAlergiPk.value;
+    editingKelompok.value.alergi_porsi_besar = modalTotalAlergiPb.value;
+
+    showModalEditPm.value = false;
+    editingKelompok.value = null;
+}
+
+function formatTanggalIndo(dateStr) {
+    if (!dateStr) return "-";
+    try {
+        const d = new Date(dateStr + "T00:00:00");
+        return d.toLocaleDateString("id-ID", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+        });
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+// Menu rekomendasi dari kalender siklus bulan berjalan yang sesuai tanggal atau saran
+const menuSaranDariKalender = computed(() => {
+    return (
+        jadwalMenuBulan.value.find((j) => j.tanggal === tanggalRencana.value) ||
+        null
+    );
+});
+
+function handleGunakanMenuSaran(item) {
+    if (item) {
+        namaMenuAktif.value = item.namaMenu;
+    }
+}
+
+function handleMulaiFormulasiWo() {
+    if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
+        alert("Nama Menu Produksi MBG wajib diisi pada Work Order!");
+        return;
+    }
+    if (!tanggalRencana.value) {
+        alert("Tanggal Distribusi Menu wajib dipilih pada Work Order!");
+        return;
+    }
+    const menerimaCount = woKelompokList.value.filter(
+        (k) => k.status_menerima !== false,
+    ).length;
+    if (menerimaCount === 0) {
+        alert("Minimal harus ada 1 kelompok sasaran yang berstatus 'Menerima' pada Work Order!");
+        return;
+    }
+    woStatus.value = "in_progress";
+    buatMenuSubTab.value = "pre_order";
+}
 
 // Resep Bahan Baku Baku Terpilih dari Database Resmi TKPI 2020 (Default Kosong dari 0)
 const selectedBahanList = ref([]);
@@ -705,27 +978,183 @@ function resetPo() {
 }
 
 // ==========================================
-// KALKULASI REKAPITULASI MBG
+// KALKULASI REKAPITULASI MBG (DARI WORK ORDER KELOMPOK AKTIF / MENERIMA)
 // ==========================================
-const totalPK = computed(() => props.stats.total_porsi_kecil || 0);
-const totalPB = computed(() => props.stats.total_porsi_besar || 0);
-const totalPM = computed(() => props.stats.total_penerima || 0);
+const kelompokMenerimaAktif = computed(() => {
+    return woKelompokList.value.filter((k) => k.status_menerima !== false);
+});
+
+const totalPK = computed(() => {
+    return kelompokMenerimaAktif.value.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_kecil) || 0),
+        0,
+    );
+});
+const totalPB = computed(() => {
+    return kelompokMenerimaAktif.value.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_besar) || 0),
+        0,
+    );
+});
+const totalPM = computed(() => {
+    return totalPK.value + totalPB.value;
+});
 
 // Rekapitulasi Alergi KPM
 const totalPKAlergi = computed(() => {
-    return props.kelompokList.reduce(
-        (acc, k) => acc + (k.alergi_porsi_kecil || 0),
+    return kelompokMenerimaAktif.value.reduce(
+        (acc, k) => acc + (Number(k.alergi_porsi_kecil) || 0),
         0,
     );
 });
 const totalPBAlergi = computed(() => {
-    return props.kelompokList.reduce(
-        (acc, k) => acc + (k.alergi_porsi_besar || 0),
+    return kelompokMenerimaAktif.value.reduce(
+        (acc, k) => acc + (Number(k.alergi_porsi_besar) || 0),
         0,
     );
 });
 
-// Daftar opsi alergi dari data KPM dan standar
+// Keyword dictionary untuk deteksi cerdas alergen dari nama menu
+const ALLERGEN_KEYWORDS = {
+    "Ikan Laut / Seafood": [
+        "ikan", "fish", "tuna", "tongkol", "lele", "bandeng", "gurame", "nila", "dori",
+        "salmon", "patin", "seafood", "cumi", "gurita", "kakap", "tenggiri", "kembung",
+    ],
+    "Udang & Krustasea": [
+        "udang", "shrimp", "prawn", "kepiting", "crab", "lobster", "rajungan",
+    ],
+    "Telur": [
+        "telur", "egg", "dadar", "ceplok", "balado telur", "omelet", "puyuh", "mata sapi",
+    ],
+    "Susu Sapi / Laktosa": [
+        "susu", "milk", "keju", "cheese", "mentega", "butter", "yogurt", "krim", "cream",
+    ],
+    "Kacang Tanah & Pohon": [
+        "kacang", "peanut", "bumbu kacang", "almond", "mete", "cashew", "pecel", "gado-gado", "saus kacang",
+    ],
+    "Kedelai / Soja": [
+        "kedelai", "soy", "tahu", "tempe", "tauco", "kecap", "edamame",
+    ],
+    "Gandum / Gluten": [
+        "gandum", "wheat", "gluten", "roti", "mie", "mi", "pasta", "spageti", "makaroni", "tepung",
+    ],
+    "Daging Ayam / Unggas": [
+        "ayam", "chicken", "bebek", "unggas",
+    ],
+    "Daging Sapi": [
+        "sapi", "beef", "daging", "bakso", "rendang", "rawon", "empal",
+    ],
+    "Cokelat": [
+        "cokelat", "chocolate", "coklat", "cocoa",
+    ],
+};
+
+const REKOMENDASI_SUBSTITUSI = {
+    "Ikan Laut / Seafood": "Fillet Daging Ayam, Daging Sapi, Tahu, atau Tempe",
+    "Udang & Krustasea": "Daging Ayam, Daging Sapi, atau Telur",
+    "Telur": "Tahu Sutra, Tempe, Daging Ayam, atau Ikan",
+    "Susu Sapi / Laktosa": "Susu Kedelai, Susu Almond, atau Sari Gandum Oat",
+    "Kacang Tanah & Pohon": "Saus Wijen, Saus Tomat, atau Bumbu Kecap Rempah",
+    "Kedelai / Soja": "Telur, Daging Ayam, Ikan, atau Kacang Merah",
+    "Gandum / Gluten": "Nasi Putih, Jagung Pipil, Kentang, Ubi, atau Bihun Beras",
+    "Daging Ayam / Unggas": "Ikan Fillet, Telur, Daging Sapi, atau Tahu",
+    "Daging Sapi": "Daging Ayam, Ikan, Telur, atau Tempe",
+};
+
+// Rekapitulasi Alergi per Jenis dari seluruh kelompok sasaran aktif
+const rekapAlergiDetailPm = computed(() => {
+    const summary = {};
+    kelompokMenerimaAktif.value.forEach((k) => {
+        if (Array.isArray(k.keterangan_alergi)) {
+            k.keterangan_alergi.forEach((item) => {
+                const jenis = typeof item === "string" ? item : item.jenis_alergi;
+                if (!jenis) return;
+                const cleanJenis = jenis.trim();
+                if (!summary[cleanJenis]) {
+                    summary[cleanJenis] = {
+                        jenis_alergi: cleanJenis,
+                        porsi_kecil: 0,
+                        porsi_besar: 0,
+                        total: 0,
+                        kelompok_names: [],
+                    };
+                }
+                const pk = Number(item.porsi_kecil) || 0;
+                const pb = Number(item.porsi_besar) || 0;
+                summary[cleanJenis].porsi_kecil += pk;
+                summary[cleanJenis].porsi_besar += pb;
+                summary[cleanJenis].total += pk + pb;
+                if (
+                    pk + pb > 0 &&
+                    !summary[cleanJenis].kelompok_names.includes(k.nama_kelompok)
+                ) {
+                    summary[cleanJenis].kelompok_names.push(k.nama_kelompok);
+                }
+            });
+        }
+    });
+    return Object.values(summary).filter((item) => item.total > 0);
+});
+
+// Analisa & Rekomendasi Alergi Menu Terhadap Detail PM
+const analisaAlergiMenu = computed(() => {
+    const menuLower = (namaMenuAktif.value || "").toLowerCase();
+    const activeAlergi = rekapAlergiDetailPm.value;
+    const conflicts = [];
+
+    activeAlergi.forEach((al) => {
+        let matched = false;
+        let matchedKeyword = "";
+
+        // Cari di dictionary kata kunci alergen
+        for (const [allergenName, keywords] of Object.entries(ALLERGEN_KEYWORDS)) {
+            const isRelated =
+                allergenName.toLowerCase().includes(al.jenis_alergi.toLowerCase()) ||
+                al.jenis_alergi.toLowerCase().includes(allergenName.toLowerCase());
+
+            if (isRelated) {
+                for (const kw of keywords) {
+                    const regex = new RegExp(`\\b${kw}`, "i");
+                    if (regex.test(menuLower) || menuLower.includes(kw)) {
+                        matched = true;
+                        matchedKeyword = kw;
+                        break;
+                    }
+                }
+            }
+            if (matched) break;
+        }
+
+        // Cek nama jenis alergi langsung
+        if (!matched && menuLower.includes(al.jenis_alergi.toLowerCase())) {
+            matched = true;
+            matchedKeyword = al.jenis_alergi;
+        }
+
+        if (matched) {
+            const rekomendasiBahan =
+                REKOMENDASI_SUBSTITUSI[al.jenis_alergi] ||
+                "Bahan pangan sumber protein/karbohidrat alternatif non-alergen";
+
+            conflicts.push({
+                ...al,
+                keyword: matchedKeyword,
+                rekomendasi: rekomendasiBahan,
+            });
+        }
+    });
+
+    const totalAlergiPm = activeAlergi.reduce((s, a) => s + a.total, 0);
+
+    return {
+        totalSiswaAlergi: totalAlergiPm,
+        activeAlergiList: activeAlergi,
+        conflicts: conflicts,
+        hasConflicts: conflicts.length > 0,
+    };
+});
+
+// Daftar opsi alergi dari data KPM dan standar untuk select dropdown bahan
 const daftarAlergiKpm = computed(() => {
     const list = new Set([
         "Alergi Telur",
@@ -736,15 +1165,9 @@ const daftarAlergiKpm = computed(() => {
         "Alergi Udang / Kepiting",
         "Alergi Kedelai",
     ]);
-    props.kelompokList.forEach((k) => {
-        if (Array.isArray(k.keterangan_alergi)) {
-            k.keterangan_alergi.forEach((al) => {
-                const name = typeof al === "string" ? al : al.jenis_alergi;
-                if (name && name.trim()) {
-                    list.add(name.trim());
-                }
-            });
-        }
+    rekapAlergiDetailPm.value.forEach((al) => {
+        list.add(al.jenis_alergi);
+        list.add(`Alergi ${al.jenis_alergi}`);
     });
     return Array.from(list);
 });
@@ -1734,7 +2157,822 @@ const tkpiCategoryList = computed(() => {
                     </button>
                 </div>
 
-                <!-- Bagian 1: Formulasi Resep & Pre-Order -->
+                <!-- Sticky / Summary Banner Work Order (Tampil di Step 2, 3, 4, 5) -->
+                <div
+                    v-if="buatMenuSubTab !== 'work_order'"
+                    class="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 rounded-2xl p-4 sm:p-5 text-white shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                    <div class="space-y-1.5 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span
+                                class="px-2.5 py-0.5 text-xs font-mono font-black rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30"
+                            >
+                                {{ woNo }}
+                            </span>
+                            <span
+                                class="px-2.5 py-0.5 text-xs font-bold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1"
+                            >
+                                <CheckCircle2 class="h-3.5 w-3.5" /> Kuota PM Terkunci
+                            </span>
+                            <span class="text-xs text-slate-300 font-medium">
+                                📅 Tanggal Distribusi:
+                                <strong class="text-white">{{
+                                    formatTanggalIndo(tanggalRencana)
+                                }}</strong>
+                            </span>
+                        </div>
+                        <h3
+                            class="text-base sm:text-lg font-black text-white truncate"
+                        >
+                            {{ namaMenuAktif || "Nama Menu Belum Diisi" }}
+                        </h3>
+                        <div
+                            class="flex items-center gap-3 flex-wrap text-xs text-blue-200"
+                        >
+                            <span
+                                >🎯 Total PM:
+                                <strong>{{
+                                    totalPM.toLocaleString("id-ID")
+                                }} Porsi</strong></span
+                            >
+                            <span
+                                >• PK:
+                                <strong>{{
+                                    totalPK.toLocaleString("id-ID")
+                                }} Porsi</strong></span
+                            >
+                            <span
+                                >• PB:
+                                <strong>{{
+                                    totalPB.toLocaleString("id-ID")
+                                }} Porsi</strong></span
+                            >
+                            <span
+                                v-if="totalPKAlergi + totalPBAlergi > 0"
+                                >• Alergi:
+                                <strong class="text-rose-300"
+                                    >{{
+                                        totalPKAlergi + totalPBAlergi
+                                    }} Siswa</strong
+                                ></span
+                            >
+                            <span
+                                >• Terjadwal:
+                                <strong class="text-slate-300">{{
+                                    woKelompokList.length
+                                }} Kelompok</strong></span
+                            >
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <Button
+                            type="button"
+                            @click="buatMenuSubTab = 'work_order'"
+                            className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3.5 h-9 flex items-center gap-1.5 border border-white/20 cursor-pointer shadow-none"
+                        >
+                            <Edit3 class="h-3.5 w-3.5" />
+                            <span>Ubah Work Order</span>
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- ========================================================================================= -->
+                <!-- Bagian 1: Work Order Produksi (Step 1) -->
+                <!-- ========================================================================================= -->
+                <div v-if="buatMenuSubTab === 'work_order'" class="space-y-6">
+                    <Card className="bg-white border-slate-200 shadow-xs overflow-hidden">
+                        <CardHeader
+                            className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70"
+                        >
+                            <div
+                                class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                            >
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <CardTitle
+                                            class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
+                                        >
+                                            <FileSpreadsheet
+                                                class="h-5 w-5 text-primary"
+                                            />
+                                            <span
+                                                >Surat Perintah Kerja (Work Order) Produksi MBG</span
+                                            >
+                                        </CardTitle>
+                                        <Badge
+                                            variant="outline"
+                                            class="bg-blue-50 text-blue-700 border-blue-300 font-extrabold text-xs"
+                                        >
+                                            Langkah 1 dari 5
+                                        </Badge>
+                                    </div>
+                                    <CardDescription
+                                        class="text-xs sm:text-sm mt-0.5"
+                                    >
+                                        Penetapan jadwal distribusi menu, penamaan paket MBG, dan penguncian kuota Penerima Manfaat (PM) resmi SPPG.
+                                    </CardDescription>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        @click="handleMulaiFormulasiWo"
+                                        className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-4 h-9 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                    >
+                                        <span>Mulai Formulasi Menu (Step 2)</span>
+                                        <ArrowRight class="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-5 sm:p-6 space-y-6">
+                            <!-- Form Identitas Work Order (Ringkas) -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-3 gap-4"
+                            >
+                                <!-- No. Work Order -->
+                                <div class="space-y-1.5">
+                                    <label
+                                        class="text-xs font-bold text-slate-700"
+                                        >No. Work Order (SPK):</label
+                                    >
+                                    <input
+                                        type="text"
+                                        v-model="woNo"
+                                        class="w-full text-xs font-mono font-bold text-slate-900 rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-slate-50"
+                                    />
+                                </div>
+
+                                <!-- Tanggal Distribusi (Tanggal WO) -->
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <label
+                                        class="text-xs font-bold text-slate-700"
+                                    >
+                                        Tanggal Distribusi Menu (Tanggal WO):
+                                        <span class="text-rose-500">*</span>
+                                    </label>
+                                    <div class="flex items-center gap-3">
+                                        <input
+                                            type="date"
+                                            v-model="tanggalRencana"
+                                            required
+                                            class="w-full sm:w-64 text-xs font-bold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-white"
+                                        />
+                                        <span
+                                            class="text-xs font-bold text-primary shrink-0"
+                                        >
+                                            📅 {{ formatTanggalIndo(tanggalRencana) }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Nama Menu Produksi MBG -->
+                                <div class="md:col-span-3 space-y-1.5">
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <label
+                                            class="text-xs font-bold text-slate-700"
+                                        >
+                                            Nama Menu Produksi MBG:
+                                            <span class="text-rose-500">*</span>
+                                        </label>
+                                        <button
+                                            v-if="menuSaranDariKalender"
+                                            type="button"
+                                            @click="
+                                                handleGunakanMenuSaran(
+                                                    menuSaranDariKalender,
+                                                )
+                                            "
+                                            class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <Sparkles class="h-3 w-3" />
+                                            Gunakan Rekomendasi Kalender: "{{
+                                                menuSaranDariKalender.namaMenu
+                                            }}"
+                                        </button>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        v-model="namaMenuAktif"
+                                        required
+                                        placeholder="Contoh: Paket Nasi Kuning Ayam Suwir, Tempe Orek, Tumis Buncis & Pisang..."
+                                        class="w-full text-xs font-bold text-slate-900 rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-slate-50/40"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Ringkasan Kuota PM Fix Berdasarkan Tanggal Work Order -->
+                            <div class="space-y-3 pt-4 border-t border-slate-200">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4
+                                            class="text-sm font-black text-slate-900 flex items-center gap-2"
+                                        >
+                                            <Users class="h-4 w-4 text-primary" />
+                                            <span
+                                                >Data Kuota Penerima Manfaat (PM) Fix per Tanggal Distribusi</span
+                                            >
+                                        </h4>
+                                        <p class="text-xs text-slate-500 mt-0.5">
+                                            Kuota porsi terkunci otomatis berdasarkan data rekapitulasi siswa & penerima aktif SPPG pada tanggal tersebut.
+                                        </p>
+                                    </div>
+                                    <Badge
+                                        variant="outline"
+                                        class="bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold text-xs"
+                                    >
+                                        <CheckCircle2 class="h-3 w-3 mr-1" /> Kuota Terverifikasi
+                                    </Badge>
+                                </div>
+
+                                <!-- 4 Metric Cards Kuota PM Fix -->
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                                    <!-- Total PM -->
+                                    <div
+                                        class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/60 border border-blue-200/80 space-y-1 shadow-2xs"
+                                    >
+                                        <p
+                                            class="text-[11px] font-bold text-blue-700 uppercase tracking-wider"
+                                        >
+                                            Total Sasaran PM Fix
+                                        </p>
+                                        <h3
+                                            class="text-2xl font-black text-blue-950"
+                                        >
+                                            {{
+                                                totalPM.toLocaleString("id-ID")
+                                            }}
+                                            <span
+                                                class="text-xs font-semibold text-blue-700"
+                                                >Porsi</span
+                                            >
+                                        </h3>
+                                        <p
+                                            class="text-[10.5px] text-blue-600 font-medium"
+                                        >
+                                            100% Kuota Distribusi Harian
+                                        </p>
+                                    </div>
+
+                                    <!-- Porsi Kecil -->
+                                    <div
+                                        class="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100/60 border border-amber-200/80 space-y-1 shadow-2xs"
+                                    >
+                                        <p
+                                            class="text-[11px] font-bold text-amber-800 uppercase tracking-wider"
+                                        >
+                                            Porsi Kecil (PK)
+                                        </p>
+                                        <h3
+                                            class="text-2xl font-black text-amber-950"
+                                        >
+                                            {{
+                                                totalPK.toLocaleString("id-ID")
+                                            }}
+                                            <span
+                                                class="text-xs font-semibold text-amber-800"
+                                                >Porsi</span
+                                            >
+                                        </h3>
+                                        <p
+                                            class="text-[10.5px] text-amber-700 font-medium"
+                                        >
+                                            TK, PAUD, SD 1-3 & Balita
+                                        </p>
+                                    </div>
+
+                                    <!-- Porsi Besar -->
+                                    <div
+                                        class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100/60 border border-indigo-200/80 space-y-1 shadow-2xs"
+                                    >
+                                        <p
+                                            class="text-[11px] font-bold text-indigo-800 uppercase tracking-wider"
+                                        >
+                                            Porsi Besar (PB)
+                                        </p>
+                                        <h3
+                                            class="text-2xl font-black text-indigo-950"
+                                        >
+                                            {{
+                                                totalPB.toLocaleString("id-ID")
+                                            }}
+                                            <span
+                                                class="text-xs font-semibold text-indigo-800"
+                                                >Porsi</span
+                                            >
+                                        </h3>
+                                        <p
+                                            class="text-[10.5px] text-indigo-700 font-medium"
+                                        >
+                                            SD 4-6, SMP, SMA, Bumil & Guru
+                                        </p>
+                                    </div>
+
+                                    <!-- Varian Khusus Alergi -->
+                                    <div
+                                        class="p-4 rounded-2xl bg-gradient-to-br from-rose-50 to-rose-100/60 border border-rose-200/80 space-y-1 shadow-2xs"
+                                    >
+                                        <p
+                                            class="text-[11px] font-bold text-rose-800 uppercase tracking-wider"
+                                        >
+                                            Varian Alergi Khusus
+                                        </p>
+                                        <h3
+                                            class="text-2xl font-black text-rose-950"
+                                        >
+                                            {{
+                                                (
+                                                    totalPKAlergi +
+                                                    totalPBAlergi
+                                                ).toLocaleString("id-ID")
+                                            }}
+                                            <span
+                                                class="text-xs font-semibold text-rose-800"
+                                                >Siswa</span
+                                            >
+                                        </h3>
+                                        <p
+                                            class="text-[10.5px] text-rose-700 font-medium"
+                                        >
+                                            {{ totalPKAlergi }} PK •
+                                            {{ totalPBAlergi }} PB Membutuhkan
+                                            Substitusi
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabel Rincian Kelompok Sasaran Terjadwal (Status Menerima & Edit Detail Sub-Kategori) -->
+                            <div class="space-y-3 pt-2">
+                                <div
+                                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                                >
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <h5
+                                                class="text-xs font-bold text-slate-800 uppercase tracking-wider"
+                                            >
+                                                Daftar Kelompok Sasaran Distribusi ({{
+                                                    woKelompokList.length
+                                                }} Kelompok)
+                                            </h5>
+                                            <Badge
+                                                variant="outline"
+                                                class="text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border-emerald-300"
+                                            >
+                                                <UserCheck class="h-3 w-3 mr-1" />
+                                                {{ kelompokMenerimaAktif.length }} Menerima
+                                            </Badge>
+                                            <Badge
+                                                v-if="
+                                                    woKelompokList.length >
+                                                    kelompokMenerimaAktif.length
+                                                "
+                                                variant="outline"
+                                                class="text-[11px] font-extrabold bg-rose-50 text-rose-800 border-rose-300"
+                                            >
+                                                <UserX class="h-3 w-3 mr-1" />
+                                                {{
+                                                    woKelompokList.length -
+                                                    kelompokMenerimaAktif.length
+                                                }}
+                                                Tidak Menerima
+                                            </Badge>
+                                        </div>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">
+                                            Kelompok yang dinyatakan <strong>"Tidak Menerima"</strong> kuotanya otomatis dinolkan dari perhitungan Work Order ini.
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            @click="handleResetWoKelompokList"
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 h-8 flex items-center gap-1 cursor-pointer shadow-none border border-slate-200"
+                                            title="Kembalikan semua kelompok default dari database"
+                                        >
+                                            <RotateCcw class="h-3.5 w-3.5" />
+                                            <span>Reset ke Default</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div
+                                    class="rounded-xl border border-slate-200 overflow-hidden"
+                                >
+                                    <table
+                                        class="w-full text-left text-xs border-collapse"
+                                    >
+                                        <thead
+                                            class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
+                                        >
+                                            <tr>
+                                                <th class="p-3 text-center">Status</th>
+                                                <th class="p-3">Nama Kelompok Sasaran</th>
+                                                <th class="p-3">Kategori</th>
+                                                <th class="p-3 text-center">Porsi Kecil (PK)</th>
+                                                <th class="p-3 text-center">Porsi Besar (PB)</th>
+                                                <th class="p-3 text-right">Total PM</th>
+                                                <th class="p-3">Status Alergi</th>
+                                                <th class="p-3 text-center">Aksi Distribusi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody
+                                            class="divide-y divide-slate-100 text-slate-800"
+                                        >
+                                            <tr
+                                                v-for="k in woKelompokList"
+                                                :key="k.id"
+                                                :class="[
+                                                    'transition-colors',
+                                                    k.status_menerima === false
+                                                        ? 'bg-rose-50/40 text-slate-400'
+                                                        : 'hover:bg-slate-50/60'
+                                                ]"
+                                            >
+                                                <!-- Status Badge -->
+                                                <td class="p-3 text-center align-middle">
+                                                    <span
+                                                        v-if="k.status_menerima !== false"
+                                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                    >
+                                                        <UserCheck class="h-3 w-3 mr-1" />
+                                                        Menerima
+                                                    </span>
+                                                    <span
+                                                        v-else
+                                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300"
+                                                    >
+                                                        <UserX class="h-3 w-3 mr-1" />
+                                                        Tidak Menerima
+                                                    </span>
+                                                </td>
+
+                                                <!-- Nama Kelompok -->
+                                                <td class="p-3 font-bold align-middle" :class="k.status_menerima === false ? 'text-slate-500 line-through' : 'text-slate-900'">
+                                                    {{ k.nama_kelompok }}
+                                                    <span
+                                                        class="block text-[10px] text-slate-400 font-normal no-underline"
+                                                    >
+                                                        {{ k.desa_kelurahan }},
+                                                        {{ k.kecamatan }}
+                                                    </span>
+                                                </td>
+
+                                                <!-- Kategori -->
+                                                <td class="p-3 align-middle">
+                                                    <Badge
+                                                        variant="outline"
+                                                        class="font-bold text-[11px] bg-slate-50"
+                                                    >
+                                                        {{ k.kategori }}
+                                                    </Badge>
+                                                </td>
+
+                                                <!-- Porsi Kecil -->
+                                                <td
+                                                    class="p-3 text-center align-middle font-bold"
+                                                    :class="k.status_menerima === false ? 'text-slate-400' : 'text-amber-900 bg-amber-50/20'"
+                                                >
+                                                    {{ k.total_porsi_kecil }} Porsi
+                                                </td>
+
+                                                <!-- Porsi Besar -->
+                                                <td
+                                                    class="p-3 text-center align-middle font-bold"
+                                                    :class="k.status_menerima === false ? 'text-slate-400' : 'text-indigo-900 bg-indigo-50/20'"
+                                                >
+                                                    {{ k.total_porsi_besar }} Porsi
+                                                </td>
+
+                                                <!-- Total PM -->
+                                                <td
+                                                    class="p-3 text-right font-black text-sm align-middle"
+                                                    :class="k.status_menerima === false ? 'text-slate-400' : 'text-slate-900'"
+                                                >
+                                                    {{ k.total_penerima }} Siswa
+                                                </td>
+
+                                                <!-- Alergi (Detail Breakdown per Jenis) -->
+                                                <td class="p-3 align-middle">
+                                                    <div
+                                                        v-if="
+                                                            k.keterangan_alergi &&
+                                                            k.keterangan_alergi.length > 0
+                                                        "
+                                                        class="space-y-1"
+                                                    >
+                                                        <div
+                                                            v-for="(al, alIdx) in k.keterangan_alergi"
+                                                            :key="alIdx"
+                                                            class="text-[11px] font-bold"
+                                                            :class="k.status_menerima === false ? 'text-slate-400' : 'text-rose-700'"
+                                                        >
+                                                            ⚠️ {{ al.jenis_alergi }}:
+                                                            <span class="font-black text-rose-900 ml-0.5">
+                                                                {{ (Number(al.porsi_kecil) || 0) + (Number(al.porsi_besar) || 0) }} Siswa
+                                                            </span>
+                                                            <span class="text-[10px] text-slate-500 font-normal ml-1">
+                                                                (PK: {{ al.porsi_kecil || 0 }}, PB: {{ al.porsi_besar || 0 }})
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        v-else-if="
+                                                            (k.alergi_porsi_kecil || 0) +
+                                                                (k.alergi_porsi_besar || 0) >
+                                                            0
+                                                        "
+                                                        class="text-[11px] font-bold"
+                                                        :class="k.status_menerima === false ? 'text-slate-400' : 'text-rose-700'"
+                                                    >
+                                                        ⚠️ {{ (k.alergi_porsi_kecil || 0) + (k.alergi_porsi_besar || 0) }} Alergi
+                                                        <span class="block text-[10px] text-slate-500 font-normal">
+                                                            PK: {{ k.alergi_porsi_kecil || 0 }} • PB: {{ k.alergi_porsi_besar || 0 }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        v-else
+                                                        class="text-[11px] text-emerald-700 font-medium"
+                                                    >
+                                                        ✓ Normal
+                                                    </div>
+                                                </td>
+
+                                                <!-- Aksi -->
+                                                <td class="p-2 text-center align-middle">
+                                                    <div class="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            @click="handleOpenModalEditPm(k)"
+                                                            class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                                            title="Edit Rincian PM per Sub-Sub Kategori"
+                                                        >
+                                                            <Edit3 class="h-3.5 w-3.5" />
+                                                            <span>Edit Detail PM</span>
+                                                        </button>
+
+                                                        <button
+                                                            v-if="k.status_menerima !== false"
+                                                            type="button"
+                                                            @click="handleToggleStatusMenerima(k)"
+                                                            class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                                            title="Nyatakan kelompok ini tidak menerima distribusi pada Work Order ini"
+                                                        >
+                                                            <UserX class="h-3.5 w-3.5" />
+                                                            <span>Tidak Menerima</span>
+                                                        </button>
+
+                                                        <button
+                                                            v-else
+                                                            type="button"
+                                                            @click="handleToggleStatusMenerima(k)"
+                                                            class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                                            title="Aktifkan kembali kelompok ini untuk menerima distribusi"
+                                                        >
+                                                            <UserCheck class="h-3.5 w-3.5" />
+                                                            <span>Aktifkan Menerima</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Bottom Action Button -->
+                            <div
+                                class="pt-4 border-t border-slate-200 flex items-center justify-between"
+                            >
+                                <div class="text-xs text-slate-500">
+                                    Pastikan tanggal, nama menu, dan status penerima sasaran sudah sesuai sebelum melanjutkan.
+                                </div>
+                                <Button
+                                    type="button"
+                                    @click="handleMulaiFormulasiWo"
+                                    className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center gap-2 rounded-xl shadow-xs cursor-pointer"
+                                >
+                                    <span>Lanjut ke Formulasi Menu & Pre-Order (Step 2)</span>
+                                    <ArrowRight class="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Modal Edit Detail Penerima Manfaat per Sub-Sub Kategori -->
+                    <Modal
+                        :show="showModalEditPm"
+                        @close="showModalEditPm = false"
+                        maxWidth="3xl"
+                    >
+                        <div class="p-5 sm:p-6 space-y-5">
+                            <!-- Modal Header -->
+                            <div class="flex items-start justify-between border-b border-slate-100 pb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                        <School class="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <h3 class="text-base font-black text-slate-900">
+                                            Edit Rincian PM: {{ editingKelompok?.nama_kelompok }}
+                                        </h3>
+                                        <p class="text-xs text-slate-500 mt-0.5">
+                                            Kategori: <strong class="text-slate-800">{{ editingKelompok?.kategori }}</strong> • Wilayah: {{ editingKelompok?.desa_kelurahan }}, {{ editingKelompok?.kecamatan }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="showModalEditPm = false"
+                                    class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                                >
+                                    <X class="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <!-- Modal Body: Tabel Sub-Sub Kategori -->
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        Rincian Jumlah Siswa / Penerima per Jenjang:
+                                    </h4>
+                                    <span class="text-xs text-slate-500">
+                                        Format input: Laki-laki (L) + Perempuan (P)
+                                    </span>
+                                </div>
+
+                                <div class="rounded-xl border border-slate-200 overflow-hidden max-h-60 overflow-y-auto">
+                                    <table class="w-full text-left text-xs border-collapse">
+                                        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px] sticky top-0 z-10 shadow-2xs">
+                                            <tr>
+                                                <th class="p-3">Sub-Kategori / Jenjang</th>
+                                                <th class="p-3">Peruntukan Porsi</th>
+                                                <th class="p-3 text-center min-w-[100px]">Laki-laki (L)</th>
+                                                <th class="p-3 text-center min-w-[100px]">Perempuan (P)</th>
+                                                <th class="p-3 text-right">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 text-slate-800">
+                                            <tr
+                                                v-for="(r, rIdx) in editFormRincian"
+                                                :key="r.sub_kategori || rIdx"
+                                                class="hover:bg-slate-50/60"
+                                            >
+                                                <td class="p-3 font-bold text-slate-900">
+                                                    {{ r.sub_kategori }}
+                                                </td>
+                                                <td class="p-3">
+                                                    <Badge
+                                                        variant="outline"
+                                                        :class="[
+                                                            'font-extrabold text-[10px]',
+                                                            r.jenis_porsi === 'Porsi Kecil'
+                                                                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                                                : 'bg-indigo-50 text-indigo-800 border-indigo-300'
+                                                        ]"
+                                                    >
+                                                        {{ r.jenis_porsi }}
+                                                    </Badge>
+                                                </td>
+                                                <td class="p-2 text-center">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="r.jumlah_laki_laki"
+                                                        class="w-20 text-center text-xs font-bold rounded-lg border-slate-300 p-1.5 focus:ring-primary focus:border-primary"
+                                                    />
+                                                </td>
+                                                <td class="p-2 text-center">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="r.jumlah_perempuan"
+                                                        class="w-20 text-center text-xs font-bold rounded-lg border-slate-300 p-1.5 focus:ring-primary focus:border-primary"
+                                                    />
+                                                </td>
+                                                <td class="p-3 text-right font-black text-slate-900">
+                                                    {{ (Number(r.jumlah_laki_laki) || 0) + (Number(r.jumlah_perempuan) || 0) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Input Khusus Kuota Siswa Alergi (Jenis Alergen Bersumber dari Master Data PM) -->
+                                <div class="p-4 rounded-xl bg-rose-50/60 border border-rose-200/80 space-y-3">
+                                    <div>
+                                        <h5 class="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                                            <AlertCircle class="h-4 w-4 text-rose-600" />
+                                            <span>Penyesuaian Jumlah Siswa Alergi (Membutuhkan Menu Substitusi)</span>
+                                        </h5>
+                                        <p class="text-[11px] text-rose-700 mt-0.5">
+                                            Daftar jenis alergen bersumber dari master data <strong>Penerima Manfaat</strong>. Anda dapat menyesuaikan jumlah kuota porsi (PK / PB) untuk Work Order ini jika ada perubahan kehadiran.
+                                        </p>
+                                    </div>
+
+                                    <!-- Tabel Daftar Alergi Terdaftar -->
+                                    <div
+                                        v-if="editFormKeteranganAlergi.length > 0"
+                                        class="rounded-lg border border-rose-200 bg-white overflow-hidden"
+                                    >
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead class="bg-rose-100/60 text-rose-900 font-bold border-b border-rose-200 uppercase text-[10px]">
+                                                <tr>
+                                                    <th class="p-3">Jenis Alergen (Master PM)</th>
+                                                    <th class="p-3 text-center min-w-[110px]">Porsi Kecil (PK)</th>
+                                                    <th class="p-3 text-center min-w-[110px]">Porsi Besar (PB)</th>
+                                                    <th class="p-3 text-right">Subtotal Alergi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-rose-100 text-slate-800">
+                                                <tr
+                                                    v-for="(alItem, alIdx) in editFormKeteranganAlergi"
+                                                    :key="alIdx"
+                                                    class="hover:bg-rose-50/40"
+                                                >
+                                                    <td class="p-3 font-bold text-slate-900 align-middle">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="h-2 w-2 rounded-full bg-rose-500 shrink-0"></span>
+                                                            <span class="text-xs font-black text-rose-950">{{ alItem.jenis_alergi }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2 text-center align-middle">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            :max="modalTotalPk"
+                                                            v-model.number="alItem.porsi_kecil"
+                                                            class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-rose-50/30 p-1.5 focus:ring-rose-400 focus:border-rose-400"
+                                                        />
+                                                    </td>
+                                                    <td class="p-2 text-center align-middle">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            :max="modalTotalPb"
+                                                            v-model.number="alItem.porsi_besar"
+                                                            class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-rose-50/30 p-1.5 focus:ring-rose-400 focus:border-rose-400"
+                                                        />
+                                                    </td>
+                                                    <td class="p-3 text-right font-black text-rose-900 text-xs align-middle">
+                                                        {{ (Number(alItem.porsi_kecil) || 0) + (Number(alItem.porsi_besar) || 0) }} Siswa
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div
+                                        v-else
+                                        class="p-4 text-center text-slate-500 text-xs bg-white rounded-xl border border-dashed border-rose-200 space-y-1"
+                                    >
+                                        <p class="font-bold text-slate-700">Tidak ada riwayat alergi yang terdaftar untuk kelompok sasaran ini.</p>
+                                        <p class="text-[11px] text-slate-500">
+                                            Penambahan atau pengelolaan jenis alergen dilakukan melalui master data <strong class="text-slate-800">Penerima Manfaat</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Live Summary Bar -->
+                                <div class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div>
+                                        <span class="text-slate-400">Hasil Rekapitulasi: </span>
+                                        <strong class="text-white ml-1">Total {{ modalTotalPm }} PM</strong>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-amber-300 font-bold">PK: {{ modalTotalPk }} Porsi</span>
+                                        <span class="text-indigo-300 font-bold">PB: {{ modalTotalPb }} Porsi</span>
+                                        <span class="text-rose-300 font-bold">Alergi: {{ modalGrandTotalAlergi }} Siswa (PK: {{ modalTotalAlergiPk }}, PB: {{ modalTotalAlergiPb }})</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    @click="showModalEditPm = false"
+                                    className="text-xs font-bold cursor-pointer"
+                                >
+                                    Batal
+                                </Button>
+                                <Button
+                                    type="button"
+                                    @click="handleSimpanEditDetailPm"
+                                    className="bg-primary hover:bg-primary/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                >
+                                    <Check class="h-4 w-4" />
+                                    <span>Simpan Perubahan</span>
+                                </Button>
+                            </div>
+                        </div>
+                    </Modal>
+                </div>
+
+                <!-- ========================================================================================= -->
+                <!-- Bagian 2: Formulasi Resep & Pre-Order (Step 2) -->
+                <!-- ========================================================================================= -->
                 <div v-if="buatMenuSubTab === 'pre_order'" class="space-y-6">
                     <!-- Header Pre-Order Card -->
                     <Card className="bg-white border-slate-200 shadow-xs">
@@ -1757,9 +2995,7 @@ const tkpiCategoryList = computed(() => {
                                         >
                                     </CardTitle>
                                     <CardDescription class="text-xs sm:text-sm">
-                                        Penentuan menu, gramasi bahan, konversi
-                                        ke kebutuhan kotor (BDD, Buffer %), dan
-                                        penyusunan Draft PO.
+                                        Penentuan gramasi bahan makanan per porsi, konversi ke kebutuhan kotor (BDD & Buffer %), serta pengajuan Draft PO ke Akuntan.
                                     </CardDescription>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -1775,39 +3011,123 @@ const tkpiCategoryList = computed(() => {
                             </div>
                         </CardHeader>
                         <CardContent className="p-4 sm:p-5 space-y-4">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <!-- Nama Menu -->
-                                <div class="md:col-span-2 space-y-1.5">
-                                    <label
-                                        class="text-xs font-bold text-slate-700"
-                                        >Nama Menu Produksi MBG:
-                                        <span class="text-rose-500"
-                                            >*</span
-                                        ></label
-                                    >
-                                    <input
-                                        type="text"
-                                        v-model="namaMenuAktif"
-                                        required
-                                        placeholder="Contoh: Paket Nasi Kuning Ayam Suwir, Tempe Orek & Pisang..."
-                                        class="w-full text-xs font-bold text-slate-900 rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-slate-50/40"
-                                    />
+
+                            <!-- ========================================================================= -->
+                            <!-- BANNER ANALISA & REKOMENDASI ALERGI BERDASARKAN NAMA MENU & DETAIL PM -->
+                            <!-- ========================================================================= -->
+                            <!-- Case 1: Terdeteksi Alergen pada Judul Menu yang bentrok dengan PM Alergi (Warning Amber/Rose) -->
+                            <div
+                                v-if="analisaAlergiMenu.hasConflicts"
+                                class="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border-2 border-amber-300 shadow-xs space-y-3.5 animate-in fade-in"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                            <AlertTriangle class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <h4 class="text-sm font-black text-amber-950">
+                                                    Peringatan Alergen Menu: Terdeteksi Bahan yang Berpotensi Alergi
+                                                </h4>
+                                                <Badge class="bg-rose-600 text-white font-extrabold text-[10px] px-2 py-0.5">
+                                                    {{ analisaAlergiMenu.conflicts.length }} Alergen Teridentifikasi
+                                                </Badge>
+                                            </div>
+                                            <p class="text-xs text-amber-800 mt-0.5">
+                                                Nama menu <em>"{{ namaMenuAktif }}"</em> mengandung bahan yang cocok dengan data riwayat alergi siswa/penerima aktif hari ini.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <!-- Tanggal Rencana -->
-                                <div class="space-y-1.5">
-                                    <label
-                                        class="text-xs font-bold text-slate-700"
-                                        >Tanggal Rencana Masak & Distribusi:
-                                        <span class="text-rose-500"
-                                            >*</span
-                                        ></label
+
+                                <!-- Grid Kartu Benturan Alergen & Rekomendasi Substitusi -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                    <div
+                                        v-for="(cf, cfIdx) in analisaAlergiMenu.conflicts"
+                                        :key="cfIdx"
+                                        class="p-3.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs space-y-2"
                                     >
-                                    <input
-                                        type="date"
-                                        v-model="tanggalRencana"
-                                        required
-                                        class="w-full text-xs font-bold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5"
-                                    />
+                                        <div class="flex items-center justify-between gap-2 border-b border-amber-100 pb-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="px-2 py-0.5 rounded text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                                    {{ cf.jenis_alergi }}
+                                                </span>
+                                                <span class="text-[11px] text-slate-500">
+                                                    (Kata kunci menu: <strong>"{{ cf.keyword }}"</strong>)
+                                                </span>
+                                            </div>
+                                            <span class="text-xs font-black text-rose-900 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                                {{ cf.total }} Siswa Kena
+                                            </span>
+                                        </div>
+
+                                        <div class="text-xs space-y-1">
+                                            <div class="flex items-center justify-between text-slate-600">
+                                                <span>Porsi Pengganti Diperlukan:</span>
+                                                <strong class="text-slate-900">PK: {{ cf.porsi_kecil }} • PB: {{ cf.porsi_besar }}</strong>
+                                            </div>
+                                            <div class="text-[11px] text-slate-500">
+                                                Kelompok terdampak: {{ cf.kelompok_names.join(', ') || '-' }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Rekomendasi Ahli Gizi -->
+                                        <div class="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-950 flex items-start gap-2 text-xs">
+                                            <Lightbulb class="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                                            <div>
+                                                <strong class="text-emerald-900 font-bold block text-[11px]">Rekomendasi Bahan Pengganti:</strong>
+                                                <span class="text-[11px] text-emerald-800 font-medium leading-relaxed">
+                                                    Tambahkan formulasi bahan pangan <em>{{ cf.rekomendasi }}</em> dengan peruntukan porsi <strong>"Alergi: {{ cf.jenis_alergi }}"</strong> untuk {{ cf.total }} porsi.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Case 2: Ada Siswa Alergi Aktif tapi tidak ada kata kunci bentrok langsung di judul menu (Info Pengingat) -->
+                            <div
+                                v-else-if="analisaAlergiMenu.totalSiswaAlergi > 0"
+                                class="p-4 rounded-2xl bg-sky-50/80 border border-sky-200 shadow-xs space-y-3"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-9 w-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0">
+                                            <Info class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs sm:text-sm font-bold text-sky-950 flex items-center gap-2">
+                                                <span>Pengingat Rekapitulasi Alergi PM Terjadwal ({{ analisaAlergiMenu.totalSiswaAlergi }} Siswa)</span>
+                                            </h4>
+                                            <p class="text-xs text-sky-800 mt-0.5">
+                                                Meskipun nama menu tidak menyebutkan alergen langsung, terdapat siswa aktif dengan riwayat alergi khusus. Pastikan bahan dan bumbu aman dari kontaminasi silang.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    <div
+                                        v-for="(al, alIdx) in analisaAlergiMenu.activeAlergiList"
+                                        :key="alIdx"
+                                        class="px-3 py-1.5 rounded-xl bg-white border border-sky-200 text-xs flex items-center gap-2 shadow-2xs"
+                                    >
+                                        <span class="font-bold text-sky-950">{{ al.jenis_alergi }}:</span>
+                                        <span class="font-black text-rose-700">{{ al.total }} Siswa</span>
+                                        <span class="text-[10px] text-slate-500">(PK: {{ al.porsi_kecil }}, PB: {{ al.porsi_besar }})</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Case 3: Zero Alergi Terdaftar pada Kelompok Aktif (Green Safe) -->
+                            <div
+                                v-else
+                                class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3 text-xs text-emerald-900"
+                            >
+                                <CheckCircle2 class="h-5 w-5 text-emerald-600 shrink-0" />
+                                <div>
+                                    <strong class="font-bold">Status Alergen Aman:</strong> Seluruh {{ totalPM }} penerima manfaat pada kelompok aktif hari ini tidak memiliki catatan alergi khusus. Semua porsi dapat disiapkan dengan formulasi menu standar.
                                 </div>
                             </div>
 
