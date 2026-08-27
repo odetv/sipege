@@ -1658,7 +1658,7 @@ onBeforeUnmount(() => {
                     <!-- Floating Top Right Action & Info Bar -->
                     <div
                         class="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 flex items-center gap-1.5 sm:gap-2 select-none flex-wrap justify-end pl-12"
-                        style="z-index: 1000"
+                        style="z-index: 400"
                     >
                         <!-- Floating Counter Badge -->
                         <div

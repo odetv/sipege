@@ -61,7 +61,7 @@ defineExpose({
         <div
             v-if="isMobileSidebarOpen"
             @click="closeMobileSidebar"
-            class="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs lg:hidden transition-opacity"
+            class="fixed inset-0 z-[9998] bg-slate-900/40 backdrop-blur-xs lg:hidden transition-opacity"
         ></div>
 
         <!-- Reusable Sidebar -->

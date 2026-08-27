@@ -34,15 +34,31 @@ class GiziController extends Controller
     }
 
     /**
-     * Sub-menu 3: Buat Menu (Penyusunan Resep, Evaluasi AKG, Food Cost & PO).
+     * Sub-menu 3: Daftar Menu (Jadwal & Siklus Menu Harian MBG).
      */
-    public function buatMenu(Request $request): Response
+    public function daftarMenu(Request $request): Response
     {
-        return $this->renderGiziView($request, 'buat-menu');
+        return $this->renderGiziView($request, 'daftar-menu');
     }
 
     /**
-     * Sub-menu 4: Kalender Menu (Jadwal & Siklus Menu Harian MBG).
+     * Sub-menu 4: Rancang Menu (Perencanaan Produksi & Formulasi Gizi).
+     */
+    public function rancangMenu(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'rancang-menu', $request->query('step'));
+    }
+
+    /**
+     * Alias Buat Menu.
+     */
+    public function buatMenu(Request $request): Response
+    {
+        return $this->rancangMenu($request);
+    }
+
+    /**
+     * Sub-menu 5: Kalender Menu (Jadwal & Siklus Menu Harian MBG).
      */
     public function kalenderMenu(Request $request): Response
     {
@@ -52,7 +68,7 @@ class GiziController extends Controller
     /**
      * Helper render view Gizi dengan data lengkap dan activeTab.
      */
-    private function renderGiziView(Request $request, string $activeTab): Response
+    private function renderGiziView(Request $request, string $activeTab, ?string $step = null): Response
     {
         $user = $request->user()->load('unitSppg');
         $unitSppg = $user->unitSppg;
@@ -88,6 +104,7 @@ class GiziController extends Controller
             'kelompokList' => $kelompokList,
             'tkpiList' => $this->getTkpiData(),
             'activeTab' => $activeTab,
+            'initialStep' => $step,
             'stats' => [
                 'total_kelompok' => count($kelompokList),
                 'total_sekolah' => $kelompokList->where('kategori', '!=', 'Posyandu')->count(),

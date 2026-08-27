@@ -16,6 +16,20 @@ import {
     BarChart3,
     Utensils,
     CalendarDays,
+    FileSpreadsheet,
+    ClipboardList,
+    Receipt,
+    Coins,
+    CreditCard,
+    BookOpen,
+    Landmark,
+    Banknote,
+    Package,
+    Sliders,
+    Building,
+    FileCheck2,
+    ShieldCheck,
+    FileSignature,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -41,7 +55,39 @@ const props = defineProps({
 
 const emit = defineEmits(["update:isMobileOpen", "update:isCollapsed"]);
 
-const isGiziExpanded = ref(true);
+const page = usePage();
+
+const isGiziActive = computed(() => {
+    try {
+        return route().current("gizi.*");
+    } catch {
+        return false;
+    }
+});
+
+const isKeuanganActive = computed(() => {
+    try {
+        return route().current("keuangan.*");
+    } catch {
+        return false;
+    }
+});
+
+// Default tertutup, hanya terbuka jika sub-menunya sedang aktif/dibuka
+const isGiziExpanded = ref(isGiziActive.value);
+const isKeuanganExpanded = ref(isKeuanganActive.value);
+
+watch(
+    () => page.url,
+    () => {
+        if (isGiziActive.value) {
+            isGiziExpanded.value = true;
+        }
+        if (isKeuanganActive.value) {
+            isKeuanganExpanded.value = true;
+        }
+    }
+);
 
 function toggleGiziMenu() {
     if (props.isCollapsed) {
@@ -52,7 +98,15 @@ function toggleGiziMenu() {
     }
 }
 
-const page = usePage();
+function toggleKeuanganMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+        isKeuanganExpanded.value = true;
+    } else {
+        isKeuanganExpanded.value = !isKeuanganExpanded.value;
+    }
+}
+
 const currentUser = computed(() => {
     return props.user?.nama || props.user?.name
         ? props.user
@@ -94,12 +148,12 @@ function logout() {
     <!-- ================= SHADCN SIDEBAR (EXPAND / COLLAPSE) ================= -->
     <aside
         :class="[
-            'fixed inset-y-0 left-0 z-50 h-screen bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none',
+            'fixed inset-y-0 left-0 z-[9999] h-screen bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none',
             // Tampilan Mobile: Selalu w-64, slide in/out dengan transform
             'w-64',
             isMobileOpen ? 'translate-x-0' : '-translate-x-full',
             // Tampilan Desktop: Static, lebar mengikuti isCollapsed
-            'lg:static lg:h-screen lg:shrink-0 lg:translate-x-0',
+            'lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 lg:z-auto',
             isCollapsed ? 'lg:w-20' : 'lg:w-64',
         ]"
     >
@@ -268,10 +322,10 @@ function logout() {
                         />
                     </button>
 
-                    <!-- Sub-menu Items (TKPI, Analisa PM, Buat Menu, Kalender Menu) -->
+                    <!-- Sub-menu Items: TKPI, Analisa PM, Daftar Menu, Buat Menu (Perencanaan, Formula Gizi) -->
                     <div
                         v-if="!isCollapsed && isGiziExpanded"
-                        class="pl-4 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                     >
                         <!-- Sub-menu 1: TKPI -->
                         <Link
@@ -301,68 +355,244 @@ function logout() {
                             <span class="truncate">Analisa PM</span>
                         </Link>
 
-                        <!-- Sub-menu 3: Buat Menu -->
+                        <!-- Sub-menu 3: Daftar Menu -->
                         <Link
-                            :href="route('gizi.buat-menu')"
+                            :href="route('gizi.daftar-menu')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.buat-menu') || (route().current('gizi.index') && page.props.activeTab === 'buat-menu')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Utensils class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Buat Menu</span>
-                        </Link>
-
-                        <!-- Sub-menu 4: Kalender Menu -->
-                        <Link
-                            :href="route('gizi.kalender-menu')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.kalender-menu') || (route().current('gizi.index') && page.props.activeTab === 'kalender-menu')
+                                route().current('gizi.daftar-menu') || route().current('gizi.kalender-menu') || (route().current('gizi.index') && (page.props.activeTab === 'daftar-menu' || page.props.activeTab === 'kalender-menu'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <CalendarDays class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Kalender Menu</span>
+                            <span class="truncate">Daftar Menu</span>
+                        </Link>
+
+                        <!-- Sub-menu 4: Rancang Menu -->
+                        <Link
+                            :href="route('gizi.rancang-menu')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.rancang-menu') || route().current('gizi.buat-menu') || (route().current('gizi.index') && (page.props.activeTab === 'rancang-menu' || page.props.activeTab === 'buat-menu'))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Utensils class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rancang Menu</span>
                         </Link>
                     </div>
                 </div>
 
-                <!-- 4. Menu Keuangan -->
-                <Link
-                    :href="route('keuangan.index')"
-                    :title="isCollapsed ? 'Keuangan' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('keuangan.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Wallet class="h-4 w-4 shrink-0" />
-                    <span
+                <!-- 4. Menu Keuangan (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Keuangan Button -->
+                    <button
+                        type="button"
+                        @click="toggleKeuanganMenu"
+                        :title="isCollapsed ? 'Keuangan' : ''"
                         :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Keuangan</span
-                    >
-                    <div
-                        v-if="route().current('keuangan.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            route().current('keuangan.*')
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
                         ]"
-                    ></div>
-                </Link>
+                    >
+                        <Wallet class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Keuangan</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isKeuanganExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items under Keuangan: 12 Sub-menu Lengkap -->
+                    <div
+                        v-if="!isCollapsed && isKeuanganExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- 1. Anggaran -->
+                        <Link
+                            :href="route('keuangan.anggaran')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.anggaran') || (route().current('keuangan.index') && (page.props.activeTab === 'anggaran' || !page.props.activeTab))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Coins class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Anggaran</span>
+                        </Link>
+
+                        <!-- 2. Daftar PO -->
+                        <Link
+                            :href="route('keuangan.daftar-po')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.daftar-po') || route().current('keuangan.daftar_po') || (route().current('keuangan.*') && (page.props.activeTab === 'daftar-po' || page.props.activeTab === 'daftar_po'))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Receipt class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Daftar PO</span>
+                        </Link>
+
+                        <!-- 3. Transaksi -->
+                        <Link
+                            :href="route('keuangan.transaksi')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.transaksi') || (route().current('keuangan.*') && page.props.activeTab === 'transaksi')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CreditCard class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Transaksi</span>
+                        </Link>
+
+                        <!-- 4. BKU -->
+                        <Link
+                            :href="route('keuangan.bku')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bku') || (route().current('keuangan.*') && page.props.activeTab === 'bku')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <BookOpen class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BKU</span>
+                        </Link>
+
+                        <!-- 5. BP Bank -->
+                        <Link
+                            :href="route('keuangan.bp-bank')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bp-bank') || (route().current('keuangan.*') && page.props.activeTab === 'bp-bank')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Landmark class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BP Bank</span>
+                        </Link>
+
+                        <!-- 6. BP Petty Cash -->
+                        <Link
+                            :href="route('keuangan.bp-petty-cash')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bp-petty-cash') || (route().current('keuangan.*') && page.props.activeTab === 'bp-petty-cash')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Banknote class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BP Petty Cash</span>
+                        </Link>
+
+                        <!-- 7. BP Bahan Baku -->
+                        <Link
+                            :href="route('keuangan.bp-bahan-baku')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bp-bahan-baku') || (route().current('keuangan.*') && page.props.activeTab === 'bp-bahan-baku')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Package class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BP Bahan Baku</span>
+                        </Link>
+
+                        <!-- 8. BP Operasional -->
+                        <Link
+                            :href="route('keuangan.bp-operasional')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bp-operasional') || (route().current('keuangan.*') && page.props.activeTab === 'bp-operasional')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Sliders class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BP Operasional</span>
+                        </Link>
+
+                        <!-- 9. BP Fasilitas -->
+                        <Link
+                            :href="route('keuangan.bp-fasilitas')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bp-fasilitas') || (route().current('keuangan.*') && page.props.activeTab === 'bp-fasilitas')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Building class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BP Fasilitas</span>
+                        </Link>
+
+                        <!-- 10. LPA -->
+                        <Link
+                            :href="route('keuangan.lpa')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.lpa') || (route().current('keuangan.*') && page.props.activeTab === 'lpa')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileCheck2 class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">LPA</span>
+                        </Link>
+
+                        <!-- 11. SPTJ -->
+                        <Link
+                            :href="route('keuangan.sptj')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.sptj') || (route().current('keuangan.*') && page.props.activeTab === 'sptj')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <ShieldCheck class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">SPTJ</span>
+                        </Link>
+
+                        <!-- 12. BAPSD -->
+                        <Link
+                            :href="route('keuangan.bapsd')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.bapsd') || (route().current('keuangan.*') && page.props.activeTab === 'bapsd')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileSignature class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">BAPSD</span>
+                        </Link>
+                    </div>
+                </div>
 
                 <!-- 5. Menu Label -->
                 <Link
@@ -445,37 +675,44 @@ function logout() {
                 </div>
             </div>
 
-            <!-- Tombol Halaman Utama (Beranda) -->
-            <Link
-                :href="route('home')"
-                :title="isCollapsed ? 'Halaman Utama' : ''"
+            <!-- 2 Tombol 1 Baris: Kiri Icon Halaman Utama (Tanpa Teks), Kanan Tombol Keluar -->
+            <div
                 :class="[
-                    'w-full flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-100 hover:text-slate-900 bg-white shadow-2xs cursor-pointer transition-all rounded-lg',
-                    isCollapsed ? 'h-9 px-3 lg:h-10 lg:p-0' : 'h-9 px-3',
+                    'items-center gap-2',
+                    isCollapsed ? 'flex flex-col lg:flex-col' : 'flex',
                 ]"
             >
-                <Home class="h-4 w-4 shrink-0 text-slate-500" />
-                <span :class="[isCollapsed ? 'inline lg:hidden' : 'inline']">
-                    Halaman Utama
-                </span>
-            </Link>
-
-            <!-- Tombol Keluar (Logout) -->
-            <Button
-                type="button"
-                variant="outline"
-                @click="logout"
-                :title="isCollapsed ? 'Keluar' : ''"
-                :class="[
-                    'w-full flex items-center justify-center gap-2 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 bg-white shadow-2xs cursor-pointer transition-all',
-                    isCollapsed ? 'h-9 px-3 lg:h-10 lg:p-0' : 'h-9 px-3',
-                ]"
-            >
-                <LogOut class="h-4 w-4 shrink-0" />
-                <span :class="[isCollapsed ? 'inline lg:hidden' : 'inline']"
-                    >Keluar</span
+                <!-- Tombol Halaman Utama (Icon Saja) -->
+                <Link
+                    :href="route('home')"
+                    title="Halaman Utama"
+                    :class="[
+                        'flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 shadow-2xs cursor-pointer transition-all shrink-0',
+                        isCollapsed ? 'h-9 w-full lg:h-10 lg:w-full' : 'h-9 w-10',
+                    ]"
                 >
-            </Button>
+                    <Home class="h-4 w-4 text-slate-600" />
+                </Link>
+
+                <!-- Tombol Keluar (Tetap ada Bacaan Teks Keluar) -->
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="logout"
+                    title="Keluar"
+                    :class="[
+                        'flex items-center justify-center gap-1.5 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 bg-white shadow-2xs cursor-pointer transition-all rounded-lg',
+                        isCollapsed
+                            ? 'h-9 w-full lg:h-10 lg:w-full p-0'
+                            : 'h-9 flex-1 px-3',
+                    ]"
+                >
+                    <LogOut class="h-4 w-4 shrink-0" />
+                    <span :class="[isCollapsed ? 'inline lg:hidden' : 'inline']">
+                        Keluar
+                    </span>
+                </Button>
+            </div>
         </div>
     </aside>
 </template>

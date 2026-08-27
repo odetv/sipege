@@ -83,6 +83,10 @@ const props = defineProps({
         type: String,
         default: "tkpi",
     },
+    initialStep: {
+        type: String,
+        default: null,
+    },
     stats: {
         type: Object,
         default: () => ({
@@ -95,8 +99,8 @@ const props = defineProps({
     },
 });
 
-// 4 Sub-Menu Utama Gizi SPPG
-// 'tkpi' | 'analisa-pm' | 'buat-menu' | 'kalender-menu'
+// Sub-Menu Utama Gizi SPPG
+// 'tkpi' | 'analisa-pm' | 'daftar-menu' | 'buat-menu' | 'kalender-menu'
 const activeSubMenu = ref(props.activeTab || "tkpi");
 
 watch(
@@ -124,20 +128,20 @@ const subMenus = [
         routeName: "gizi.analisa-pm",
     },
     {
-        id: "buat-menu",
+        id: "daftar-menu",
         no: "3",
-        title: "Buat Menu",
-        subtitle: "Resep, AKG & Food Cost",
-        icon: UtensilsCrossed,
-        routeName: "gizi.buat-menu",
+        title: "Daftar Menu",
+        subtitle: "Tabel Work Order & Menu MBG",
+        icon: FileSpreadsheet,
+        routeName: "gizi.daftar-menu",
     },
     {
-        id: "kalender-menu",
+        id: "rancang-menu",
         no: "4",
-        title: "Kalender Menu",
-        subtitle: "Siklus Menu Harian",
-        icon: CalendarDays,
-        routeName: "gizi.kalender-menu",
+        title: "Rancang Menu",
+        subtitle: "Perencanaan & Formula Gizi",
+        icon: UtensilsCrossed,
+        routeName: "gizi.rancang-menu",
     },
 ];
 
@@ -151,8 +155,32 @@ function selectSubMenu(menu) {
     }
 }
 
-// Sub-Tab di dalam modul Buat Menu (3 Langkah Terpadu)
-const buatMenuSubTab = ref("work_order");
+// Sub-Tab di dalam modul Buat Menu (Perencanaan & Formulasi Gizi)
+const normalizeStep = (step) => {
+    if (
+        step === "pre_order" ||
+        step === "formula-gizi" ||
+        step === "formula_gizi"
+    )
+        return "pre_order";
+    if (
+        step === "order" ||
+        step === "pembelian_bahan" ||
+        step === "pembelian-bahan"
+    )
+        return "order";
+    return "work_order";
+};
+
+const buatMenuSubTab = ref(normalizeStep(props.initialStep));
+
+watch(
+    () => props.initialStep,
+    (step) => {
+        if (step) buatMenuSubTab.value = normalizeStep(step);
+    },
+);
+
 const buatMenuSubTabs = [
     {
         id: "work_order",
@@ -161,7 +189,7 @@ const buatMenuSubTabs = [
     },
     {
         id: "pre_order",
-        label: "2. Formulasi Gizi",
+        label: "2. Formula Gizi",
         icon: ClipboardList,
     },
     {
@@ -480,6 +508,105 @@ const jadwalMenuBulan = ref([
         ],
     },
 ]);
+
+// ==========================================
+// DAFTAR MENU & REKAP WORK ORDER (TAB DAFTAR MENU)
+// ==========================================
+const searchDaftarMenu = ref("");
+const statusFilterDaftarMenu = ref("semua");
+
+const daftarMenuList = ref([
+    {
+        id: "WO-MBG-20260825",
+        nama: "Ayam Goreng Lengkuas, Sayur Bayam Jagung Manis, Tempe Bacem & Pisang Cavendish",
+        tanggal: "2026-08-25",
+        siklus: "Hari ke-1",
+        porsi_pk: 733,
+        porsi_pb: 1175,
+        total_porsi: 1908,
+        energi_pk: 465,
+        protein_pk: 16.2,
+        energi_pb: 685,
+        protein_pb: 24.5,
+        cost_pk: 7850,
+        cost_pb: 9900,
+        status_akg: "memenuhi",
+        status_wo: "Terkonfirmasi",
+        po_no: "PO-20260825-001",
+    },
+    {
+        id: "WO-MBG-20260826",
+        nama: "Ikan Kembung Bakar Kecap, Tumis Buncis Wortel Tempe, Tahu Goreng & Jeruk Manis",
+        tanggal: "2026-08-26",
+        siklus: "Hari ke-2",
+        porsi_pk: 733,
+        porsi_pb: 1175,
+        total_porsi: 1908,
+        energi_pk: 470,
+        protein_pk: 16.8,
+        energi_pb: 690,
+        protein_pb: 25.1,
+        cost_pk: 7920,
+        cost_pb: 9850,
+        status_akg: "memenuhi",
+        status_wo: "Siap Produksi",
+        po_no: "PO-20260826-002",
+    },
+    {
+        id: "WO-MBG-20260827",
+        nama: "Semur Telur Ayam & Tahu Tempe, Sayur Sop Komplit, Kerupuk & Pepaya Potong",
+        tanggal: "2026-08-27",
+        siklus: "Hari ke-3",
+        porsi_pk: 733,
+        porsi_pb: 1175,
+        total_porsi: 1908,
+        energi_pk: 455,
+        protein_pk: 15.5,
+        energi_pb: 675,
+        protein_pb: 23.8,
+        cost_pk: 7650,
+        cost_pb: 9600,
+        status_akg: "memenuhi",
+        status_wo: "Draft WO",
+        po_no: "PO-20260827-003",
+    },
+    {
+        id: "WO-MBG-20260828",
+        nama: "Daging Sapi Cincang Saus Tiram, Capcay Sayuran Segar, Tahu Bakso & Semangka",
+        tanggal: "2026-08-28",
+        siklus: "Hari ke-4",
+        porsi_pk: 733,
+        porsi_pb: 1175,
+        total_porsi: 1908,
+        energi_pk: 480,
+        protein_pk: 17.5,
+        energi_pb: 710,
+        protein_pb: 26.2,
+        cost_pk: 7980,
+        cost_pb: 9980,
+        status_akg: "memenuhi",
+        status_wo: "Draft WO",
+        po_no: "PO-20260828-004",
+    },
+]);
+
+const filteredDaftarMenu = computed(() => {
+    return daftarMenuList.value.filter((m) => {
+        const matchSearch =
+            !searchDaftarMenu.value ||
+            m.id.toLowerCase().includes(searchDaftarMenu.value.toLowerCase()) ||
+            m.nama
+                .toLowerCase()
+                .includes(searchDaftarMenu.value.toLowerCase()) ||
+            m.tanggal.includes(searchDaftarMenu.value);
+        const matchStatus =
+            statusFilterDaftarMenu.value === "semua" ||
+            m.status_wo
+                .toLowerCase()
+                .includes(statusFilterDaftarMenu.value.toLowerCase());
+        return matchSearch && matchStatus;
+    });
+});
 
 // ==========================================
 // 1. STATE WORK ORDER & PRE-ORDER (AHLI GIZI)
@@ -1888,58 +2015,6 @@ const tkpiCategoryList = computed(() => {
         <Head title="Gizi" />
 
         <div class="space-y-6">
-            <!-- TOP SUB-MENU NAVIGATOR (4 Menu Gizi) -->
-            <div
-                class="bg-white rounded-2xl border border-slate-200/90 p-2.5 shadow-xs print:hidden"
-            >
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <button
-                        v-for="menu in subMenus"
-                        :key="menu.id"
-                        type="button"
-                        @click="selectSubMenu(menu)"
-                        :class="[
-                            'p-3 rounded-xl transition-all flex items-center gap-3 cursor-pointer text-left border',
-                            activeSubMenu === menu.id
-                                ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-bold'
-                                : 'bg-slate-50/70 hover:bg-slate-100/90 text-slate-700 border-slate-200/80 hover:border-slate-300 font-semibold',
-                        ]"
-                    >
-                        <div
-                            :class="[
-                                'h-8 w-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors shadow-2xs',
-                                activeSubMenu === menu.id
-                                    ? 'bg-white text-primary font-black'
-                                    : 'bg-white text-slate-700 font-black border border-slate-200',
-                            ]"
-                        >
-                            {{ menu.no }}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p
-                                class="text-xs sm:text-sm leading-snug font-extrabold truncate flex items-center gap-1.5"
-                            >
-                                <component
-                                    :is="menu.icon"
-                                    class="h-3.5 w-3.5 shrink-0 opacity-80"
-                                />
-                                <span>{{ menu.title }}</span>
-                            </p>
-                            <p
-                                :class="[
-                                    'text-[10.5px] leading-tight font-medium truncate mt-0.5',
-                                    activeSubMenu === menu.id
-                                        ? 'text-blue-100'
-                                        : 'text-slate-400',
-                                ]"
-                            >
-                                {{ menu.subtitle }}
-                            </p>
-                        </div>
-                    </button>
-                </div>
-            </div>
-
             <!-- ========================================================================================= -->
             <!-- 1. SUB MENU 1: TKPI (TABEL KOMPOSISI PANGAN INDONESIA) -->
             <!-- ========================================================================================= -->
@@ -2727,10 +2802,352 @@ const tkpiCategoryList = computed(() => {
             </div>
 
             <!-- ========================================================================================= -->
-            <!-- 3. SUB MENU 3: BUAT MENU (RESEP, AKG, FOOD COST, PO) -->
+            <!-- 3. SUB MENU 3: DAFTAR MENU (TABEL WORK ORDER & MENU MBG TERENCANA) -->
             <!-- ========================================================================================= -->
-            <div v-if="activeSubMenu === 'buat-menu'" class="space-y-6">
-                <!-- Sub-tab pill bar for Buat Menu -->
+            <div v-if="activeSubMenu === 'daftar-menu'" class="space-y-6">
+                <!-- Metrics Ringkasan Menu -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <Card className="bg-white border-slate-200/80 shadow-xs">
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div
+                                class="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100"
+                            >
+                                <FileSpreadsheet class="h-5 w-5" />
+                            </div>
+                            <div class="min-w-0">
+                                <p
+                                    class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                                >
+                                    Total Menu Terencana
+                                </p>
+                                <h3
+                                    class="text-lg sm:text-xl font-extrabold text-blue-900 mt-0.5"
+                                >
+                                    {{ daftarMenuList.length }} Menu WO
+                                </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/80 shadow-xs">
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div
+                                class="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"
+                            >
+                                <Users class="h-5 w-5" />
+                            </div>
+                            <div class="min-w-0">
+                                <p
+                                    class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                                >
+                                    Total Porsi Sasaran
+                                </p>
+                                <h3
+                                    class="text-lg sm:text-xl font-extrabold text-emerald-900 mt-0.5"
+                                >
+                                    {{
+                                        daftarMenuList
+                                            .reduce(
+                                                (acc, m) => acc + m.total_porsi,
+                                                0,
+                                            )
+                                            .toLocaleString("id-ID")
+                                    }}
+                                    Porsi
+                                </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/80 shadow-xs">
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div
+                                class="h-11 w-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100"
+                            >
+                                <Coins class="h-5 w-5" />
+                            </div>
+                            <div class="min-w-0">
+                                <p
+                                    class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                                >
+                                    Rata-rata PK (Pagu: Rp 8rb)
+                                </p>
+                                <h3
+                                    class="text-lg sm:text-xl font-bold text-amber-900 mt-0.5"
+                                >
+                                    Rp 7.850
+                                    <span
+                                        class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 py-0.5 rounded"
+                                        >Hemat</span
+                                    >
+                                </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/80 shadow-xs">
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div
+                                class="h-11 w-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100"
+                            >
+                                <Utensils class="h-5 w-5" />
+                            </div>
+                            <div class="min-w-0">
+                                <p
+                                    class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider"
+                                >
+                                    Rata-rata PB (Pagu: Rp 10rb)
+                                </p>
+                                <h3
+                                    class="text-lg sm:text-xl font-bold text-indigo-900 mt-0.5"
+                                >
+                                    Rp 9.832
+                                    <span
+                                        class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 py-0.5 rounded"
+                                        >Hemat</span
+                                    >
+                                </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <!-- Card Tabel Daftar Menu -->
+                <Card
+                    className="bg-white border-slate-200 shadow-xs overflow-hidden"
+                >
+                    <CardHeader
+                        className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    >
+                        <div>
+                            <CardTitle
+                                className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
+                            >
+                                <FileSpreadsheet class="h-5 w-5 text-primary" />
+                                <span
+                                    >Daftar Menu & Rekap Work Order (WO)
+                                    SPPG</span
+                                >
+                            </CardTitle>
+                            <CardDescription class="text-xs sm:text-sm">
+                                Seluruh formulasi menu dan work order produksi
+                                makanan bergizi yang telah disusun.
+                            </CardDescription>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <div class="relative w-48 sm:w-60">
+                                <Search
+                                    class="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                                />
+                                <input
+                                    v-model="searchDaftarMenu"
+                                    type="text"
+                                    placeholder="Cari No. WO / Menu..."
+                                    class="w-full pl-9 pr-3 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                            <select
+                                v-model="statusFilterDaftarMenu"
+                                class="px-3 py-1.5 rounded-lg text-xs border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                            >
+                                <option value="semua">Semua Status</option>
+                                <option value="Terkonfirmasi">
+                                    Terkonfirmasi
+                                </option>
+                                <option value="Siap Produksi">
+                                    Siap Produksi
+                                </option>
+                                <option value="Draft">Draft WO</option>
+                            </select>
+                            <Link
+                                :href="route('gizi.rancang-menu')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <Plus class="h-3.5 w-3.5" />
+                                <span>Rancang Menu Baru</span>
+                            </Link>
+                        </div>
+                    </CardHeader>
+                    <div class="overflow-x-auto">
+                        <table
+                            class="w-full min-w-[900px] text-left text-xs border-collapse"
+                        >
+                            <thead
+                                class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
+                            >
+                                <tr>
+                                    <th class="p-3.5">No. Work Order</th>
+                                    <th class="p-3.5">Tanggal Distribusi</th>
+                                    <th class="p-3.5">Nama & Komposisi Menu</th>
+                                    <th class="p-3.5 text-center">
+                                        Porsi Sasaran
+                                    </th>
+                                    <th class="p-3.5 text-center">
+                                        Evaluasi AKG
+                                    </th>
+                                    <th class="p-3.5 text-right">
+                                        Food Cost PK / PB
+                                    </th>
+                                    <th class="p-3.5 text-center">Status</th>
+                                    <th class="p-3.5 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                class="divide-y divide-slate-100 text-slate-800"
+                            >
+                                <tr
+                                    v-for="menu in filteredDaftarMenu"
+                                    :key="menu.id"
+                                    class="hover:bg-slate-50/70 transition-colors"
+                                >
+                                    <td
+                                        class="p-3.5 font-mono font-bold text-primary"
+                                    >
+                                        <div class="flex items-center gap-1.5">
+                                            <span>{{ menu.id }}</span>
+                                        </div>
+                                        <span
+                                            class="inline-block mt-0.5 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-semibold"
+                                        >
+                                            {{ menu.siklus }}
+                                        </span>
+                                    </td>
+                                    <td
+                                        class="p-3.5 font-medium text-slate-600 whitespace-nowrap"
+                                    >
+                                        {{ formatTanggalIndo(menu.tanggal) }}
+                                    </td>
+                                    <td class="p-3.5 max-w-sm">
+                                        <p
+                                            class="font-bold text-slate-900 leading-snug"
+                                        >
+                                            {{ menu.nama }}
+                                        </p>
+                                        <div
+                                            class="flex items-center gap-2 mt-1 text-[10.5px] text-slate-500 font-medium"
+                                        >
+                                            <span
+                                                >PK: {{ menu.energi_pk }} kkal /
+                                                {{ menu.protein_pk }}g
+                                                Prot</span
+                                            >
+                                            <span>•</span>
+                                            <span
+                                                >PB: {{ menu.energi_pb }} kkal /
+                                                {{ menu.protein_pb }}g
+                                                Prot</span
+                                            >
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <span
+                                            class="font-black text-slate-900 block text-xs"
+                                        >
+                                            {{
+                                                menu.total_porsi.toLocaleString(
+                                                    "id-ID",
+                                                )
+                                            }}
+                                            PM
+                                        </span>
+                                        <span
+                                            class="text-[10px] text-slate-500 block"
+                                        >
+                                            {{ menu.porsi_pk }} PK /
+                                            {{ menu.porsi_pb }} PB
+                                        </span>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <Badge
+                                            variant="outline"
+                                            className="bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold text-[10.5px]"
+                                        >
+                                            ✓ MEMENUHI AKG
+                                        </Badge>
+                                    </td>
+                                    <td
+                                        class="p-3.5 text-right whitespace-nowrap"
+                                    >
+                                        <div
+                                            class="text-[11px] font-bold text-amber-800"
+                                        >
+                                            PK: {{ formatRupiah(menu.cost_pk) }}
+                                        </div>
+                                        <div
+                                            class="text-[11px] font-bold text-indigo-800"
+                                        >
+                                            PB: {{ formatRupiah(menu.cost_pb) }}
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <Badge
+                                            variant="outline"
+                                            :className="
+                                                menu.status_wo ===
+                                                'Terkonfirmasi'
+                                                    ? 'bg-blue-50 text-blue-700 border-blue-300 font-bold text-[10.5px]'
+                                                    : menu.status_wo ===
+                                                        'Siap Produksi'
+                                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-bold text-[10.5px]'
+                                                      : 'bg-amber-50 text-amber-700 border-amber-300 font-bold text-[10.5px]'
+                                            "
+                                        >
+                                            {{ menu.status_wo }}
+                                        </Badge>
+                                    </td>
+                                    <td
+                                        class="p-3.5 text-center whitespace-nowrap"
+                                    >
+                                        <div
+                                            class="flex items-center justify-center gap-1.5"
+                                        >
+                                            <Link
+                                                :href="
+                                                    route('gizi.rancang-menu')
+                                                "
+                                                class="px-2 py-1 rounded text-[11px] font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-colors"
+                                                title="Lihat / Edit Formulasi Menu"
+                                            >
+                                                Edit Resep
+                                            </Link>
+                                            <Link
+                                                :href="
+                                                    route('keuangan.daftar-po')
+                                                "
+                                                class="px-2 py-1 rounded text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors"
+                                                title="Lihat Purchase Order Terkait"
+                                            >
+                                                Lihat PO
+                                            </Link>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="filteredDaftarMenu.length === 0">
+                                    <td
+                                        colspan="8"
+                                        class="p-8 text-center text-slate-400 font-semibold"
+                                    >
+                                        Tidak ada menu yang sesuai dengan filter
+                                        pencarian.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
+
+            <!-- ========================================================================================= -->
+            <!-- 4. SUB MENU 4: RANCANG MENU (PERENCANAAN & FORMULASI GIZI) -->
+            <!-- ========================================================================================= -->
+            <div
+                v-if="
+                    activeSubMenu === 'rancang-menu' ||
+                    activeSubMenu === 'buat-menu'
+                "
+                class="space-y-6"
+            >
+                <!-- Sub-tab pill bar for Rancang Menu -->
                 <div
                     class="bg-white rounded-2xl border border-slate-200/90 p-2 shadow-xs flex flex-wrap items-center gap-2 print:hidden"
                 >
@@ -2910,9 +3327,7 @@ const tkpiCategoryList = computed(() => {
                                             <FileSpreadsheet
                                                 class="h-5 w-5 text-primary"
                                             />
-                                            <span
-                                                >Perencanaan Produksi MBG</span
-                                            >
+                                            <span>Perencanaan Produksi</span>
                                         </CardTitle>
                                         <Badge
                                             variant="outline"
@@ -4100,10 +4515,7 @@ const tkpiCategoryList = computed(() => {
                                             <ClipboardList
                                                 class="h-5 w-5 text-primary"
                                             />
-                                            <span
-                                                >Formulasi Resep, Standar AKG &
-                                                Food Cost</span
-                                            >
+                                            <span>Formulasi Gizi</span>
                                         </CardTitle>
                                         <Badge
                                             variant="outline"
@@ -5788,8 +6200,8 @@ const tkpiCategoryList = computed(() => {
                                 <h4
                                     class="text-xs sm:text-sm font-black text-slate-900"
                                 >
-                                    Analisis Food Cost & Kepatuhan Pagu
-                                    Anggaran BGN
+                                    Analisis Food Cost & Kepatuhan Pagu Anggaran
+                                    BGN
                                 </h4>
                                 <p class="text-[11px] text-slate-500">
                                     Monitoring biaya bahan baku per porsi
@@ -5843,9 +6255,12 @@ const tkpiCategoryList = computed(() => {
                                             >
                                                 Food Cost Porsi Kecil (PK)
                                             </CardTitle>
-                                            <p class="text-xs text-slate-500 font-medium">
+                                            <p
+                                                class="text-xs text-slate-500 font-medium"
+                                            >
                                                 Batas Pagu:
-                                                <strong class="text-slate-800 font-bold"
+                                                <strong
+                                                    class="text-slate-800 font-bold"
                                                     >Rp 8.000 / porsi</strong
                                                 >
                                             </p>
@@ -5863,18 +6278,27 @@ const tkpiCategoryList = computed(() => {
                                             v-if="totalFoodCostPKNormal <= 8000"
                                             class="flex items-center gap-1.5"
                                         >
-                                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span
+                                                class="h-2 w-2 rounded-full bg-emerald-500"
+                                            ></span>
                                             <span>EFISIEN / AMAN</span>
                                         </span>
-                                        <span v-else class="flex items-center gap-1.5">
-                                            <AlertTriangle class="h-3.5 w-3.5 text-rose-600" />
+                                        <span
+                                            v-else
+                                            class="flex items-center gap-1.5"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3.5 w-3.5 text-rose-600"
+                                            />
                                             <span>OVER BUDGET</span>
                                         </span>
                                     </Badge>
                                 </CardHeader>
                                 <CardContent className="p-4 sm:p-5 space-y-4">
                                     <!-- Dual Stat Grid -->
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div
+                                        class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                                    >
                                         <!-- Metric 1: Realisasi -->
                                         <div
                                             class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
@@ -5884,11 +6308,17 @@ const tkpiCategoryList = computed(() => {
                                                     : 'bg-slate-50/80 border-slate-200/80'
                                             "
                                         >
-                                            <div class="flex items-center justify-between gap-1">
-                                                <span class="text-xs font-bold text-slate-600">
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
+                                                <span
+                                                    class="text-xs font-bold text-slate-600"
+                                                >
                                                     Total Food Cost PK
                                                 </span>
-                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs">
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs"
+                                                >
                                                     PK
                                                 </span>
                                             </div>
@@ -5896,14 +6326,21 @@ const tkpiCategoryList = computed(() => {
                                                 <h3
                                                     class="text-2xl sm:text-3xl font-black tracking-tight"
                                                     :class="
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? 'text-rose-950'
                                                             : 'text-slate-900'
                                                     "
                                                 >
-                                                    {{ formatRupiah(totalFoodCostPKNormal) }}
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal,
+                                                        )
+                                                    }}
                                                 </h3>
-                                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                <p
+                                                    class="text-[11px] text-slate-400 font-medium mt-0.5"
+                                                >
                                                     Kalkulasi menu per porsi
                                                 </p>
                                             </div>
@@ -5918,17 +6355,21 @@ const tkpiCategoryList = computed(() => {
                                                     : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
                                             "
                                         >
-                                            <div class="flex items-center justify-between gap-1">
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
                                                 <span
                                                     class="text-xs font-bold"
                                                     :class="
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? 'text-rose-800'
                                                             : 'text-emerald-800'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? "Selisih Lebih (Over)"
                                                             : "Sisa Pagu Anggaran"
                                                     }}
@@ -5936,13 +6377,15 @@ const tkpiCategoryList = computed(() => {
                                                 <span
                                                     class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
                                                     :class="
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
                                                             : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? "Defisit"
                                                             : "Hemat"
                                                     }}
@@ -5952,28 +6395,39 @@ const tkpiCategoryList = computed(() => {
                                                 <h4
                                                     class="text-2xl sm:text-3xl font-black tracking-tight"
                                                     :class="
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? 'text-rose-700'
                                                             : 'text-emerald-700'
                                                     "
                                                 >
-                                                    <span v-if="totalFoodCostPKNormal > 8000">+</span
+                                                    <span
+                                                        v-if="
+                                                            totalFoodCostPKNormal >
+                                                            8000
+                                                        "
+                                                        >+</span
                                                     >{{
                                                         formatRupiah(
-                                                            Math.abs(8000 - totalFoodCostPKNormal)
+                                                            Math.abs(
+                                                                8000 -
+                                                                    totalFoodCostPKNormal,
+                                                            ),
                                                         )
                                                     }}
                                                 </h4>
                                                 <p
                                                     class="text-[11px] font-medium mt-0.5"
                                                     :class="
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? 'text-rose-600'
                                                             : 'text-emerald-700/80'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPKNormal > 8000
+                                                        totalFoodCostPKNormal >
+                                                        8000
                                                             ? "Melebihi batas pagu BGN"
                                                             : "Tersisa dari pagu Rp 8.000"
                                                     }}
@@ -5983,10 +6437,18 @@ const tkpiCategoryList = computed(() => {
                                     </div>
 
                                     <!-- Budget Utilization Progress Bar -->
-                                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
-                                        <div class="flex items-center justify-between text-xs">
-                                            <span class="font-bold text-slate-600 flex items-center gap-1.5">
-                                                <Coins class="h-3.5 w-3.5 text-slate-400" />
+                                    <div
+                                        class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between text-xs"
+                                        >
+                                            <span
+                                                class="font-bold text-slate-600 flex items-center gap-1.5"
+                                            >
+                                                <Coins
+                                                    class="h-3.5 w-3.5 text-slate-400"
+                                                />
                                                 Utilisasi Anggaran Pagu:
                                             </span>
                                             <span
@@ -5997,21 +6459,37 @@ const tkpiCategoryList = computed(() => {
                                                         : 'text-slate-800'
                                                 "
                                             >
-                                                {{ ((totalFoodCostPKNormal / 8000) * 100).toFixed(1) }}%
-                                                <span class="text-[10px] font-normal text-slate-400">
-                                                    ({{ formatRupiah(totalFoodCostPKNormal) }} / Rp 8.000)
+                                                {{
+                                                    (
+                                                        (totalFoodCostPKNormal /
+                                                            8000) *
+                                                        100
+                                                    ).toFixed(1)
+                                                }}%
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-400"
+                                                >
+                                                    ({{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal,
+                                                        )
+                                                    }}
+                                                    / Rp 8.000)
                                                 </span>
                                             </span>
                                         </div>
-                                        <div class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden">
+                                        <div
+                                            class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden"
+                                        >
                                             <div
                                                 class="h-full rounded-full transition-all duration-500"
                                                 :class="
                                                     totalFoodCostPKNormal > 8000
                                                         ? 'bg-rose-500'
-                                                        : totalFoodCostPKNormal > 6800
-                                                        ? 'bg-amber-500'
-                                                        : 'bg-emerald-500'
+                                                        : totalFoodCostPKNormal >
+                                                            6800
+                                                          ? 'bg-amber-500'
+                                                          : 'bg-emerald-500'
                                                 "
                                                 :style="{
                                                     width: `${Math.min(100, (totalFoodCostPKNormal / 8000) * 100)}%`,
@@ -6029,11 +6507,35 @@ const tkpiCategoryList = computed(() => {
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
                                         />
                                         <div class="space-y-0.5">
-                                            <p class="font-extrabold text-rose-950 text-xs">
-                                                ⚠️ Peringatan: Melebihi Batas Pagu PK!
+                                            <p
+                                                class="font-extrabold text-rose-950 text-xs"
+                                            >
+                                                ⚠️ Peringatan: Melebihi Batas
+                                                Pagu PK!
                                             </p>
-                                            <p class="text-[11px] text-rose-800 leading-relaxed">
-                                                Food cost PK (<strong>{{ formatRupiah(totalFoodCostPKNormal) }}</strong>) melampaui pagu maksimal <strong>Rp 8.000 / porsi</strong> dengan selisih lebih <strong>+{{ formatRupiah(totalFoodCostPKNormal - 8000) }} / porsi</strong>. Mohon sesuaikan gramasi atau pilihan bahan baku.
+                                            <p
+                                                class="text-[11px] text-rose-800 leading-relaxed"
+                                            >
+                                                Food cost PK (<strong>{{
+                                                    formatRupiah(
+                                                        totalFoodCostPKNormal,
+                                                    )
+                                                }}</strong
+                                                >) melampaui pagu maksimal
+                                                <strong
+                                                    >Rp 8.000 / porsi</strong
+                                                >
+                                                dengan selisih lebih
+                                                <strong
+                                                    >+{{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal -
+                                                                8000,
+                                                        )
+                                                    }}
+                                                    / porsi</strong
+                                                >. Mohon sesuaikan gramasi atau
+                                                pilihan bahan baku.
                                             </p>
                                         </div>
                                     </div>
@@ -6041,9 +6543,24 @@ const tkpiCategoryList = computed(() => {
                                         v-else
                                         class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
-                                        <CheckCircle2 class="h-4 w-4 text-emerald-600 shrink-0" />
-                                        <span class="text-[11px] text-emerald-900 font-medium">
-                                            Biaya bahan baku PK <strong>aman dan efisien</strong> sesuai standar pagu BGN (Hemat/Sisa: <strong>{{ formatRupiah(8000 - totalFoodCostPKNormal) }} / porsi</strong>).
+                                        <CheckCircle2
+                                            class="h-4 w-4 text-emerald-600 shrink-0"
+                                        />
+                                        <span
+                                            class="text-[11px] text-emerald-900 font-medium"
+                                        >
+                                            Biaya bahan baku PK
+                                            <strong>aman dan efisien</strong>
+                                            sesuai standar pagu BGN (Hemat/Sisa:
+                                            <strong
+                                                >{{
+                                                    formatRupiah(
+                                                        8000 -
+                                                            totalFoodCostPKNormal,
+                                                    )
+                                                }}
+                                                / porsi</strong
+                                            >).
                                         </span>
                                     </div>
                                 </CardContent>
@@ -6080,7 +6597,8 @@ const tkpiCategoryList = computed(() => {
                                             <p
                                                 class="text-[10px] font-black uppercase tracking-wider"
                                                 :class="
-                                                    totalFoodCostPBNormal > 10000
+                                                    totalFoodCostPBNormal >
+                                                    10000
                                                         ? 'text-rose-800'
                                                         : 'text-indigo-800/80'
                                                 "
@@ -6092,9 +6610,12 @@ const tkpiCategoryList = computed(() => {
                                             >
                                                 Food Cost Porsi Besar (PB)
                                             </CardTitle>
-                                            <p class="text-xs text-slate-500 font-medium">
+                                            <p
+                                                class="text-xs text-slate-500 font-medium"
+                                            >
                                                 Batas Pagu:
-                                                <strong class="text-slate-800 font-bold"
+                                                <strong
+                                                    class="text-slate-800 font-bold"
                                                     >Rp 10.000 / porsi</strong
                                                 >
                                             </p>
@@ -6109,21 +6630,32 @@ const tkpiCategoryList = computed(() => {
                                         "
                                     >
                                         <span
-                                            v-if="totalFoodCostPBNormal <= 10000"
+                                            v-if="
+                                                totalFoodCostPBNormal <= 10000
+                                            "
                                             class="flex items-center gap-1.5"
                                         >
-                                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span
+                                                class="h-2 w-2 rounded-full bg-emerald-500"
+                                            ></span>
                                             <span>EFISIEN / AMAN</span>
                                         </span>
-                                        <span v-else class="flex items-center gap-1.5">
-                                            <AlertTriangle class="h-3.5 w-3.5 text-rose-600" />
+                                        <span
+                                            v-else
+                                            class="flex items-center gap-1.5"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3.5 w-3.5 text-rose-600"
+                                            />
                                             <span>OVER BUDGET</span>
                                         </span>
                                     </Badge>
                                 </CardHeader>
                                 <CardContent className="p-4 sm:p-5 space-y-4">
                                     <!-- Dual Stat Grid -->
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div
+                                        class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                                    >
                                         <!-- Metric 1: Realisasi -->
                                         <div
                                             class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
@@ -6133,11 +6665,17 @@ const tkpiCategoryList = computed(() => {
                                                     : 'bg-slate-50/80 border-slate-200/80'
                                             "
                                         >
-                                            <div class="flex items-center justify-between gap-1">
-                                                <span class="text-xs font-bold text-slate-600">
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
+                                                <span
+                                                    class="text-xs font-bold text-slate-600"
+                                                >
                                                     Total Food Cost PB
                                                 </span>
-                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs">
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs"
+                                                >
                                                     PB
                                                 </span>
                                             </div>
@@ -6145,14 +6683,21 @@ const tkpiCategoryList = computed(() => {
                                                 <h3
                                                     class="text-2xl sm:text-3xl font-black tracking-tight"
                                                     :class="
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? 'text-rose-950'
                                                             : 'text-slate-900'
                                                     "
                                                 >
-                                                    {{ formatRupiah(totalFoodCostPBNormal) }}
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal,
+                                                        )
+                                                    }}
                                                 </h3>
-                                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                <p
+                                                    class="text-[11px] text-slate-400 font-medium mt-0.5"
+                                                >
                                                     Kalkulasi menu per porsi
                                                 </p>
                                             </div>
@@ -6167,17 +6712,21 @@ const tkpiCategoryList = computed(() => {
                                                     : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
                                             "
                                         >
-                                            <div class="flex items-center justify-between gap-1">
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
                                                 <span
                                                     class="text-xs font-bold"
                                                     :class="
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? 'text-rose-800'
                                                             : 'text-emerald-800'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? "Selisih Lebih (Over)"
                                                             : "Sisa Pagu Anggaran"
                                                     }}
@@ -6185,13 +6734,15 @@ const tkpiCategoryList = computed(() => {
                                                 <span
                                                     class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
                                                     :class="
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
                                                             : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? "Defisit"
                                                             : "Hemat"
                                                     }}
@@ -6201,28 +6752,39 @@ const tkpiCategoryList = computed(() => {
                                                 <h4
                                                     class="text-2xl sm:text-3xl font-black tracking-tight"
                                                     :class="
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? 'text-rose-700'
                                                             : 'text-emerald-700'
                                                     "
                                                 >
-                                                    <span v-if="totalFoodCostPBNormal > 10000">+</span
+                                                    <span
+                                                        v-if="
+                                                            totalFoodCostPBNormal >
+                                                            10000
+                                                        "
+                                                        >+</span
                                                     >{{
                                                         formatRupiah(
-                                                            Math.abs(10000 - totalFoodCostPBNormal)
+                                                            Math.abs(
+                                                                10000 -
+                                                                    totalFoodCostPBNormal,
+                                                            ),
                                                         )
                                                     }}
                                                 </h4>
                                                 <p
                                                     class="text-[11px] font-medium mt-0.5"
                                                     :class="
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? 'text-rose-600'
                                                             : 'text-emerald-700/80'
                                                     "
                                                 >
                                                     {{
-                                                        totalFoodCostPBNormal > 10000
+                                                        totalFoodCostPBNormal >
+                                                        10000
                                                             ? "Melebihi batas pagu BGN"
                                                             : "Tersisa dari pagu Rp 10.000"
                                                     }}
@@ -6232,35 +6794,61 @@ const tkpiCategoryList = computed(() => {
                                     </div>
 
                                     <!-- Budget Utilization Progress Bar -->
-                                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
-                                        <div class="flex items-center justify-between text-xs">
-                                            <span class="font-bold text-slate-600 flex items-center gap-1.5">
-                                                <Coins class="h-3.5 w-3.5 text-slate-400" />
+                                    <div
+                                        class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between text-xs"
+                                        >
+                                            <span
+                                                class="font-bold text-slate-600 flex items-center gap-1.5"
+                                            >
+                                                <Coins
+                                                    class="h-3.5 w-3.5 text-slate-400"
+                                                />
                                                 Utilisasi Anggaran Pagu:
                                             </span>
                                             <span
                                                 class="font-black"
                                                 :class="
-                                                    totalFoodCostPBNormal > 10000
+                                                    totalFoodCostPBNormal >
+                                                    10000
                                                         ? 'text-rose-700'
                                                         : 'text-slate-800'
                                                 "
                                             >
-                                                {{ ((totalFoodCostPBNormal / 10000) * 100).toFixed(1) }}%
-                                                <span class="text-[10px] font-normal text-slate-400">
-                                                    ({{ formatRupiah(totalFoodCostPBNormal) }} / Rp 10.000)
+                                                {{
+                                                    (
+                                                        (totalFoodCostPBNormal /
+                                                            10000) *
+                                                        100
+                                                    ).toFixed(1)
+                                                }}%
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-400"
+                                                >
+                                                    ({{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal,
+                                                        )
+                                                    }}
+                                                    / Rp 10.000)
                                                 </span>
                                             </span>
                                         </div>
-                                        <div class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden">
+                                        <div
+                                            class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden"
+                                        >
                                             <div
                                                 class="h-full rounded-full transition-all duration-500"
                                                 :class="
-                                                    totalFoodCostPBNormal > 10000
+                                                    totalFoodCostPBNormal >
+                                                    10000
                                                         ? 'bg-rose-500'
-                                                        : totalFoodCostPBNormal > 8500
-                                                        ? 'bg-amber-500'
-                                                        : 'bg-emerald-500'
+                                                        : totalFoodCostPBNormal >
+                                                            8500
+                                                          ? 'bg-amber-500'
+                                                          : 'bg-emerald-500'
                                                 "
                                                 :style="{
                                                     width: `${Math.min(100, (totalFoodCostPBNormal / 10000) * 100)}%`,
@@ -6278,11 +6866,35 @@ const tkpiCategoryList = computed(() => {
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
                                         />
                                         <div class="space-y-0.5">
-                                            <p class="font-extrabold text-rose-950 text-xs">
-                                                ⚠️ Peringatan: Melebihi Batas Pagu PB!
+                                            <p
+                                                class="font-extrabold text-rose-950 text-xs"
+                                            >
+                                                ⚠️ Peringatan: Melebihi Batas
+                                                Pagu PB!
                                             </p>
-                                            <p class="text-[11px] text-rose-800 leading-relaxed">
-                                                Food cost PB (<strong>{{ formatRupiah(totalFoodCostPBNormal) }}</strong>) melampaui pagu maksimal <strong>Rp 10.000 / porsi</strong> dengan selisih lebih <strong>+{{ formatRupiah(totalFoodCostPBNormal - 10000) }} / porsi</strong>. Mohon sesuaikan gramasi atau pilihan bahan baku.
+                                            <p
+                                                class="text-[11px] text-rose-800 leading-relaxed"
+                                            >
+                                                Food cost PB (<strong>{{
+                                                    formatRupiah(
+                                                        totalFoodCostPBNormal,
+                                                    )
+                                                }}</strong
+                                                >) melampaui pagu maksimal
+                                                <strong
+                                                    >Rp 10.000 / porsi</strong
+                                                >
+                                                dengan selisih lebih
+                                                <strong
+                                                    >+{{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal -
+                                                                10000,
+                                                        )
+                                                    }}
+                                                    / porsi</strong
+                                                >. Mohon sesuaikan gramasi atau
+                                                pilihan bahan baku.
                                             </p>
                                         </div>
                                     </div>
@@ -6290,9 +6902,24 @@ const tkpiCategoryList = computed(() => {
                                         v-else
                                         class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
-                                        <CheckCircle2 class="h-4 w-4 text-emerald-600 shrink-0" />
-                                        <span class="text-[11px] text-emerald-900 font-medium">
-                                            Biaya bahan baku PB <strong>aman dan efisien</strong> sesuai standar pagu BGN (Hemat/Sisa: <strong>{{ formatRupiah(10000 - totalFoodCostPBNormal) }} / porsi</strong>).
+                                        <CheckCircle2
+                                            class="h-4 w-4 text-emerald-600 shrink-0"
+                                        />
+                                        <span
+                                            class="text-[11px] text-emerald-900 font-medium"
+                                        >
+                                            Biaya bahan baku PB
+                                            <strong>aman dan efisien</strong>
+                                            sesuai standar pagu BGN (Hemat/Sisa:
+                                            <strong
+                                                >{{
+                                                    formatRupiah(
+                                                        10000 -
+                                                            totalFoodCostPBNormal,
+                                                    )
+                                                }}
+                                                / porsi</strong
+                                            >).
                                         </span>
                                     </div>
                                 </CardContent>
@@ -6565,8 +7192,7 @@ const tkpiCategoryList = computed(() => {
                                         <CardTitle
                                             class="text-base sm:text-lg font-bold text-slate-900"
                                         >
-                                            Review & Validasi Purchase Order (PO
-                                            Akuntan)
+                                            Pembelian Bahan
                                         </CardTitle>
                                         <Badge
                                             variant="outline"
@@ -6860,13 +7486,12 @@ const tkpiCategoryList = computed(() => {
                                 <h4
                                     class="text-xs sm:text-sm font-black text-slate-900"
                                 >
-                                    Analisis Food Cost & Kepatuhan Pagu
-                                    Anggaran BGN
+                                    Analisis Food Cost & Kepatuhan Pagu Anggaran
+                                    BGN
                                 </h4>
                                 <p class="text-[11px] text-slate-500">
                                     Simulasi dampak koreksi harga pasar aktual
-                                    terhadap kepatuhan batas pagu MBG
-                                    nasional.
+                                    terhadap kepatuhan batas pagu MBG nasional.
                                 </p>
                             </div>
                         </div>
@@ -7213,8 +7838,7 @@ const tkpiCategoryList = computed(() => {
                                         >
                                             Biaya bahan baku PK
                                             <strong>aman dan efisien</strong>
-                                            sesuai standar pagu BGN
-                                            (Hemat/Sisa:
+                                            sesuai standar pagu BGN (Hemat/Sisa:
                                             <strong
                                                 >{{
                                                     formatRupiah(
@@ -7574,8 +8198,7 @@ const tkpiCategoryList = computed(() => {
                                         >
                                             Biaya bahan baku PB
                                             <strong>aman dan efisien</strong>
-                                            sesuai standar pagu BGN
-                                            (Hemat/Sisa:
+                                            sesuai standar pagu BGN (Hemat/Sisa:
                                             <strong
                                                 >{{
                                                     formatRupiah(
@@ -7810,7 +8433,7 @@ const tkpiCategoryList = computed(() => {
             </div>
 
             <!-- ========================================================================================= -->
-            <!-- 4. SUB MENU 4: KALENDER MENU (SIKLUS & JADWAL HARIAN MBG) -->
+            <!-- 5. SUB MENU 5: KALENDER MENU (SIKLUS & JADWAL HARIAN MBG) -->
             <!-- ========================================================================================= -->
             <div v-if="activeSubMenu === 'kalender-menu'" class="space-y-6">
                 <!-- Header & Info Siklus -->

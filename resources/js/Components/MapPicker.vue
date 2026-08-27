@@ -317,7 +317,7 @@ onBeforeUnmount(() => {
     <!-- Map container with floating controls -->
     <div class="relative w-full rounded-lg border border-slate-200 shadow-inner overflow-hidden">
       <!-- Floating Center Button on Top-Right -->
-      <div class="absolute top-2.5 right-2.5 select-none" style="z-index: 1000;">
+      <div class="absolute top-2.5 right-2.5 select-none" style="z-index: 400;">
         <Button
           type="button"
           variant="outline"
