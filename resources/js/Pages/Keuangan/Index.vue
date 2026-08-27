@@ -348,7 +348,7 @@ function formatRupiah(amount) {
                         </div>
                     </CardHeader>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs border-collapse">
+                        <table class="w-full min-w-[700px] text-left text-xs border-collapse">
                             <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]">
                                 <tr>
                                     <th class="p-3.5">Kode TRX</th>
@@ -427,7 +427,7 @@ function formatRupiah(amount) {
                         </CardTitle>
                     </CardHeader>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs border-collapse">
+                        <table class="w-full min-w-[700px] text-left text-xs border-collapse">
                             <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]">
                                 <tr>
                                     <th class="p-3.5">Nama Kelompok</th>

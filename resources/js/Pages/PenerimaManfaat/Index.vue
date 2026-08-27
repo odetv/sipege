@@ -1051,7 +1051,7 @@ function formatDateTimeWita(dateString) {
                     >
                         <div class="overflow-x-auto">
                             <table
-                                class="w-full text-left text-xs border-collapse"
+                                class="w-full min-w-[850px] text-left text-xs border-collapse"
                             >
                                 <thead
                                     class="bg-slate-50/90 border-b border-slate-200"
@@ -1828,9 +1828,9 @@ function formatDateTimeWita(dateString) {
                     </div>
 
                     <div
-                        class="border border-slate-200 rounded-xl overflow-hidden"
+                        class="border border-slate-200 rounded-xl overflow-x-auto"
                     >
-                        <table class="w-full text-left text-xs border-collapse">
+                        <table class="w-full min-w-[600px] text-left text-xs border-collapse">
                             <thead>
                                 <tr
                                     class="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase"
@@ -1981,9 +1981,9 @@ function formatDateTimeWita(dateString) {
                             activeKelompok.keterangan_alergi &&
                             activeKelompok.keterangan_alergi.length > 0
                         "
-                        class="border border-rose-200/80 rounded-lg overflow-hidden bg-white mt-2"
+                        class="border border-rose-200/80 rounded-lg overflow-x-auto bg-white mt-2"
                     >
-                        <table class="w-full text-left text-xs border-collapse">
+                        <table class="w-full min-w-[500px] text-left text-xs border-collapse">
                             <thead>
                                 <tr
                                     class="bg-rose-100/50 text-rose-900 font-bold text-[10.5px] uppercase border-b border-rose-200/70"

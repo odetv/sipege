@@ -702,21 +702,23 @@ function submitForm() {
 
         <div class="max-w-6xl mx-auto space-y-6 pb-12">
             <!-- Top Navigation Bar -->
-            <div class="flex items-center justify-between gap-4">
+            <div
+                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
                 <Link
                     :href="route('penerima-manfaat.index')"
-                    class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-primary transition-colors cursor-pointer"
+                    class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-primary transition-colors cursor-pointer w-fit"
                 >
                     <ArrowLeft class="h-4 w-4" />
                     <span>Kembali ke Daftar Kelompok</span>
                 </Link>
 
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <button
                         type="button"
                         @click="form.reset()"
                         :disabled="form.processing"
-                        class="inline-flex items-center justify-center gap-1.5 h-11 px-5 min-w-[120px] text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                        class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 h-10 sm:h-11 px-3 sm:px-5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer"
                     >
                         <RotateCcw class="h-3.5 w-3.5" />
                         <span>Reset Form</span>
@@ -725,7 +727,7 @@ function submitForm() {
                         type="button"
                         @click="submitForm"
                         :disabled="form.processing"
-                        class="inline-flex items-center justify-center gap-2 h-11 px-6 min-w-[160px] text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
+                        class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 h-10 sm:h-11 px-4 sm:px-6 text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50"
                     >
                         <Save class="h-4 w-4" />
                         <span>{{
@@ -1770,10 +1772,10 @@ function submitForm() {
 
                         <div
                             v-else
-                            class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
+                            class="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs"
                         >
                             <table
-                                class="w-full text-left text-xs border-collapse"
+                                class="w-full min-w-[650px] text-left text-xs border-collapse"
                             >
                                 <thead>
                                     <tr
@@ -2140,10 +2142,10 @@ function submitForm() {
                                     form.keterangan_alergi &&
                                     form.keterangan_alergi.length > 0
                                 "
-                                class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs mt-3"
+                                class="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs mt-3"
                             >
                                 <table
-                                    class="w-full text-left text-xs border-collapse"
+                                    class="w-full min-w-[600px] text-left text-xs border-collapse"
                                 >
                                     <thead>
                                         <tr
@@ -2328,18 +2330,18 @@ function submitForm() {
 
                 <!-- Bottom Submit Button -->
                 <div
-                    class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200"
+                    class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-slate-200"
                 >
                     <Link
                         :href="route('penerima-manfaat.index')"
-                        class="inline-flex items-center justify-center h-11 px-6 min-w-[100px] text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                        class="w-full sm:w-auto inline-flex items-center justify-center h-10 sm:h-11 px-6 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer"
                     >
                         Batal
                     </Link>
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="inline-flex items-center justify-center gap-2 h-11 px-6 min-w-[180px] text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
+                        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 sm:h-11 px-6 text-xs font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50"
                     >
                         <Save class="h-4 w-4" />
                         <span>{{
