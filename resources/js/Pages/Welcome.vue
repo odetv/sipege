@@ -5,12 +5,12 @@ import Card from "@/Components/ui/Card.vue";
 import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import {
-    ShieldCheck,
     LogIn,
     UserPlus,
     Building2,
-    MapPin,
-    CheckCircle2,
+    Users,
+    UtensilsCrossed,
+    Wallet,
 } from "lucide-vue-next";
 
 defineProps({
@@ -99,7 +99,7 @@ defineProps({
                 variant="info"
                 className="mb-4 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
             >
-                Portal SPPG
+                SIPEGE
             </Badge>
 
             <h1
@@ -109,11 +109,11 @@ defineProps({
             </h1>
 
             <p
-                class="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed"
+                class="text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed"
             >
                 Sistem informasi dan pengelolaan SPPG terpadu untuk memudahkan
-                pendataan dan pengelolaan data unit SPPG, profil kepala unit,
-                serta pemetaan wilayah operasional secara akurat.
+                pendataan dan pengelolaan data unit SPPG, pengelolaan gizi, dan
+                keuangan.
             </p>
 
             <!-- Feature cards -->
@@ -123,14 +123,14 @@ defineProps({
                         <div
                             class="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-3"
                         >
-                            <ShieldCheck class="h-5 w-5" />
+                            <Users class="h-5 w-5" />
                         </div>
                         <h3 class="font-bold text-slate-900 text-base mb-1">
-                            Autentikasi Terintegrasi
+                            Penerima Manfaat
                         </h3>
                         <p class="text-sm text-slate-500">
-                            Pendaftaran lengkap data profil Kepala SPPG dengan
-                            validasi NIK dan identitas resmi.
+                            Kelola data kelompok dan rincian penerima manfaat
+                            SPPG berdasarkan kategori dan subkategori.
                         </p>
                     </CardContent>
                 </Card>
@@ -138,16 +138,16 @@ defineProps({
                 <Card className="border-slate-200/90 shadow-sm bg-white/90">
                     <CardContent className="p-5">
                         <div
-                            class="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3"
+                            class="h-10 w-10 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center mb-3"
                         >
-                            <Building2 class="h-5 w-5" />
+                            <UtensilsCrossed class="h-5 w-5" />
                         </div>
                         <h3 class="font-bold text-slate-900 text-base mb-1">
-                            Manajemen Unit SPPG
+                            Gizi
                         </h3>
                         <p class="text-sm text-slate-500">
-                            Pencatatan kode unik 8-digit, status operasional,
-                            dan data kelengkapan unit.
+                            Pencatatan menu makanan bergizi, jadwal distribusi,
+                            dan pemantauan status gizi penerima manfaat.
                         </p>
                     </CardContent>
                 </Card>
@@ -157,14 +157,14 @@ defineProps({
                         <div
                             class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3"
                         >
-                            <MapPin class="h-5 w-5" />
+                            <Wallet class="h-5 w-5" />
                         </div>
                         <h3 class="font-bold text-slate-900 text-base mb-1">
-                            Pemetaan Geografis
+                            Keuangan
                         </h3>
                         <p class="text-sm text-slate-500">
-                            Integrasi peta interaktif Leaflet dan API Wilayah
-                            Indonesia secara akurat.
+                            Pengelolaan anggaran, realisasi belanja, dan laporan
+                            keuangan unit SPPG secara transparan.
                         </p>
                     </CardContent>
                 </Card>
