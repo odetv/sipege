@@ -986,9 +986,7 @@ function handleAjukanDraftPo() {
 // ==========================================
 // Status: 'draft' | 'approved' | 'rejected'
 const poStatus = ref("draft");
-const poCatatanAkuntan = ref(
-    "Harga pasar telah diverifikasi sesuai penawaran supplier lokal.",
-);
+const poCatatanAkuntan = ref("");
 const poNo = ref("PO-SPPG-" + new Date().getFullYear() + "08-001");
 
 function approvePo() {
@@ -2110,7 +2108,9 @@ const tkpiCategoryList = computed(() => {
                     className="bg-white border-slate-200 shadow-xs overflow-hidden"
                 >
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[900px] text-left text-xs border-collapse">
+                        <table
+                            class="w-full min-w-[900px] text-left text-xs border-collapse"
+                        >
                             <thead
                                 class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
                             >
@@ -2545,7 +2545,9 @@ const tkpiCategoryList = computed(() => {
                         </CardDescription>
                     </CardHeader>
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[700px] text-left text-xs border-collapse">
+                        <table
+                            class="w-full min-w-[700px] text-left text-xs border-collapse"
+                        >
                             <thead
                                 class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                             >
@@ -6543,6 +6545,7 @@ const tkpiCategoryList = computed(() => {
                                     class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
                                 >
                                     <tr>
+                                        <th class="p-3 w-10 text-center">No</th>
                                         <th class="p-3">Nama Bahan Baku</th>
                                         <th class="p-3">Kategori</th>
                                         <th class="p-3 text-right">
@@ -6568,6 +6571,11 @@ const tkpiCategoryList = computed(() => {
                                         :key="idx"
                                         class="hover:bg-slate-50/70 transition-colors"
                                     >
+                                        <td
+                                            class="p-3 text-center text-slate-400 font-medium"
+                                        >
+                                            {{ idx + 1 }}
+                                        </td>
                                         <td
                                             class="p-3 font-bold text-slate-900"
                                         >
@@ -6621,25 +6629,42 @@ const tkpiCategoryList = computed(() => {
                                             {{ formatRupiah(b.subtotalAktual) }}
                                         </td>
                                         <td
-                                            class="p-3 text-center text-[11px] font-bold"
-                                            :class="
-                                                b.subtotalAktual >
-                                                b.subtotalMaster
-                                                    ? 'text-rose-600'
-                                                    : 'text-emerald-600'
-                                            "
+                                            class="p-3 text-center text-xs font-bold"
                                         >
-                                            {{
-                                                b.subtotalAktual >
-                                                b.subtotalMaster
-                                                    ? "+"
-                                                    : ""
-                                            }}{{
-                                                formatRupiah(
-                                                    b.subtotalAktual -
-                                                        b.subtotalMaster,
-                                                )
-                                            }}
+                                            <span
+                                                v-if="
+                                                    b.subtotalAktual >
+                                                    b.subtotalMaster
+                                                "
+                                                class="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold"
+                                            >
+                                                Lebih Mahal (+{{
+                                                    formatRupiah(
+                                                        b.subtotalAktual -
+                                                            b.subtotalMaster,
+                                                    )
+                                                }})
+                                            </span>
+                                            <span
+                                                v-else-if="
+                                                    b.subtotalAktual <
+                                                    b.subtotalMaster
+                                                "
+                                                class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold"
+                                            >
+                                                Lebih Murah (-{{
+                                                    formatRupiah(
+                                                        b.subtotalMaster -
+                                                            b.subtotalAktual,
+                                                    )
+                                                }})
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200 text-[11px] font-medium"
+                                            >
+                                                Sesuai (Rp 0)
+                                            </span>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -6648,7 +6673,7 @@ const tkpiCategoryList = computed(() => {
                                 >
                                     <tr>
                                         <td
-                                            colspan="4"
+                                            colspan="5"
                                             class="p-3.5 uppercase tracking-wider text-slate-700"
                                         >
                                             Total Nilai Realisasi Purchase Order
@@ -6660,26 +6685,41 @@ const tkpiCategoryList = computed(() => {
                                         >
                                             {{ formatRupiah(grandTotalAktual) }}
                                         </td>
-                                        <td
-                                            class="p-3.5 text-center text-xs"
-                                            :class="
-                                                grandTotalAktual >
-                                                grandTotalDraftMaster
-                                                    ? 'text-rose-700'
-                                                    : 'text-emerald-700'
-                                            "
-                                        >
-                                            {{
-                                                grandTotalAktual >
-                                                grandTotalDraftMaster
-                                                    ? "+"
-                                                    : ""
-                                            }}{{
-                                                formatRupiah(
-                                                    grandTotalAktual -
-                                                        grandTotalDraftMaster,
-                                                )
-                                            }}
+                                        <td class="p-3.5 text-center text-xs">
+                                            <span
+                                                v-if="
+                                                    grandTotalAktual >
+                                                    grandTotalDraftMaster
+                                                "
+                                                class="inline-flex items-center px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-xs font-bold"
+                                            >
+                                                Lebih Mahal (+{{
+                                                    formatRupiah(
+                                                        grandTotalAktual -
+                                                            grandTotalDraftMaster,
+                                                    )
+                                                }})
+                                            </span>
+                                            <span
+                                                v-else-if="
+                                                    grandTotalAktual <
+                                                    grandTotalDraftMaster
+                                                "
+                                                class="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold"
+                                            >
+                                                Lebih Murah (-{{
+                                                    formatRupiah(
+                                                        grandTotalDraftMaster -
+                                                            grandTotalAktual,
+                                                    )
+                                                }})
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold"
+                                            >
+                                                Sesuai (Rp 0)
+                                            </span>
                                         </td>
                                     </tr>
                                 </tfoot>
