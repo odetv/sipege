@@ -53,8 +53,10 @@ export const ANGGARAN_PORSI_MAP = {
     "Porsi Besar": 10000,
 };
 
-export const BUDGET_PLAFON_PK = 8000; // Rp 8.000 / porsi
-export const BUDGET_PLAFON_PB = 10000; // Rp 10.000 / porsi
+export const BUDGET_PAGU_PK = 8000; // Rp 8.000 / porsi
+export const BUDGET_PAGU_PB = 10000; // Rp 10.000 / porsi
+export const BUDGET_PLAFON_PK = BUDGET_PAGU_PK;
+export const BUDGET_PLAFON_PB = BUDGET_PAGU_PB;
 
 // Mapping default jenis porsi berdasarkan Sub Kategori & Jenjang
 export const SUB_KATEGORI_PORSI_MAP = {

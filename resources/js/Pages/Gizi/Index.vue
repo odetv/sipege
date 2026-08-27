@@ -2562,7 +2562,7 @@ const tkpiCategoryList = computed(() => {
                                     <th class="p-3.5 text-center">
                                         Porsi Besar
                                     </th>
-                                    <th class="p-3.5 text-right">Total PM</th>
+                                    <th class="p-3.5 text-center">Total PM</th>
                                     <th class="p-3.5">Status Alergi</th>
                                 </tr>
                             </thead>
@@ -2614,7 +2614,7 @@ const tkpiCategoryList = computed(() => {
                                         {{ k.total_porsi_besar || 0 }}
                                     </td>
                                     <td
-                                        class="p-3.5 text-right font-black text-slate-900 text-sm"
+                                        class="p-3.5 text-center font-black text-slate-900 text-sm"
                                     >
                                         {{ k.total_penerima || 0 }}
                                     </td>
@@ -4117,7 +4117,7 @@ const tkpiCategoryList = computed(() => {
                                     >
                                         Penentuan gramasi bahan makanan dari
                                         TKPI 2020, evaluasi real-time kecukupan
-                                        gizi AKG BGN, dan analisis plafon food
+                                        gizi AKG BGN, dan analisis pagu food
                                         cost.
                                     </CardDescription>
                                 </div>
@@ -5180,7 +5180,7 @@ const tkpiCategoryList = computed(() => {
                     </Card>
 
                     <!-- ========================================================================= -->
-                    <!-- Real-time Evaluasi Standar AKG BGN & Analisis Food Cost & Plafon Anggaran -->
+                    <!-- Real-time Evaluasi Standar AKG BGN & Analisis Food Cost & Pagu Anggaran -->
                     <!-- ========================================================================= -->
 
                     <!-- 1. Evaluasi Standar AKG BGN -->
@@ -5775,7 +5775,7 @@ const tkpiCategoryList = computed(() => {
                         </div>
                     </div>
 
-                    <!-- 2. Analisis Food Cost & Batas Plafon Anggaran -->
+                    <!-- 2. Analisis Food Cost & Batas Pagu Anggaran -->
                     <div class="space-y-4 pt-2">
                         <!-- Header Food Cost -->
                         <div class="flex items-center gap-2">
@@ -5788,199 +5788,262 @@ const tkpiCategoryList = computed(() => {
                                 <h4
                                     class="text-xs sm:text-sm font-black text-slate-900"
                                 >
-                                    Analisis Food Cost & Kepatuhan Plafon
+                                    Analisis Food Cost & Kepatuhan Pagu
                                     Anggaran BGN
                                 </h4>
                                 <p class="text-[11px] text-slate-500">
                                     Monitoring biaya bahan baku per porsi
-                                    terhadap batas maksimal plafon MBG nasional.
+                                    terhadap batas maksimal pagu MBG nasional.
                                 </p>
                             </div>
                         </div>
 
-                        <!-- Card Perbandingan Plafon -->
+                        <!-- Card Perbandingan Pagu -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- Food Cost PK (Batas Rp 8.000) -->
                             <Card
-                                className="bg-white border-slate-200 shadow-xs transition-all"
+                                className="bg-white border-slate-200/90 shadow-sm transition-all rounded-2xl overflow-hidden hover:shadow-md"
                                 :class="{
                                     'border-rose-300 ring-2 ring-rose-200/80 bg-rose-50/10':
                                         totalFoodCostPKNormal > 8000,
                                 }"
                             >
                                 <CardHeader
-                                    class="p-3.5 sm:p-4 border-b flex flex-row items-center justify-between"
+                                    class="p-4 sm:p-5 border-b flex flex-row items-center justify-between gap-3"
                                     :class="
                                         totalFoodCostPKNormal > 8000
                                             ? 'bg-rose-50/70 border-rose-100'
-                                            : 'bg-amber-50/60 border-slate-100'
+                                            : 'bg-gradient-to-r from-amber-50/70 to-orange-50/40 border-slate-100'
                                     "
                                 >
-                                    <div>
-                                        <CardTitle
-                                            class="text-sm sm:text-base font-bold"
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
                                             :class="
                                                 totalFoodCostPKNormal > 8000
-                                                    ? 'text-rose-950'
-                                                    : 'text-amber-950'
+                                                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                    : 'bg-white text-amber-600 border border-amber-200/80'
                                             "
                                         >
-                                            Food Cost Porsi Kecil (PK)
-                                        </CardTitle>
-                                        <CardDescription class="text-[11px]">
-                                            Batas Plafon Maksimal:
-                                            <strong>Rp 8.000 / porsi</strong>
-                                        </CardDescription>
+                                            <Utensils class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-[10px] font-black uppercase tracking-wider"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'text-rose-800'
+                                                        : 'text-amber-800/80'
+                                                "
+                                            >
+                                                Standar BGN • Porsi Kecil
+                                            </p>
+                                            <CardTitle
+                                                class="text-base font-black text-slate-900 mt-0.5"
+                                            >
+                                                Food Cost Porsi Kecil (PK)
+                                            </CardTitle>
+                                            <p class="text-xs text-slate-500 font-medium">
+                                                Batas Pagu:
+                                                <strong class="text-slate-800 font-bold"
+                                                    >Rp 8.000 / porsi</strong
+                                                >
+                                            </p>
+                                        </div>
                                     </div>
                                     <Badge
                                         variant="outline"
                                         :className="
                                             totalFoodCostPKNormal <= 8000
-                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black text-xs'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs animate-pulse'
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-xs px-2.5 py-1 shadow-2xs'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs px-2.5 py-1 animate-pulse shadow-2xs'
                                         "
                                     >
                                         <span
                                             v-if="totalFoodCostPKNormal <= 8000"
-                                            >✓ EFISIEN / AMAN</span
+                                            class="flex items-center gap-1.5"
                                         >
-                                        <span v-else>⚠️ OVER BUDGET</span>
+                                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>EFISIEN / AMAN</span>
+                                        </span>
+                                        <span v-else class="flex items-center gap-1.5">
+                                            <AlertTriangle class="h-3.5 w-3.5 text-rose-600" />
+                                            <span>OVER BUDGET</span>
+                                        </span>
                                     </Badge>
                                 </CardHeader>
-                                <CardContent className="p-3.5 sm:p-4 space-y-3">
-                                    <div
-                                        class="flex items-center justify-between p-3 rounded-xl border"
-                                        :class="
-                                            totalFoodCostPKNormal > 8000
-                                                ? 'bg-rose-50/50 border-rose-200'
-                                                : 'bg-slate-50 border-slate-200'
-                                        "
-                                    >
-                                        <div>
-                                            <p
-                                                class="text-xs text-slate-500 font-bold"
-                                            >
-                                                Total Food Cost PK:
-                                            </p>
-                                            <h3
-                                                class="text-xl sm:text-2xl font-black mt-0.5"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-950'
-                                                        : 'text-slate-900'
-                                                "
-                                            >
-                                                {{
-                                                    formatRupiah(
-                                                        totalFoodCostPKNormal,
-                                                    )
-                                                }}
-                                            </h3>
-                                        </div>
-                                        <div class="text-right">
-                                            <p
-                                                class="text-xs font-bold"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-700'
-                                                        : 'text-slate-500'
-                                                "
-                                            >
-                                                {{
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? "Selisih Lebih (Over):"
-                                                        : "Sisa Plafon Anggaran:"
-                                                }}
-                                            </p>
-                                            <h4
-                                                class="text-sm sm:text-base font-black flex items-center justify-end gap-0.5 mt-0.5"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-700'
-                                                        : 'text-emerald-700'
-                                                "
-                                            >
-                                                <span
-                                                    v-if="
-                                                        totalFoodCostPKNormal >
-                                                        8000
+                                <CardContent className="p-4 sm:p-5 space-y-4">
+                                    <!-- Dual Stat Grid -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <!-- Metric 1: Realisasi -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPKNormal > 8000
+                                                    ? 'bg-rose-50/50 border-rose-200'
+                                                    : 'bg-slate-50/80 border-slate-200/80'
+                                            "
+                                        >
+                                            <div class="flex items-center justify-between gap-1">
+                                                <span class="text-xs font-bold text-slate-600">
+                                                    Total Food Cost PK
+                                                </span>
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs">
+                                                    PK
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h3
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? 'text-rose-950'
+                                                            : 'text-slate-900'
                                                     "
-                                                    >+</span
-                                                >{{
-                                                    formatRupiah(
-                                                        Math.abs(
-                                                            8000 -
-                                                                totalFoodCostPKNormal,
-                                                        ),
-                                                    )
-                                                }}
-                                            </h4>
+                                                >
+                                                    {{ formatRupiah(totalFoodCostPKNormal) }}
+                                                </h3>
+                                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                    Kalkulasi menu per porsi
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Metric 2: Sisa Pagu / Selisih Lebih -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPKNormal > 8000
+                                                    ? 'bg-gradient-to-br from-rose-50 to-red-50/60 border-rose-200 text-rose-900'
+                                                    : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
+                                            "
+                                        >
+                                            <div class="flex items-center justify-between gap-1">
+                                                <span
+                                                    class="text-xs font-bold"
+                                                    :class="
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? 'text-rose-800'
+                                                            : 'text-emerald-800'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? "Selisih Lebih (Over)"
+                                                            : "Sisa Pagu Anggaran"
+                                                    }}
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
+                                                    :class="
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
+                                                            : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? "Defisit"
+                                                            : "Hemat"
+                                                    }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h4
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? 'text-rose-700'
+                                                            : 'text-emerald-700'
+                                                    "
+                                                >
+                                                    <span v-if="totalFoodCostPKNormal > 8000">+</span
+                                                    >{{
+                                                        formatRupiah(
+                                                            Math.abs(8000 - totalFoodCostPKNormal)
+                                                        )
+                                                    }}
+                                                </h4>
+                                                <p
+                                                    class="text-[11px] font-medium mt-0.5"
+                                                    :class="
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? 'text-rose-600'
+                                                            : 'text-emerald-700/80'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal > 8000
+                                                            ? "Melebihi batas pagu BGN"
+                                                            : "Tersisa dari pagu Rp 8.000"
+                                                    }}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Warning Alert Jika Lewat Batas Plafon PK (Rp 8.000) -->
+                                    <!-- Budget Utilization Progress Bar -->
+                                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                                        <div class="flex items-center justify-between text-xs">
+                                            <span class="font-bold text-slate-600 flex items-center gap-1.5">
+                                                <Coins class="h-3.5 w-3.5 text-slate-400" />
+                                                Utilisasi Anggaran Pagu:
+                                            </span>
+                                            <span
+                                                class="font-black"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'text-rose-700'
+                                                        : 'text-slate-800'
+                                                "
+                                            >
+                                                {{ ((totalFoodCostPKNormal / 8000) * 100).toFixed(1) }}%
+                                                <span class="text-[10px] font-normal text-slate-400">
+                                                    ({{ formatRupiah(totalFoodCostPKNormal) }} / Rp 8.000)
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden">
+                                            <div
+                                                class="h-full rounded-full transition-all duration-500"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'bg-rose-500'
+                                                        : totalFoodCostPKNormal > 6800
+                                                        ? 'bg-amber-500'
+                                                        : 'bg-emerald-500'
+                                                "
+                                                :style="{
+                                                    width: `${Math.min(100, (totalFoodCostPKNormal / 8000) * 100)}%`,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Alert Status Banner -->
                                     <div
                                         v-if="totalFoodCostPKNormal > 8000"
-                                        class="p-3 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
+                                        class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
                                     >
                                         <AlertTriangle
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
                                         />
                                         <div class="space-y-0.5">
-                                            <p
-                                                class="font-extrabold text-rose-950 text-xs"
-                                            >
-                                                ⚠️ Peringatan: Melebihi Batas
-                                                Plafon PK!
+                                            <p class="font-extrabold text-rose-950 text-xs">
+                                                ⚠️ Peringatan: Melebihi Batas Pagu PK!
                                             </p>
-                                            <p
-                                                class="text-[11px] text-rose-800 leading-relaxed"
-                                            >
-                                                Food cost PK (<strong>{{
-                                                    formatRupiah(
-                                                        totalFoodCostPKNormal,
-                                                    )
-                                                }}</strong
-                                                >) melampaui plafon maksimal
-                                                <strong
-                                                    >Rp 8.000 / porsi</strong
-                                                >
-                                                dengan selisih lebih sebesar
-                                                <strong
-                                                    class="text-rose-950 font-black"
-                                                    >+{{
-                                                        formatRupiah(
-                                                            totalFoodCostPKNormal -
-                                                                8000,
-                                                        )
-                                                    }}
-                                                    / porsi</strong
-                                                >. Mohon sesuaikan gramasi atau
-                                                pilihan bahan baku.
+                                            <p class="text-[11px] text-rose-800 leading-relaxed">
+                                                Food cost PK (<strong>{{ formatRupiah(totalFoodCostPKNormal) }}</strong>) melampaui pagu maksimal <strong>Rp 8.000 / porsi</strong> dengan selisih lebih <strong>+{{ formatRupiah(totalFoodCostPKNormal - 8000) }} / porsi</strong>. Mohon sesuaikan gramasi atau pilihan bahan baku.
                                             </p>
                                         </div>
                                     </div>
                                     <div
                                         v-else
-                                        class="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2"
+                                        class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
-                                        <CheckCircle2
-                                            class="h-4 w-4 text-emerald-600 shrink-0"
-                                        />
-                                        <span
-                                            class="text-[11px] text-emerald-800 font-medium"
-                                        >
-                                            Biaya bahan baku PK aman sesuai
-                                            standar plafon (Hemat/Sisa:
-                                            <strong
-                                                >{{
-                                                    formatRupiah(
-                                                        8000 -
-                                                            totalFoodCostPKNormal,
-                                                    )
-                                                }}
-                                                / porsi</strong
-                                            >).
+                                        <CheckCircle2 class="h-4 w-4 text-emerald-600 shrink-0" />
+                                        <span class="text-[11px] text-emerald-900 font-medium">
+                                            Biaya bahan baku PK <strong>aman dan efisien</strong> sesuai standar pagu BGN (Hemat/Sisa: <strong>{{ formatRupiah(8000 - totalFoodCostPKNormal) }} / porsi</strong>).
                                         </span>
                                     </div>
                                 </CardContent>
@@ -5988,191 +6051,248 @@ const tkpiCategoryList = computed(() => {
 
                             <!-- Food Cost PB (Batas Rp 10.000) -->
                             <Card
-                                className="bg-white border-slate-200 shadow-xs transition-all"
+                                className="bg-white border-slate-200/90 shadow-sm transition-all rounded-2xl overflow-hidden hover:shadow-md"
                                 :class="{
                                     'border-rose-300 ring-2 ring-rose-200/80 bg-rose-50/10':
                                         totalFoodCostPBNormal > 10000,
                                 }"
                             >
                                 <CardHeader
-                                    class="p-3.5 sm:p-4 border-b flex flex-row items-center justify-between"
+                                    class="p-4 sm:p-5 border-b flex flex-row items-center justify-between gap-3"
                                     :class="
                                         totalFoodCostPBNormal > 10000
                                             ? 'bg-rose-50/70 border-rose-100'
-                                            : 'bg-indigo-50/60 border-slate-100'
+                                            : 'bg-gradient-to-r from-indigo-50/70 to-blue-50/40 border-slate-100'
                                     "
                                 >
-                                    <div>
-                                        <CardTitle
-                                            class="text-sm sm:text-base font-bold"
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
                                             :class="
                                                 totalFoodCostPBNormal > 10000
-                                                    ? 'text-rose-950'
-                                                    : 'text-indigo-950'
+                                                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                    : 'bg-white text-indigo-600 border border-indigo-200/80'
                                             "
                                         >
-                                            Food Cost Porsi Besar (PB)
-                                        </CardTitle>
-                                        <CardDescription class="text-[11px]">
-                                            Batas Plafon Maksimal:
-                                            <strong>Rp 10.000 / porsi</strong>
-                                        </CardDescription>
+                                            <UtensilsCrossed class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-[10px] font-black uppercase tracking-wider"
+                                                :class="
+                                                    totalFoodCostPBNormal > 10000
+                                                        ? 'text-rose-800'
+                                                        : 'text-indigo-800/80'
+                                                "
+                                            >
+                                                Standar BGN • Porsi Besar
+                                            </p>
+                                            <CardTitle
+                                                class="text-base font-black text-slate-900 mt-0.5"
+                                            >
+                                                Food Cost Porsi Besar (PB)
+                                            </CardTitle>
+                                            <p class="text-xs text-slate-500 font-medium">
+                                                Batas Pagu:
+                                                <strong class="text-slate-800 font-bold"
+                                                    >Rp 10.000 / porsi</strong
+                                                >
+                                            </p>
+                                        </div>
                                     </div>
                                     <Badge
                                         variant="outline"
                                         :className="
                                             totalFoodCostPBNormal <= 10000
-                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black text-xs'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs animate-pulse'
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-xs px-2.5 py-1 shadow-2xs'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs px-2.5 py-1 animate-pulse shadow-2xs'
                                         "
                                     >
                                         <span
-                                            v-if="
-                                                totalFoodCostPBNormal <= 10000
-                                            "
-                                            >✓ EFISIEN / AMAN</span
+                                            v-if="totalFoodCostPBNormal <= 10000"
+                                            class="flex items-center gap-1.5"
                                         >
-                                        <span v-else>⚠️ OVER BUDGET</span>
+                                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>EFISIEN / AMAN</span>
+                                        </span>
+                                        <span v-else class="flex items-center gap-1.5">
+                                            <AlertTriangle class="h-3.5 w-3.5 text-rose-600" />
+                                            <span>OVER BUDGET</span>
+                                        </span>
                                     </Badge>
                                 </CardHeader>
-                                <CardContent className="p-3.5 sm:p-4 space-y-3">
-                                    <div
-                                        class="flex items-center justify-between p-3 rounded-xl border"
-                                        :class="
-                                            totalFoodCostPBNormal > 10000
-                                                ? 'bg-rose-50/50 border-rose-200'
-                                                : 'bg-slate-50 border-slate-200'
-                                        "
-                                    >
-                                        <div>
-                                            <p
-                                                class="text-xs text-slate-500 font-bold"
-                                            >
-                                                Total Food Cost PB:
-                                            </p>
-                                            <h3
-                                                class="text-xl sm:text-2xl font-black mt-0.5"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-950'
-                                                        : 'text-slate-900'
-                                                "
-                                            >
-                                                {{
-                                                    formatRupiah(
-                                                        totalFoodCostPBNormal,
-                                                    )
-                                                }}
-                                            </h3>
-                                        </div>
-                                        <div class="text-right">
-                                            <p
-                                                class="text-xs font-bold"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-700'
-                                                        : 'text-slate-500'
-                                                "
-                                            >
-                                                {{
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? "Selisih Lebih (Over):"
-                                                        : "Sisa Plafon Anggaran:"
-                                                }}
-                                            </p>
-                                            <h4
-                                                class="text-sm sm:text-base font-black flex items-center justify-end gap-0.5 mt-0.5"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-700'
-                                                        : 'text-emerald-700'
-                                                "
-                                            >
-                                                <span
-                                                    v-if="
-                                                        totalFoodCostPBNormal >
-                                                        10000
+                                <CardContent className="p-4 sm:p-5 space-y-4">
+                                    <!-- Dual Stat Grid -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <!-- Metric 1: Realisasi -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPBNormal > 10000
+                                                    ? 'bg-rose-50/50 border-rose-200'
+                                                    : 'bg-slate-50/80 border-slate-200/80'
+                                            "
+                                        >
+                                            <div class="flex items-center justify-between gap-1">
+                                                <span class="text-xs font-bold text-slate-600">
+                                                    Total Food Cost PB
+                                                </span>
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs">
+                                                    PB
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h3
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? 'text-rose-950'
+                                                            : 'text-slate-900'
                                                     "
-                                                    >+</span
-                                                >{{
-                                                    formatRupiah(
-                                                        Math.abs(
-                                                            10000 -
-                                                                totalFoodCostPBNormal,
-                                                        ),
-                                                    )
-                                                }}
-                                            </h4>
+                                                >
+                                                    {{ formatRupiah(totalFoodCostPBNormal) }}
+                                                </h3>
+                                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                    Kalkulasi menu per porsi
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Metric 2: Sisa Pagu / Selisih Lebih -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPBNormal > 10000
+                                                    ? 'bg-gradient-to-br from-rose-50 to-red-50/60 border-rose-200 text-rose-900'
+                                                    : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
+                                            "
+                                        >
+                                            <div class="flex items-center justify-between gap-1">
+                                                <span
+                                                    class="text-xs font-bold"
+                                                    :class="
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? 'text-rose-800'
+                                                            : 'text-emerald-800'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? "Selisih Lebih (Over)"
+                                                            : "Sisa Pagu Anggaran"
+                                                    }}
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
+                                                    :class="
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
+                                                            : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? "Defisit"
+                                                            : "Hemat"
+                                                    }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h4
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? 'text-rose-700'
+                                                            : 'text-emerald-700'
+                                                    "
+                                                >
+                                                    <span v-if="totalFoodCostPBNormal > 10000">+</span
+                                                    >{{
+                                                        formatRupiah(
+                                                            Math.abs(10000 - totalFoodCostPBNormal)
+                                                        )
+                                                    }}
+                                                </h4>
+                                                <p
+                                                    class="text-[11px] font-medium mt-0.5"
+                                                    :class="
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? 'text-rose-600'
+                                                            : 'text-emerald-700/80'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal > 10000
+                                                            ? "Melebihi batas pagu BGN"
+                                                            : "Tersisa dari pagu Rp 10.000"
+                                                    }}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Warning Alert Jika Lewat Batas Plafon PB (Rp 10.000) -->
+                                    <!-- Budget Utilization Progress Bar -->
+                                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                                        <div class="flex items-center justify-between text-xs">
+                                            <span class="font-bold text-slate-600 flex items-center gap-1.5">
+                                                <Coins class="h-3.5 w-3.5 text-slate-400" />
+                                                Utilisasi Anggaran Pagu:
+                                            </span>
+                                            <span
+                                                class="font-black"
+                                                :class="
+                                                    totalFoodCostPBNormal > 10000
+                                                        ? 'text-rose-700'
+                                                        : 'text-slate-800'
+                                                "
+                                            >
+                                                {{ ((totalFoodCostPBNormal / 10000) * 100).toFixed(1) }}%
+                                                <span class="text-[10px] font-normal text-slate-400">
+                                                    ({{ formatRupiah(totalFoodCostPBNormal) }} / Rp 10.000)
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden">
+                                            <div
+                                                class="h-full rounded-full transition-all duration-500"
+                                                :class="
+                                                    totalFoodCostPBNormal > 10000
+                                                        ? 'bg-rose-500'
+                                                        : totalFoodCostPBNormal > 8500
+                                                        ? 'bg-amber-500'
+                                                        : 'bg-emerald-500'
+                                                "
+                                                :style="{
+                                                    width: `${Math.min(100, (totalFoodCostPBNormal / 10000) * 100)}%`,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Alert Status Banner -->
                                     <div
                                         v-if="totalFoodCostPBNormal > 10000"
-                                        class="p-3 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
+                                        class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
                                     >
                                         <AlertTriangle
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
                                         />
                                         <div class="space-y-0.5">
-                                            <p
-                                                class="font-extrabold text-rose-950 text-xs"
-                                            >
-                                                ⚠️ Peringatan: Melebihi Batas
-                                                Plafon PB!
+                                            <p class="font-extrabold text-rose-950 text-xs">
+                                                ⚠️ Peringatan: Melebihi Batas Pagu PB!
                                             </p>
-                                            <p
-                                                class="text-[11px] text-rose-800 leading-relaxed"
-                                            >
-                                                Food cost PB (<strong>{{
-                                                    formatRupiah(
-                                                        totalFoodCostPBNormal,
-                                                    )
-                                                }}</strong
-                                                >) melampaui plafon maksimal
-                                                <strong
-                                                    >Rp 10.000 / porsi</strong
-                                                >
-                                                dengan selisih lebih sebesar
-                                                <strong
-                                                    class="text-rose-950 font-black"
-                                                    >+{{
-                                                        formatRupiah(
-                                                            totalFoodCostPBNormal -
-                                                                10000,
-                                                        )
-                                                    }}
-                                                    / porsi</strong
-                                                >. Mohon sesuaikan gramasi atau
-                                                pilihan bahan baku.
+                                            <p class="text-[11px] text-rose-800 leading-relaxed">
+                                                Food cost PB (<strong>{{ formatRupiah(totalFoodCostPBNormal) }}</strong>) melampaui pagu maksimal <strong>Rp 10.000 / porsi</strong> dengan selisih lebih <strong>+{{ formatRupiah(totalFoodCostPBNormal - 10000) }} / porsi</strong>. Mohon sesuaikan gramasi atau pilihan bahan baku.
                                             </p>
                                         </div>
                                     </div>
                                     <div
                                         v-else
-                                        class="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2"
+                                        class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
-                                        <CheckCircle2
-                                            class="h-4 w-4 text-emerald-600 shrink-0"
-                                        />
-                                        <span
-                                            class="text-[11px] text-emerald-800 font-medium"
-                                        >
-                                            Biaya bahan baku PB aman sesuai
-                                            standar plafon (Hemat/Sisa:
-                                            <strong
-                                                >{{
-                                                    formatRupiah(
-                                                        10000 -
-                                                            totalFoodCostPBNormal,
-                                                    )
-                                                }}
-                                                / porsi</strong
-                                            >).
+                                        <CheckCircle2 class="h-4 w-4 text-emerald-600 shrink-0" />
+                                        <span class="text-[11px] text-emerald-900 font-medium">
+                                            Biaya bahan baku PB <strong>aman dan efisien</strong> sesuai standar pagu BGN (Hemat/Sisa: <strong>{{ formatRupiah(10000 - totalFoodCostPBNormal) }} / porsi</strong>).
                                         </span>
                                     </div>
                                 </CardContent>
@@ -6727,7 +6847,7 @@ const tkpiCategoryList = computed(() => {
                         </div>
                     </Card>
 
-                    <!-- Real-time Analisis Food Cost & Kepatuhan Plafon Anggaran BGN untuk Akuntan -->
+                    <!-- Real-time Analisis Food Cost & Kepatuhan Pagu Anggaran BGN untuk Akuntan -->
                     <div class="space-y-4 pt-2">
                         <!-- Header Food Cost Akuntan -->
                         <div class="flex items-center gap-2">
@@ -6740,141 +6860,309 @@ const tkpiCategoryList = computed(() => {
                                 <h4
                                     class="text-xs sm:text-sm font-black text-slate-900"
                                 >
-                                    Analisis Food Cost & Kepatuhan Plafon
+                                    Analisis Food Cost & Kepatuhan Pagu
                                     Anggaran BGN
                                 </h4>
                                 <p class="text-[11px] text-slate-500">
                                     Simulasi dampak koreksi harga pasar aktual
-                                    terhadap kepatuhan batas plafon MBG
+                                    terhadap kepatuhan batas pagu MBG
                                     nasional.
                                 </p>
                             </div>
                         </div>
 
-                        <!-- Card Perbandingan Plafon (Real-time dari Harga Aktual) -->
+                        <!-- Card Perbandingan Pagu (Real-time dari Harga Aktual) -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- Food Cost PK (Batas Rp 8.000) -->
                             <Card
-                                className="bg-white border-slate-200 shadow-xs transition-all"
+                                className="bg-white border-slate-200/90 shadow-sm transition-all rounded-2xl overflow-hidden hover:shadow-md"
                                 :class="{
                                     'border-rose-300 ring-2 ring-rose-200/80 bg-rose-50/10':
                                         totalFoodCostPKNormal > 8000,
                                 }"
                             >
                                 <CardHeader
-                                    class="p-3.5 sm:p-4 border-b flex flex-row items-center justify-between"
+                                    class="p-4 sm:p-5 border-b flex flex-row items-center justify-between gap-3"
                                     :class="
                                         totalFoodCostPKNormal > 8000
                                             ? 'bg-rose-50/70 border-rose-100'
-                                            : 'bg-amber-50/60 border-slate-100'
+                                            : 'bg-gradient-to-r from-amber-50/70 to-orange-50/40 border-slate-100'
                                     "
                                 >
-                                    <div>
-                                        <CardTitle
-                                            class="text-sm sm:text-base font-bold"
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
                                             :class="
                                                 totalFoodCostPKNormal > 8000
-                                                    ? 'text-rose-950'
-                                                    : 'text-amber-950'
+                                                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                    : 'bg-white text-amber-600 border border-amber-200/80'
                                             "
                                         >
-                                            Food Cost Porsi Kecil (PK)
-                                        </CardTitle>
-                                        <CardDescription class="text-[11px]">
-                                            Batas Plafon Maksimal:
-                                            <strong>Rp 8.000 / porsi</strong>
-                                        </CardDescription>
+                                            <Utensils class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-[10px] font-black uppercase tracking-wider"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'text-rose-800'
+                                                        : 'text-amber-800/80'
+                                                "
+                                            >
+                                                Standar BGN • Porsi Kecil
+                                            </p>
+                                            <CardTitle
+                                                class="text-base font-black text-slate-900 mt-0.5"
+                                            >
+                                                Food Cost Porsi Kecil (PK)
+                                            </CardTitle>
+                                            <p
+                                                class="text-xs text-slate-500 font-medium"
+                                            >
+                                                Batas Pagu:
+                                                <strong
+                                                    class="text-slate-800 font-bold"
+                                                    >Rp 8.000 / porsi</strong
+                                                >
+                                            </p>
+                                        </div>
                                     </div>
                                     <Badge
                                         variant="outline"
                                         :className="
                                             totalFoodCostPKNormal <= 8000
-                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black text-xs'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs animate-pulse'
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-xs px-2.5 py-1 shadow-2xs'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs px-2.5 py-1 animate-pulse shadow-2xs'
                                         "
                                     >
                                         <span
                                             v-if="totalFoodCostPKNormal <= 8000"
-                                            >✓ EFISIEN / AMAN</span
+                                            class="flex items-center gap-1.5"
                                         >
-                                        <span v-else>⚠️ OVER BUDGET</span>
+                                            <span
+                                                class="h-2 w-2 rounded-full bg-emerald-500"
+                                            ></span>
+                                            <span>EFISIEN / AMAN</span>
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="flex items-center gap-1.5"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3.5 w-3.5 text-rose-600"
+                                            />
+                                            <span>OVER BUDGET</span>
+                                        </span>
                                     </Badge>
                                 </CardHeader>
-                                <CardContent className="p-3.5 sm:p-4 space-y-3">
+                                <CardContent className="p-4 sm:p-5 space-y-4">
+                                    <!-- Dual Stat Grid -->
                                     <div
-                                        class="flex items-center justify-between p-3 rounded-xl border"
-                                        :class="
-                                            totalFoodCostPKNormal > 8000
-                                                ? 'bg-rose-50/50 border-rose-200'
-                                                : 'bg-slate-50 border-slate-200'
-                                        "
+                                        class="grid grid-cols-1 sm:grid-cols-2 gap-3"
                                     >
-                                        <div>
-                                            <p
-                                                class="text-xs text-slate-500 font-bold"
-                                            >
-                                                Total Food Cost PK (Realisasi):
-                                            </p>
-                                            <h3
-                                                class="text-xl sm:text-2xl font-black mt-0.5"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-950'
-                                                        : 'text-slate-900'
-                                                "
-                                            >
-                                                {{
-                                                    formatRupiah(
-                                                        totalFoodCostPKNormal,
-                                                    )
-                                                }}
-                                            </h3>
-                                        </div>
-                                        <div class="text-right">
-                                            <p
-                                                class="text-xs font-bold"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-700'
-                                                        : 'text-slate-500'
-                                                "
-                                            >
-                                                {{
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? "Selisih Lebih (Over):"
-                                                        : "Sisa Plafon Anggaran:"
-                                                }}
-                                            </p>
-                                            <h4
-                                                class="text-sm sm:text-base font-black flex items-center justify-end gap-0.5 mt-0.5"
-                                                :class="
-                                                    totalFoodCostPKNormal > 8000
-                                                        ? 'text-rose-700'
-                                                        : 'text-emerald-700'
-                                                "
+                                        <!-- Metric 1: Realisasi -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPKNormal > 8000
+                                                    ? 'bg-rose-50/50 border-rose-200'
+                                                    : 'bg-slate-50/80 border-slate-200/80'
+                                            "
+                                        >
+                                            <div
+                                                class="flex items-center justify-between gap-1"
                                             >
                                                 <span
-                                                    v-if="
+                                                    class="text-xs font-bold text-slate-600"
+                                                >
+                                                    Total Food Cost (Realisasi)
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs"
+                                                >
+                                                    PK
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h3
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
                                                         totalFoodCostPKNormal >
                                                         8000
+                                                            ? 'text-rose-950'
+                                                            : 'text-slate-900'
                                                     "
-                                                    >+</span
-                                                >{{
-                                                    formatRupiah(
-                                                        Math.abs(
-                                                            8000 -
-                                                                totalFoodCostPKNormal,
-                                                        ),
-                                                    )
-                                                }}
-                                            </h4>
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal,
+                                                        )
+                                                    }}
+                                                </h3>
+                                                <p
+                                                    class="text-[11px] text-slate-400 font-medium mt-0.5"
+                                                >
+                                                    Biaya riil per porsi MBG
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Metric 2: Sisa Pagu / Selisih Lebih -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPKNormal > 8000
+                                                    ? 'bg-gradient-to-br from-rose-50 to-red-50/60 border-rose-200 text-rose-900'
+                                                    : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
+                                            "
+                                        >
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
+                                                <span
+                                                    class="text-xs font-bold"
+                                                    :class="
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? 'text-rose-800'
+                                                            : 'text-emerald-800'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? "Selisih Lebih (Over)"
+                                                            : "Sisa Pagu Anggaran"
+                                                    }}
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
+                                                    :class="
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
+                                                            : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? "Defisit"
+                                                            : "Hemat"
+                                                    }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h4
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? 'text-rose-700'
+                                                            : 'text-emerald-700'
+                                                    "
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            totalFoodCostPKNormal >
+                                                            8000
+                                                        "
+                                                        >+</span
+                                                    >{{
+                                                        formatRupiah(
+                                                            Math.abs(
+                                                                8000 -
+                                                                    totalFoodCostPKNormal,
+                                                            ),
+                                                        )
+                                                    }}
+                                                </h4>
+                                                <p
+                                                    class="text-[11px] font-medium mt-0.5"
+                                                    :class="
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? 'text-rose-600'
+                                                            : 'text-emerald-700/80'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPKNormal >
+                                                        8000
+                                                            ? "Melebihi batas pagu BGN"
+                                                            : "Tersisa dari pagu Rp 8.000"
+                                                    }}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Warning Alert Jika Lewat Batas Plafon PK (Rp 8.000) -->
+                                    <!-- Budget Utilization Progress Bar -->
+                                    <div
+                                        class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between text-xs"
+                                        >
+                                            <span
+                                                class="font-bold text-slate-600 flex items-center gap-1.5"
+                                            >
+                                                <Coins
+                                                    class="h-3.5 w-3.5 text-slate-400"
+                                                />
+                                                Utilisasi Anggaran Pagu:
+                                            </span>
+                                            <span
+                                                class="font-black"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'text-rose-700'
+                                                        : 'text-slate-800'
+                                                "
+                                            >
+                                                {{
+                                                    (
+                                                        (totalFoodCostPKNormal /
+                                                            8000) *
+                                                        100
+                                                    ).toFixed(1)
+                                                }}%
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-400"
+                                                >
+                                                    ({{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal,
+                                                        )
+                                                    }}
+                                                    / Rp 8.000)
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full rounded-full transition-all duration-500"
+                                                :class="
+                                                    totalFoodCostPKNormal > 8000
+                                                        ? 'bg-rose-500'
+                                                        : totalFoodCostPKNormal >
+                                                            6800
+                                                          ? 'bg-amber-500'
+                                                          : 'bg-emerald-500'
+                                                "
+                                                :style="{
+                                                    width: `${Math.min(100, (totalFoodCostPKNormal / 8000) * 100)}%`,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Alert Status Banner -->
                                     <div
                                         v-if="totalFoodCostPKNormal > 8000"
-                                        class="p-3 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
+                                        class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
                                     >
                                         <AlertTriangle
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
@@ -6884,7 +7172,7 @@ const tkpiCategoryList = computed(() => {
                                                 class="font-extrabold text-rose-950 text-xs"
                                             >
                                                 ⚠️ Peringatan: Melebihi Batas
-                                                Plafon PK!
+                                                Pagu PK!
                                             </p>
                                             <p
                                                 class="text-[11px] text-rose-800 leading-relaxed"
@@ -6894,13 +7182,12 @@ const tkpiCategoryList = computed(() => {
                                                         totalFoodCostPKNormal,
                                                     )
                                                 }}</strong
-                                                >) melampaui plafon maksimal
+                                                >) melampaui pagu maksimal
                                                 <strong
                                                     >Rp 8.000 / porsi</strong
                                                 >
-                                                dengan selisih lebih sebesar
+                                                dengan selisih lebih
                                                 <strong
-                                                    class="text-rose-950 font-black"
                                                     >+{{
                                                         formatRupiah(
                                                             totalFoodCostPKNormal -
@@ -6916,16 +7203,18 @@ const tkpiCategoryList = computed(() => {
                                     </div>
                                     <div
                                         v-else
-                                        class="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2"
+                                        class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
                                         <CheckCircle2
                                             class="h-4 w-4 text-emerald-600 shrink-0"
                                         />
                                         <span
-                                            class="text-[11px] text-emerald-800 font-medium"
+                                            class="text-[11px] text-emerald-900 font-medium"
                                         >
-                                            Biaya bahan baku PK aman sesuai
-                                            standar plafon (Hemat/Sisa:
+                                            Biaya bahan baku PK
+                                            <strong>aman dan efisien</strong>
+                                            sesuai standar pagu BGN
+                                            (Hemat/Sisa:
                                             <strong
                                                 >{{
                                                     formatRupiah(
@@ -6942,132 +7231,299 @@ const tkpiCategoryList = computed(() => {
 
                             <!-- Food Cost PB (Batas Rp 10.000) -->
                             <Card
-                                className="bg-white border-slate-200 shadow-xs transition-all"
+                                className="bg-white border-slate-200/90 shadow-sm transition-all rounded-2xl overflow-hidden hover:shadow-md"
                                 :class="{
                                     'border-rose-300 ring-2 ring-rose-200/80 bg-rose-50/10':
                                         totalFoodCostPBNormal > 10000,
                                 }"
                             >
                                 <CardHeader
-                                    class="p-3.5 sm:p-4 border-b flex flex-row items-center justify-between"
+                                    class="p-4 sm:p-5 border-b flex flex-row items-center justify-between gap-3"
                                     :class="
                                         totalFoodCostPBNormal > 10000
                                             ? 'bg-rose-50/70 border-rose-100'
-                                            : 'bg-indigo-50/60 border-slate-100'
+                                            : 'bg-gradient-to-r from-indigo-50/70 to-blue-50/40 border-slate-100'
                                     "
                                 >
-                                    <div>
-                                        <CardTitle
-                                            class="text-sm sm:text-base font-bold"
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
                                             :class="
                                                 totalFoodCostPBNormal > 10000
-                                                    ? 'text-rose-950'
-                                                    : 'text-indigo-950'
+                                                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                    : 'bg-white text-indigo-600 border border-indigo-200/80'
                                             "
                                         >
-                                            Food Cost Porsi Besar (PB)
-                                        </CardTitle>
-                                        <CardDescription class="text-[11px]">
-                                            Batas Plafon Maksimal:
-                                            <strong>Rp 10.000 / porsi</strong>
-                                        </CardDescription>
+                                            <UtensilsCrossed class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-[10px] font-black uppercase tracking-wider"
+                                                :class="
+                                                    totalFoodCostPBNormal >
+                                                    10000
+                                                        ? 'text-rose-800'
+                                                        : 'text-indigo-800/80'
+                                                "
+                                            >
+                                                Standar BGN • Porsi Besar
+                                            </p>
+                                            <CardTitle
+                                                class="text-base font-black text-slate-900 mt-0.5"
+                                            >
+                                                Food Cost Porsi Besar (PB)
+                                            </CardTitle>
+                                            <p
+                                                class="text-xs text-slate-500 font-medium"
+                                            >
+                                                Batas Pagu:
+                                                <strong
+                                                    class="text-slate-800 font-bold"
+                                                    >Rp 10.000 / porsi</strong
+                                                >
+                                            </p>
+                                        </div>
                                     </div>
                                     <Badge
                                         variant="outline"
                                         :className="
                                             totalFoodCostPBNormal <= 10000
-                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black text-xs'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs animate-pulse'
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-xs px-2.5 py-1 shadow-2xs'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300 font-black text-xs px-2.5 py-1 animate-pulse shadow-2xs'
                                         "
                                     >
                                         <span
                                             v-if="
                                                 totalFoodCostPBNormal <= 10000
                                             "
-                                            >✓ EFISIEN / AMAN</span
+                                            class="flex items-center gap-1.5"
                                         >
-                                        <span v-else>⚠️ OVER BUDGET</span>
+                                            <span
+                                                class="h-2 w-2 rounded-full bg-emerald-500"
+                                            ></span>
+                                            <span>EFISIEN / AMAN</span>
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="flex items-center gap-1.5"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3.5 w-3.5 text-rose-600"
+                                            />
+                                            <span>OVER BUDGET</span>
+                                        </span>
                                     </Badge>
                                 </CardHeader>
-                                <CardContent className="p-3.5 sm:p-4 space-y-3">
+                                <CardContent className="p-4 sm:p-5 space-y-4">
+                                    <!-- Dual Stat Grid -->
                                     <div
-                                        class="flex items-center justify-between p-3 rounded-xl border"
-                                        :class="
-                                            totalFoodCostPBNormal > 10000
-                                                ? 'bg-rose-50/50 border-rose-200'
-                                                : 'bg-slate-50 border-slate-200'
-                                        "
+                                        class="grid grid-cols-1 sm:grid-cols-2 gap-3"
                                     >
-                                        <div>
-                                            <p
-                                                class="text-xs text-slate-500 font-bold"
-                                            >
-                                                Total Food Cost PB (Realisasi):
-                                            </p>
-                                            <h3
-                                                class="text-xl sm:text-2xl font-black mt-0.5"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-950'
-                                                        : 'text-slate-900'
-                                                "
-                                            >
-                                                {{
-                                                    formatRupiah(
-                                                        totalFoodCostPBNormal,
-                                                    )
-                                                }}
-                                            </h3>
-                                        </div>
-                                        <div class="text-right">
-                                            <p
-                                                class="text-xs font-bold"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-700'
-                                                        : 'text-slate-500'
-                                                "
-                                            >
-                                                {{
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? "Selisih Lebih (Over):"
-                                                        : "Sisa Plafon Anggaran:"
-                                                }}
-                                            </p>
-                                            <h4
-                                                class="text-sm sm:text-base font-black flex items-center justify-end gap-0.5 mt-0.5"
-                                                :class="
-                                                    totalFoodCostPBNormal >
-                                                    10000
-                                                        ? 'text-rose-700'
-                                                        : 'text-emerald-700'
-                                                "
+                                        <!-- Metric 1: Realisasi -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPBNormal > 10000
+                                                    ? 'bg-rose-50/50 border-rose-200'
+                                                    : 'bg-slate-50/80 border-slate-200/80'
+                                            "
+                                        >
+                                            <div
+                                                class="flex items-center justify-between gap-1"
                                             >
                                                 <span
-                                                    v-if="
+                                                    class="text-xs font-bold text-slate-600"
+                                                >
+                                                    Total Food Cost (Realisasi)
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-500 border border-slate-200 shadow-2xs"
+                                                >
+                                                    PB
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h3
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
                                                         totalFoodCostPBNormal >
                                                         10000
+                                                            ? 'text-rose-950'
+                                                            : 'text-slate-900'
                                                     "
-                                                    >+</span
-                                                >{{
-                                                    formatRupiah(
-                                                        Math.abs(
-                                                            10000 -
-                                                                totalFoodCostPBNormal,
-                                                        ),
-                                                    )
-                                                }}
-                                            </h4>
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal,
+                                                        )
+                                                    }}
+                                                </h3>
+                                                <p
+                                                    class="text-[11px] text-slate-400 font-medium mt-0.5"
+                                                >
+                                                    Biaya riil per porsi MBG
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Metric 2: Sisa Pagu / Selisih Lebih -->
+                                        <div
+                                            class="p-3.5 rounded-xl border flex flex-col justify-between transition-all"
+                                            :class="
+                                                totalFoodCostPBNormal > 10000
+                                                    ? 'bg-gradient-to-br from-rose-50 to-red-50/60 border-rose-200 text-rose-900'
+                                                    : 'bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-200/80 text-emerald-900'
+                                            "
+                                        >
+                                            <div
+                                                class="flex items-center justify-between gap-1"
+                                            >
+                                                <span
+                                                    class="text-xs font-bold"
+                                                    :class="
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? 'text-rose-800'
+                                                            : 'text-emerald-800'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? "Selisih Lebih (Over)"
+                                                            : "Sisa Pagu Anggaran"
+                                                    }}
+                                                </span>
+                                                <span
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-extrabold shadow-2xs"
+                                                    :class="
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? 'bg-rose-200/80 text-rose-950 border border-rose-300'
+                                                            : 'bg-emerald-200/80 text-emerald-950 border border-emerald-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? "Defisit"
+                                                            : "Hemat"
+                                                    }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <h4
+                                                    class="text-2xl sm:text-3xl font-black tracking-tight"
+                                                    :class="
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? 'text-rose-700'
+                                                            : 'text-emerald-700'
+                                                    "
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            totalFoodCostPBNormal >
+                                                            10000
+                                                        "
+                                                        >+</span
+                                                    >{{
+                                                        formatRupiah(
+                                                            Math.abs(
+                                                                10000 -
+                                                                    totalFoodCostPBNormal,
+                                                            ),
+                                                        )
+                                                    }}
+                                                </h4>
+                                                <p
+                                                    class="text-[11px] font-medium mt-0.5"
+                                                    :class="
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? 'text-rose-600'
+                                                            : 'text-emerald-700/80'
+                                                    "
+                                                >
+                                                    {{
+                                                        totalFoodCostPBNormal >
+                                                        10000
+                                                            ? "Melebihi batas pagu BGN"
+                                                            : "Tersisa dari pagu Rp 10.000"
+                                                    }}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Warning Alert Jika Lewat Batas Plafon PB (Rp 10.000) -->
+                                    <!-- Budget Utilization Progress Bar -->
+                                    <div
+                                        class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between text-xs"
+                                        >
+                                            <span
+                                                class="font-bold text-slate-600 flex items-center gap-1.5"
+                                            >
+                                                <Coins
+                                                    class="h-3.5 w-3.5 text-slate-400"
+                                                />
+                                                Utilisasi Anggaran Pagu:
+                                            </span>
+                                            <span
+                                                class="font-black"
+                                                :class="
+                                                    totalFoodCostPBNormal >
+                                                    10000
+                                                        ? 'text-rose-700'
+                                                        : 'text-slate-800'
+                                                "
+                                            >
+                                                {{
+                                                    (
+                                                        (totalFoodCostPBNormal /
+                                                            10000) *
+                                                        100
+                                                    ).toFixed(1)
+                                                }}%
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-400"
+                                                >
+                                                    ({{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal,
+                                                        )
+                                                    }}
+                                                    / Rp 10.000)
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="h-2 w-full rounded-full bg-slate-200/80 overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full rounded-full transition-all duration-500"
+                                                :class="
+                                                    totalFoodCostPBNormal >
+                                                    10000
+                                                        ? 'bg-rose-500'
+                                                        : totalFoodCostPBNormal >
+                                                            8500
+                                                          ? 'bg-amber-500'
+                                                          : 'bg-emerald-500'
+                                                "
+                                                :style="{
+                                                    width: `${Math.min(100, (totalFoodCostPBNormal / 10000) * 100)}%`,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Alert Status Banner -->
                                     <div
                                         v-if="totalFoodCostPBNormal > 10000"
-                                        class="p-3 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
+                                        class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-2xs"
                                     >
                                         <AlertTriangle
                                             class="h-4 w-4 text-rose-600 shrink-0 mt-0.5"
@@ -7077,7 +7533,7 @@ const tkpiCategoryList = computed(() => {
                                                 class="font-extrabold text-rose-950 text-xs"
                                             >
                                                 ⚠️ Peringatan: Melebihi Batas
-                                                Plafon PB!
+                                                Pagu PB!
                                             </p>
                                             <p
                                                 class="text-[11px] text-rose-800 leading-relaxed"
@@ -7087,13 +7543,12 @@ const tkpiCategoryList = computed(() => {
                                                         totalFoodCostPBNormal,
                                                     )
                                                 }}</strong
-                                                >) melampaui plafon maksimal
+                                                >) melampaui pagu maksimal
                                                 <strong
                                                     >Rp 10.000 / porsi</strong
                                                 >
-                                                dengan selisih lebih sebesar
+                                                dengan selisih lebih
                                                 <strong
-                                                    class="text-rose-950 font-black"
                                                     >+{{
                                                         formatRupiah(
                                                             totalFoodCostPBNormal -
@@ -7109,16 +7564,18 @@ const tkpiCategoryList = computed(() => {
                                     </div>
                                     <div
                                         v-else
-                                        class="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2"
+                                        class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 shadow-2xs"
                                     >
                                         <CheckCircle2
                                             class="h-4 w-4 text-emerald-600 shrink-0"
                                         />
                                         <span
-                                            class="text-[11px] text-emerald-800 font-medium"
+                                            class="text-[11px] text-emerald-900 font-medium"
                                         >
-                                            Biaya bahan baku PB aman sesuai
-                                            standar plafon (Hemat/Sisa:
+                                            Biaya bahan baku PB
+                                            <strong>aman dan efisien</strong>
+                                            sesuai standar pagu BGN
+                                            (Hemat/Sisa:
                                             <strong
                                                 >{{
                                                     formatRupiah(
