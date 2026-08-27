@@ -30,6 +30,7 @@ import {
     FileCheck2,
     ShieldCheck,
     FileSignature,
+    CalendarRange,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -618,6 +619,39 @@ function logout() {
                     >
                     <div
                         v-if="route().current('label.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 6. Menu Periode -->
+                <Link
+                    :href="route('periode.index')"
+                    :title="isCollapsed ? 'Periode' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('periode.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <CalendarRange class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Periode</span
+                    >
+                    <div
+                        v-if="route().current('periode.*')"
                         :class="[
                             'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
                             isCollapsed

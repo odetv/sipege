@@ -5,6 +5,7 @@ use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
+use App\Http\Controllers\PeriodeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
@@ -67,6 +68,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Label SPPG
     Route::get('/label', [LabelController::class, 'index'])->name('label.index');
+
+    // Periode Operasional SPPG
+    Route::resource('periode', PeriodeController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
 Route::middleware('auth')->group(function () {

@@ -20,13 +20,14 @@ class DatabaseSeeder extends Seeder
         $driver = DB::getDriverName();
 
         if ($driver === 'pgsql') {
-            DB::statement('TRUNCATE TABLE rincian_penerima_manfaat, kelompok_penerima_manfaat, unit_sppg, users RESTART IDENTITY CASCADE;');
+            DB::statement('TRUNCATE TABLE rincian_penerima_manfaat, kelompok_penerima_manfaat, unit_sppg, users, periodes RESTART IDENTITY CASCADE;');
         } elseif ($driver === 'mysql') {
             Schema::disableForeignKeyConstraints();
             DB::table('rincian_penerima_manfaat')->truncate();
             DB::table('kelompok_penerima_manfaat')->truncate();
             DB::table('unit_sppg')->truncate();
             DB::table('users')->truncate();
+            DB::table('periodes')->truncate();
             Schema::enableForeignKeyConstraints();
         } elseif ($driver === 'sqlite') {
             DB::statement('PRAGMA foreign_keys = OFF;');
@@ -34,7 +35,8 @@ class DatabaseSeeder extends Seeder
             DB::table('kelompok_penerima_manfaat')->delete();
             DB::table('unit_sppg')->delete();
             DB::table('users')->delete();
-            DB::statement('DELETE FROM sqlite_sequence WHERE name IN ("rincian_penerima_manfaat", "kelompok_penerima_manfaat", "unit_sppg", "users");');
+            DB::table('periodes')->delete();
+            DB::statement('DELETE FROM sqlite_sequence WHERE name IN ("rincian_penerima_manfaat", "kelompok_penerima_manfaat", "unit_sppg", "users", "periodes");');
             DB::statement('PRAGMA foreign_keys = ON;');
         }
 
@@ -49,5 +51,8 @@ class DatabaseSeeder extends Seeder
 
         // 4. Seeder Rincian Penerima Manfaat (87 Klasifikasi Sub Kategori) -> ID: 1..87, KPM ID: 1..18
         $this->call(RincianPenerimaManfaatSeeder::class);
+
+        // 5. Seeder Periode Operasional SPPG (9 Periode)
+        $this->call(PeriodeSeeder::class);
     }
 }
