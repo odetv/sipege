@@ -6,7 +6,6 @@ use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\PeriodeController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -71,12 +70,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Periode Operasional SPPG
     Route::resource('periode', PeriodeController::class)->only(['index', 'store', 'update', 'destroy']);
-});
-
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 require __DIR__ . '/auth.php';
