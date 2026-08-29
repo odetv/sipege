@@ -361,12 +361,12 @@ function logout() {
                             :href="route('gizi.daftar-menu')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.daftar-menu') || route().current('gizi.kalender-menu') || (route().current('gizi.index') && (page.props.activeTab === 'daftar-menu' || page.props.activeTab === 'kalender-menu'))
+                                route().current('gizi.daftar-menu') || (route().current('gizi.index') && page.props.activeTab === 'daftar-menu')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
-                            <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                            <FileSpreadsheet class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Daftar Menu</span>
                         </Link>
 
@@ -382,6 +382,20 @@ function logout() {
                         >
                             <Utensils class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Rancang Menu</span>
+                        </Link>
+
+                        <!-- Sub-menu 5: Kalender Menu -->
+                        <Link
+                            :href="route('gizi.kalender-menu')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.kalender-menu') || (route().current('gizi.index') && page.props.activeTab === 'kalender-menu')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kalender Menu</span>
                         </Link>
                     </div>
                 </div>

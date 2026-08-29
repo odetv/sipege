@@ -26,7 +26,7 @@ class DashboardController extends Controller
                 ->get();
         }
 
-        return Inertia::render('Dashboard', [
+        return Inertia::render('Dashboard/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
