@@ -249,9 +249,19 @@ class GiziController extends Controller
         }
         $workOrder = $query->firstOrFail();
 
-        if ($workOrder->status !== 'Draft') {
-            return back()->with('error', 'Hanya menu dengan status Draft yang dapat dihapus.');
+        $statusAllowed = ['Draft', 'Ditolak', 'Ditolak Keuangan'];
+        if (!in_array($workOrder->status, $statusAllowed)) {
+            return back()->with('error', 'Hanya menu dengan status Draft atau Ditolak yang dapat dihapus.');
         }
+
+        // Hapus juga purchase order terkait jika ada
+        if ($workOrder->purchaseOrder) {
+            $workOrder->purchaseOrder->items()->delete();
+            $workOrder->purchaseOrder->delete();
+        }
+
+        $workOrder->items()->delete();
+        $workOrder->kelompoks()->delete();
         $workOrder->delete();
 
         return back()->with('success', 'Work Order berhasil dihapus.');

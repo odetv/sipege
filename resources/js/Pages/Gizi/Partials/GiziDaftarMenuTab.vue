@@ -243,8 +243,10 @@ function handleEditWo(m) {
 }
 
 function confirmDeleteWo(m) {
-    if (m.status_wo !== 'Draft') {
-        alert(`Menu berstatus "${m.status_wo}" tidak dapat dihapus. Hanya menu berstatus "Draft" yang dapat dihapus.`);
+    const statusLower = (m.status_wo || '').toLowerCase();
+    const canDelete = statusLower === 'draft' || statusLower.includes('ditolak');
+    if (!canDelete) {
+        alert(`Menu berstatus "${m.status_wo}" tidak dapat dihapus. Hanya menu yang belum siap produksi / belum di-ACC (Draft atau Ditolak) yang dapat dihapus.`);
         return;
     }
     menuToDelete.value = m;
@@ -497,13 +499,13 @@ function executeDeleteWo() {
                                         <Lock class="h-3.5 w-3.5 text-slate-400" />
                                     </span>
 
-                                    <!-- 3. Tombol Hapus (Hanya jika Draft) -->
+                                    <!-- 3. Tombol Hapus (Bisa jika Draft atau Ditolak Keuangan) -->
                                     <button
-                                        v-if="menu.status_wo === 'Draft'"
+                                        v-if="menu.status_wo === 'Draft' || menu.status_wo.toLowerCase().includes('ditolak')"
                                         type="button"
                                         @click="confirmDeleteWo(menu)"
                                         class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Hapus Menu Draft Ini"
+                                        title="Hapus Rancangan Menu Ini"
                                     >
                                         <Trash2 class="h-4 w-4" />
                                     </button>
