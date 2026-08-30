@@ -35,6 +35,14 @@ const props = defineProps({
         type: String,
         default: null,
     },
+    workOrdersList: {
+        type: Array,
+        default: () => [],
+    },
+    activeWorkOrder: {
+        type: Object,
+        default: null,
+    },
     stats: {
         type: Object,
         default: () => ({
@@ -89,6 +97,7 @@ function selectSubMenu(tabId) {
             <!-- 3. SUB MENU 3: DAFTAR MENU -->
             <GiziDaftarMenuTab
                 v-if="activeSubMenu === 'daftar-menu'"
+                :work-orders-list="workOrdersList"
                 @open-rancang-menu="selectSubMenu('rancang-menu')"
             />
 
@@ -104,11 +113,14 @@ function selectSubMenu(tabId) {
                 :tkpi-list="tkpiList"
                 :stats="stats"
                 :initial-step="initialStep"
+                :work-orders-list="workOrdersList"
+                :active-work-order="activeWorkOrder"
             />
 
             <!-- 5. SUB MENU 5: KALENDER MENU -->
             <GiziKalenderMenuTab
                 v-if="activeSubMenu === 'kalender-menu'"
+                :work-orders-list="workOrdersList"
                 @open-rancang-menu="selectSubMenu('rancang-menu')"
             />
         </div>

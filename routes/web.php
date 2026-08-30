@@ -45,12 +45,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/rancang-menu', [GiziController::class, 'rancangMenu'])->name('rancang-menu');
         Route::get('/buat-menu', [GiziController::class, 'rancangMenu'])->name('buat-menu');
         Route::get('/kalender-menu', [GiziController::class, 'kalenderMenu'])->name('kalender-menu');
+
+        // Work Order Actions
+        Route::post('/work-order', [GiziController::class, 'storeWorkOrder'])->name('work-order.store');
+        Route::put('/work-order/{id}', [GiziController::class, 'updateWorkOrder'])->name('work-order.update');
+        Route::delete('/work-order/{id}', [GiziController::class, 'destroyWorkOrder'])->name('work-order.destroy');
     });
 
     // Keuangan SPPG (12 Sub-menu Lengkap)
     Route::prefix('keuangan')->name('keuangan.')->group(function () {
         Route::get('/', [KeuanganController::class, 'anggaran'])->name('index');
         Route::get('/anggaran', [KeuanganController::class, 'anggaran'])->name('anggaran');
+        Route::get('/verifikasi-po', [KeuanganController::class, 'verifikasiPoIndex'])->name('verifikasi-po');
+        Route::get('/verifikasi_po', [KeuanganController::class, 'verifikasiPoIndex'])->name('verifikasi_po');
         Route::get('/daftar-po', [KeuanganController::class, 'daftarPo'])->name('daftar-po');
         Route::get('/daftar_po', [KeuanganController::class, 'daftarPo'])->name('daftar_po');
         Route::get('/transaksi', [KeuanganController::class, 'transaksi'])->name('transaksi');
@@ -63,6 +70,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/lpa', [KeuanganController::class, 'lpa'])->name('lpa');
         Route::get('/sptj', [KeuanganController::class, 'sptj'])->name('sptj');
         Route::get('/bapsd', [KeuanganController::class, 'bapsd'])->name('bapsd');
+        Route::get('/stok', [KeuanganController::class, 'stok'])->name('stok');
+        Route::get('/laporan-harian', [KeuanganController::class, 'laporanHarian'])->name('laporan-harian');
+        Route::get('/laporan-periodik', [KeuanganController::class, 'laporanPeriodik'])->name('laporan-periodik');
+
+        // PO Actions
+        Route::post('/po/{id}/verifikasi', [KeuanganController::class, 'verifikasiPo'])->name('po.verifikasi');
     });
 
     // Label SPPG

@@ -5,6 +5,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 
 // Partials
 import KeuanganAnggaranTab from "@/Pages/Keuangan/Partials/KeuanganAnggaranTab.vue";
+import KeuanganVerifikasiPoTab from "@/Pages/Keuangan/Partials/KeuanganVerifikasiPoTab.vue";
 import KeuanganDaftarPoTab from "@/Pages/Keuangan/Partials/KeuanganDaftarPoTab.vue";
 import KeuanganTransaksiTab from "@/Pages/Keuangan/Partials/KeuanganTransaksiTab.vue";
 import KeuanganBkuTab from "@/Pages/Keuangan/Partials/KeuanganBkuTab.vue";
@@ -16,6 +17,9 @@ import KeuanganBpFasilitasTab from "@/Pages/Keuangan/Partials/KeuanganBpFasilita
 import KeuanganLpaTab from "@/Pages/Keuangan/Partials/KeuanganLpaTab.vue";
 import KeuanganSptjTab from "@/Pages/Keuangan/Partials/KeuanganSptjTab.vue";
 import KeuanganBapsdTab from "@/Pages/Keuangan/Partials/KeuanganBapsdTab.vue";
+import KeuanganStokTab from "@/Pages/Keuangan/Partials/KeuanganStokTab.vue";
+import KeuanganLaporanHarianTab from "@/Pages/Keuangan/Partials/KeuanganLaporanHarianTab.vue";
+import KeuanganLaporanPeriodikTab from "@/Pages/Keuangan/Partials/KeuanganLaporanPeriodikTab.vue";
 
 const props = defineProps({
     user: {
@@ -33,6 +37,14 @@ const props = defineProps({
     activeTab: {
         type: String,
         default: "anggaran",
+    },
+    verifikasiPoList: {
+        type: Array,
+        default: () => [],
+    },
+    poList: {
+        type: Array,
+        default: () => [],
     },
     summary: {
         type: Object,
@@ -52,6 +64,7 @@ const props = defineProps({
 });
 
 const normalizeTab = (tab) => {
+    if (tab === "verifikasi-po" || tab === "verifikasi_po") return "verifikasi_po";
     if (tab === "daftar-po" || tab === "daftar_po") return "daftar_po";
     if (tab === "ringkasan" || tab === "anggaran") return "anggaran";
     if (tab === "transaksi" || tab === "arus_kas") return "transaksi";
@@ -120,42 +133,7 @@ const transaksiList = ref([
     },
 ]);
 
-// 2. DATA PO
-const poList = ref([
-    {
-        id: "PO-20260825-001",
-        wo_id: "WO-MBG-20260825",
-        tanggal: "2026-08-25",
-        menu: "Ayam Goreng Lengkuas & Sayur Bayam",
-        vendor: "Koperasi Pangan Sejahtera",
-        items_count: 8,
-        total_nominal: 17450000,
-        status_po: "Terverifikasi",
-        status_bayar: "Lunas (Transfer Bank)",
-    },
-    {
-        id: "PO-20260826-002",
-        wo_id: "WO-MBG-20260826",
-        tanggal: "2026-08-26",
-        menu: "Ikan Kembung Bakar & Tumis Buncis",
-        vendor: "Kelompok Tani & Nelayan Mandiri",
-        items_count: 7,
-        total_nominal: 17380000,
-        status_po: "Diproses",
-        status_bayar: "Menunggu Tagihan",
-    },
-    {
-        id: "PO-20260827-003",
-        wo_id: "WO-MBG-20260827",
-        tanggal: "2026-08-27",
-        menu: "Semur Telur & Tahu Tempe",
-        vendor: "Agen Sembako Makmur Jaya",
-        items_count: 6,
-        total_nominal: 16890000,
-        status_po: "Draft",
-        status_bayar: "Belum Dibayar",
-    },
-]);
+// 2. DATA PO (Diambil langsung dari props.poList dari database)
 
 // 3. DATA BKU (BUKU KAS UMUM)
 const bkuList = ref([
@@ -451,7 +429,15 @@ function formatTanggalIndo(tgl) {
                 :format-rupiah="formatRupiah"
             />
 
-            <!-- 2. DAFTAR PO (PURCHASE ORDER) -->
+            <!-- 2. VERIFIKASI PO (TELAAH & PERSETUJUAN DARI TIM GIZI) -->
+            <KeuanganVerifikasiPoTab
+                v-if="activeTab === 'verifikasi_po'"
+                :verifikasi-po-list="props.verifikasiPoList || []"
+                :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
+            />
+
+            <!-- 3. DAFTAR PO (PURCHASE ORDER RESMI) -->
             <KeuanganDaftarPoTab
                 v-if="activeTab === 'daftar_po'"
                 :po-list="poList"
@@ -533,6 +519,28 @@ function formatTanggalIndo(tgl) {
                 :bapsd-list="bapsdList"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
+            />
+
+            <!-- 13. STOK PERSADAAN -->
+            <KeuanganStokTab
+                v-if="activeTab === 'stok'"
+                :po-list="poList"
+                :format-rupiah="formatRupiah"
+            />
+
+            <!-- 14. LAPORAN HARIAN -->
+            <KeuanganLaporanHarianTab
+                v-if="activeTab === 'laporan-harian' || activeTab === 'laporan_harian'"
+                :po-list="poList"
+                :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
+            />
+
+            <!-- 15. LAPORAN PERIODIK -->
+            <KeuanganLaporanPeriodikTab
+                v-if="activeTab === 'laporan-periodik' || activeTab === 'laporan_periodik'"
+                :summary="summary"
+                :format-rupiah="formatRupiah"
             />
         </div>
     </AppLayout>

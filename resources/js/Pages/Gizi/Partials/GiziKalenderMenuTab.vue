@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
+import { router } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -21,7 +22,11 @@ import {
     X,
 } from "lucide-vue-next";
 
-defineProps({
+const props = defineProps({
+    workOrdersList: {
+        type: Array,
+        default: () => [],
+    },
     formatRupiah: {
         type: Function,
         default: (num) => {
@@ -57,7 +62,7 @@ const kalenderBulan = ref("Agustus 2026");
 const siklusAktif = ref("10 Hari");
 const selectedKalenderItem = ref(null);
 
-const jadwalMenuBulan = ref([
+const defaultJadwalMenuBulan = ref([
     {
         tanggal: "2026-08-03",
         tglNo: 3,
@@ -340,6 +345,108 @@ const jadwalMenuBulan = ref([
         ],
     },
 ]);
+
+const defaultJadwalList = ref([
+    {
+        tanggal: "2026-08-25",
+        tglNo: 25,
+        hari: "Selasa",
+        siklusKe: 1,
+        namaMenu: "Ayam Goreng Lengkuas, Sayur Bayam Jagung Manis, Tempe Bacem & Pisang",
+        status: "Terkonfirmasi",
+        kaloriPK: 465,
+        kaloriPB: 685,
+        costPK: 7850,
+        costPB: 9900,
+        komponen: ["Beras Putih", "Daging Ayam", "Bayam Segar", "Jagung Manis", "Tempe", "Pisang"],
+    },
+    {
+        tanggal: "2026-08-26",
+        tglNo: 26,
+        hari: "Rabu",
+        siklusKe: 2,
+        namaMenu: "Ikan Kembung Bakar Kecap, Tumis Buncis Wortel Tempe, Tahu & Jeruk",
+        status: "Siap Produksi",
+        kaloriPK: 470,
+        kaloriPB: 690,
+        costPK: 7920,
+        costPB: 9850,
+        komponen: ["Beras Putih", "Ikan Kembung", "Buncis", "Wortel", "Tahu", "Jeruk"],
+    },
+    {
+        tanggal: "2026-08-27",
+        tglNo: 27,
+        hari: "Kamis",
+        siklusKe: 3,
+        namaMenu: "Semur Telur Ayam & Tahu Tempe, Sayur Sop Komplit, Kerupuk & Pepaya",
+        status: "Draft",
+        kaloriPK: 455,
+        kaloriPB: 675,
+        costPK: 7650,
+        costPB: 9600,
+        komponen: ["Beras Putih", "Telur Ayam", "Tahu", "Tempe", "Sayur Sop", "Pepaya"],
+    },
+    {
+        tanggal: "2026-08-28",
+        tglNo: 28,
+        hari: "Jumat",
+        siklusKe: 4,
+        namaMenu: "Daging Sapi Cincang Saus Tiram, Capcay Sayuran Segar, Tahu & Semangka",
+        status: "Draft",
+        kaloriPK: 480,
+        kaloriPB: 710,
+        costPK: 7980,
+        costPB: 9980,
+        komponen: ["Beras Putih", "Daging Sapi", "Capcay Sayur", "Tahu", "Semangka"],
+    },
+]);
+
+const jadwalMenuBulan = computed(() => {
+    if (props.workOrdersList && props.workOrdersList.length > 0) {
+        return props.workOrdersList.map((wo, idx) => {
+            const tglStr = typeof wo.tanggal_distribusi === 'string' ? wo.tanggal_distribusi.substring(0, 10) : '';
+            const tglD = new Date(tglStr);
+            const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+            const hariName = !isNaN(tglD.getDay()) ? dayNames[tglD.getDay()] : "Hari";
+            
+            const komponenList = [];
+            if (wo.items && wo.items.length > 0) {
+                wo.items.forEach(it => komponenList.push(it.nama_po || it.nama));
+            } else {
+                [wo.komponen_energi, wo.komponen_protein, wo.komponen_lemak, wo.komponen_karbohidrat, wo.komponen_serat]
+                    .filter(Boolean)
+                    .forEach(k => komponenList.push(k));
+            }
+
+            return {
+                id: wo.nomor_wo,
+                db_id: wo.id,
+                tanggal: tglStr,
+                tglNo: !isNaN(tglD.getDate()) ? tglD.getDate() : (idx + 1),
+                hari: hariName,
+                siklusKe: wo.siklus_ke || (idx + 1),
+                namaMenu: wo.nama_menu,
+                status: wo.status || "Draft",
+                kaloriPK: wo.akg_pk?.energi ? Math.round(wo.akg_pk.energi) : 485,
+                kaloriPB: wo.akg_pb?.energi ? Math.round(wo.akg_pb.energi) : 640,
+                costPK: wo.food_cost_pk || 7850,
+                costPB: wo.food_cost_pb || 9850,
+                komponen: komponenList.length > 0 ? komponenList : ["Menu MBG"],
+                raw: wo,
+            };
+        });
+    }
+    return defaultJadwalList.value;
+});
+
+function handleOpenMenuFromKalender(item) {
+    if (item && item.db_id) {
+        router.visit('/gizi/rancang-menu?wo_id=' + item.db_id);
+    } else {
+        emit('openRancangMenu');
+    }
+}
+
 </script>
 
 <template>

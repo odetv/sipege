@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { router } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -84,6 +85,14 @@ const props = defineProps({
     stats: {
         type: Object,
         default: () => ({}),
+    },
+    workOrdersList: {
+        type: Array,
+        default: () => [],
+    },
+    activeWorkOrder: {
+        type: Object,
+        default: null,
     },
 });
 
@@ -589,8 +598,11 @@ const editingKelompok = ref(null);
 const editFormRincian = ref([]);
 const editFormKeteranganAlergi = ref([]);
 
+const modalPmError = ref("");
+
 function handleOpenModalEditPm(kelompok) {
     editingKelompok.value = kelompok;
+    modalPmError.value = "";
     editFormRincian.value = JSON.parse(JSON.stringify(kelompok.rincian || []));
     editFormKeteranganAlergi.value = JSON.parse(
         JSON.stringify(kelompok.keterangan_alergi || []),
@@ -646,6 +658,13 @@ const modalGrandTotalAlergi = computed(() => {
 
 function handleSimpanEditDetailPm() {
     if (!editingKelompok.value) return;
+
+    if (modalTotalPm.value === 0 && editingKelompok.value.status_menerima !== false) {
+        modalPmError.value = `Total porsi untuk "${editingKelompok.value.nama_kelompok}" minimal 1 porsi. Jika tidak menerima distribusi, silakan tandai status kelompok menjadi 'Tidak Menerima'.`;
+        return;
+    }
+
+    modalPmError.value = "";
 
     // Update data rincian
     editingKelompok.value.rincian = editFormRincian.value.map((r) => ({
@@ -714,28 +733,6 @@ function handleGunakanMenuSaran(item) {
     }
 }
 
-function handleMulaiFormulasiWo() {
-    if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
-        alert("Nama Menu Produksi MBG wajib diisi pada Work Order!");
-        return;
-    }
-    if (!tanggalRencana.value) {
-        alert("Tanggal Distribusi Menu wajib dipilih pada Work Order!");
-        return;
-    }
-    const menerimaCount = woKelompokList.value.filter(
-        (k) => k.status_menerima !== false,
-    ).length;
-    if (menerimaCount === 0) {
-        alert(
-            "Minimal harus ada 1 kelompok sasaran yang berstatus 'Menerima' pada Work Order!",
-        );
-        return;
-    }
-    woStatus.value = "in_progress";
-    buatMenuSubTab.value = "pre_order";
-}
-
 // Resep Bahan Baku Baku Terpilih dari Database Resmi TKPI 2020 (Default Kosong dari 0)
 const selectedBahanList = ref([]);
 
@@ -760,7 +757,20 @@ function calculateGrossWeightKg(
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossGramPerPortion = (netGram / bddFactor) * bufferFactor;
     const totalKg = (grossGramPerPortion * totalPortions) / 1000;
-    return Number(totalKg.toFixed(2));
+    return totalKg;
+}
+
+function formatGrossWeight(kg) {
+    if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg))) return "0 kg";
+    const num = Number(kg);
+    if (num <= 0) return "0 kg";
+    if (num < 0.001) {
+        return `${parseFloat(num.toFixed(4))} kg`;
+    } else if (num < 0.01) {
+        return `${parseFloat(num.toFixed(3))} kg`;
+    } else {
+        return `${parseFloat(num.toFixed(2))} kg`;
+    }
 }
 
 function calculateNutritionFromNetGram(itemTkpi, netGram) {
@@ -877,67 +887,118 @@ function handleAddBahan() {
     isTkpiDropdownOpen.value = false;
 }
 
+const validationErrors = ref({});
+
+function clearError(field) {
+    if (validationErrors.value[field]) {
+        delete validationErrors.value[field];
+    }
+}
+
+function validateStep1() {
+    const errs = {};
+    if (!tanggalRencana.value) {
+        errs.tanggalRencana = "Tanggal rencana masak & distribusi wajib diisi.";
+    } else {
+        // Cek duplikasi tanggal (hanya boleh 1 WO per tanggal)
+        const duplicateDateWo = (props.workOrdersList || []).find((w) => {
+            const wTgl = typeof w.tanggal_distribusi === 'string' ? w.tanggal_distribusi.substring(0, 10) : '';
+            const isSameDate = wTgl === tanggalRencana.value;
+            const isDifferentWo = w.nomor_wo !== woNo.value && w.uuid !== props.activeWorkOrder?.uuid && w.id !== props.activeWorkOrder?.id;
+            return isSameDate && isDifferentWo;
+        });
+        if (duplicateDateWo) {
+            errs.tanggalRencana = `Tanggal ini sudah memiliki Work Order ("${duplicateDateWo.nama_menu}"). Hanya boleh 1 menu per tanggal.`;
+        }
+    }
+    if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
+        errs.namaMenuAktif = "Nama menu paket MBG wajib diisi.";
+    }
+    if (!subMenuKomponen.value.energi || !subMenuKomponen.value.energi.trim()) {
+        errs.energi = "Komponen energi wajib diisi.";
+    }
+    if (!subMenuKomponen.value.protein || !subMenuKomponen.value.protein.trim()) {
+        errs.protein = "Komponen protein wajib diisi.";
+    }
+    if (!subMenuKomponen.value.lemak || !subMenuKomponen.value.lemak.trim()) {
+        errs.lemak = "Komponen lemak wajib diisi.";
+    }
+    if (!subMenuKomponen.value.karbohidrat || !subMenuKomponen.value.karbohidrat.trim()) {
+        errs.karbohidrat = "Komponen karbohidrat wajib diisi.";
+    }
+    if (!subMenuKomponen.value.serat || !subMenuKomponen.value.serat.trim()) {
+        errs.serat = "Komponen serat wajib diisi.";
+    }
+    if (kelompokMenerimaAktif.value.length === 0) {
+        errs.kelompok = "Minimal 1 kelompok sasaran penerima manfaat harus berstatus Menerima.";
+    } else {
+        const zeroReceiving = woKelompokList.value.find(k => k.status_menerima !== false && ((Number(k.total_porsi_kecil) || 0) + (Number(k.total_porsi_besar) || 0) <= 0));
+        if (zeroReceiving) {
+            errs.kelompok = `Kelompok "${zeroReceiving.nama_kelompok}" berstatus Menerima tetapi memiliki 0 porsi. Wajib minimal 1 porsi atau tandai 'Tidak Menerima'.`;
+        }
+    }
+    validationErrors.value = errs;
+    return Object.keys(errs).length === 0;
+}
+
+function validateStep2() {
+    const isStep1Valid = validateStep1();
+    const errs = { ...validationErrors.value };
+
+    if (!selectedBahanList.value || selectedBahanList.value.length === 0) {
+        errs.selectedBahan = "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database TKPI 2020.";
+    }
+
+    selectedBahanList.value.forEach((b, i) => {
+        if (b.tipe_porsi === 'alergi' && (!b.jenis_alergi || !b.jenis_alergi.trim())) {
+            errs['bahan_' + i + '_alergi'] = "Jenis alergi wajib dipilih.";
+        }
+        const pkVal = Number(b.gram_pk) || 0;
+        const pbVal = Number(b.gram_pb) || 0;
+        if (pkVal <= 0 && pbVal <= 0) {
+            errs['bahan_' + i + '_gram'] = "Wajib isi minimal salah satu (PK atau PB) > 0";
+        }
+        if (b.bdd === null || b.bdd === undefined || b.bdd === '' || Number(b.bdd) <= 0) {
+            errs['bahan_' + i + '_bdd'] = "BDD > 0%";
+        }
+        if (b.buffer === null || b.buffer === undefined || b.buffer === '' || Number(b.buffer) < 0) {
+            errs['bahan_' + i + '_buffer'] = "Wajib >= 0%";
+        }
+    });
+
+    validationErrors.value = errs;
+    return isStep1Valid && Object.keys(errs).length === 0;
+}
+
+function handleSwitchSubTab(targetTab) {
+    if (targetTab === 'pre_order' || targetTab === 'formula-gizi' || targetTab === 'formula_gizi') {
+        if (!validateStep1()) {
+            return;
+        }
+    } else if (targetTab === 'order' || targetTab === 'pembelian_bahan' || targetTab === 'pembelian-bahan') {
+        if (!validateStep2()) {
+            return;
+        }
+    }
+    buatMenuSubTab.value = normalizeStep(targetTab);
+}
+
+function handleMulaiFormulasiWo() {
+    if (validateStep1()) {
+        buatMenuSubTab.value = "pre_order";
+    }
+}
+
 function handleRemoveBahan(index) {
     selectedBahanList.value.splice(index, 1);
+    // Clear error for this index if any
+    delete validationErrors.value.selectedBahan;
 }
 
 function handleAjukanDraftPo() {
-    if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
-        alert("Nama Menu Produksi MBG wajib diisi!");
-        return;
+    if (validateStep2()) {
+        buatMenuSubTab.value = "order";
     }
-    if (!tanggalRencana.value) {
-        alert("Tanggal Rencana Masak & Distribusi wajib diisi!");
-        return;
-    }
-    if (selectedBahanList.value.length === 0) {
-        alert(
-            "Harap tambahkan minimal 1 bahan makanan dari Database TKPI 2020!",
-        );
-        return;
-    }
-    for (let i = 0; i < selectedBahanList.value.length; i++) {
-        const b = selectedBahanList.value[i];
-        if (
-            b.tipe_porsi === "alergi" &&
-            (!b.jenis_alergi || !b.jenis_alergi.trim())
-        ) {
-            alert(
-                `Untuk bahan "${b.nama}" (Porsi Alergi), jenis alergi wajib diisi/dipilih!`,
-            );
-            return;
-        }
-        if (b.gram_pk === null || b.gram_pk === undefined || b.gram_pk === "") {
-            alert(
-                `Gram PK untuk bahan "${b.nama}" wajib diisi (tidak boleh kosong)!`,
-            );
-            return;
-        }
-        if (b.gram_pb === null || b.gram_pb === undefined || b.gram_pb === "") {
-            alert(
-                `Gram PB untuk bahan "${b.nama}" wajib diisi (tidak boleh kosong)!`,
-            );
-            return;
-        }
-        if (
-            b.bdd === null ||
-            b.bdd === undefined ||
-            b.bdd === "" ||
-            Number(b.bdd) <= 0
-        ) {
-            alert(
-                `BDD (%) untuk bahan "${b.nama}" wajib diisi dan harus lebih dari 0%!`,
-            );
-            return;
-        }
-        if (b.buffer === null || b.buffer === undefined || b.buffer === "") {
-            alert(
-                `Buffer (%) untuk bahan "${b.nama}" wajib diisi (tidak boleh kosong)!`,
-            );
-            return;
-        }
-    }
-    buatMenuSubTab.value = "order";
 }
 
 // ==========================================
@@ -1479,9 +1540,15 @@ const alergiOptionsWithStats = computed(() => {
 const bahanCalculations = computed(() => {
     return selectedBahanList.value.map((b) => {
         const tkpi =
-            tkpiItems.value.find(
-                (i) => i.id === b.tkpi_id || i.code === b.tkpi_id,
-            ) || {};
+            b.tkpi && b.tkpi.energi !== undefined
+                ? b.tkpi
+                : tkpiItems.value.find(
+                      (i) =>
+                          (b.tkpi_id && (i.id === b.tkpi_id || i.code === b.tkpi_id)) ||
+                          (b.id && (i.id === b.id || i.code === b.id)) ||
+                          (b.code && (i.id === b.code || i.code === b.code)) ||
+                          (i.nama && b.nama && i.nama.toLowerCase().trim() === b.nama.toLowerCase().trim()),
+                  ) || {};
         const bdd = b.bdd || 100;
         const buffer = b.buffer || 0;
         const isAlergi = b.tipe_porsi === "alergi";
@@ -1527,7 +1594,7 @@ const bahanCalculations = computed(() => {
             }
         }
 
-        // Kebutuhan Kotor Kg untuk PK dan PB
+        // Kebutuhan Kotor Kg untuk PK dan PB (Presisi penuh tanpa pembulatan awal)
         const grossKgPK = calculateGrossWeightKg(
             b.gram_pk,
             targetPKCount,
@@ -1540,13 +1607,19 @@ const bahanCalculations = computed(() => {
             bdd,
             buffer,
         );
-        const totalGrossKg = Number((grossKgPK + grossKgPB).toFixed(2));
+        const totalGrossKg = grossKgPK + grossKgPB;
 
         // Biaya PO
-        const subtotalMaster = Math.round(totalGrossKg * (b.harga_master || 0));
-        const subtotalAktual = Math.round(
+        let subtotalMaster = Math.round(totalGrossKg * (b.harga_master || 0));
+        if (totalGrossKg > 0 && (b.harga_master || 0) > 0 && subtotalMaster === 0) {
+            subtotalMaster = Math.ceil(totalGrossKg * b.harga_master);
+        }
+        let subtotalAktual = Math.round(
             totalGrossKg * (b.harga_aktual || b.harga_master || 0),
         );
+        if (totalGrossKg > 0 && (b.harga_aktual || b.harga_master || 0) > 0 && subtotalAktual === 0) {
+            subtotalAktual = Math.ceil(totalGrossKg * (b.harga_aktual || b.harga_master));
+        }
 
         // Food cost per porsi
         const costPK = calculateItemFoodCostPerPortion(
@@ -1752,10 +1825,14 @@ const activeAlergiAkgList = computed(() => {
 // 4. KALKULASI HASIL FOOD COST
 // ==========================================
 const totalFoodCostPKNormal = computed(() => {
-    return bahanCalculations.value.reduce((acc, item) => acc + item.costPK, 0);
+    return bahanCalculations.value
+        .filter((item) => item.tipe_porsi !== "alergi")
+        .reduce((acc, item) => acc + item.costPK, 0);
 });
 const totalFoodCostPBNormal = computed(() => {
-    return bahanCalculations.value.reduce((acc, item) => acc + item.costPB, 0);
+    return bahanCalculations.value
+        .filter((item) => item.tipe_porsi !== "alergi")
+        .reduce((acc, item) => acc + item.costPB, 0);
 });
 
 // Food Cost Varian Alergi
@@ -1782,6 +1859,54 @@ const totalFoodCostPBAlergi = computed(() => {
     }, 0);
 });
 
+
+// Food Cost per Porsi Khusus Varian Alergi (Disesuaikan dengan bahan aman + substitusi)
+const activeAlergiFoodCostList = computed(() => {
+    const alergiBahanList = bahanCalculations.value.filter(
+        (b) => b.tipe_porsi === "alergi" && b.jenis_alergi && b.jenis_alergi.trim()
+    );
+    if (alergiBahanList.length === 0) return [];
+
+    const uniqueJenisMap = new Map();
+    alergiBahanList.forEach((b) => {
+        const jenis = b.jenis_alergi.trim();
+        if (!uniqueJenisMap.has(jenis)) {
+            uniqueJenisMap.set(jenis, []);
+        }
+        uniqueJenisMap.get(jenis).push(b);
+    });
+
+    const result = [];
+    uniqueJenisMap.forEach((bahans, jenis) => {
+        const detailPm = findAlergiDetail(jenis);
+        const jmlPk = detailPm ? Number(detailPm.porsi_kecil) || 0 : 0;
+        const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
+        const jmlTotal = detailPm ? Number(detailPm.total) || 0 : 0;
+        if (jmlTotal === 0) return;
+
+        // Ambil bahan normal yang aman (tidak mengandung alergen terkait)
+        const bahanNormalSafe = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi !== "normal") return false;
+            return !isBahanContainsAlergen(b, jenis);
+        });
+
+        const allItems = [...bahanNormalSafe, ...bahans];
+        const costPK = allItems.reduce((acc, it) => acc + (it.costPK || 0), 0);
+        const costPB = allItems.reduce((acc, it) => acc + (it.costPB || 0), 0);
+
+        result.push({
+            jenis_alergi: jenis,
+            siswa_pk: jmlPk,
+            siswa_pb: jmlPb,
+            total_siswa: jmlTotal,
+            cost_pk: costPK,
+            cost_pb: costPB,
+        });
+    });
+
+    return result;
+});
+
 function formatRupiah(num) {
     return "Rp " + (Number(num) || 0).toLocaleString("id-ID");
 }
@@ -1795,25 +1920,194 @@ const statusPengajuanWo = ref("Draft");
 const showSubmitSuccessAlert = ref(false);
 const submitAlertMessage = ref("");
 
+const isSubmitting = ref(false);
+
+function getPayload(statusStr) {
+    return {
+        nomor_wo: woNo.value,
+        tanggal_distribusi: tanggalRencana.value,
+        nama_menu: namaMenuAktif.value || 'Menu MBG',
+        siklus_ke: 1,
+        status: statusStr,
+        komponen_energi: subMenuKomponen.value.energi || null,
+        komponen_protein: subMenuKomponen.value.protein || null,
+        komponen_lemak: subMenuKomponen.value.lemak || null,
+        komponen_karbohidrat: subMenuKomponen.value.karbohidrat || null,
+        komponen_serat: subMenuKomponen.value.serat || null,
+        total_pm: totalPM.value,
+        total_pk: totalPK.value,
+        total_pb: totalPB.value,
+        total_alergi: totalPKAlergi.value + totalPBAlergi.value,
+        total_kelompok: woKelompokList.value.length,
+        akg_pk: akgResultPKNormal.value,
+        akg_pb: akgResultPBNormal.value,
+        food_cost_pk: totalFoodCostPKNormal.value,
+        food_cost_pb: totalFoodCostPBNormal.value,
+        total_anggaran_master: grandTotalDraftMaster.value,
+        items: bahanCalculations.value.map(b => ({
+            tkpi_id: b.id || b.code,
+            nama: b.nama,
+            nama_po: b.nama_po || b.nama,
+            kategori: b.kategori,
+            tipe_porsi: b.tipe_porsi || 'normal',
+            jenis_alergi: b.jenis_alergi || null,
+            alergen: b.alergen || null,
+            gram_pk: b.gram_pk || 0,
+            gram_pb: b.gram_pb || 0,
+            bdd: b.bdd || 100,
+            buffer: b.buffer || 0,
+            grossKgPK: b.grossKgPK || 0,
+            grossKgPB: b.grossKgPB || 0,
+            totalGrossKg: b.totalGrossKg || 0,
+            harga_master: b.harga_master || 0,
+            subtotalMaster: b.subtotalMaster || 0,
+            nutrisiPK: b.nutrisiPK || null,
+            nutrisiPB: b.nutrisiPB || null,
+        })),
+        kelompoks: woKelompokList.value.map(k => {
+            const masterK = (props.kelompokList || []).find(x => x.id === k.id) || {};
+            return {
+                id: k.id,
+                nama_kelompok: k.nama_kelompok,
+                kategori: k.kategori,
+                is_menerima: k.status_menerima !== false,
+                total_porsi_kecil: Number(k.total_porsi_kecil) || 0,
+                total_porsi_besar: Number(k.total_porsi_besar) || 0,
+                total_penerima: Number(k.total_penerima) || ((Number(k.total_porsi_kecil) || 0) + (Number(k.total_porsi_besar) || 0)),
+                status_alergi: k.has_alergi ? 'Ada Alergi' : 'Tidak Ada Alergi',
+                rincian: Array.isArray(k.rincian) && k.rincian.length > 0 ? k.rincian : (masterK.rincian || []),
+                detail_alergi: Array.isArray(k.keterangan_alergi) && k.keterangan_alergi.length > 0 ? k.keterangan_alergi : (masterK.keterangan_alergi || []),
+            };
+        }),
+    };
+}
+
 function simpanSebagaiDraft() {
+    if (!validateStep2()) {
+        if (!validateStep1()) {
+            buatMenuSubTab.value = 'work_order';
+        } else {
+            buatMenuSubTab.value = 'pre_order';
+        }
+        return;
+    }
+    isSubmitting.value = true;
     statusPengajuanWo.value = "Draft";
-    submitAlertMessage.value =
-        "Rancangan menu berhasil disimpan sebagai Draft Work Order.";
-    showSubmitSuccessAlert.value = true;
-    setTimeout(() => {
-        showSubmitSuccessAlert.value = false;
-    }, 4000);
+    const payload = getPayload("Draft");
+
+    router.post('/gizi/work-order', payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isSubmitting.value = false;
+            router.visit('/gizi/daftar-menu');
+        },
+        onError: () => {
+            isSubmitting.value = false;
+        }
+    });
 }
 
 function ajukanKeKeuangan() {
+    if (!validateStep2()) {
+        if (!validateStep1()) {
+            buatMenuSubTab.value = 'work_order';
+        } else {
+            buatMenuSubTab.value = 'pre_order';
+        }
+        return;
+    }
+    isSubmitting.value = true;
     statusPengajuanWo.value = "Diajukan ke Keuangan";
-    submitAlertMessage.value =
-        "Rancangan menu & estimasi PO berhasil diajukan ke Bagian Keuangan.";
-    showSubmitSuccessAlert.value = true;
-    setTimeout(() => {
-        showSubmitSuccessAlert.value = false;
-    }, 4000);
+    const payload = getPayload("Diajukan ke Keuangan");
+
+    router.post('/gizi/work-order', payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isSubmitting.value = false;
+            router.visit('/gizi/daftar-menu');
+        },
+        onError: () => {
+            isSubmitting.value = false;
+        }
+    });
 }
+
+// Populate from activeWorkOrder if present
+watch(
+    () => props.activeWorkOrder,
+    (wo) => {
+        if (wo) {
+            woNo.value = wo.nomor_wo || woNo.value;
+            tanggalRencana.value = typeof wo.tanggal_distribusi === 'string' ? wo.tanggal_distribusi.substring(0, 10) : (wo.tanggal_distribusi || tanggalRencana.value);
+            namaMenuAktif.value = wo.nama_menu || namaMenuAktif.value;
+            statusPengajuanWo.value = wo.status || "Draft";
+            if (wo.komponen_energi || wo.komponen_protein || wo.komponen_lemak || wo.komponen_karbohidrat || wo.komponen_serat) {
+                subMenuKomponen.value = {
+                    energi: wo.komponen_energi || "",
+                    protein: wo.komponen_protein || "",
+                    lemak: wo.komponen_lemak || "",
+                    karbohidrat: wo.komponen_karbohidrat || "",
+                    serat: wo.komponen_serat || "",
+                };
+            }
+
+            // 1. Populate selectedBahanList with full TKPI nutritional lookup
+            if (wo.items && wo.items.length > 0) {
+                selectedBahanList.value = wo.items.map((it) => {
+                    const matchedTkpi = tkpiItems.value.find(
+                        (t) =>
+                            (it.tkpi_id && (t.id === it.tkpi_id || t.code === it.tkpi_id)) ||
+                            (t.nama && it.nama && t.nama.toLowerCase().trim() === it.nama.toLowerCase().trim())
+                    ) || {};
+
+                    return {
+                        id: matchedTkpi.id || it.tkpi_id || it.id,
+                        code: matchedTkpi.code || it.tkpi_id || it.id,
+                        tkpi_id: matchedTkpi.id || it.tkpi_id || it.id,
+                        nama: it.nama || matchedTkpi.nama,
+                        nama_po: it.nama_po || it.nama || matchedTkpi.nama,
+                        kategori: it.kategori || matchedTkpi.kategori || 'Lainnya',
+                        tipe_porsi: it.tipe_porsi || 'normal',
+                        jenis_alergi: it.jenis_alergi || '',
+                        alergen: it.alergen || matchedTkpi.alergen || '',
+                        gram_pk: Number(it.gram_pk) || 0,
+                        gram_pb: Number(it.gram_pb) || 0,
+                        bdd: Number(it.bdd) || matchedTkpi.bdd || 100,
+                        buffer: (it.buffer !== undefined && it.buffer !== null && it.buffer !== '') ? Number(it.buffer) : 0,
+                        harga_master: Number(it.harga_master) || matchedTkpi.harga_master || 0,
+                        harga_aktual: Number(it.harga_aktual) || it.harga_master || matchedTkpi.harga_master || 0,
+                        tkpi: matchedTkpi,
+                    };
+                });
+            }
+
+            // 2. Populate woKelompokList with saved KPM participation and class breakdown
+            if (wo.kelompoks && wo.kelompoks.length > 0) {
+                woKelompokList.value = (props.kelompokList || []).map((masterK) => {
+                    const savedK = wo.kelompoks.find(
+                        (sk) => sk.kelompok_id === masterK.id || sk.nama_kelompok === masterK.nama_kelompok
+                    );
+                    const norm = normalizeKelompokForWo(masterK);
+                    if (savedK) {
+                        return {
+                            ...norm,
+                            status_menerima: savedK.is_menerima !== false,
+                            total_porsi_kecil: savedK.porsi_kecil !== undefined ? Number(savedK.porsi_kecil) : norm.total_porsi_kecil,
+                            total_porsi_besar: savedK.porsi_besar !== undefined ? Number(savedK.porsi_besar) : norm.total_porsi_besar,
+                            total_penerima: savedK.total_penerima !== undefined ? Number(savedK.total_penerima) : norm.total_penerima,
+                            status_alergi: savedK.status_alergi || norm.status_alergi,
+                            rincian: Array.isArray(savedK.rincian) && savedK.rincian.length > 0 ? savedK.rincian : norm.rincian,
+                            keterangan_alergi: Array.isArray(savedK.detail_alergi) && savedK.detail_alergi.length > 0 ? savedK.detail_alergi : norm.keterangan_alergi,
+                        };
+                    }
+                    return norm;
+                });
+            }
+        }
+    },
+    { immediate: true }
+);
+
 </script>
 
 <template>
@@ -1829,7 +2123,7 @@ function ajukanKeKeuangan() {
                 v-for="sub in buatMenuSubTabs"
                 :key="sub.id"
                 type="button"
-                @click="buatMenuSubTab = sub.id"
+                @click="handleSwitchSubTab(sub.id)"
                 :class="[
                     'px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer border',
                     buatMenuSubTab === sub.id
@@ -1936,15 +2230,17 @@ function ajukanKeKeuangan() {
                     <span v-if="totalPKAlergi + totalPBAlergi > 0"
                         >• Alergi:
                         <strong class="text-rose-300"
-                            >{{ totalPKAlergi + totalPBAlergi }} Siswa</strong
+                            >{{ totalPKAlergi + totalPBAlergi }} Porsi</strong
                         ></span
                     >
-                    <span
-                        >• Terjadwal:
-                        <strong class="text-slate-300"
-                            >{{ woKelompokList.length }} Kelompok</strong
-                        ></span
-                    >
+                    <span>• Terjadwal:
+                        <strong class="text-slate-200 font-black">
+                            {{ woKelompokList.length }} Kelompok
+                            <span class="text-[11px] font-normal text-slate-300">
+                                ({{ kelompokMenerimaAktif.length }} Menerima<span v-if="woKelompokList.length - kelompokMenerimaAktif.length > 0">, {{ woKelompokList.length - kelompokMenerimaAktif.length }} Tidak Menerima</span>)
+                            </span>
+                        </strong>
+                    </span>
                 </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -1963,6 +2259,20 @@ function ajukanKeKeuangan() {
         <!-- Bagian 1: Work Order Produksi (Step 1) -->
         <!-- ========================================================================================= -->
         <div v-if="buatMenuSubTab === 'work_order'" class="space-y-6">
+            <!-- Banner Catatan Penolakan jika WO ini sebelumnya ditolak oleh Keuangan -->
+            <div
+                v-if="props.activeWorkOrder && (props.activeWorkOrder.status?.toLowerCase().includes('ditolak') || props.activeWorkOrder.catatan_keuangan)"
+                class="p-4 sm:p-5 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-900 space-y-2 shadow-xs"
+            >
+                <div class="flex items-center gap-2 font-black text-rose-800 text-sm">
+                    <AlertCircle class="h-5 w-5 text-rose-600 shrink-0" />
+                    <span>Work Order Ini Sebelumnya Ditolak oleh Keuangan</span>
+                </div>
+                <div class="bg-white p-3.5 rounded-xl border border-rose-200/80 text-xs font-medium text-slate-800 whitespace-pre-wrap leading-relaxed shadow-2xs">
+                    <strong class="text-rose-900 block mb-1">Catatan Verifikator Keuangan:</strong>
+                    {{ props.activeWorkOrder.catatan_keuangan || 'Silakan sesuaikan formula gizi atau anggaran belanja pada langkah berikutnya, kemudian ajukan kembali ke bagian keuangan.' }}
+                </div>
+            </div>
             <Card
                 className="bg-white border-slate-200 shadow-xs overflow-hidden"
             >
@@ -2040,7 +2350,7 @@ function ajukanKeKeuangan() {
                             </label>
                             <input
                                 type="date"
-                                v-model="tanggalRencana"
+                                v-model="tanggalRencana" @change="clearError('tanggalRencana')"
                                 required
                                 class="w-full text-xs font-bold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-white"
                             />
@@ -2080,10 +2390,18 @@ function ajukanKeKeuangan() {
                             <input
                                 type="text"
                                 v-model="namaMenuAktif"
+                                @input="clearError('namaMenuAktif')"
                                 required
                                 placeholder="Contoh: Nasi Liwet Sunda, Ayam Goreng..."
-                                class="w-full text-xs font-bold text-slate-900 rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-white"
+                                :class="[
+                                    'w-full text-xs font-bold text-slate-900 rounded-lg border p-2.5 bg-white',
+                                    validationErrors.namaMenuAktif ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20' : 'border-slate-300 focus:ring-primary focus:border-primary'
+                                ]"
                             />
+                            <p v-if="validationErrors.namaMenuAktif" class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                                <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                <span>{{ validationErrors.namaMenuAktif }}</span>
+                            </p>
                         </div>
                     </div>
 
@@ -2118,7 +2436,8 @@ function ajukanKeKeuangan() {
                         >
                             <!-- Sub Menu Energi -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border border-amber-200/90 shadow-2xs"
+                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                :class="validationErrors.energi ? 'border-rose-400 bg-rose-50/20' : 'border-amber-200/90'"
                             >
                                 <label
                                     class="text-[11px] font-black text-amber-900 flex items-center gap-1.5"
@@ -2126,19 +2445,24 @@ function ajukanKeKeuangan() {
                                     <span
                                         class="h-2 w-2 rounded-full bg-amber-500"
                                     ></span>
-                                    <span>Energi</span>
+                                    <span>Energi <strong class="text-rose-500">*</strong></span>
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.energi"
+                                    v-model="subMenuKomponen.energi" @input="clearError('energi')"
                                     placeholder="Contoh: Nasi Putih Gurih"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-amber-500 focus:border-amber-500 p-2 bg-slate-50/50"
                                 />
+                                <p v-if="validationErrors.energi" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                    <AlertCircle class="h-3 w-3 shrink-0" />
+                                    <span>{{ validationErrors.energi }}</span>
+                                </p>
                             </div>
 
                             <!-- Sub Menu Protein -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border border-rose-200/90 shadow-2xs"
+                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                :class="validationErrors.protein ? 'border-rose-400 bg-rose-50/20' : 'border-rose-200/90'"
                             >
                                 <label
                                     class="text-[11px] font-black text-rose-900 flex items-center gap-1.5"
@@ -2146,19 +2470,24 @@ function ajukanKeKeuangan() {
                                     <span
                                         class="h-2 w-2 rounded-full bg-rose-500"
                                     ></span>
-                                    <span>Protein</span>
+                                    <span>Protein <strong class="text-rose-500">*</strong></span>
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.protein"
+                                    v-model="subMenuKomponen.protein" @input="clearError('protein')"
                                     placeholder="Contoh: Ayam Goreng Lengkuas"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-rose-500 focus:border-rose-500 p-2 bg-slate-50/50"
                                 />
+                                <p v-if="validationErrors.protein" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                    <AlertCircle class="h-3 w-3 shrink-0" />
+                                    <span>{{ validationErrors.protein }}</span>
+                                </p>
                             </div>
 
                             <!-- Sub Menu Lemak -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border border-yellow-200/90 shadow-2xs"
+                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                :class="validationErrors.lemak ? 'border-rose-400 bg-rose-50/20' : 'border-yellow-200/90'"
                             >
                                 <label
                                     class="text-[11px] font-black text-yellow-900 flex items-center gap-1.5"
@@ -2166,19 +2495,24 @@ function ajukanKeKeuangan() {
                                     <span
                                         class="h-2 w-2 rounded-full bg-yellow-500"
                                     ></span>
-                                    <span>Lemak</span>
+                                    <span>Lemak <strong class="text-rose-500">*</strong></span>
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.lemak"
+                                    v-model="subMenuKomponen.lemak" @input="clearError('lemak')"
                                     placeholder="Contoh: Tahu Bacem Goreng"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 p-2 bg-slate-50/50"
                                 />
+                                <p v-if="validationErrors.lemak" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                    <AlertCircle class="h-3 w-3 shrink-0" />
+                                    <span>{{ validationErrors.lemak }}</span>
+                                </p>
                             </div>
 
                             <!-- Sub Menu Karbohidrat -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border border-blue-200/90 shadow-2xs"
+                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                :class="validationErrors.karbohidrat ? 'border-rose-400 bg-rose-50/20' : 'border-blue-200/90'"
                             >
                                 <label
                                     class="text-[11px] font-black text-blue-900 flex items-center gap-1.5"
@@ -2186,19 +2520,24 @@ function ajukanKeKeuangan() {
                                     <span
                                         class="h-2 w-2 rounded-full bg-blue-500"
                                     ></span>
-                                    <span>Karbohidrat</span>
+                                    <span>Karbohidrat <strong class="text-rose-500">*</strong></span>
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.karbohidrat"
+                                    v-model="subMenuKomponen.karbohidrat" @input="clearError('karbohidrat')"
                                     placeholder="Contoh: Nasi Liwet / Ubi"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-blue-500 focus:border-blue-500 p-2 bg-slate-50/50"
                                 />
+                                <p v-if="validationErrors.karbohidrat" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                    <AlertCircle class="h-3 w-3 shrink-0" />
+                                    <span>{{ validationErrors.karbohidrat }}</span>
+                                </p>
                             </div>
 
                             <!-- Sub Menu Serat -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border border-emerald-200/90 shadow-2xs"
+                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                :class="validationErrors.serat ? 'border-rose-400 bg-rose-50/20' : 'border-emerald-200/90'"
                             >
                                 <label
                                     class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5"
@@ -2206,14 +2545,18 @@ function ajukanKeKeuangan() {
                                     <span
                                         class="h-2 w-2 rounded-full bg-emerald-500"
                                     ></span>
-                                    <span>Serat</span>
+                                    <span>Serat <strong class="text-rose-500">*</strong></span>
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.serat"
+                                    v-model="subMenuKomponen.serat" @input="clearError('serat')"
                                     placeholder="Contoh: Lalapan Sayur & Melon"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 p-2 bg-slate-50/50"
                                 />
+                                <p v-if="validationErrors.serat" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                    <AlertCircle class="h-3 w-3 shrink-0" />
+                                    <span>{{ validationErrors.serat }}</span>
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -2233,7 +2576,7 @@ function ajukanKeKeuangan() {
                                 </h4>
                                 <p class="text-xs text-slate-500 mt-0.5">
                                     Kuota porsi terkunci otomatis berdasarkan
-                                    data rekapitulasi siswa & penerima aktif
+                                    data rekapitulasi porsi sasaran & penerima aktif
                                     SPPG pada tanggal tersebut.
                                 </p>
                             </div>
@@ -2691,6 +3034,10 @@ function ajukanKeKeuangan() {
                                 </tbody>
                             </table>
                         </div>
+                        <div v-if="validationErrors.kelompok" class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2 mt-3">
+                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+                            <span>{{ validationErrors.kelompok }}</span>
+                        </div>
                     </div>
 
                     <!-- Bottom Action Button -->
@@ -2757,11 +3104,15 @@ function ajukanKeKeuangan() {
 
                     <!-- Modal Body: Tabel Sub-Sub Kategori -->
                     <div class="space-y-4">
+                        <div v-if="modalPmError" class="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2">
+                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+                            <span>{{ modalPmError }}</span>
+                        </div>
                         <div class="flex items-center justify-between">
                             <h4
                                 class="text-xs font-bold text-slate-700 uppercase tracking-wider"
                             >
-                                Rincian Jumlah Siswa / Penerima per Jenjang:
+                                Rincian Kuota Porsi / Penerima per Jenjang:
                             </h4>
                             <span class="text-xs text-slate-500">
                                 Format input: Laki-laki (L) + Perempuan (P)
@@ -2857,7 +3208,7 @@ function ajukanKeKeuangan() {
                             </table>
                         </div>
 
-                        <!-- Input Khusus Kuota Siswa Alergi (Jenis Alergen Bersumber dari Master Data PM) -->
+                        <!-- Input Khusus Kuota Porsi Alergi (Jenis Alergen Bersumber dari Master Data PM) -->
                         <div
                             class="p-4 rounded-xl bg-rose-50/60 border border-rose-200/80 space-y-3"
                         >
@@ -2869,7 +3220,7 @@ function ajukanKeKeuangan() {
                                         class="h-4 w-4 text-rose-600"
                                     />
                                     <span
-                                        >Penyesuaian Jumlah Siswa Alergi
+                                        >Penyesuaian Porsi Khusus Alergi
                                         (Membutuhkan Menu Substitusi)</span
                                     >
                                 </h5>
@@ -3022,7 +3373,7 @@ function ajukanKeKeuangan() {
                                     >PB: {{ modalTotalPb }} Porsi</span
                                 >
                                 <span class="text-rose-300 font-bold"
-                                    >Alergi: {{ modalGrandTotalAlergi }} Siswa
+                                    >Alergi: {{ modalGrandTotalAlergi }} Porsi
                                     (PK: {{ modalTotalAlergiPk }}, PB:
                                     {{ modalTotalAlergiPb }})</span
                                 >
@@ -3277,7 +3628,7 @@ function ajukanKeKeuangan() {
                         </div>
                     </div>
 
-                    <!-- Case 2: Ada Siswa Alergi Aktif tapi tidak ada kata kunci bentrok langsung di judul menu (Info Pengingat) -->
+                    <!-- Case 2: Ada Porsi Alergi Aktif tapi tidak ada kata kunci bentrok langsung di judul menu (Info Pengingat) -->
                     <div
                         v-else-if="analisaAlergiMenu.totalSiswaAlergi > 0"
                         class="p-4 rounded-2xl bg-sky-50/80 border border-sky-200 shadow-xs space-y-3"
@@ -3384,16 +3735,17 @@ function ajukanKeKeuangan() {
                             >
                                 <!-- Trigger Button -->
                                 <button
-                                    type="button"
-                                    @click="
-                                        isTkpiDropdownOpen = !isTkpiDropdownOpen
-                                    "
-                                    class="w-full h-11 px-4 py-2 text-sm font-semibold rounded-xl border border-slate-300 bg-white text-slate-900 flex items-center justify-between shadow-2xs hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-left transition-colors cursor-pointer"
-                                    :class="{
-                                        'ring-2 ring-primary/20 border-primary':
-                                            isTkpiDropdownOpen,
-                                    }"
-                                >
+                                        type="button"
+                                        @click="
+                                            isTkpiDropdownOpen = !isTkpiDropdownOpen
+                                        "
+                                        :class="[
+                                            'w-full h-11 px-4 py-2 text-sm font-semibold rounded-xl border bg-white text-slate-900 flex items-center justify-between shadow-2xs hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-left transition-colors cursor-pointer',
+                                            selectedBahanList.length === 0
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : isTkpiDropdownOpen ? 'ring-2 ring-primary/20 border-primary' : 'border-slate-300'
+                                        ]"
+                                    >
                                     <span
                                         v-if="selectedTkpiItem"
                                         class="truncate font-bold text-slate-900 flex items-center gap-2 min-w-0"
@@ -3601,6 +3953,10 @@ function ajukanKeKeuangan() {
                                         >
                                     </div>
                                 </div>
+                                <p v-if="selectedBahanList.length === 0" class="text-xs text-rose-600 font-bold mt-1.5 flex items-center gap-1.5">
+                                    <AlertCircle class="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                                    <span>Wajib memilih dan menambahkan minimal 1 bahan makanan dari database TKPI 2020.</span>
+                                </p>
                             </div>
 
                             <Button
@@ -3670,10 +4026,10 @@ function ajukanKeKeuangan() {
                                             <Utensils class="h-6 w-6" />
                                         </div>
                                         <p
-                                            class="font-extrabold text-slate-700 text-sm"
+                                            class="font-extrabold text-rose-800 text-sm flex items-center gap-1.5"
                                         >
-                                            Belum Ada Bahan Makanan yang
-                                            Ditambahkan
+                                            <AlertCircle class="h-4 w-4 text-rose-600" />
+                                            <span>Wajib Memilih & Menambahkan Minimal 1 Bahan Makanan</span>
                                         </p>
                                         <p
                                             class="text-xs text-slate-400 max-w-md"
@@ -3791,7 +4147,7 @@ function ajukanKeKeuangan() {
                                                 </option>
                                             </select>
 
-                                            <!-- Info Siswa Alergi di PM -->
+                                            <!-- Info Porsi Alergi di PM -->
                                             <div
                                                 v-if="
                                                     selectedBahanList[idx]
@@ -3816,7 +4172,7 @@ function ajukanKeKeuangan() {
                                                     v-else
                                                     class="block text-[9.5px] font-bold text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded text-center leading-tight border border-rose-200"
                                                 >
-                                                    ⚠️ 0 Siswa Alergi di PM
+                                                    ⚠️ 0 Porsi Alergi di PM
                                                 </span>
                                             </div>
                                         </div>
@@ -3864,9 +4220,17 @@ function ajukanKeKeuangan() {
                                             "
                                             required
                                             placeholder="0"
-                                            class="w-16 h-9 text-center text-xs font-bold rounded-lg border-slate-300 p-1 bg-amber-50/40 text-amber-900 focus:ring-primary focus:border-primary"
+                                            :class="[
+                                                'w-16 h-9 text-center text-xs font-bold rounded-lg border p-1',
+                                                ((!selectedBahanList[idx].gram_pk || Number(selectedBahanList[idx].gram_pk) <= 0) && (!selectedBahanList[idx].gram_pb || Number(selectedBahanList[idx].gram_pb) <= 0))
+                                                    ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50 text-rose-900'
+                                                    : 'border-slate-300 bg-amber-50/40 text-amber-900 focus:ring-primary focus:border-primary'
+                                            ]"
                                             min="0"
                                         />
+                                        <span v-if="(!selectedBahanList[idx].gram_pk || Number(selectedBahanList[idx].gram_pk) <= 0) && (!selectedBahanList[idx].gram_pb || Number(selectedBahanList[idx].gram_pb) <= 0)" class="text-[9px] text-rose-600 font-bold block mt-0.5">
+                                            Wajib > 0 salah satu
+                                        </span>
                                         <span
                                             class="block text-[10px] font-extrabold text-amber-900 bg-amber-100/80 px-1.5 py-0.5 rounded-md mt-1.5 text-center whitespace-nowrap shadow-2xs"
                                             :class="{
@@ -3890,9 +4254,17 @@ function ajukanKeKeuangan() {
                                             "
                                             required
                                             placeholder="0"
-                                            class="w-16 h-9 text-center text-xs font-bold rounded-lg border-slate-300 p-1 bg-indigo-50/40 text-indigo-900 focus:ring-primary focus:border-primary"
+                                            :class="[
+                                                'w-16 h-9 text-center text-xs font-bold rounded-lg border p-1',
+                                                ((!selectedBahanList[idx].gram_pk || Number(selectedBahanList[idx].gram_pk) <= 0) && (!selectedBahanList[idx].gram_pb || Number(selectedBahanList[idx].gram_pb) <= 0))
+                                                    ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50 text-rose-900'
+                                                    : 'border-slate-300 bg-indigo-50/40 text-indigo-900 focus:ring-primary focus:border-primary'
+                                            ]"
                                             min="0"
                                         />
+                                        <span v-if="(!selectedBahanList[idx].gram_pk || Number(selectedBahanList[idx].gram_pk) <= 0) && (!selectedBahanList[idx].gram_pb || Number(selectedBahanList[idx].gram_pb) <= 0)" class="text-[9px] text-rose-600 font-bold block mt-0.5">
+                                            Wajib > 0 salah satu
+                                        </span>
                                         <span
                                             class="block text-[10px] font-extrabold text-indigo-900 bg-indigo-100/80 px-1.5 py-0.5 rounded-md mt-1.5 text-center whitespace-nowrap shadow-2xs"
                                             :class="{
@@ -3936,9 +4308,17 @@ function ajukanKeKeuangan() {
                                             "
                                             required
                                             placeholder="0"
-                                            class="w-14 h-9 text-center text-xs font-bold rounded-lg border-slate-300 p-1 text-rose-800 bg-white focus:ring-primary focus:border-primary"
+                                            :class="[
+                                                'w-14 h-9 text-center text-xs font-bold rounded-lg border p-1',
+                                                (selectedBahanList[idx].buffer === null || selectedBahanList[idx].buffer === undefined || selectedBahanList[idx].buffer === '' || Number(selectedBahanList[idx].buffer) < 0)
+                                                    ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50 text-rose-900'
+                                                    : 'border-slate-300 text-rose-800 bg-white focus:ring-primary focus:border-primary'
+                                            ]"
                                             min="0"
                                         />
+                                        <span v-if="selectedBahanList[idx].buffer === null || selectedBahanList[idx].buffer === undefined || selectedBahanList[idx].buffer === '' || Number(selectedBahanList[idx].buffer) < 0" class="text-[9px] text-rose-600 font-bold block mt-0.5">
+                                            Wajib >= 0%
+                                        </span>
                                         <span
                                             class="block text-[9.5px] font-bold text-slate-400 mt-1.5 py-0.5"
                                         >
@@ -3951,7 +4331,7 @@ function ajukanKeKeuangan() {
                                 <td
                                     class="p-3 text-right font-black text-slate-900 bg-slate-50/50 align-top pt-4"
                                 >
-                                    {{ b.totalGrossKg }} kg
+                                    {{ formatGrossWeight(b.totalGrossKg) }}
                                 </td>
 
                                 <!-- Harga Master -->
@@ -3994,15 +4374,10 @@ function ajukanKeKeuangan() {
                                 </td>
                                 <td class="p-3.5 text-right text-slate-900">
                                     {{
-                                        bahanCalculations
-                                            .reduce(
-                                                (acc, i) =>
-                                                    acc + i.totalGrossKg,
-                                                0,
-                                            )
-                                            .toFixed(1)
+                                        formatGrossWeight(
+                                            bahanCalculations.reduce((acc, i) => acc + i.totalGrossKg, 0)
+                                        )
                                     }}
-                                    Kg
                                 </td>
                                 <td></td>
                                 <td
@@ -5975,7 +6350,7 @@ function ajukanKeKeuangan() {
                                         <td
                                             class="p-3 text-right font-mono font-bold text-slate-900 align-top pt-4 whitespace-nowrap"
                                         >
-                                            {{ b.totalGrossKg }} kg
+                                            {{ formatGrossWeight(b.totalGrossKg) }}
                                         </td>
                                         <td
                                             class="p-3 text-right font-mono text-slate-600 align-top pt-4 whitespace-nowrap"
