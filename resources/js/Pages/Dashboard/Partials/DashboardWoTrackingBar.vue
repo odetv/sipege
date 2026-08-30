@@ -43,13 +43,54 @@ function getTodayDateString() {
 
 const todayStr = getTodayDateString();
 const selectedWoId = ref(null);
+const isUserManuallySelected = ref(false);
+
+const todayWorkOrder = computed(() => {
+    if (!props.workOrders || props.workOrders.length === 0) return null;
+    return props.workOrders.find(w => (w.tanggal || '').substring(0, 10) === todayStr) || null;
+});
+
+const categorizedWorkOrders = computed(() => {
+    const todayList = [];
+    const upcomingList = [];
+    const pastList = [];
+
+    (props.workOrders || []).forEach(w => {
+        const tgl = (w.tanggal || '').substring(0, 10);
+        if (tgl === todayStr) {
+            todayList.push(w);
+        } else if (tgl > todayStr) {
+            upcomingList.push(w);
+        } else {
+            pastList.push(w);
+        }
+    });
+
+    return {
+        today: todayList,
+        upcoming: upcomingList.sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || '')),
+        past: pastList.sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')),
+    };
+});
+
+function onSelectWo(id) {
+    selectedWoId.value = id;
+    isUserManuallySelected.value = true;
+}
+
+function selectTodayWo() {
+    if (todayWorkOrder.value) {
+        selectedWoId.value = todayWorkOrder.value.id;
+        isUserManuallySelected.value = false;
+    }
+}
 
 // Automatically pick today's WO or closest active WO on mount
 function initDefaultWo() {
     if (!props.workOrders || props.workOrders.length === 0) return;
     
     // 1. Look for WO matching today's date
-    const todayWo = props.workOrders.find(w => w.tanggal === todayStr);
+    const todayWo = props.workOrders.find(w => (w.tanggal || '').substring(0, 10) === todayStr);
     if (todayWo) {
         selectedWoId.value = todayWo.id;
         return;
@@ -57,8 +98,8 @@ function initDefaultWo() {
 
     // 2. Look for upcoming WO (tanggal >= today)
     const upcomingWo = [...props.workOrders]
-        .filter(w => w.tanggal && w.tanggal >= todayStr)
-        .sort((a, b) => a.tanggal.localeCompare(b.tanggal))[0];
+        .filter(w => (w.tanggal || '').substring(0, 10) >= todayStr)
+        .sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || ''))[0];
     if (upcomingWo) {
         selectedWoId.value = upcomingWo.id;
         return;
@@ -72,31 +113,34 @@ onMounted(() => {
     initDefaultWo();
 });
 
-watch(() => props.workOrders, () => {
-    if (!selectedWoId.value) {
-        initDefaultWo();
+watch(() => props.workOrders, (wos) => {
+    if (wos && wos.length > 0) {
+        if (!isUserManuallySelected.value || !selectedWoId.value || !wos.some(w => w.id === selectedWoId.value)) {
+            initDefaultWo();
+        }
     }
-}, { immediate: true });
+}, { immediate: true, deep: true });
 
 const activeWorkOrder = computed(() => {
     if (!props.workOrders || props.workOrders.length === 0) return null;
     if (selectedWoId.value) {
-        const found = props.workOrders.find((w) => w.id === selectedWoId.value);
+        const found = props.workOrders.find((w) => w.id === selectedWoId.value || w.uuid === selectedWoId.value || w.db_id === selectedWoId.value);
         if (found) return found;
     }
-    return props.workOrders[0];
+    // Default fallback to today's WO if exists, else first WO
+    return todayWorkOrder.value || props.workOrders[0];
 });
 
 // Check whether the active WO is for today, upcoming, or past
 const dateStatus = computed(() => {
     if (!activeWorkOrder.value || !activeWorkOrder.value.tanggal) return null;
-    const tgl = activeWorkOrder.value.tanggal;
+    const tgl = (activeWorkOrder.value.tanggal || '').substring(0, 10);
     if (tgl === todayStr) {
-        return { label: "Menu Hari Ini", type: "today", badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300" };
+        return { label: "⭐ Menu Hari Ini", type: "today", badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-300 font-black shadow-2xs" };
     } else if (tgl > todayStr) {
-        return { label: "Menu Mendatang", type: "upcoming", badgeClass: "bg-blue-50 text-blue-700 border-blue-300" };
+        return { label: "📅 Menu Rencana Mendatang", type: "upcoming", badgeClass: "bg-blue-50 text-blue-800 border-blue-300 font-bold" };
     } else {
-        return { label: "Riwayat Distribusi", type: "past", badgeClass: "bg-slate-100 text-slate-600 border-slate-300" };
+        return { label: "🕒 Riwayat Menu Terdahulu", type: "past", badgeClass: "bg-slate-100 text-slate-700 border-slate-300 font-medium" };
     }
 });
 
@@ -295,18 +339,53 @@ function formatTanggalIndo(tgl) {
                 <div class="flex items-center gap-2 w-full md:w-auto flex-wrap sm:flex-nowrap min-w-0">
                     <div v-if="workOrders.length > 1" class="relative flex-1 sm:flex-none min-w-0 w-full sm:w-auto">
                         <select
-                            v-model="selectedWoId"
+                            :value="activeWorkOrder?.id"
+                            @change="onSelectWo($event.target.value)"
                             class="w-full sm:w-auto max-w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 pr-8 text-slate-700 hover:border-slate-300 focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-colors cursor-pointer truncate"
                         >
-                            <option
-                                v-for="w in workOrders"
-                                :key="w.id"
-                                :value="w.id"
-                            >
-                                {{ w.tanggal === todayStr ? '⭐ Hari Ini - ' : '' }}{{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
-                            </option>
+                            <optgroup v-if="categorizedWorkOrders.today.length > 0" label="⭐ Menu Hari Ini">
+                                <option
+                                    v-for="w in categorizedWorkOrders.today"
+                                    :key="w.id"
+                                    :value="w.id"
+                                >
+                                    ⭐ Hari Ini • {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                </option>
+                            </optgroup>
+
+                            <optgroup v-if="categorizedWorkOrders.upcoming.length > 0" label="📅 Menu Rencana Mendatang">
+                                <option
+                                    v-for="w in categorizedWorkOrders.upcoming"
+                                    :key="w.id"
+                                    :value="w.id"
+                                >
+                                    📅 {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                </option>
+                            </optgroup>
+
+                            <optgroup v-if="categorizedWorkOrders.past.length > 0" label="🕒 Riwayat Menu Terdahulu">
+                                <option
+                                    v-for="w in categorizedWorkOrders.past"
+                                    :key="w.id"
+                                    :value="w.id"
+                                >
+                                    🕒 {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                </option>
+                            </optgroup>
                         </select>
                     </div>
+
+                    <!-- Tombol Cepat Kembali ke Menu Hari Ini jika sedang melihat menu terdahulu/mendatang -->
+                    <button
+                        v-if="todayWorkOrder && activeWorkOrder && activeWorkOrder.id !== todayWorkOrder.id"
+                        type="button"
+                        @click="selectTodayWo"
+                        class="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer shrink-0"
+                        title="Kembali ke Work Order Hari Ini"
+                    >
+                        <Sparkles class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>Menu Hari Ini</span>
+                    </button>
 
                     <Link
                         :href="route('gizi.daftar-menu')"

@@ -2851,7 +2851,7 @@ watch(
                                         :class="[
                                             'transition-colors',
                                             k.status_menerima === false
-                                                ? 'bg-rose-50/40 text-slate-400'
+                                                ? 'bg-slate-50/90 text-slate-400 opacity-60 select-none'
                                                 : 'hover:bg-slate-50/60',
                                         ]"
                                     >
@@ -2872,9 +2872,9 @@ watch(
                                             </span>
                                             <span
                                                 v-else
-                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300"
+                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-80 select-none"
                                             >
-                                                <UserX class="h-3 w-3 mr-1" />
+                                                <UserX class="h-3 w-3 mr-1 text-slate-400" />
                                                 Tidak Menerima
                                             </span>
                                         </td>
@@ -2884,7 +2884,7 @@ watch(
                                             class="p-3 font-bold align-middle"
                                             :class="
                                                 k.status_menerima === false
-                                                    ? 'text-slate-500 line-through'
+                                                    ? 'text-slate-400 line-through opacity-70'
                                                     : 'text-slate-900'
                                             "
                                         >
@@ -2901,7 +2901,12 @@ watch(
                                         <td class="p-3 align-middle">
                                             <Badge
                                                 variant="outline"
-                                                class="font-bold text-[11px] bg-slate-50"
+                                                :class="[
+                                                    'font-bold text-[11px]',
+                                                    k.status_menerima === false
+                                                        ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-60'
+                                                        : 'bg-slate-50 text-slate-700'
+                                                ]"
                                             >
                                                 {{ k.kategori }}
                                             </Badge>
@@ -2912,7 +2917,7 @@ watch(
                                             class="p-3 text-center align-middle font-bold"
                                             :class="
                                                 k.status_menerima === false
-                                                    ? 'text-slate-400'
+                                                    ? 'text-slate-300 line-through font-normal'
                                                     : 'text-amber-900 bg-amber-50/20'
                                             "
                                         >
@@ -2924,7 +2929,7 @@ watch(
                                             class="p-3 text-center align-middle font-bold"
                                             :class="
                                                 k.status_menerima === false
-                                                    ? 'text-slate-400'
+                                                    ? 'text-slate-300 line-through font-normal'
                                                     : 'text-indigo-900 bg-indigo-50/20'
                                             "
                                         >
@@ -2936,7 +2941,7 @@ watch(
                                             class="p-3 text-center font-black text-sm align-middle"
                                             :class="
                                                 k.status_menerima === false
-                                                    ? 'text-slate-400'
+                                                    ? 'text-slate-300 line-through font-normal'
                                                     : 'text-slate-900'
                                             "
                                         >
@@ -2962,7 +2967,7 @@ watch(
                                                     :class="
                                                         k.status_menerima ===
                                                         false
-                                                            ? 'text-slate-400'
+                                                            ? 'text-slate-300 line-through font-normal'
                                                             : 'text-rose-700'
                                                     "
                                                 >
@@ -2970,6 +2975,7 @@ watch(
                                                     {{ al.jenis_alergi }}:
                                                     <span
                                                         class="font-black text-rose-900 ml-0.5"
+                                                        :class="k.status_menerima === false ? 'text-slate-300 line-through' : ''"
                                                     >
                                                         {{
                                                             (Number(
@@ -3004,7 +3010,7 @@ watch(
                                                 class="text-[11px] font-bold"
                                                 :class="
                                                     k.status_menerima === false
-                                                        ? 'text-slate-400'
+                                                        ? 'text-slate-300 line-through font-normal'
                                                         : 'text-rose-700'
                                                 "
                                             >
@@ -3032,7 +3038,8 @@ watch(
                                             </div>
                                             <div
                                                 v-else
-                                                class="text-[11px] text-emerald-700 font-medium"
+                                                class="text-[11px] font-medium"
+                                                :class="k.status_menerima === false ? 'text-slate-300 line-through' : 'text-emerald-700'"
                                             >
                                                 ✓ Normal
                                             </div>
@@ -3043,9 +3050,15 @@ watch(
                                             <div class="flex items-center justify-center gap-1.5">
                                                 <button
                                                     type="button"
+                                                    :disabled="k.status_menerima === false"
                                                     @click="handleOpenModalEditPm(k)"
-                                                    class="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                                    title="Edit Detail PM per Sub-Sub Kategori"
+                                                    :class="[
+                                                        k.status_menerima === false
+                                                            ? 'opacity-30 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 pointer-events-none'
+                                                            : 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200/80 cursor-pointer shadow-2xs',
+                                                        'h-8 w-8 rounded-lg border flex items-center justify-center transition-colors'
+                                                    ]"
+                                                    :title="k.status_menerima === false ? 'Kelompok Tidak Menerima (Non-Aktif)' : 'Edit Detail PM per Sub-Sub Kategori'"
                                                 >
                                                     <Edit3 class="h-4 w-4" />
                                                 </button>
