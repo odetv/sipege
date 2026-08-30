@@ -351,7 +351,7 @@ defineProps({
                     type="button"
                     @click="addCustomSubkategori"
                     :disabled="isAllSubkategoriAdded"
-                    class="inline-flex items-center justify-center gap-2 h-11 px-5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                    class="inline-flex items-center justify-center gap-2 h-11 px-5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50/60 text-slate-700 shadow-2xs transition-colors cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
                     :title="
                         isAllSubkategoriAdded
                             ? 'Semua sub kategori untuk jenjang ini telah ditambahkan'

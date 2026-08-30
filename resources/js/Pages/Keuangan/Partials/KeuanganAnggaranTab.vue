@@ -247,19 +247,19 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">Nama Kelompok</th>
-                            <th class="p-3.5">Kategori</th>
-                            <th class="p-3.5">Porsi Kecil (PK)</th>
-                            <th class="p-3.5">Porsi Besar (PB)</th>
-                            <th class="p-3.5">Biaya Harian</th>
-                            <th class="p-3.5">Biaya Bulanan (20 Hari)</th>
+                            <th class="py-3.5 px-4">Nama Kelompok</th>
+                            <th class="py-3.5 px-4">Kategori</th>
+                            <th class="py-3.5 px-4">Porsi Kecil (PK)</th>
+                            <th class="py-3.5 px-4">Porsi Besar (PB)</th>
+                            <th class="py-3.5 px-4">Biaya Harian</th>
+                            <th class="py-3.5 px-4">Biaya Bulanan (20 Hari)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="k in kelompokList"
                             :key="k.id"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-bold text-slate-900">
                                 {{ k.nama_kelompok }}

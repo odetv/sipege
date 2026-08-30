@@ -235,82 +235,105 @@ function rejectPo() {
 <template>
     <div class="space-y-6">
         <!-- Card 1: Tabel Utama Verifikasi PO -->
-        <Card className="bg-white border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader
-                className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-            >
-                <div>
-                    <CardTitle
-                        className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
-                    >
-                        <ShieldCheck class="h-5 w-5 text-primary" />
-                        <span>Verifikasi Pengajuan Purchase Order (PO)</span>
-                    </CardTitle>
-                    <CardDescription class="text-xs sm:text-sm">
-                        Modul telaah, verifikasi harga pasar, dan persetujuan pengajuan belanja bahan baku dari rancangan menu Tim Gizi sebelum diterbitkan ke Daftar PO resmi.
-                    </CardDescription>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="px-3 py-1 text-xs font-extrabold rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-                        {{ activeList.filter(p => p.status_po === 'Menunggu Verifikasi' || p.status_po === 'Diajukan ke Keuangan').length }} Pengajuan Menunggu
-                    </span>
-                </div>
-            </CardHeader>
+        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[950px] text-left text-xs border-collapse">
-                    <thead
-                        class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                    >
-                        <tr>
-                            <th class="p-3.5">No. PO & WO</th>
-                            <th class="p-3.5">Tanggal Distribusi</th>
-                            <th class="p-3.5">Menu Sasaran & Vendor</th>
-                            <th class="p-3.5">Waktu Pengajuan</th>
-                            <th class="p-3.5 text-center">Items</th>
-                            <th class="p-3.5 text-right">Estimasi Nominal</th>
-                            <th class="p-3.5 text-center">Status Verifikasi</th>
-                            <th class="p-3.5 text-center min-w-[170px]">Aksi</th>
+                <table class="w-full min-w-[1050px] text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                            <th class="py-3.5 px-4 w-12 text-center">No</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Kode WO & Tanggal</th>
+                            <th class="py-3.5 px-5 min-w-[260px]">Nama Menu & Kandungan</th>
+                            <th class="py-3.5 px-4 text-center min-w-[130px]">Sasaran Porsi</th>
+                            <th class="py-3.5 px-4 text-right min-w-[140px]">Est. Belanja Bahan</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Waktu Pengajuan</th>
+                            <th class="py-3.5 px-4 text-center min-w-[120px]">Status Verifikasi</th>
+                            <th class="py-3.5 px-4 text-center w-36">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
-                            v-for="po in activeList"
+                            v-for="(po, index) in activeList"
                             :key="po.id"
                             class="hover:bg-slate-50/70 transition-colors"
                         >
-                            <td class="p-3.5 font-mono font-bold text-primary">
-                                <div>{{ po.id }}</div>
-                                <div class="text-[10px] text-slate-400 font-normal">
-                                    {{ po.wo_id }}
+                            <!-- 1. No Urut -->
+                            <td class="py-4 px-4 text-center font-bold text-slate-400">
+                                {{ index + 1 }}
+                            </td>
+
+                            <!-- 2. Kode WO & Tanggal Distribusi -->
+                            <td class="py-4 px-4">
+                                <div class="space-y-1">
+                                    <div>
+                                        <span class="font-mono font-bold text-xs text-primary bg-primary/10 px-2 py-0.5 rounded inline-block">
+                                            {{ po.wo_id }}
+                                        </span>
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                                        <Calendar class="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span>{{ formatTanggalIndo(po.tanggal) }}</span>
+                                    </p>
                                 </div>
                             </td>
-                            <td class="p-3.5 font-medium text-slate-600 whitespace-nowrap">
-                                {{ formatTanggalIndo(po.tanggal) }}
-                            </td>
-                            <td class="p-3.5 font-bold text-slate-900 max-w-xs">
-                                <div>{{ po.menu }}</div>
-                                <div class="text-[10.5px] text-slate-500 font-normal">
-                                    Vendor: {{ po.vendor || 'Rekanan Pangan SPPG' }}
+
+                            <!-- 3. Nama Menu & Kandungan Nutrisi -->
+                            <td class="py-4 px-5 max-w-sm">
+                                <div class="space-y-1">
+                                    <p class="font-bold text-slate-900 leading-snug text-xs sm:text-sm">
+                                        {{ po.menu }}
+                                    </p>
+                                    <div v-if="po.energi_pk || po.energi_pb" class="flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-slate-500">
+                                        <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
+                                            PK: {{ po.energi_pk || 0 }} kkal • {{ po.protein_pk || 0 }}g Prot
+                                        </span>
+                                        <span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[10px]">
+                                            PB: {{ po.energi_pb || 0 }} kkal • {{ po.protein_pb || 0 }}g Prot
+                                        </span>
+                                    </div>
+                                    <div class="text-[10.5px] text-slate-500 font-medium">
+                                        No PO: <span class="font-mono font-bold text-slate-700">{{ po.id }}</span>
+                                    </div>
                                 </div>
                             </td>
-                            <td class="p-3.5 whitespace-nowrap text-[10.5px]">
+
+                            <!-- 4. Sasaran Porsi -->
+                            <td class="py-4 px-4 text-center">
+                                <span class="font-black text-slate-900 block text-xs">
+                                    {{ Number(po.total_porsi || 0).toLocaleString("id-ID") }} PM
+                                </span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5">
+                                    {{ po.porsi_pk || 0 }} PK / {{ po.porsi_pb || 0 }} PB
+                                </span>
+                            </td>
+
+                            <!-- 5. Estimasi Belanja Bahan -->
+                            <td class="py-4 px-4 text-right whitespace-nowrap">
+                                <div class="font-mono font-black text-slate-900 text-xs sm:text-[13px]">
+                                    {{ formatRupiah(po.total_nominal_master || po.total_nominal) }}
+                                </div>
+                                <div class="text-[10.5px] font-bold text-slate-500 mt-0.5">
+                                    {{ po.items_count || po.items?.length || 0 }} Item Bahan
+                                </div>
+                            </td>
+
+                            <!-- 6. Waktu Pengajuan -->
+                            <td class="py-4 px-4 whitespace-nowrap text-[10.5px]">
                                 <div class="text-slate-600">
                                     <span class="text-slate-400">Diajukan:</span> {{ formatDateTimeIndo(po.created_at) }}
                                 </div>
-                                <div v-if="po.diverifikasi_pada" class="text-rose-600 font-semibold mt-0.5">
+                                <div v-if="po.diverifikasi_pada && po.status_po === 'Ditolak'" class="text-rose-600 font-semibold mt-0.5">
                                     Ditolak: {{ formatDateTimeIndo(po.diverifikasi_pada) }}
                                 </div>
+                                <div v-else-if="po.diverifikasi_pada" class="text-emerald-700 font-semibold mt-0.5">
+                                    Diverifikasi: {{ formatDateTimeIndo(po.diverifikasi_pada) }}
+                                </div>
                             </td>
-                            <td class="p-3.5 text-center font-bold text-slate-700">
-                                {{ po.items_count || po.items?.length || 0 }} Item
-                            </td>
-                            <td class="p-3.5 text-right font-mono font-black text-slate-900 whitespace-nowrap">
-                                {{ formatRupiah(po.total_nominal_master || po.total_nominal) }}
-                            </td>
-                            <td class="p-3.5 text-center">
+
+                            <!-- 7. Status Verifikasi -->
+                            <td class="py-4 px-4 text-center">
                                 <span
                                     :class="[
-                                        'px-2.5 py-0.5 text-[10.5px] font-bold rounded-lg border inline-block whitespace-nowrap',
+                                        'px-2.5 py-1 text-[10.5px] font-bold rounded-lg border inline-block whitespace-nowrap',
                                         po.status_po === 'Draft Verifikasi'
                                             ? 'bg-amber-50 text-amber-700 border-amber-300'
                                             : po.status_po === 'Ditolak'
@@ -321,34 +344,30 @@ function rejectPo() {
                                     {{ po.status_po }}
                                 </span>
                             </td>
-                            <td class="p-3.5 text-center whitespace-nowrap">
-                                <!-- Status Menunggu Verifikasi atau Draft Verifikasi -> Tombol Verifikasi Belanja Aktif -->
-                                <div v-if="po.status_po === 'Menunggu Verifikasi' || po.status_po === 'Diajukan ke Keuangan' || po.status_po === 'Draft Verifikasi'">
-                                    <Button
+
+                            <!-- 8. Aksi -->
+                            <td class="py-4 px-4 text-center whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <!-- Verifikasi Belanja (Hijau) -->
+                                    <button
+                                        v-if="po.status_po === 'Menunggu Verifikasi' || po.status_po === 'Diajukan ke Keuangan' || po.status_po === 'Draft Verifikasi'"
                                         type="button"
                                         @click="openVerificationModal(po, false)"
-                                        className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-3 h-8 rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1 mx-auto"
-                                        title="Buka Form Verifikasi & Persetujuan"
+                                        class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Verifikasi & Telaah Belanja PO"
                                     >
-                                        <ShieldCheck class="h-3.5 w-3.5" />
-                                        <span>Verifikasi Belanja</span>
-                                    </Button>
-                                </div>
+                                        <ShieldCheck class="h-4 w-4" />
+                                    </button>
 
-                                <!-- Status Ditolak -> Tombol Verifikasi gabisa diklik lagi, tampilkan tombol Lihat Hasil -->
-                                <div v-else-if="po.status_po === 'Ditolak'" class="flex items-center justify-center gap-1.5">
-                                    <Button
+                                    <!-- Detail / Lihat Hasil (Biru) -->
+                                    <button
                                         type="button"
                                         @click="openVerificationModal(po, true)"
-                                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold px-2.5 h-7 rounded-lg transition-colors cursor-pointer"
-                                        title="Lihat Alasan Penolakan"
+                                        class="h-8 w-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Lihat Detail & Catatan Riwayat"
                                     >
-                                        <Eye class="h-3.5 w-3.5 mr-1" />
-                                        Lihat Hasil
-                                    </Button>
-                                    <span class="text-[10px] text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded">
-                                        Menunggu Revisi
-                                    </span>
+                                        <Eye class="h-4 w-4" />
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -364,7 +383,7 @@ function rejectPo() {
                     </tbody>
                 </table>
             </div>
-        </Card>
+        </div>
 
         <!-- Modal Verifikasi Detail Pembelian Bahan (Akuntan) -->
         <Modal

@@ -133,7 +133,7 @@ defineEmits(["update:customAlergiInput"]);
                             'px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5',
                             isAlergiSelected(al.value)
                                 ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-2xs font-bold'
-                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50/60 hover:border-slate-300',
                         ]"
                     >
                         <CheckCircle2

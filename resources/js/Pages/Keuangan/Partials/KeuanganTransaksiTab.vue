@@ -49,20 +49,20 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">ID Transaksi</th>
-                            <th class="p-3.5">Tanggal</th>
-                            <th class="p-3.5">Kategori</th>
-                            <th class="p-3.5">Uraian Transaksi</th>
-                            <th class="p-3.5">PJ</th>
-                            <th class="p-3.5 text-right">Nominal</th>
-                            <th class="p-3.5 text-center">Status</th>
+                            <th class="py-3.5 px-4">ID Transaksi</th>
+                            <th class="py-3.5 px-4">Tanggal</th>
+                            <th class="py-3.5 px-4">Kategori</th>
+                            <th class="py-3.5 px-4">Uraian Transaksi</th>
+                            <th class="py-3.5 px-4">PJ</th>
+                            <th class="py-3.5 px-4 text-right">Nominal</th>
+                            <th class="py-3.5 px-4 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="trx in transaksiList"
                             :key="trx.id"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ trx.id }}

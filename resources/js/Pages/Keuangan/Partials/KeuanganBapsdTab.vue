@@ -52,14 +52,14 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">No. BAPSD</th>
-                            <th class="p-3.5">Tanggal</th>
-                            <th class="p-3.5">Rekanan / Vendor</th>
-                            <th class="p-3.5">
+                            <th class="py-3.5 px-4">No. BAPSD</th>
+                            <th class="py-3.5 px-4">Tanggal</th>
+                            <th class="py-3.5 px-4">Rekanan / Vendor</th>
+                            <th class="py-3.5 px-4">
                                 Komoditas Barang Diserahterimakan
                             </th>
-                            <th class="p-3.5 text-right">Nilai Pembayaran</th>
-                            <th class="p-3.5 text-center">
+                            <th class="py-3.5 px-4 text-right">Nilai Pembayaran</th>
+                            <th class="py-3.5 px-4 text-center">
                                 Status Berita Acara
                             </th>
                         </tr>
@@ -68,7 +68,7 @@ defineProps({
                         <tr
                             v-for="bap in bapsdList"
                             :key="bap.no_bap"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ bap.no_bap }}

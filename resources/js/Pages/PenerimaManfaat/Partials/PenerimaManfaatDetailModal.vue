@@ -394,7 +394,7 @@ function formatDateTimeWita(dateString) {
                                     activeKelompok.kategori,
                                 )"
                                 :key="rincian.id || idx"
-                                class="hover:bg-slate-50/50"
+                                class="hover:bg-slate-50/60/50"
                             >
                                 <td
                                     class="py-2.5 px-4 text-center text-slate-400 font-medium"

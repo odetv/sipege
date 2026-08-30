@@ -45,17 +45,17 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">Kode</th>
-                            <th class="p-3.5">Rincian Pos Fasilitas</th>
-                            <th class="p-3.5 text-right">Pagu Anggaran</th>
-                            <th class="p-3.5 text-right">Realisasi Pengeluaran</th>
+                            <th class="py-3.5 px-4">Kode</th>
+                            <th class="py-3.5 px-4">Rincian Pos Fasilitas</th>
+                            <th class="py-3.5 px-4 text-right">Pagu Anggaran</th>
+                            <th class="py-3.5 px-4 text-right">Realisasi Pengeluaran</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="fas in bpFasilitasList"
                             :key="fas.kode"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ fas.kode }}

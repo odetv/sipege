@@ -2750,32 +2750,19 @@ watch(
                                 </Button>
                             </div>
                         </div>
-                        <div
-                            class="rounded-xl border border-slate-200 overflow-x-auto"
-                        >
-                            <table
-                                class="w-full min-w-[650px] text-left text-xs border-collapse"
-                            >
-                                <thead
-                                    class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                                >
-                                    <tr>
-                                        <th class="p-3 text-center">Status</th>
-                                        <th class="p-3">
-                                            Nama Kelompok Sasaran
-                                        </th>
-                                        <th class="p-3">Kategori</th>
-                                        <th class="p-3 text-center">
-                                            Porsi Kecil (PK)
-                                        </th>
-                                        <th class="p-3 text-center">
-                                            Porsi Besar (PB)
-                                        </th>
-                                        <th class="p-3 text-center">
-                                            Total PM
-                                        </th>
-                                        <th class="p-3">Status Alergi</th>
-                                        <th class="p-3 text-center">Aksi</th>
+                        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[650px] text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                                        <th class="py-3.5 px-3 text-center">Status</th>
+                                        <th class="py-3.5 px-3">Nama Kelompok Sasaran</th>
+                                        <th class="py-3.5 px-3">Kategori</th>
+                                        <th class="py-3.5 px-3 text-center">Porsi Kecil (PK)</th>
+                                        <th class="py-3.5 px-3 text-center">Porsi Besar (PB)</th>
+                                        <th class="py-3.5 px-3 text-center">Total PM</th>
+                                        <th class="py-3.5 px-3">Status Alergi</th>
+                                        <th class="py-3.5 px-3 text-center w-28">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody
@@ -2975,58 +2962,34 @@ watch(
                                         </td>
 
                                         <!-- Aksi -->
-                                        <td
-                                            class="p-2 text-center align-middle"
-                                        >
-                                            <div
-                                                class="flex items-center justify-center gap-1.5"
-                                            >
+                                        <td class="py-3 px-3 text-center align-middle">
+                                            <div class="flex items-center justify-center gap-1.5">
                                                 <button
                                                     type="button"
-                                                    @click="
-                                                        handleOpenModalEditPm(k)
-                                                    "
-                                                    class="p-2 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center justify-center cursor-pointer shadow-2xs"
+                                                    @click="handleOpenModalEditPm(k)"
+                                                    class="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
                                                     title="Edit Detail PM per Sub-Sub Kategori"
                                                 >
-                                                    <Edit3
-                                                        class="h-3.5 w-3.5"
-                                                    />
+                                                    <Edit3 class="h-4 w-4" />
                                                 </button>
 
                                                 <button
-                                                    v-if="
-                                                        k.status_menerima !==
-                                                        false
-                                                    "
+                                                    v-if="k.status_menerima !== false"
                                                     type="button"
-                                                    @click="
-                                                        handleToggleStatusMenerima(
-                                                            k,
-                                                        )
-                                                    "
-                                                    class="p-2 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors flex items-center justify-center cursor-pointer shadow-2xs"
-                                                    title="Nyatakan Tidak Menerima Distribusi"
+                                                    @click="handleToggleStatusMenerima(k, false)"
+                                                    class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                                    title="Tandai TIDAK MENERIMA Menu Hari Ini"
                                                 >
-                                                    <UserX
-                                                        class="h-3.5 w-3.5"
-                                                    />
+                                                    <UserX class="h-4 w-4" />
                                                 </button>
-
                                                 <button
                                                     v-else
                                                     type="button"
-                                                    @click="
-                                                        handleToggleStatusMenerima(
-                                                            k,
-                                                        )
-                                                    "
-                                                    class="p-2 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center justify-center cursor-pointer shadow-2xs"
-                                                    title="Aktifkan Kembali Status Menerima"
+                                                    @click="handleToggleStatusMenerima(k, true)"
+                                                    class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                                    title="Aktifkan Kembali Penerimaan"
                                                 >
-                                                    <UserCheck
-                                                        class="h-3.5 w-3.5"
-                                                    />
+                                                    <RotateCcw class="h-4 w-4" />
                                                 </button>
                                             </div>
                                         </td>
@@ -3034,7 +2997,8 @@ watch(
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="validationErrors.kelompok" class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2 mt-3">
+                    </div>
+                    <div v-if="validationErrors.kelompok" class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2 mt-3">
                             <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
                             <span>{{ validationErrors.kelompok }}</span>
                         </div>
@@ -3974,41 +3938,23 @@ watch(
             </Card>
 
             <!-- Tabel Detail Perhitungan Gramasi & Draft PO -->
-            <Card
-                className="bg-white border-slate-200 shadow-xs overflow-hidden"
-            >
-                <!-- Tabel Bahan Pangan Terpilih & Formulasi Resep -->
+            <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
                 <div class="overflow-x-auto">
-                    <table
-                        class="w-full min-w-[1050px] text-left text-xs border-collapse"
-                    >
-                        <thead
-                            class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                        >
-                            <tr>
-                                <th class="p-3 text-center w-10">No</th>
-                                <th class="p-3">Bahan (TKPI 2020)</th>
-                                <th class="p-3 min-w-[170px]">
-                                    Nama Bahan (PO Akuntan)
-                                </th>
-                                <th class="p-3">Kategori</th>
-                                <th class="p-3 text-center min-w-[170px]">
-                                    Peruntukan Porsi
-                                </th>
-                                <th class="p-3 text-center">Gram PK</th>
-                                <th class="p-3 text-center">Gram PB</th>
-                                <th class="p-3 text-center">BDD (%)</th>
-                                <th class="p-3 text-center">Buffer (%)</th>
-                                <th class="p-3 text-right">
-                                    Kebutuhan Kotor (Kg)
-                                </th>
-                                <th class="p-3 text-right">
-                                    Harga Master (Awal)
-                                </th>
-                                <th class="p-3 text-right">
-                                    Subtotal PO Draft
-                                </th>
-                                <th class="p-3 text-center">Aksi</th>
+                    <table class="w-full min-w-[1050px] text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                                <th class="py-3.5 px-3 text-center w-10">No</th>
+                                <th class="py-3.5 px-3 min-w-[180px]">Bahan Pangan (TKPI)</th>
+                                <th class="py-3.5 px-3 min-w-[170px]">Nama di Belanja PO</th>
+                                <th class="py-3.5 px-3">Kategori</th>
+                                <th class="py-3.5 px-3 text-center min-w-[160px]">Peruntukan Porsi</th>
+                                <th class="py-3.5 px-3 text-center">Gram Bersih (PK/PB)</th>
+                                <th class="py-3.5 px-3 text-center">BDD (%)</th>
+                                <th class="py-3.5 px-3 text-center min-w-[90px]">Buffer (%)</th>
+                                <th class="py-3.5 px-3 text-right">Kg Kotor</th>
+                                <th class="py-3.5 px-3 text-right">Harga Satuan</th>
+                                <th class="py-3.5 px-3 text-right">Subtotal</th>
+                                <th class="py-3.5 px-3 text-center w-14">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-800">
@@ -4349,12 +4295,12 @@ watch(
                                     {{ formatRupiah(b.subtotalMaster) }}
                                 </td>
 
-                                <td class="p-2 text-center align-top pt-3">
+                                <td class="py-3 px-3 text-center align-top pt-3">
                                     <button
                                         type="button"
                                         @click="handleRemoveBahan(idx)"
-                                        class="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                                        title="Hapus Bahan"
+                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer mx-auto"
+                                        title="Hapus Bahan Ini"
                                     >
                                         <Trash2 class="h-4 w-4" />
                                     </button>
@@ -4390,7 +4336,7 @@ watch(
                         </tfoot>
                     </table>
                 </div>
-            </Card>
+            </div>
 
             <!-- ========================================================================= -->
             <!-- Real-time Evaluasi Standar AKG BGN & Analisis Food Cost & Pagu Anggaran -->

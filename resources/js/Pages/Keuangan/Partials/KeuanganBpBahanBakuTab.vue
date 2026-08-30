@@ -46,19 +46,19 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">Kode Pos</th>
-                            <th class="p-3.5">Kelompok Bahan</th>
-                            <th class="p-3.5">Item Komoditas Pangan</th>
-                            <th class="p-3.5 text-right">Pagu Pos</th>
-                            <th class="p-3.5 text-right">Realisasi Belanja</th>
-                            <th class="p-3.5 text-center">Status</th>
+                            <th class="py-3.5 px-4">Kode Pos</th>
+                            <th class="py-3.5 px-4">Kelompok Bahan</th>
+                            <th class="py-3.5 px-4">Item Komoditas Pangan</th>
+                            <th class="py-3.5 px-4 text-right">Pagu Pos</th>
+                            <th class="py-3.5 px-4 text-right">Realisasi Belanja</th>
+                            <th class="py-3.5 px-4 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="bb in bpBahanBakuList"
                             :key="bb.kode"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ bb.kode }}

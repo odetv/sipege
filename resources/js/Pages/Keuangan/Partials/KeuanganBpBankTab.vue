@@ -48,19 +48,19 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">No. Referensi</th>
-                            <th class="p-3.5">Tanggal</th>
-                            <th class="p-3.5">Keterangan Mutasi</th>
-                            <th class="p-3.5 text-right">Penerimaan</th>
-                            <th class="p-3.5 text-right">Pengeluaran</th>
-                            <th class="p-3.5 text-right">Saldo Bank</th>
+                            <th class="py-3.5 px-4">No. Referensi</th>
+                            <th class="py-3.5 px-4">Tanggal</th>
+                            <th class="py-3.5 px-4">Keterangan Mutasi</th>
+                            <th class="py-3.5 px-4 text-right">Penerimaan</th>
+                            <th class="py-3.5 px-4 text-right">Pengeluaran</th>
+                            <th class="py-3.5 px-4 text-right">Saldo Bank</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="bk in bpBankList"
                             :key="bk.no_ref"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ bk.no_ref }}

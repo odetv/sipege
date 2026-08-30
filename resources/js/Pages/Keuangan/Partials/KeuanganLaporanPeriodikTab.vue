@@ -112,12 +112,12 @@ const grandPersen = computed(() => grandPagu.value > 0 ? (grandRealisasi.value /
                     <thead>
                         <tr class="border-b border-slate-100 bg-slate-50/75 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                             <th class="p-3.5 text-center w-12">No</th>
-                            <th class="p-3.5">Pos Anggaran Belanja</th>
-                            <th class="p-3.5 text-right">Pagu Alokasi</th>
-                            <th class="p-3.5 text-right">Realisasi S.D Lalu</th>
-                            <th class="p-3.5 text-right">Realisasi Periode Ini</th>
-                            <th class="p-3.5 text-right">Total Realisasi Kumulatif</th>
-                            <th class="p-3.5 text-right">% Serapan</th>
+                            <th class="py-3.5 px-4">Pos Anggaran Belanja</th>
+                            <th class="py-3.5 px-4 text-right">Pagu Alokasi</th>
+                            <th class="py-3.5 px-4 text-right">Realisasi S.D Lalu</th>
+                            <th class="py-3.5 px-4 text-right">Realisasi Periode Ini</th>
+                            <th class="py-3.5 px-4 text-right">Total Realisasi Kumulatif</th>
+                            <th class="py-3.5 px-4 text-right">% Serapan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">

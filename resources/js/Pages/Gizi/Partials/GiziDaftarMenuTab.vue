@@ -353,123 +353,86 @@ function executeDeleteWo() {
         </div>
 
         <!-- Card Tabel Utama Daftar Menu -->
-        <Card className="bg-white border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader
-                className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-            >
-                <div>
-                    <CardTitle
-                        className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
-                    >
-                        <FileSpreadsheet class="h-5 w-5 text-primary" />
-                        <span>Daftar Menu & Rekap Work Order (WO) SPPG</span>
-                    </CardTitle>
-                    <CardDescription class="text-xs sm:text-sm">
-                        Seluruh formulasi menu dan work order produksi makanan bergizi yang telah disusun.
-                    </CardDescription>
-                </div>
-                <div class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-                    <!-- Search Input Box -->
-                    <div class="relative w-full sm:w-64 shrink-0">
-                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                            <Search class="h-4 w-4 text-slate-400" />
-                        </div>
-                        <input
-                            v-model="searchDaftarMenu"
-                            type="text"
-                            placeholder="Cari No. WO / Menu..."
-                            class="block w-full h-10 rounded-lg border border-slate-200 bg-white pl-10 pr-4 text-xs placeholder-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-2xs font-medium text-slate-800"
-                        />
-                    </div>
-
-                    <!-- Status Filter Select -->
-                    <div class="relative min-w-[140px]">
-                        <select
-                            v-model="statusFilterDaftarMenu"
-                            class="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-700 font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-2xs"
-                        >
-                            <option value="semua">Semua Status</option>
-                            <option value="Siap Produksi">Siap Produksi</option>
-                            <option value="Diajukan">Diajukan ke Keuangan</option>
-                            <option value="Ditolak">Ditolak Keuangan</option>
-                            <option value="Draft">Draft WO</option>
-                        </select>
-                    </div>
-
-                    <!-- Action Button Rancang Menu Baru -->
-                    <Link
-                        :href="route('gizi.rancang-menu')"
-                        class="inline-flex items-center gap-2 h-10 px-4 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-xs transition-colors cursor-pointer shrink-0"
-                    >
-                        <Plus class="h-4 w-4 stroke-[3]" />
-                        <span>Rancang Menu Baru</span>
-                    </Link>
-                </div>
-            </CardHeader>
+        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[1050px] text-left text-xs border-collapse">
-                    <thead
-                        class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                    >
-                        <tr>
-                            <th class="p-3.5">No. Work Order</th>
-                            <th class="p-3.5">Tanggal Distribusi</th>
-                            <th class="p-3.5">Nama & Komposisi Menu</th>
-                            <th class="p-3.5 text-center">Porsi Sasaran</th>
-                            <th class="p-3.5 text-right">Food Cost PK / PB</th>
-                            <th class="p-3.5">Waktu Pembuatan & Status</th>
-                            <th class="p-3.5 text-center">Status</th>
-                            <th class="p-3.5 text-center min-w-[160px]">Aksi</th>
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                            <th class="py-3.5 px-4 w-12 text-center">No</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Kode WO & Tanggal</th>
+                            <th class="py-3.5 px-5 min-w-[260px]">Nama Menu & Kandungan</th>
+                            <th class="py-3.5 px-4 text-center min-w-[130px]">Sasaran Porsi</th>
+                            <th class="py-3.5 px-4 text-right min-w-[130px]">Biaya / Porsi</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Riwayat Waktu</th>
+                            <th class="py-3.5 px-4 text-center min-w-[120px]">Status Telaah</th>
+                            <th class="py-3.5 px-4 text-center w-36">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
-                            v-for="menu in filteredDaftarMenu"
+                            v-for="(menu, index) in filteredDaftarMenu"
                             :key="menu.id"
                             class="hover:bg-slate-50/70 transition-colors"
                         >
-                            <td class="p-3.5 font-mono font-bold text-primary">
-                                <div class="flex items-center gap-1.5">
-                                    <span>{{ menu.id }}</span>
-                                </div>
-                                <span
-                                    class="inline-block mt-0.5 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-semibold"
-                                >
-                                    {{ menu.siklus }}
-                                </span>
+                            <!-- 1. No Urut -->
+                            <td class="py-4 px-4 text-center font-bold text-slate-400">
+                                {{ index + 1 }}
                             </td>
-                            <td class="p-3.5 font-medium text-slate-600 whitespace-nowrap">
-                                {{ formatTanggalIndo(menu.tanggal) }}
-                            </td>
-                            <td class="p-3.5 max-w-sm">
-                                <p class="font-bold text-slate-900 leading-snug">
-                                    {{ menu.nama }}
-                                </p>
-                                <div
-                                    class="flex items-center gap-2 mt-1 text-[10.5px] text-slate-500 font-medium"
-                                >
-                                    <span>PK: {{ menu.energi_pk }} kkal / {{ menu.protein_pk }}g Prot</span>
-                                    <span>•</span>
-                                    <span>PB: {{ menu.energi_pb }} kkal / {{ menu.protein_pb }}g Prot</span>
+
+                            <!-- 2. Kode WO & Tanggal Distribusi -->
+                            <td class="py-4 px-4">
+                                <div class="space-y-1">
+                                    <div>
+                                        <span class="font-mono font-bold text-xs text-primary bg-primary/10 px-2 py-0.5 rounded inline-block">
+                                            {{ menu.id }}
+                                        </span>
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                                        <Calendar class="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span>{{ formatTanggalIndo(menu.tanggal) }}</span>
+                                    </p>
                                 </div>
                             </td>
-                            <td class="p-3.5 text-center">
+
+                            <!-- 3. Nama Menu & Kandungan Nutrisi -->
+                            <td class="py-4 px-5 max-w-sm">
+                                <div class="space-y-1">
+                                    <p class="font-bold text-slate-900 leading-snug text-xs sm:text-sm">
+                                        {{ menu.nama }}
+                                    </p>
+                                    <div class="flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-slate-500">
+                                        <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
+                                            PK: {{ menu.energi_pk }} kkal • {{ menu.protein_pk }}g Prot
+                                        </span>
+                                        <span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[10px]">
+                                            PB: {{ menu.energi_pb }} kkal • {{ menu.protein_pb }}g Prot
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- 4. Sasaran Porsi -->
+                            <td class="py-4 px-4 text-center">
                                 <span class="font-black text-slate-900 block text-xs">
                                     {{ Number(menu.total_porsi || 0).toLocaleString("id-ID") }} PM
                                 </span>
-                                <span class="text-[10px] text-slate-500 block">
+                                <span class="text-[10px] text-slate-500 block mt-0.5">
                                     {{ menu.porsi_pk }} PK / {{ menu.porsi_pb }} PB
                                 </span>
                             </td>
-                            <td class="p-3.5 text-right whitespace-nowrap">
+
+                            <!-- 5. Biaya / Porsi -->
+                            <td class="py-4 px-4 text-right whitespace-nowrap">
                                 <div class="text-[11px] font-bold text-amber-800 font-mono">
                                     PK: {{ formatRupiah(menu.cost_pk) }}
                                 </div>
-                                <div class="text-[11px] font-bold text-indigo-800 font-mono">
+                                <div class="text-[11px] font-bold text-indigo-800 font-mono mt-0.5">
                                     PB: {{ formatRupiah(menu.cost_pb) }}
                                 </div>
                             </td>
-                            <td class="p-3.5 whitespace-nowrap text-[10.5px]">
+
+                            <!-- 6. Riwayat Waktu -->
+                            <td class="py-4 px-4 whitespace-nowrap text-[10.5px]">
                                 <div class="text-slate-500">
                                     <span class="text-slate-400">Dibuat:</span> {{ formatDateTimeIndo(menu.created_at) }}
                                 </div>
@@ -486,7 +449,9 @@ function executeDeleteWo() {
                                     Ditolak: {{ formatDateTimeIndo(menu.ditolak_pada) }}
                                 </div>
                             </td>
-                            <td class="p-3.5 text-center">
+
+                            <!-- 7. Status Telaah -->
+                            <td class="py-4 px-4 text-center">
                                 <span
                                     :class="[
                                         'px-2.5 py-1 text-[10.5px] font-bold rounded-lg border inline-block whitespace-nowrap',
@@ -502,17 +467,16 @@ function executeDeleteWo() {
                                     {{ menu.status_wo }}
                                 </span>
                             </td>
-                            <td class="p-3.5 text-center whitespace-nowrap">
+                            <td class="py-3.5 px-4 text-center whitespace-nowrap">
                                 <div class="flex items-center justify-center gap-1.5">
-                                    <!-- 1. Tombol Lihat Detail (Selalu Bisa) -->
+                                    <!-- 1. Tombol Lihat Detail -->
                                     <button
                                         type="button"
                                         @click="openDetailModal(menu)"
-                                        class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
+                                        class="h-8 w-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
                                         title="Lihat Detail Resep, Sasaran PM & Waktu"
                                     >
-                                        <Eye class="h-3.5 w-3.5 text-slate-600" />
-                                        <span>Detail</span>
+                                        <Eye class="h-4 w-4" />
                                     </button>
 
                                     <!-- 2. Tombol Edit (Bisa jika Draft atau Ditolak Keuangan) -->
@@ -520,30 +484,28 @@ function executeDeleteWo() {
                                         v-if="menu.status_wo === 'Draft' || menu.status_wo.toLowerCase().includes('ditolak')"
                                         type="button"
                                         @click="handleEditWo(menu)"
-                                        class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex items-center gap-1 cursor-pointer"
-                                        :title="menu.status_wo.toLowerCase().includes('ditolak') ? 'Perbaiki & Edit Menu yang Ditolak' : 'Buka & Edit di Formulasi Rancang Menu'"
+                                        class="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        :title="menu.status_wo.toLowerCase().includes('ditolak') ? 'Perbaiki & Edit Menu yang Ditolak' : 'Buka & Edit Formulasi Rancang Menu'"
                                     >
-                                        <Edit3 class="h-3.5 w-3.5 text-blue-600" />
-                                        <span>{{ menu.status_wo.toLowerCase().includes('ditolak') ? 'Perbaiki' : 'Edit' }}</span>
+                                        <Edit3 class="h-4 w-4" />
                                     </button>
                                     <span
                                         v-else
-                                        class="px-2 py-1 rounded text-[10.5px] font-medium text-slate-400 bg-slate-50 border border-slate-200 flex items-center gap-1 cursor-not-allowed"
+                                        class="h-8 px-2 rounded-lg text-[10.5px] font-bold text-slate-400 bg-slate-100 border border-slate-200 flex items-center justify-center gap-1 cursor-not-allowed shadow-2xs"
                                         :title="menu.status_wo === 'Diajukan ke Keuangan' ? 'Sedang diverifikasi Keuangan (Terkunci)' : 'Telah disetujui Keuangan (Terkunci)'"
                                     >
-                                        <Lock class="h-3 w-3 text-slate-400" />
-                                        <span>Terkunci</span>
+                                        <Lock class="h-3.5 w-3.5 text-slate-400" />
                                     </span>
 
-                                    <!-- 3. Tombol Hapus (Hanya BISA jika Draft) -->
+                                    <!-- 3. Tombol Hapus (Hanya jika Draft) -->
                                     <button
                                         v-if="menu.status_wo === 'Draft'"
                                         type="button"
                                         @click="confirmDeleteWo(menu)"
-                                        class="p-1.5 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
                                         title="Hapus Menu Draft Ini"
                                     >
-                                        <Trash2 class="h-3.5 w-3.5 text-rose-600" />
+                                        <Trash2 class="h-4 w-4" />
                                     </button>
                                 </div>
                             </td>
@@ -562,7 +524,7 @@ function executeDeleteWo() {
                     </tbody>
                 </table>
             </div>
-        </Card>
+        </div>
 
         <!-- MODAL PREVIEW DETAIL LENGKAP WORK ORDER -->
         <Modal
@@ -577,9 +539,6 @@ function executeDeleteWo() {
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="font-mono text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
                                 {{ selectedMenu.id }}
-                            </span>
-                            <span class="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                                {{ selectedMenu.siklus }}
                             </span>
                             <span
                                 :class="[
@@ -741,10 +700,11 @@ function executeDeleteWo() {
 
                 <!-- TAB 1: RESEP & BAHAN BAKU -->
                 <div v-if="detailActiveTab === 'resep'" class="space-y-4">
-                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+                    <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
+                        <div class="overflow-x-auto">
                         <table class="w-full min-w-[850px] text-left text-xs border-collapse">
-                            <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]">
-                                <tr>
+                            <thead>
+                                <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
                                     <th class="p-3 text-center w-10">No</th>
                                     <th class="p-3">Bahan Pangan</th>
                                     <th class="p-3 text-center min-w-[140px]">Peruntukan Porsi</th>
@@ -825,6 +785,7 @@ function executeDeleteWo() {
                             </tfoot>
                         </table>
                     </div>
+                </div>
                 </div>
 
                 <!-- TAB 2: DETAIL SASARAN PM TERJANGKAU (KELAS & Porsi Alergi) -->

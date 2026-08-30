@@ -140,82 +140,105 @@ const totalAktualBiaya = computed(() => {
 <template>
     <div class="space-y-6">
         <!-- Card 1: Tabel Utama Daftar PO Resmi -->
-        <Card className="bg-white border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader
-                className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-            >
-                <div>
-                    <CardTitle
-                        className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
-                    >
-                        <Receipt class="h-5 w-5 text-primary" />
-                        <span>Daftar Purchase Order (PO) Resmi & Belanja Bahan Baku</span>
-                    </CardTitle>
-                    <CardDescription class="text-xs sm:text-sm">
-                        Daftar Purchase Order resmi yang telah disetujui melalui proses verifikasi dan siap untuk realisasi belanja atau pembayaran ke supplier rekanan SPPG.
-                    </CardDescription>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="px-3 py-1 text-xs font-extrabold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {{ activePoList.length }} PO Resmi Aktif
-                    </span>
-                </div>
-            </CardHeader>
+        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[900px] text-left text-xs border-collapse">
-                    <thead
-                        class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                    >
-                        <tr>
-                            <th class="p-3.5">No. PO & WO</th>
-                            <th class="p-3.5">Tanggal Distribusi</th>
-                            <th class="p-3.5">Menu Sasaran & Vendor</th>
-                            <th class="p-3.5">Waktu Disetujui</th>
-                            <th class="p-3.5 text-center">Items</th>
-                            <th class="p-3.5 text-right">Total Anggaran PO</th>
-                            <th class="p-3.5 text-center">Status Bayar</th>
-                            <th class="p-3.5 text-center min-w-[120px]">Aksi</th>
+                <table class="w-full min-w-[1050px] text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                            <th class="py-3.5 px-4 w-12 text-center">No</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Kode PO & Tanggal</th>
+                            <th class="py-3.5 px-5 min-w-[260px]">Nama Menu & Kandungan</th>
+                            <th class="py-3.5 px-4 text-center min-w-[130px]">Sasaran Porsi</th>
+                            <th class="py-3.5 px-4 text-right min-w-[140px]">Total Belanja (PO)</th>
+                            <th class="py-3.5 px-4 min-w-[170px]">Riwayat Persetujuan</th>
+                            <th class="py-3.5 px-4 text-center min-w-[120px]">Status Bayar</th>
+                            <th class="py-3.5 px-4 text-center w-36">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
-                            v-for="po in activePoList"
+                            v-for="(po, index) in activePoList"
                             :key="po.id"
                             class="hover:bg-slate-50/70 transition-colors"
                         >
-                            <td class="p-3.5 font-mono font-bold text-primary">
-                                <div>{{ po.id }}</div>
-                                <div class="text-[10px] text-slate-400 font-normal">
-                                    {{ po.wo_id }}
+                            <!-- 1. No Urut -->
+                            <td class="py-4 px-4 text-center font-bold text-slate-400">
+                                {{ index + 1 }}
+                            </td>
+
+                            <!-- 2. Kode PO, WO & Tanggal Distribusi -->
+                            <td class="py-4 px-4">
+                                <div class="space-y-1">
+                                    <div>
+                                        <span class="font-mono font-bold text-xs text-primary bg-primary/10 px-2 py-0.5 rounded inline-block">
+                                            {{ po.id }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[11px] font-mono text-slate-500 font-medium">
+                                        Ref: {{ po.wo_id }}
+                                    </p>
+                                    <p class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                                        <Calendar class="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span>{{ formatTanggalIndo(po.tanggal) }}</span>
+                                    </p>
                                 </div>
                             </td>
-                            <td class="p-3.5 font-medium text-slate-600 whitespace-nowrap">
-                                {{ formatTanggalIndo(po.tanggal) }}
-                            </td>
-                            <td class="p-3.5 font-bold text-slate-900 max-w-xs">
-                                <div>{{ po.menu }}</div>
-                                <div class="text-[10.5px] text-slate-500 font-normal">
-                                    Vendor: {{ po.vendor || 'Rekanan Pangan SPPG' }}
+
+                            <!-- 3. Nama Menu & Kandungan Nutrisi -->
+                            <td class="py-4 px-5 max-w-sm">
+                                <div class="space-y-1">
+                                    <p class="font-bold text-slate-900 leading-snug text-xs sm:text-sm">
+                                        {{ po.menu }}
+                                    </p>
+                                    <div v-if="po.energi_pk || po.energi_pb" class="flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-slate-500">
+                                        <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
+                                            PK: {{ po.energi_pk || 0 }} kkal • {{ po.protein_pk || 0 }}g Prot
+                                        </span>
+                                        <span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[10px]">
+                                            PB: {{ po.energi_pb || 0 }} kkal • {{ po.protein_pb || 0 }}g Prot
+                                        </span>
+                                    </div>
+                                    <div class="text-[10.5px] text-slate-500 font-normal">
+                                        Vendor: <span class="font-semibold text-slate-700">{{ po.vendor || 'Rekanan Pangan SPPG' }}</span>
+                                    </div>
                                 </div>
                             </td>
-                            <td class="p-3.5 whitespace-nowrap text-[10.5px]">
+
+                            <!-- 4. Sasaran Porsi -->
+                            <td class="py-4 px-4 text-center">
+                                <span class="font-black text-slate-900 block text-xs">
+                                    {{ Number(po.total_porsi || 0).toLocaleString("id-ID") }} PM
+                                </span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5">
+                                    {{ po.porsi_pk || 0 }} PK / {{ po.porsi_pb || 0 }} PB
+                                </span>
+                            </td>
+
+                            <!-- 5. Total Belanja (PO) -->
+                            <td class="py-4 px-4 text-right whitespace-nowrap">
+                                <div class="font-mono font-black text-emerald-900 text-xs sm:text-[13px]">
+                                    {{ formatRupiah(po.total_nominal) }}
+                                </div>
+                                <div class="text-[10.5px] font-bold text-slate-500 mt-0.5">
+                                    {{ po.items_count || po.items?.length || 0 }} Item Bahan
+                                </div>
+                            </td>
+
+                            <!-- 6. Riwayat Persetujuan -->
+                            <td class="py-4 px-4 whitespace-nowrap text-[10.5px]">
                                 <div class="text-emerald-700 font-semibold">
                                     Disetujui: {{ formatDateTimeIndo(po.diverifikasi_pada || po.updated_at) }}
                                 </div>
-                                <div class="text-slate-400 text-[10px]">
+                                <div class="text-slate-400 text-[10px] mt-0.5">
                                     Dibuat: {{ formatDateTimeIndo(po.created_at) }}
                                 </div>
                             </td>
-                            <td class="p-3.5 text-center font-bold text-slate-700">
-                                {{ po.items_count || po.items?.length || 0 }} Item
-                            </td>
-                            <td class="p-3.5 text-right font-mono font-black text-emerald-900 whitespace-nowrap">
-                                {{ formatRupiah(po.total_nominal) }}
-                            </td>
-                            <td class="p-3.5 text-center">
+
+                            <!-- 7. Status Bayar -->
+                            <td class="py-4 px-4 text-center">
                                 <span
                                     :class="[
-                                        'px-2.5 py-0.5 text-[10.5px] font-bold rounded-lg border inline-block whitespace-nowrap',
+                                        'px-2.5 py-1 text-[10.5px] font-bold rounded-lg border inline-block whitespace-nowrap',
                                         po.status_bayar === 'Lunas'
                                             ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                                             : 'bg-amber-50 text-amber-700 border-amber-300',
@@ -224,16 +247,19 @@ const totalAktualBiaya = computed(() => {
                                     {{ po.status_bayar || 'Belum Bayar' }}
                                 </span>
                             </td>
-                            <td class="p-3.5 text-center whitespace-nowrap">
-                                <Button
-                                    type="button"
-                                    @click="openDetailModal(po)"
-                                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 h-8 rounded-lg transition-colors cursor-pointer flex items-center gap-1 mx-auto"
-                                    title="Lihat Detail Rincian PO Resmi"
-                                >
-                                    <Eye class="h-3.5 w-3.5" />
-                                    <span>Lihat PO</span>
-                                </Button>
+
+                            <!-- 8. Aksi -->
+                            <td class="py-4 px-4 text-center whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        @click="openDetailModal(po)"
+                                        class="h-8 w-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Lihat Detail Rincian PO Resmi"
+                                    >
+                                        <Eye class="h-4 w-4" />
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="activePoList.length === 0">
@@ -248,7 +274,7 @@ const totalAktualBiaya = computed(() => {
                     </tbody>
                 </table>
             </div>
-        </Card>
+        </div>
 
         <!-- Modal Detail PO Resmi (Read Only) -->
         <Modal

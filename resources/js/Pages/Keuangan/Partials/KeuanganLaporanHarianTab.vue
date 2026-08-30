@@ -107,12 +107,12 @@ const saldoHarian = computed(() => totalMasuk.value - totalKeluar.value);
                     <thead>
                         <tr class="border-b border-slate-100 bg-slate-50/75 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                             <th class="p-3.5 text-center w-12">No</th>
-                            <th class="p-3.5">Kategori Transaksi</th>
-                            <th class="p-3.5">Uraian / Deskripsi Belanja</th>
-                            <th class="p-3.5">No. Referensi</th>
-                            <th class="p-3.5 text-right">Penerimaan (Debit)</th>
-                            <th class="p-3.5 text-right">Pengeluaran (Kredit)</th>
-                            <th class="p-3.5 text-center">Status</th>
+                            <th class="py-3.5 px-4">Kategori Transaksi</th>
+                            <th class="py-3.5 px-4">Uraian / Deskripsi Belanja</th>
+                            <th class="py-3.5 px-4">No. Referensi</th>
+                            <th class="py-3.5 px-4 text-right">Penerimaan (Debit)</th>
+                            <th class="py-3.5 px-4 text-right">Pengeluaran (Kredit)</th>
+                            <th class="py-3.5 px-4 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">

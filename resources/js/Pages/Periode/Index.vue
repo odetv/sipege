@@ -290,20 +290,20 @@ function doDelete() {
 
                         <!-- Aksi -->
                         <td class="px-5 py-4">
-                            <div class="flex items-center justify-center gap-2">
+                            <div class="flex items-center justify-center gap-1.5">
                                 <button
                                     @click="openEdit(p)"
-                                    class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                    title="Edit Tanggal"
+                                    class="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                    title="Edit Tanggal Periode"
                                 >
-                                    <Pencil class="h-3.5 w-3.5" />
+                                    <Pencil class="h-4 w-4" />
                                 </button>
                                 <button
-                                    @click="deleteTarget = p"
-                                    class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                                    title="Hapus"
+                                    @click="confirmDelete(p)"
+                                    class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                    title="Hapus Periode"
                                 >
-                                    <Trash2 class="h-3.5 w-3.5" />
+                                    <Trash2 class="h-4 w-4" />
                                 </button>
                             </div>
                         </td>

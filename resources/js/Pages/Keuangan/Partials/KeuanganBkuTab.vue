@@ -48,21 +48,21 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">No. Bukti</th>
-                            <th class="p-3.5">Tanggal</th>
-                            <th class="p-3.5">Uraian Transaksi</th>
-                            <th class="p-3.5 text-right">Penerimaan (Debit)</th>
-                            <th class="p-3.5 text-right">
+                            <th class="py-3.5 px-4">No. Bukti</th>
+                            <th class="py-3.5 px-4">Tanggal</th>
+                            <th class="py-3.5 px-4">Uraian Transaksi</th>
+                            <th class="py-3.5 px-4 text-right">Penerimaan (Debit)</th>
+                            <th class="py-3.5 px-4 text-right">
                                 Pengeluaran (Kredit)
                             </th>
-                            <th class="p-3.5 text-right">Saldo Kas</th>
+                            <th class="py-3.5 px-4 text-right">Saldo Kas</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="b in bkuList"
                             :key="b.no_bukti"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ b.no_bukti }}

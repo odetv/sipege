@@ -159,13 +159,13 @@ const totalItemKritis = computed(() => {
                     <thead>
                         <tr class="border-b border-slate-100 bg-slate-50/75 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                             <th class="p-3.5 text-center w-12">No</th>
-                            <th class="p-3.5">Nama Bahan Pangan</th>
-                            <th class="p-3.5">Kategori</th>
-                            <th class="p-3.5 text-right">Stok Masuk</th>
-                            <th class="p-3.5 text-right">Terpakai (Keluar)</th>
-                            <th class="p-3.5 text-right">Sisa Stok Gudang</th>
-                            <th class="p-3.5 text-right">Nilai Persediaan</th>
-                            <th class="p-3.5 text-center">Status</th>
+                            <th class="py-3.5 px-4">Nama Bahan Pangan</th>
+                            <th class="py-3.5 px-4">Kategori</th>
+                            <th class="py-3.5 px-4 text-right">Stok Masuk</th>
+                            <th class="py-3.5 px-4 text-right">Terpakai (Keluar)</th>
+                            <th class="py-3.5 px-4 text-right">Sisa Stok Gudang</th>
+                            <th class="py-3.5 px-4 text-right">Nilai Persediaan</th>
+                            <th class="py-3.5 px-4 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">

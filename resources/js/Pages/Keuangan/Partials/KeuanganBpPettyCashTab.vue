@@ -51,19 +51,19 @@ defineProps({
                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10.5px]"
                     >
                         <tr>
-                            <th class="p-3.5">No. Voucher</th>
-                            <th class="p-3.5">Tanggal</th>
-                            <th class="p-3.5">Uraian Belanja Tunai</th>
-                            <th class="p-3.5 text-right">Kas Masuk</th>
-                            <th class="p-3.5 text-right">Kas Keluar</th>
-                            <th class="p-3.5 text-right">Sisa Kas Kecil</th>
+                            <th class="py-3.5 px-4">No. Voucher</th>
+                            <th class="py-3.5 px-4">Tanggal</th>
+                            <th class="py-3.5 px-4">Uraian Belanja Tunai</th>
+                            <th class="py-3.5 px-4 text-right">Kas Masuk</th>
+                            <th class="py-3.5 px-4 text-right">Kas Keluar</th>
+                            <th class="py-3.5 px-4 text-right">Sisa Kas Kecil</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="pc in bpPettyCashList"
                             :key="pc.no_voucher"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/60/70 transition-colors"
                         >
                             <td class="p-3.5 font-mono font-bold text-primary">
                                 {{ pc.no_voucher }}

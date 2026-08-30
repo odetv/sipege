@@ -66,6 +66,15 @@ const tkpiCategoryList = computed(() => {
     const cats = new Set(tkpiItems.value.map((i) => i.kategori));
     return ["Semua", ...Array.from(cats)];
 });
+
+function formatRupiah(val) {
+    if (!val && val !== 0) return "Rp 0";
+    return new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+    }).format(val);
+}
 </script>
 
 <template>
@@ -230,34 +239,24 @@ const tkpiCategoryList = computed(() => {
                 </Card>
 
                 <!-- Tabel Data Bahan TKPI 2020 -->
-                <Card
-                    className="bg-white border-slate-200 shadow-xs overflow-hidden"
-                >
-                    <div class="overflow-x-auto">
-                        <table
-                            class="w-full min-w-[900px] text-left text-xs border-collapse"
-                        >
-                            <thead
-                                class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
-                            >
-                                <tr>
-                                    <th class="p-3">Kode</th>
-                                    <th class="p-3">Nama Bahan Pangan</th>
-                                    <th class="p-3">Kategori</th>
-                                    <th class="p-3 text-right">
-                                        Energi (Kkal)
-                                    </th>
-                                    <th class="p-3 text-right">Protein (g)</th>
-                                    <th class="p-3 text-right">Lemak (g)</th>
-                                    <th class="p-3 text-right">
-                                        Karbohidrat (g)
-                                    </th>
-                                    <th class="p-3 text-right">Serat (g)</th>
-                                    <th class="p-3 text-center">BDD (%)</th>
-                                    <th class="p-3 text-right">Harga Master</th>
-                                    <th class="p-3 text-center">Alergen</th>
-                                </tr>
-                            </thead>
+                <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[900px] text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                            <th class="py-3.5 px-3">Kode</th>
+                            <th class="py-3.5 px-3">Nama Bahan Pangan</th>
+                            <th class="py-3.5 px-3">Kategori</th>
+                            <th class="py-3.5 px-3 text-right">Energi (Kkal)</th>
+                            <th class="py-3.5 px-3 text-right">Protein (g)</th>
+                            <th class="py-3.5 px-3 text-right">Lemak (g)</th>
+                            <th class="py-3.5 px-3 text-right">Karbohidrat (g)</th>
+                            <th class="py-3.5 px-3 text-right">Serat (g)</th>
+                            <th class="py-3.5 px-3 text-center">BDD (%)</th>
+                            <th class="py-3.5 px-3 text-right">Harga Master</th>
+                            <th class="py-3.5 px-3 text-center">Alergen</th>
+                        </tr>
+                    </thead>
                             <tbody
                                 class="divide-y divide-slate-100 text-slate-800"
                             >
@@ -379,7 +378,7 @@ const tkpiCategoryList = computed(() => {
                             </Button>
                         </div>
                     </div>
-                </Card>
+                </div>
             </div>
 
 </template>
