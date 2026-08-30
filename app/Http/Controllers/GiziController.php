@@ -104,8 +104,9 @@ class GiziController extends Controller
             'akg_pb' => ['nullable', 'array'],
             'food_cost_pk' => ['nullable', 'numeric'],
             'food_cost_pb' => ['nullable', 'numeric'],
+            'current_step' => ['nullable', 'integer'],
             'total_anggaran_master' => ['nullable', 'numeric'],
-            'items' => ['required', 'array'],
+            'items' => ['nullable', 'array'],
             'kelompoks' => ['nullable', 'array'],
         ]);
 
@@ -130,6 +131,7 @@ class GiziController extends Controller
                     'nama_menu' => $validated['nama_menu'],
                     'siklus_ke' => $validated['siklus_ke'] ?? 1,
                     'status' => $validated['status'],
+                    'current_step' => $validated['current_step'] ?? 1,
                     'komponen_energi' => $validated['komponen_energi'] ?? null,
                     'komponen_protein' => $validated['komponen_protein'] ?? null,
                     'komponen_lemak' => $validated['komponen_lemak'] ?? null,
@@ -150,7 +152,7 @@ class GiziController extends Controller
 
             // Sync Items
             $workOrder->items()->delete();
-            foreach ($validated['items'] as $item) {
+            foreach ($validated['items'] ?? [] as $item) {
                 $workOrder->items()->create([
                     'tkpi_id' => $item['tkpi_id'] ?? $item['id'] ?? null,
                     'nama' => $item['nama'] ?? 'Bahan',

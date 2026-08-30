@@ -20,16 +20,55 @@ class DashboardController extends Controller
         $unitSppg = $user->unitSppg;
 
         $kelompokList = [];
+        $workOrders = [];
         if ($unitSppg) {
             $kelompokList = \App\Models\KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
                 ->with('rincian')
                 ->get();
+
+            $totalUnitPk = $kelompokList->sum('total_porsi_kecil');
+            $totalUnitPb = $kelompokList->sum('total_porsi_besar');
+
+            $workOrders = \App\Models\WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                ->with(['items', 'kelompoks.kelompok', 'purchaseOrder'])
+                ->orderBy('tanggal_distribusi', 'desc')
+                ->get()
+                ->map(function ($wo) use ($totalUnitPk, $totalUnitPb) {
+                    $pk = $wo->total_pk ?: ($wo->kelompoks->sum('porsi_kecil') ?: $totalUnitPk);
+                    $pb = $wo->total_pb ?: ($wo->kelompoks->sum('porsi_besar') ?: $totalUnitPb);
+                    $tot = (int)$pk + (int)$pb;
+
+                    return [
+                        'id' => $wo->nomor_wo,
+                        'db_id' => $wo->id,
+                        'uuid' => $wo->uuid,
+                        'nama' => $wo->nama_menu,
+                        'tanggal' => $wo->tanggal_distribusi ? (is_string($wo->tanggal_distribusi) ? substr($wo->tanggal_distribusi, 0, 10) : $wo->tanggal_distribusi->format('Y-m-d')) : null,
+                        'status' => $wo->status,
+                        'current_step' => (int)($wo->current_step ?: 1),
+                        'total_porsi' => $tot,
+                        'porsi_pk' => (int)$pk,
+                        'porsi_pb' => (int)$pb,
+                        'items_count' => $wo->items->count(),
+                        'created_at' => $wo->created_at ? $wo->created_at->format('Y-m-d H:i:s') : null,
+                        'diajukan_pada' => $wo->diajukan_pada ? (is_string($wo->diajukan_pada) ? $wo->diajukan_pada : $wo->diajukan_pada->format('Y-m-d H:i:s')) : null,
+                        'disetujui_pada' => $wo->disetujui_pada ? (is_string($wo->disetujui_pada) ? $wo->disetujui_pada : $wo->disetujui_pada->format('Y-m-d H:i:s')) : null,
+                        'ditolak_pada' => $wo->ditolak_pada ? (is_string($wo->ditolak_pada) ? $wo->ditolak_pada : $wo->ditolak_pada->format('Y-m-d H:i:s')) : null,
+                        'catatan_keuangan' => $wo->catatan_keuangan,
+                        'po' => $wo->purchaseOrder ? [
+                            'id' => $wo->purchaseOrder->nomor_po,
+                            'status_po' => $wo->purchaseOrder->status_po,
+                            'total_nominal' => $wo->purchaseOrder->total_nominal_aktual ?: $wo->purchaseOrder->total_nominal_master,
+                        ] : null,
+                    ];
+                });
         }
 
         return Inertia::render('Dashboard/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
+            'workOrders' => $workOrders,
         ]);
     }
 

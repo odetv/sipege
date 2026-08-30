@@ -10,6 +10,11 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import {
+    exportPoExcel,
+    exportPoWord,
+    exportPoPdf,
+} from "@/Services/exportDocHelper";
+import {
     Receipt,
     CheckCircle2,
     Clock,
@@ -21,6 +26,8 @@ import {
     Check,
     Printer,
     FileSpreadsheet,
+    FileText,
+    FilePenLine,
     Calendar,
     AlertCircle,
     Building2,
@@ -152,7 +159,7 @@ const totalAktualBiaya = computed(() => {
                             <th class="py-3.5 px-4 text-right min-w-[140px]">Total Belanja (PO)</th>
                             <th class="py-3.5 px-4 min-w-[170px]">Riwayat Persetujuan</th>
                             <th class="py-3.5 px-4 text-center min-w-[120px]">Status Bayar</th>
-                            <th class="py-3.5 px-4 text-center w-36">Aksi</th>
+                            <th class="py-3.5 px-4 text-center min-w-[190px]">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
@@ -248,9 +255,10 @@ const totalAktualBiaya = computed(() => {
                                 </span>
                             </td>
 
-                            <!-- 8. Aksi -->
+                            <!-- 8. Aksi (Detail, Excel, Word, PDF) -->
                             <td class="py-4 px-4 text-center whitespace-nowrap">
-                                <div class="flex items-center justify-center gap-1.5">
+                                <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                                    <!-- 1. Tombol Detail -->
                                     <button
                                         type="button"
                                         @click="openDetailModal(po)"
@@ -258,6 +266,39 @@ const totalAktualBiaya = computed(() => {
                                         title="Lihat Detail Rincian PO Resmi"
                                     >
                                         <Eye class="h-4 w-4" />
+                                    </button>
+
+                                    <!-- Divider Pemisah -->
+                                    <span class="h-4 w-px bg-slate-200 mx-0.5"></span>
+
+                                    <!-- 2. Export Excel -->
+                                    <button
+                                        type="button"
+                                        @click="exportPoExcel(po)"
+                                        class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Download Dokumen Excel (.xls)"
+                                    >
+                                        <FileSpreadsheet class="h-4 w-4" />
+                                    </button>
+
+                                    <!-- 3. Export Word -->
+                                    <button
+                                        type="button"
+                                        @click="exportPoWord(po)"
+                                        class="h-8 w-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Download Dokumen Word (.doc)"
+                                    >
+                                        <FilePenLine class="h-4 w-4" />
+                                    </button>
+
+                                    <!-- 4. Export PDF -->
+                                    <button
+                                        type="button"
+                                        @click="exportPoPdf(po)"
+                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Download / Cetak PDF"
+                                    >
+                                        <FileText class="h-4 w-4" />
                                     </button>
                                 </div>
                             </td>
@@ -423,23 +464,52 @@ const totalAktualBiaya = computed(() => {
 
                 <!-- Modal Footer -->
                 <div
-                    class="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3"
+                    class="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3"
                 >
-                    <button
-                        type="button"
-                        @click="showDetailModal = false"
-                        class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer"
-                    >
-                        Tutup
-                    </button>
-                    <button
-                        type="button"
-                        onclick="window.print()"
-                        class="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                        <Printer class="h-3.5 w-3.5" />
-                        <span>Cetak Purchase Order</span>
-                    </button>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-start">
+                        <button
+                            type="button"
+                            @click="exportPoExcel(selectedPo)"
+                            class="px-3 py-2 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                            <FileSpreadsheet class="h-4 w-4" />
+                            <span>Export Excel</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="exportPoWord(selectedPo)"
+                            class="px-3 py-2 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                            <FilePenLine class="h-4 w-4" />
+                            <span>Export Word</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="exportPoPdf(selectedPo)"
+                            class="px-3 py-2 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                            <FileText class="h-4 w-4" />
+                            <span>Cetak PDF</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                            type="button"
+                            @click="showDetailModal = false"
+                            class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer"
+                        >
+                            Tutup
+                        </button>
+                        <button
+                            type="button"
+                            @click="exportPoPdf(selectedPo)"
+                            class="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                            <Printer class="h-3.5 w-3.5" />
+                            <span>Cetak Purchase Order</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </Modal>

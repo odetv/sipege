@@ -1922,13 +1922,22 @@ const submitAlertMessage = ref("");
 
 const isSubmitting = ref(false);
 
-function getPayload(statusStr) {
+function triggerSubmitSuccess(msg) {
+    submitAlertMessage.value = msg;
+    showSubmitSuccessAlert.value = true;
+    setTimeout(() => {
+        showSubmitSuccessAlert.value = false;
+    }, 4000);
+}
+
+function getPayload(statusStr, stepNumber = 3) {
     return {
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
         nama_menu: namaMenuAktif.value || 'Menu MBG',
         siklus_ke: 1,
         status: statusStr,
+        current_step: stepNumber,
         komponen_energi: subMenuKomponen.value.energi || null,
         komponen_protein: subMenuKomponen.value.protein || null,
         komponen_lemak: subMenuKomponen.value.lemak || null,
@@ -1944,7 +1953,7 @@ function getPayload(statusStr) {
         food_cost_pk: totalFoodCostPKNormal.value,
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
-        items: bahanCalculations.value.map(b => ({
+        items: (bahanCalculations.value || []).map(b => ({
             tkpi_id: b.id || b.code,
             nama: b.nama,
             nama_po: b.nama_po || b.nama,
@@ -1982,18 +1991,54 @@ function getPayload(statusStr) {
     };
 }
 
-function simpanSebagaiDraft() {
-    if (!validateStep2()) {
-        if (!validateStep1()) {
-            buatMenuSubTab.value = 'work_order';
-        } else {
-            buatMenuSubTab.value = 'pre_order';
+function simpanDraftStep1() {
+    if (!validateStep1()) return;
+    isSubmitting.value = true;
+    statusPengajuanWo.value = "Draft";
+    const payload = getPayload("Draft", 1);
+
+    router.post('/gizi/work-order', payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isSubmitting.value = false;
+            triggerSubmitSuccess("Draft Langkah 1 (Perencanaan Produksi) berhasil disimpan ke Database!");
+        },
+        onError: () => {
+            isSubmitting.value = false;
         }
+    });
+}
+
+function simpanDraftStep2() {
+    if (!validateStep1()) {
+        buatMenuSubTab.value = 'work_order';
+        return;
+    }
+    if (!validateStep2()) return;
+    isSubmitting.value = true;
+    statusPengajuanWo.value = "Draft";
+    const payload = getPayload("Draft", 2);
+
+    router.post('/gizi/work-order', payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isSubmitting.value = false;
+            triggerSubmitSuccess("Draft Langkah 2 (Formulasi Gizi) berhasil disimpan ke Database!");
+        },
+        onError: () => {
+            isSubmitting.value = false;
+        }
+    });
+}
+
+function simpanSebagaiDraft() {
+    if (!validateStep1()) {
+        buatMenuSubTab.value = 'work_order';
         return;
     }
     isSubmitting.value = true;
     statusPengajuanWo.value = "Draft";
-    const payload = getPayload("Draft");
+    const payload = getPayload("Draft", 3);
 
     router.post('/gizi/work-order', payload, {
         preserveScroll: true,
@@ -2008,17 +2053,17 @@ function simpanSebagaiDraft() {
 }
 
 function ajukanKeKeuangan() {
+    if (!validateStep1()) {
+        buatMenuSubTab.value = 'work_order';
+        return;
+    }
     if (!validateStep2()) {
-        if (!validateStep1()) {
-            buatMenuSubTab.value = 'work_order';
-        } else {
-            buatMenuSubTab.value = 'pre_order';
-        }
+        buatMenuSubTab.value = 'pre_order';
         return;
     }
     isSubmitting.value = true;
     statusPengajuanWo.value = "Diajukan ke Keuangan";
-    const payload = getPayload("Diajukan ke Keuangan");
+    const payload = getPayload("Diajukan ke Keuangan", 3);
 
     router.post('/gizi/work-order', payload, {
         preserveScroll: true,
@@ -2115,6 +2160,38 @@ watch(
     <!-- 4. SUB MENU 4: RANCANG MENU (PERENCANAAN & FORMULASI GIZI) -->
     <!-- ========================================================================================= -->
     <div class="space-y-6">
+        <!-- Global Alert Feedback Sukses Simpan Draft / Ajukan -->
+        <div
+            v-if="showSubmitSuccessAlert"
+            class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 animate-in fade-in slide-in-from-top-2 duration-200 shadow-xs"
+        >
+            <div class="flex items-center gap-3">
+                <div
+                    class="h-9 w-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0"
+                >
+                    <CheckCircle2 class="h-5 w-5" />
+                </div>
+                <div>
+                    <h4 class="text-xs sm:text-sm font-black">
+                        {{ submitAlertMessage }}
+                    </h4>
+                    <p class="text-[11px] text-emerald-700 mt-0.5">
+                        Status dokumen:
+                        <strong class="uppercase font-mono">{{
+                            statusPengajuanWo
+                        }}</strong>
+                    </p>
+                </div>
+            </div>
+            <button
+                type="button"
+                @click="showSubmitSuccessAlert = false"
+                class="text-emerald-500 hover:text-emerald-700 p-1 cursor-pointer"
+            >
+                <X class="h-4 w-4" />
+            </button>
+        </div>
+
         <!-- Sub-tab pill bar for Rancang Menu -->
         <div
             class="bg-white rounded-2xl border border-slate-200/90 p-2 shadow-xs flex flex-wrap items-center gap-2 print:hidden"
@@ -3012,14 +3089,25 @@ watch(
                             Pastikan tanggal, nama menu, dan status penerima
                             sasaran sudah sesuai sebelum melanjutkan.
                         </div>
-                        <Button
-                            type="button"
-                            @click="handleMulaiFormulasiWo"
-                            className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto shrink-0 text-center"
-                        >
-                            <span>Mulai Formulasi Gizi (Langkah 2)</span>
-                            <ArrowRight class="h-4 w-4 shrink-0" />
-                        </Button>
+                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                            <Button
+                                type="button"
+                                @click="simpanDraftStep1"
+                                :disabled="isSubmitting"
+                                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
+                            >
+                                <FileText class="h-4 w-4" />
+                                <span>Simpan Draft (Langkah 1)</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                @click="handleMulaiFormulasiWo"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto shrink-0 text-center"
+                            >
+                                <span>Lanjut ke Formula Gizi (Langkah 2)</span>
+                                <ArrowRight class="h-4 w-4 shrink-0" />
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -5759,18 +5847,36 @@ watch(
                     </h4>
                     <p class="text-xs text-slate-300 leading-relaxed">
                         Seluruh kebutuhan gramasi, evaluasi AKG BGN, dan
-                        analisis food cost telah tervalidasi. Lanjutkan ke
-                        langkah pengajuan PO ke Akuntan.
+                        analisis food cost telah tervalidasi. Simpan sebagai draft atau lanjutkan.
                     </p>
                 </div>
-                <Button
-                    type="button"
-                    @click="handleAjukanDraftPo"
-                    className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
-                >
-                    <Send class="h-4 w-4 shrink-0" />
-                    <span>Lanjut ke Review & Pengajuan (Langkah 3)</span>
-                </Button>
+                <div class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto">
+                    <Button
+                        type="button"
+                        @click="buatMenuSubTab = 'work_order'"
+                        className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-3.5 h-10 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-none"
+                    >
+                        <ChevronLeft class="h-4 w-4" />
+                        <span>Kembali ke Langkah 1</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        @click="simpanDraftStep2"
+                        :disabled="isSubmitting"
+                        className="bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold px-4 h-10 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                        <FileText class="h-4 w-4 text-slate-600" />
+                        <span>Simpan Draft (Langkah 2)</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        @click="handleAjukanDraftPo"
+                        className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
+                    >
+                        <Send class="h-4 w-4 shrink-0" />
+                        <span>Lanjut ke Review & Pengajuan (Langkah 3)</span>
+                    </Button>
+                </div>
             </div>
         </div>
 
@@ -5778,37 +5884,6 @@ watch(
         <!-- Bagian 3: Order Pembelian Bahan & Verifikasi Akuntan (Step 3) -->
         <!-- ========================================================================================= -->
         <div v-if="buatMenuSubTab === 'order'" class="space-y-6">
-            <!-- Alert Feedback Sukses Simpan / Ajukan -->
-            <div
-                v-if="showSubmitSuccessAlert"
-                class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 animate-in fade-in slide-in-from-top-2 duration-200"
-            >
-                <div class="flex items-center gap-3">
-                    <div
-                        class="h-9 w-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0"
-                    >
-                        <CheckCircle2 class="h-5 w-5" />
-                    </div>
-                    <div>
-                        <h4 class="text-xs sm:text-sm font-black">
-                            {{ submitAlertMessage }}
-                        </h4>
-                        <p class="text-[11px] text-emerald-700 mt-0.5">
-                            Status dokumen:
-                            <strong class="uppercase font-mono">{{
-                                statusPengajuanWo
-                            }}</strong>
-                        </p>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    @click="showSubmitSuccessAlert = false"
-                    class="text-emerald-500 hover:text-emerald-700 p-1"
-                >
-                    <X class="h-4 w-4" />
-                </button>
-            </div>
 
             <!-- Header Langkah 3: Review & Pengajuan -->
             <Card className="bg-white border-slate-200 shadow-xs">

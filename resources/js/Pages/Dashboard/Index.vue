@@ -5,6 +5,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 
 import DashboardHeroBanner from "@/Pages/Dashboard/Partials/DashboardHeroBanner.vue";
 import DashboardMetricCards from "@/Pages/Dashboard/Partials/DashboardMetricCards.vue";
+import DashboardWoTrackingBar from "@/Pages/Dashboard/Partials/DashboardWoTrackingBar.vue";
 import DashboardNavTabs from "@/Pages/Dashboard/Partials/DashboardNavTabs.vue";
 import DashboardUnitTab from "@/Pages/Dashboard/Partials/DashboardUnitTab.vue";
 import DashboardProfileTab from "@/Pages/Dashboard/Partials/DashboardProfileTab.vue";
@@ -22,6 +23,10 @@ const props = defineProps({
         default: null,
     },
     kelompokList: {
+        type: Array,
+        default: () => [],
+    },
+    workOrders: {
         type: Array,
         default: () => [],
     },
@@ -152,6 +157,11 @@ function switchTab(tab) {
             :user="user"
             :unit-sppg="unitSppg"
             :status-variant="statusVariant"
+        />
+
+        <!-- Tracking Bar Status Work Order ke Siap Produksi -->
+        <DashboardWoTrackingBar
+            :work-orders="workOrders"
         />
 
         <!-- Navigation Tabs -->

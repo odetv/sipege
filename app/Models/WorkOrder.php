@@ -29,6 +29,7 @@ class WorkOrder extends Model
     protected $casts = [
         'tanggal_distribusi' => 'date:Y-m-d',
         'siklus_ke' => 'integer',
+        'current_step' => 'integer',
         'total_pm' => 'integer',
         'total_pk' => 'integer',
         'total_pb' => 'integer',
