@@ -381,18 +381,18 @@ function logout() {
                         v-if="!isCollapsed && isGiziExpanded"
                         class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                     >
-                        <!-- Sub-menu 1: TKPI -->
+                        <!-- Sub-menu 1: Database Pangan -->
                         <Link
-                            :href="route('gizi.tkpi')"
+                            :href="route('gizi.database-pangan')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.tkpi') || (route().current('gizi.index') && (page.props.activeTab === 'tkpi' || !page.props.activeTab))
+                                route().current('gizi.database-pangan') || route().current('gizi.tkpi') || (route().current('gizi.index') && (page.props.activeTab === 'database-pangan' || page.props.activeTab === 'tkpi' || !page.props.activeTab))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <Database class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">TKPI</span>
+                            <span class="truncate">Database Pangan</span>
                         </Link>
 
                         <!-- Sub-menu 2: Analisa PM -->

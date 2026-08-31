@@ -78,6 +78,17 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    tkpiDatasets: {
+        type: Object,
+        default: () => ({
+            fta: [],
+            csv: [],
+        }),
+    },
+    selectedSource: {
+        type: String,
+        default: "fta",
+    },
     initialStep: {
         type: String,
         default: null,
@@ -95,6 +106,8 @@ const props = defineProps({
         default: null,
     },
 });
+
+const emit = defineEmits(["update-source"]);
 
 const normalizeStep = (step) => {
     if (
@@ -742,8 +755,8 @@ const varianAlergiTelurBahan = computed(() => {
     return selectedBahanList.value.filter((b) => b.alergen !== "Telur");
 });
 
-// Database Master TKPI 2020 (dari CSV backend props.tkpiList)
-const tkpiItems = ref(props.tkpiList || []);
+// Database Master TKPI Aktif (NutriSurvey Indo .fta / TKPI 2020 .csv)
+const tkpiItems = computed(() => props.tkpiList || []);
 
 // Fungsi Kalkulasi MBG
 function calculateGrossWeightKg(
@@ -3832,8 +3845,7 @@ watch(
                                         v-else
                                         class="text-slate-400 font-medium text-sm truncate"
                                     >
-                                        -- Cari & Pilih Bahan Makanan TKPI 2020
-                                        --
+                                        -- Cari & Pilih Bahan ({{ selectedSource === 'fta' ? 'NutriSurvey Indo .fta' : 'TKPI 2020 .csv' }}) --
                                     </span>
                                     <ChevronDown
                                         class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ml-2"
@@ -3849,6 +3861,21 @@ watch(
                                     v-if="isTkpiDropdownOpen"
                                     class="absolute left-0 right-0 top-full mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden w-full animate-in fade-in zoom-in-95 duration-100"
                                 >
+                                    <!-- Active Database Info Header inside Combobox (Read-only) -->
+                                    <div
+                                        class="px-3.5 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 text-xs flex-wrap"
+                                    >
+                                        <div class="flex items-center gap-1.5 text-slate-600 font-bold">
+                                            <Database class="h-3.5 w-3.5 text-primary" />
+                                            <span>Database Pangan:</span>
+                                            <span class="text-primary font-black">{{ selectedSource === 'fta' ? 'NutriSurvey Indo (.fta)' : 'TKPI 2020 (.csv)' }}</span>
+                                            <span class="text-[10px] text-slate-400 font-normal">({{ tkpiItems.length }} bahan)</span>
+                                        </div>
+                                        <span class="text-[11px] text-slate-400 font-medium">
+                                            Ubah sumber di menu <strong>Database Pangan</strong>
+                                        </span>
+                                    </div>
+
                                     <!-- Search Input Box -->
                                     <div
                                         class="p-3 border-b border-slate-100 bg-slate-50/90 flex items-center gap-2.5"
@@ -4045,16 +4072,17 @@ watch(
                         <thead>
                             <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
                                 <th class="py-3.5 px-3 text-center w-10">No</th>
-                                <th class="py-3.5 px-3 min-w-[180px]">Bahan Pangan (TKPI)</th>
-                                <th class="py-3.5 px-3 min-w-[170px]">Nama di Belanja PO</th>
+                                <th class="py-3.5 px-3 min-w-[170px]">Bahan Pangan</th>
+                                <th class="py-3.5 px-3 min-w-[160px]">Nama di Belanja PO</th>
                                 <th class="py-3.5 px-3">Kategori</th>
                                 <th class="py-3.5 px-3 text-center min-w-[160px]">Peruntukan Porsi</th>
-                                <th class="py-3.5 px-3 text-center">Gram Bersih (PK/PB)</th>
+                                <th class="py-3.5 px-3 text-center min-w-[90px]">Gram Bersih (PK)</th>
+                                <th class="py-3.5 px-3 text-center min-w-[90px]">Gram Bersih (PB)</th>
                                 <th class="py-3.5 px-3 text-center">BDD (%)</th>
                                 <th class="py-3.5 px-3 text-center min-w-[90px]">Buffer (%)</th>
                                 <th class="py-3.5 px-3 text-right">Kg Kotor</th>
-                                <th class="py-3.5 px-3 text-right">Harga Satuan</th>
-                                <th class="py-3.5 px-3 text-right">Subtotal</th>
+                                <th class="py-3.5 px-3 text-right min-w-[130px]">Harga Satuan</th>
+                                <th class="py-3.5 px-3 text-right min-w-[100px]">Subtotal</th>
                                 <th class="py-3.5 px-3 text-center w-14">Aksi</th>
                             </tr>
                         </thead>
@@ -4381,12 +4409,25 @@ watch(
                                     {{ formatGrossWeight(b.totalGrossKg) }}
                                 </td>
 
-                                <!-- Harga Master -->
-                                <td
-                                    class="p-3 text-right text-slate-700 font-semibold align-top pt-4"
-                                >
-                                    {{ formatRupiah(b.harga_master) }}
-                                    /kg
+                                <!-- Input Harga Satuan Master (Dapat Diedit) -->
+                                <td class="p-2 text-right align-top pt-2.5 min-w-[130px]">
+                                    <div class="flex flex-col items-end">
+                                        <div class="relative w-full max-w-[125px]">
+                                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rp</span>
+                                            <input
+                                                type="number"
+                                                v-model.number="selectedBahanList[idx].harga_master"
+                                                @input="selectedBahanList[idx].harga_aktual = selectedBahanList[idx].harga_master"
+                                                placeholder="0"
+                                                class="w-full h-9 pl-8 pr-2.5 text-right text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-primary focus:border-primary shadow-2xs"
+                                                min="0"
+                                                title="Harga satuan master per kg (dapat diedit kembali)"
+                                            />
+                                        </div>
+                                        <span class="block text-[9.5px] font-bold text-slate-400 mt-1">
+                                            /kg
+                                        </span>
+                                    </div>
                                 </td>
 
                                 <!-- Subtotal Draft -->

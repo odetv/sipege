@@ -17,19 +17,27 @@ use Inertia\Response;
 class GiziController extends Controller
 {
     /**
-     * Tampilkan halaman utama gizi (default ke sub menu TKPI).
+     * Tampilkan halaman utama gizi (default ke sub menu Database Pangan).
      */
     public function index(Request $request): Response
     {
-        return $this->renderGiziView($request, 'tkpi');
+        return $this->renderGiziView($request, 'database-pangan');
     }
 
     /**
-     * Sub-menu 1: TKPI 2020 (Database Komposisi Pangan Indonesia).
+     * Sub-menu 1: Database Pangan (NutriSurvey Indo .fta & TKPI 2020 .csv).
+     */
+    public function databasePangan(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'database-pangan');
+    }
+
+    /**
+     * Alias backwards-compatibility untuk route /gizi/tkpi.
      */
     public function tkpi(Request $request): Response
     {
-        return $this->renderGiziView($request, 'tkpi');
+        return $this->databasePangan($request);
     }
 
     /**
@@ -332,11 +340,18 @@ class GiziController extends Controller
             }
         }
 
+        $ftaData = file_exists(database_path('data/indo.fta')) ? $this->parseFtaData(database_path('data/indo.fta')) : [];
+        $csvData = file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
+
         return Inertia::render('Gizi/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
-            'tkpiList' => $this->getTkpiData(),
+            'tkpiList' => !empty($ftaData) ? $ftaData : $csvData,
+            'tkpiDatasets' => [
+                'fta' => $ftaData,
+                'csv' => $csvData,
+            ],
             'activeTab' => $activeTab,
             'initialStep' => $step,
             'workOrdersList' => $workOrders,
@@ -354,20 +369,197 @@ class GiziController extends Controller
     }
 
     /**
-     * Membaca dan mem-parsing data resmi TKPI 2020 dari file database/data/tkpi2020.csv.
+     * Membaca dan mem-parsing data resmi TKPI dari database/data/indo.fta (NutriSurvey Indonesian Food Composition Table)
+     * dengan fallback ke database/data/tkpi2020.csv jika file .fta tidak ditemukan.
      *
      * @return array<int, array<string, mixed>>
      */
     private function getTkpiData(): array
     {
+        $ftaPath = database_path('data/indo.fta');
+        if (file_exists($ftaPath)) {
+            return $this->parseFtaData($ftaPath);
+        }
+
         $csvPath = database_path('data/tkpi2020.csv');
-        if (!file_exists($csvPath)) {
+        if (file_exists($csvPath)) {
+            return $this->parseCsvData($csvPath);
+        }
+
+        return [];
+    }
+
+    /**
+     * Parse NutriSurvey .fta binary database (1105 Indonesian Food Records).
+     *
+     * @param string $ftaPath
+     * @return array<int, array<string, mixed>>
+     */
+    private function parseFtaData(string $ftaPath): array
+    {
+        $data = file_get_contents($ftaPath);
+        if ($data === false) {
             return [];
         }
 
+        $recordSize = 1156;
+        $total = (int)(strlen($data) / $recordSize);
+        $items = [];
+
+        for ($r = 0; $r < $total; $r++) {
+            $rec = substr($data, $r * $recordSize, $recordSize);
+
+            $codeLen = ord($rec[0]);
+            $code = substr($rec, 1, $codeLen);
+
+            $nameLen = ord($rec[8]);
+            $name = trim(substr($rec, 9, $nameLen));
+            if ($name === '') {
+                continue;
+            }
+
+            $energyKj = unpack('f', substr($rec, 210, 4))[1] ?? 0;
+            $energy = (!is_nan($energyKj) && $energyKj > 0) ? round($energyKj / 4.184, 1) : 0;
+
+            $protein = unpack('f', substr($rec, 218, 4))[1] ?? 0;
+            $protein = (!is_nan($protein) && $protein >= 0) ? round($protein, 1) : 0;
+
+            $fat = unpack('f', substr($rec, 222, 4))[1] ?? 0;
+            $fat = (!is_nan($fat) && $fat >= 0) ? round($fat, 1) : 0;
+
+            $carb = unpack('f', substr($rec, 226, 4))[1] ?? 0;
+            $carb = (!is_nan($carb) && $carb >= 0) ? round($carb, 1) : 0;
+
+            $fiber = unpack('f', substr($rec, 230, 4))[1] ?? 0;
+            $fiber = (!is_nan($fiber) && $fiber >= 0) ? round($fiber, 1) : 0;
+
+            $nameLower = ' ' . strtolower($name) . ' ';
+            $kategori = $this->categorizeFtaFood($nameLower);
+            $alergen = $this->detectFtaAllergen($nameLower);
+            $hargaMaster = $this->estimateFtaPrice($nameLower);
+
+            $items[] = [
+                'id' => $code,
+                'code' => $code,
+                'nama' => ucwords(strtolower($name)),
+                'kategori' => $kategori,
+                'kategori_raw' => $kategori,
+                'energi' => $energy,
+                'protein' => $protein,
+                'lemak' => $fat,
+                'karbohidrat' => $carb,
+                'serat' => $fiber,
+                'bdd' => 100,
+                'fmm' => 100,
+                'buffer' => 4,
+                'harga_master' => $hargaMaster,
+                'alergen' => $alergen,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function categorizeFtaFood(string $nl): string
+    {
+        if (str_contains($nl, 'beras') || str_contains($nl, 'nasi') || str_contains($nl, 'terigu') || str_contains($nl, 'gandum') || str_contains($nl, 'jagung') || str_contains($nl, 'oat') || str_contains($nl, 'mie') || str_contains($nl, 'bihun') || str_contains($nl, 'sereal') || str_contains($nl, 'roti') || str_contains($nl, 'havermout') || str_contains($nl, 'biskuit') || str_contains($nl, 'makaroni')) {
+            return 'Serealia & Hasil Olahannya';
+        }
+        if (str_contains($nl, 'singkong') || str_contains($nl, 'ubi') || str_contains($nl, 'kentang') || str_contains($nl, 'talas') || str_contains($nl, 'tapioka') || str_contains($nl, 'sagu') || str_contains($nl, 'gaplek')) {
+            return 'Umbi-umbian & Olahannya';
+        }
+        if (str_contains($nl, 'tempe') || str_contains($nl, 'tahu') || str_contains($nl, 'kedelai') || str_contains($nl, 'kacang') || str_contains($nl, 'oncom') || str_contains($nl, 'wijen')) {
+            return 'Kacang-kacangan & Olahannya';
+        }
+        if (str_contains($nl, 'daging sapi') || str_contains($nl, 'daging ayam') || str_contains($nl, 'ayam') || str_contains($nl, 'sapi') || str_contains($nl, 'kambing') || str_contains($nl, 'bebek') || str_contains($nl, 'unggas') || str_contains($nl, 'kornet') || str_contains($nl, 'sosis') || str_contains($nl, 'bakso') || str_contains($nl, 'hati') || str_contains($nl, 'daging')) {
+            return 'Daging & Unggas';
+        }
+        if (str_contains($nl, 'ikan') || str_contains($nl, 'udang') || str_contains($nl, 'cumi') || str_contains($nl, 'kepiting') || str_contains($nl, 'kerang') || preg_match('/\bteri\b/', $nl) || str_contains($nl, 'bandeng') || str_contains($nl, 'tuna') || str_contains($nl, 'tongkol') || str_contains($nl, 'belut')) {
+            return 'Ikan & Hasil Laut';
+        }
+        if (str_contains($nl, 'telur')) {
+            return 'Telur';
+        }
+        if (str_contains($nl, 'susu') || str_contains($nl, 'keju') || str_contains($nl, 'yogurt') || str_contains($nl, 'butter') || str_contains($nl, 'lactogen') || str_contains($nl, 'sgm') || str_contains($nl, 'sustagen')) {
+            return 'Susu & Olahannya';
+        }
+        if (str_contains($nl, 'minyak') || str_contains($nl, 'mentega') || str_contains($nl, 'margarin') || str_contains($nl, 'lemak') || str_contains($nl, 'santan') || str_contains($nl, 'kelapa')) {
+            return 'Minyak & Lemak';
+        }
+        if (str_contains($nl, 'gula') || str_contains($nl, 'madu') || str_contains($nl, 'sirup') || str_contains($nl, 'permen') || str_contains($nl, 'cokelat') || str_contains($nl, 'coklat')) {
+            return 'Gula & Manisan';
+        }
+        if (str_contains($nl, 'bayam') || str_contains($nl, 'kangkung') || str_contains($nl, 'sawi') || str_contains($nl, 'wortel') || str_contains($nl, 'tomat') || str_contains($nl, 'buncis') || str_contains($nl, 'labu') || str_contains($nl, 'terong') || str_contains($nl, 'timun') || str_contains($nl, 'mentimun') || str_contains($nl, 'kacang panjang') || str_contains($nl, 'kubis') || str_contains($nl, 'kol') || str_contains($nl, 'daun') || str_contains($nl, 'jamur') || str_contains($nl, 'sayur') || str_contains($nl, 'tauge') || str_contains($nl, 'togé') || str_contains($nl, 'rebung') || str_contains($nl, 'pare')) {
+            return 'Sayuran & Olahan Sayur';
+        }
+        if (str_contains($nl, 'pisang') || str_contains($nl, 'pepaya') || str_contains($nl, 'jeruk') || str_contains($nl, 'mangga') || str_contains($nl, 'apel') || str_contains($nl, 'semangka') || str_contains($nl, 'melon') || str_contains($nl, 'nanas') || str_contains($nl, 'jambu') || str_contains($nl, 'alpukat') || str_contains($nl, 'anggur') || str_contains($nl, 'durian') || str_contains($nl, 'rambutan') || str_contains($nl, 'buah') || str_contains($nl, 'salak') || str_contains($nl, 'nangka') || str_contains($nl, 'belimbing') || str_contains($nl, 'sawo') || str_contains($nl, 'duku') || str_contains($nl, 'sirsak')) {
+            return 'Buah-buahan';
+        }
+        return 'Makanan Campuran & Olahan';
+    }
+
+    private function detectFtaAllergen(string $nl): ?string
+    {
+        if (str_contains($nl, 'telur')) {
+            return 'Telur';
+        }
+        if (str_contains($nl, 'ikan') || str_contains($nl, 'udang') || str_contains($nl, 'cumi') || str_contains($nl, 'kepiting') || str_contains($nl, 'kerang') || preg_match('/\bteri\b/', $nl)) {
+            return 'Seafood/Ikan';
+        }
+        if (str_contains($nl, 'kedelai') || str_contains($nl, 'tempe') || str_contains($nl, 'tahu')) {
+            return 'Kedelai';
+        }
+        if (str_contains($nl, 'kacang') || str_contains($nl, 'wijen')) {
+            return 'Kacang';
+        }
+        if (str_contains($nl, 'susu') || str_contains($nl, 'keju') || str_contains($nl, 'lactogen') || str_contains($nl, 'sgm')) {
+            return 'Laktosa / Susu';
+        }
+        if (str_contains($nl, 'gandum') || str_contains($nl, 'terigu') || str_contains($nl, 'roti') || str_contains($nl, 'biskuit') || str_contains($nl, 'mie') || str_contains($nl, 'havermout')) {
+            return 'Gluten';
+        }
+        return null;
+    }
+
+    private function estimateFtaPrice(string $nl): int
+    {
+        if (str_contains($nl, 'daging') || str_contains($nl, 'sapi') || str_contains($nl, 'kambing')) {
+            return 120000;
+        }
+        if (str_contains($nl, 'ayam') || str_contains($nl, 'unggas') || str_contains($nl, 'bebek')) {
+            return 38000;
+        }
+        if (str_contains($nl, 'ikan') || str_contains($nl, 'udang') || str_contains($nl, 'cumi') || str_contains($nl, 'kepiting')) {
+            return 45000;
+        }
+        if (str_contains($nl, 'telur')) {
+            return 29000;
+        }
+        if (str_contains($nl, 'tempe') || str_contains($nl, 'tahu')) {
+            return 15000;
+        }
+        if (str_contains($nl, 'beras')) {
+            return 16000;
+        }
+        if (str_contains($nl, 'sayur') || str_contains($nl, 'bayam') || str_contains($nl, 'wortel') || str_contains($nl, 'kangkung') || str_contains($nl, 'buncis')) {
+            return 14000;
+        }
+        if (str_contains($nl, 'pisang') || str_contains($nl, 'buah') || str_contains($nl, 'jeruk') || str_contains($nl, 'pepaya') || str_contains($nl, 'semangka')) {
+            return 18000;
+        }
+        if (str_contains($nl, 'minyak')) {
+            return 17500;
+        }
+        if (str_contains($nl, 'susu') || str_contains($nl, 'keju')) {
+            return 28000;
+        }
+        return 15000;
+    }
+
+    private function parseCsvData(string $csvPath): array
+    {
         $items = [];
         if (($handle = fopen($csvPath, 'r')) !== false) {
-            // Read header row
             fgetcsv($handle);
             while (($row = fgetcsv($handle)) !== false) {
                 if (count($row) < 28) {
@@ -375,7 +567,6 @@ class GiziController extends Controller
                 }
 
                 $catRaw = $row[3] ?? 'Lainnya';
-                // Bersihkan kode angka seperti "4.1. SEREALIA DAN HASIL OLAHANNYA"
                 $catClean = preg_replace('/^\d+\.\d+\.\s*/', '', $catRaw);
                 $catClean = ucwords(strtolower(trim($catClean)));
 
@@ -388,46 +579,9 @@ class GiziController extends Controller
                 $fiber = (float) ($row[11] ?? 0);
                 $bdd = (float) ($row[27] ?? 100);
 
-                // Estimasi harga master awal per kg berdasarkan jenis bahan
-                $hargaMaster = 15000;
-                $nameLower = strtolower($name);
-                if (str_contains($nameLower, 'daging') || str_contains($nameLower, 'sapi')) {
-                    $hargaMaster = 120000;
-                } elseif (str_contains($nameLower, 'ayam') || str_contains($nameLower, 'unggas')) {
-                    $hargaMaster = 38000;
-                } elseif (str_contains($nameLower, 'ikan') || str_contains($nameLower, 'udang') || str_contains($nameLower, 'cumi')) {
-                    $hargaMaster = 45000;
-                } elseif (str_contains($nameLower, 'telur')) {
-                    $hargaMaster = 29000;
-                } elseif (str_contains($nameLower, 'tempe') || str_contains($nameLower, 'tahu')) {
-                    $hargaMaster = 15000;
-                } elseif (str_contains($nameLower, 'beras')) {
-                    $hargaMaster = 16000;
-                } elseif (str_contains($nameLower, 'sayur') || str_contains($nameLower, 'bayam') || str_contains($nameLower, 'wortel') || str_contains($nameLower, 'kangkung') || str_contains($nameLower, 'buncis')) {
-                    $hargaMaster = 14000;
-                } elseif (str_contains($nameLower, 'pisang') || str_contains($nameLower, 'buah') || str_contains($nameLower, 'jeruk') || str_contains($nameLower, 'pepaya') || str_contains($nameLower, 'semangka')) {
-                    $hargaMaster = 18000;
-                } elseif (str_contains($nameLower, 'minyak')) {
-                    $hargaMaster = 17500;
-                } elseif (str_contains($nameLower, 'susu')) {
-                    $hargaMaster = 28000;
-                }
-
-                // Deteksi alergen
-                $alergen = null;
-                if (str_contains($nameLower, 'telur')) {
-                    $alergen = 'Telur';
-                } elseif (str_contains($nameLower, 'ikan') || str_contains($nameLower, 'udang') || str_contains($nameLower, 'cumi') || str_contains($nameLower, 'kepiting') || str_contains($nameLower, 'kerang')) {
-                    $alergen = 'Seafood/Ikan';
-                } elseif (str_contains($nameLower, 'kedelai') || str_contains($nameLower, 'tempe') || str_contains($nameLower, 'tahu')) {
-                    $alergen = 'Kedelai';
-                } elseif (str_contains($nameLower, 'kacang')) {
-                    $alergen = 'Kacang';
-                } elseif (str_contains($nameLower, 'susu') || str_contains($nameLower, 'keju')) {
-                    $alergen = 'Laktosa / Susu';
-                } elseif (str_contains($nameLower, 'gandum') || str_contains($nameLower, 'terigu') || str_contains($nameLower, 'roti') || str_contains($nameLower, 'biskuit')) {
-                    $alergen = 'Gluten';
-                }
+                $nameLower = ' ' . strtolower($name) . ' ';
+                $hargaMaster = $this->estimateFtaPrice($nameLower);
+                $alergen = $this->detectFtaAllergen($nameLower);
 
                 $items[] = [
                     'id' => $code,

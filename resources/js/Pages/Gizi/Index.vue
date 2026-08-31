@@ -1,10 +1,10 @@
 <script setup>
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { Head, router } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
 // Partials
-import GiziTkpiTab from "@/Pages/Gizi/Partials/GiziTkpiTab.vue";
+import GiziDatabasePanganTab from "@/Pages/Gizi/Partials/GiziDatabasePanganTab.vue";
 import GiziAnalisaPmTab from "@/Pages/Gizi/Partials/GiziAnalisaPmTab.vue";
 import GiziDaftarMenuTab from "@/Pages/Gizi/Partials/GiziDaftarMenuTab.vue";
 import GiziRancangMenuTab from "@/Pages/Gizi/Partials/GiziRancangMenuTab.vue";
@@ -27,9 +27,16 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    tkpiDatasets: {
+        type: Object,
+        default: () => ({
+            fta: [],
+            csv: [],
+        }),
+    },
     activeTab: {
         type: String,
-        default: "tkpi",
+        default: "database-pangan",
     },
     initialStep: {
         type: String,
@@ -55,9 +62,30 @@ const props = defineProps({
     },
 });
 
+// Sumber Dataset TKPI Aktif (Default: 'fta' NutriSurvey Indo FTA)
+const selectedTkpiSource = ref(
+    typeof window !== "undefined"
+        ? localStorage.getItem("sipege_tkpi_source") || "fta"
+        : "fta"
+);
+
+function handleTkpiSourceChange(newSource) {
+    selectedTkpiSource.value = newSource;
+    if (typeof window !== "undefined") {
+        localStorage.setItem("sipege_tkpi_source", newSource);
+    }
+}
+
+const activeTkpiList = computed(() => {
+    if (props.tkpiDatasets && props.tkpiDatasets[selectedTkpiSource.value] && props.tkpiDatasets[selectedTkpiSource.value].length > 0) {
+        return props.tkpiDatasets[selectedTkpiSource.value];
+    }
+    return props.tkpiList || [];
+});
+
 // Sub-Menu Utama Gizi SPPG
-// 'tkpi' | 'analisa-pm' | 'daftar-menu' | 'rancang-menu' | 'buat-menu' | 'kalender-menu'
-const activeSubMenu = ref(props.activeTab || "tkpi");
+// 'database-pangan' | 'analisa-pm' | 'daftar-menu' | 'rancang-menu' | 'buat-menu' | 'kalender-menu'
+const activeSubMenu = ref(props.activeTab || "database-pangan");
 
 watch(
     () => props.activeTab,
@@ -81,10 +109,13 @@ function selectSubMenu(tabId) {
         <Head title="Gizi" />
 
         <div class="space-y-6">
-            <!-- 1. SUB MENU 1: TKPI -->
-            <GiziTkpiTab
-                v-if="activeSubMenu === 'tkpi'"
-                :tkpi-list="tkpiList"
+            <!-- 1. SUB MENU 1: DATABASE PANGAN -->
+            <GiziDatabasePanganTab
+                v-if="activeSubMenu === 'database-pangan' || activeSubMenu === 'tkpi'"
+                :tkpi-list="activeTkpiList"
+                :tkpi-datasets="tkpiDatasets"
+                :selected-source="selectedTkpiSource"
+                @update-source="handleTkpiSourceChange"
             />
 
             <!-- 2. SUB MENU 2: ANALISA PM -->
@@ -110,7 +141,8 @@ function selectSubMenu(tabId) {
                 :user="user"
                 :unit-sppg="unitSppg"
                 :kelompok-list="kelompokList"
-                :tkpi-list="tkpiList"
+                :tkpi-list="activeTkpiList"
+                :selected-source="selectedTkpiSource"
                 :stats="stats"
                 :initial-step="initialStep"
                 :work-orders-list="workOrdersList"
