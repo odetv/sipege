@@ -16,6 +16,7 @@ import {
     FileSpreadsheet,
     Activity,
     Coins,
+    Calculator,
     CheckCircle2,
     XCircle,
     AlertCircle,
@@ -108,6 +109,11 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update-source"]);
+
+// State Tampilan Info / Edukasi Rumus Perhitungan Gizi & Biaya (Default Hidden)
+const showRumusBahan = ref(false);
+const showRumusAkg = ref(false);
+const showRumusCost = ref(false);
 
 const normalizeStep = (step) => {
     if (
@@ -1622,6 +1628,10 @@ const bahanCalculations = computed(() => {
         );
         const totalGrossKg = grossKgPK + grossKgPB;
 
+        const netKgPK = ((Number(b.gram_pk) || 0) * targetPKCount) / 1000;
+        const netKgPB = ((Number(b.gram_pb) || 0) * targetPBCount) / 1000;
+        const totalNetKg = netKgPK + netKgPB;
+
         // Biaya PO
         let subtotalMaster = Math.round(totalGrossKg * (b.harga_master || 0));
         if (totalGrossKg > 0 && (b.harga_master || 0) > 0 && subtotalMaster === 0) {
@@ -1661,6 +1671,9 @@ const bahanCalculations = computed(() => {
             targetPBCount,
             totalTargetCount: targetPKCount + targetPBCount,
             alergiDampakList,
+            netKgPK,
+            netKgPB,
+            totalNetKg,
             grossKgPK,
             grossKgPB,
             totalGrossKg,
@@ -1950,6 +1963,7 @@ function getPayload(statusStr, stepNumber = 3) {
         nama_menu: namaMenuAktif.value || 'Menu MBG',
         siklus_ke: 1,
         status: statusStr,
+        database_pangan: props.selectedSource || 'fta',
         current_step: stepNumber,
         komponen_energi: subMenuKomponen.value.energi || null,
         komponen_protein: subMenuKomponen.value.protein || null,
@@ -2095,6 +2109,9 @@ watch(
     () => props.activeWorkOrder,
     (wo) => {
         if (wo) {
+            if (wo.database_pangan && wo.database_pangan !== props.selectedSource) {
+                emit("update-source", wo.database_pangan);
+            }
             woNo.value = wo.nomor_wo || woNo.value;
             tanggalRencana.value = typeof wo.tanggal_distribusi === 'string' ? wo.tanggal_distribusi.substring(0, 10) : (wo.tanggal_distribusi || tanggalRencana.value);
             namaMenuAktif.value = wo.nama_menu || namaMenuAktif.value;
@@ -4065,10 +4082,77 @@ watch(
                 </CardContent>
             </Card>
 
+            <!-- Panduan / Rumus Perhitungan Kebutuhan Bahan & Biaya Belanja -->
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-amber-50/80 via-orange-50/50 to-amber-50/80 border border-amber-200/90 shadow-2xs space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-2 text-amber-950 font-black text-xs sm:text-sm">
+                        <Calculator class="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>Rumus Perhitungan Kebutuhan Bahan (Kg Kotor) & Subtotal Belanja</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-amber-100/90 text-amber-900 border-amber-300 font-extrabold text-[10px] uppercase">
+                            Standar BGN & Gizi
+                        </Badge>
+                        <button
+                            type="button"
+                            @click="showRumusBahan = !showRumusBahan"
+                            class="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                        >
+                            {{ showRumusBahan ? 'Sembunyikan' : 'Tampilkan Rumus' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div v-show="showRumusBahan" class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 animate-in fade-in duration-200">
+                    <!-- Rumus 1: Berat Kotor per Porsi -->
+                    <div class="p-3 bg-white/90 rounded-xl border border-amber-200 shadow-2xs space-y-1.5">
+                        <p class="text-[10.5px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>1. Berat Kotor per Porsi (g)</span>
+                        </p>
+                        <div class="p-2 bg-amber-50/90 rounded-lg font-mono text-[11px] font-bold text-amber-950 text-center border border-amber-200/70">
+                            (Gram Bersih ÷ (BDD ÷ 100)) × (1 + Buffer ÷ 100)
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-tight">
+                            <strong>BDD:</strong> % Bagian Dapat Dimakan (Standar Database).<br>
+                            <strong>Buffer:</strong> Ekstra % cadangan susut saat penyiapan/kupas.
+                        </p>
+                    </div>
+
+                    <!-- Rumus 2: Total Kg Kotor -->
+                    <div class="p-3 bg-white/90 rounded-xl border border-amber-200 shadow-2xs space-y-1.5">
+                        <p class="text-[10.5px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <span>2. Total Kebutuhan Bahan (Kg)</span>
+                        </p>
+                        <div class="p-2 bg-blue-50/90 rounded-lg font-mono text-[11px] font-bold text-blue-950 text-center border border-blue-200/70">
+                            ((Kotor PK × Sasaran PK) + (Kotor PB × Sasaran PB)) ÷ 1.000
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-tight">
+                            Mengakumulasi seluruh sasaran siswa porsi kecil & besar lalu dikonversi ke kilogram (Kg).
+                        </p>
+                    </div>
+
+                    <!-- Rumus 3: Subtotal Biaya PO -->
+                    <div class="p-3 bg-white/90 rounded-xl border border-amber-200 shadow-2xs space-y-1.5">
+                        <p class="text-[10.5px] font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>3. Subtotal Biaya Belanja (Rp)</span>
+                        </p>
+                        <div class="p-2 bg-emerald-50/90 rounded-lg font-mono text-[11px] font-bold text-emerald-950 text-center border border-emerald-200/70">
+                            Total Kg Kotor × Harga Satuan per Kg
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-tight">
+                            Total nilai belanja bahan baku yang diteruskan ke Purchase Order (PO) akuntan keuangan.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tabel Detail Perhitungan Gramasi & Draft PO -->
             <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1050px] text-left text-xs border-collapse">
+                    <table class="w-full min-w-[1450px] text-left text-xs border-collapse">
                         <thead>
                             <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
                                 <th class="py-3.5 px-3 text-center w-10">No</th>
@@ -4080,16 +4164,22 @@ watch(
                                 <th class="py-3.5 px-3 text-center min-w-[90px]">Gram Bersih (PB)</th>
                                 <th class="py-3.5 px-3 text-center">BDD (%)</th>
                                 <th class="py-3.5 px-3 text-center min-w-[90px]">Buffer (%)</th>
-                                <th class="py-3.5 px-3 text-right">Kg Kotor</th>
+                                <th class="py-3.5 px-3 text-right min-w-[95px] bg-amber-50/40 text-amber-950">Kg Bersih</th>
+                                <th class="py-3.5 px-3 text-right min-w-[95px] bg-blue-50/40 text-blue-950">Kg Kotor</th>
+                                <th class="py-3.5 px-3 text-right min-w-[110px]">Energi (Kkal)</th>
+                                <th class="py-3.5 px-3 text-right min-w-[105px]">Protein (g)</th>
+                                <th class="py-3.5 px-3 text-right min-w-[105px]">Lemak (g)</th>
+                                <th class="py-3.5 px-3 text-right min-w-[105px]">Karbohidrat (g)</th>
+                                <th class="py-3.5 px-3 text-right min-w-[105px]">Serat (g)</th>
                                 <th class="py-3.5 px-3 text-right min-w-[130px]">Harga Satuan</th>
-                                <th class="py-3.5 px-3 text-right min-w-[100px]">Subtotal</th>
+                                <th class="py-3.5 px-3 text-right min-w-[105px]">Subtotal</th>
                                 <th class="py-3.5 px-3 text-center w-14">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-800">
                             <tr v-if="bahanCalculations.length === 0">
                                 <td
-                                    colspan="13"
+                                    colspan="19"
                                     class="p-10 text-center text-slate-400"
                                 >
                                     <div
@@ -4402,11 +4492,69 @@ watch(
                                     </div>
                                 </td>
 
+                                <!-- Total Kg Bersih -->
+                                <td
+                                    class="p-3 text-right font-black text-amber-950 bg-amber-50/20 align-top pt-4 whitespace-nowrap"
+                                >
+                                    {{ formatGrossWeight(b.totalNetKg) }}
+                                </td>
+
                                 <!-- Total Kg Kotor -->
                                 <td
-                                    class="p-3 text-right font-black text-slate-900 bg-slate-50/50 align-top pt-4"
+                                    class="p-3 text-right font-black text-blue-950 bg-blue-50/20 align-top pt-4 whitespace-nowrap"
                                 >
                                     {{ formatGrossWeight(b.totalGrossKg) }}
+                                </td>
+
+                                <!-- Energi (Kkal) -->
+                                <td class="p-3 text-right align-top pt-3 whitespace-nowrap">
+                                    <div class="font-bold text-amber-900 leading-tight">
+                                        {{ b.tkpi?.energi || 0 }}
+                                        <span class="text-[9.5px] text-slate-400 font-normal">kkal</span>
+                                    </div>
+                                    <div class="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                                        PK: {{ b.nutrisiPK?.energi || 0 }} | PB: {{ b.nutrisiPB?.energi || 0 }}
+                                    </div>
+                                </td>
+
+                                <!-- Protein (g) -->
+                                <td class="p-3 text-right align-top pt-3 whitespace-nowrap">
+                                    <div class="font-bold text-blue-900 leading-tight">
+                                        {{ b.tkpi?.protein || 0 }}g
+                                    </div>
+                                    <div class="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                                        PK: {{ b.nutrisiPK?.protein || 0 }}g | PB: {{ b.nutrisiPB?.protein || 0 }}g
+                                    </div>
+                                </td>
+
+                                <!-- Lemak (g) -->
+                                <td class="p-3 text-right align-top pt-3 whitespace-nowrap">
+                                    <div class="font-bold text-purple-900 leading-tight">
+                                        {{ b.tkpi?.lemak || 0 }}g
+                                    </div>
+                                    <div class="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                                        PK: {{ b.nutrisiPK?.lemak || 0 }}g | PB: {{ b.nutrisiPB?.lemak || 0 }}g
+                                    </div>
+                                </td>
+
+                                <!-- Karbohidrat (g) -->
+                                <td class="p-3 text-right align-top pt-3 whitespace-nowrap">
+                                    <div class="font-bold text-emerald-900 leading-tight">
+                                        {{ b.tkpi?.karbohidrat || 0 }}g
+                                    </div>
+                                    <div class="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                                        PK: {{ b.nutrisiPK?.karbohidrat || 0 }}g | PB: {{ b.nutrisiPB?.karbohidrat || 0 }}g
+                                    </div>
+                                </td>
+
+                                <!-- Serat (g) -->
+                                <td class="p-3 text-right align-top pt-3 whitespace-nowrap">
+                                    <div class="font-bold text-teal-900 leading-tight">
+                                        {{ b.tkpi?.serat || 0 }}g
+                                    </div>
+                                    <div class="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                                        PK: {{ b.nutrisiPK?.serat || 0 }}g | PB: {{ b.nutrisiPB?.serat || 0 }}g
+                                    </div>
                                 </td>
 
                                 <!-- Input Harga Satuan Master (Dapat Diedit) -->
@@ -4455,21 +4603,32 @@ watch(
                             <tr>
                                 <td
                                     colspan="9"
-                                    class="p-3.5 uppercase tracking-wider text-slate-700"
+                                    class="p-3.5 uppercase tracking-wider text-slate-700 font-bold"
                                 >
-                                    Total Estimasi Kebutuhan Belanja Draft PO
-                                    (Harga Master):
+                                    Total Estimasi Kebutuhan Belanja Draft PO (Harga Master):
                                 </td>
-                                <td class="p-3.5 text-right text-slate-900">
+                                <!-- Total Kg Bersih -->
+                                <td class="p-3.5 text-right text-amber-950 bg-amber-100/40 font-black">
+                                    {{
+                                        formatGrossWeight(
+                                            bahanCalculations.reduce((acc, i) => acc + (i.totalNetKg || 0), 0)
+                                        )
+                                    }}
+                                </td>
+                                <!-- Total Kg Kotor -->
+                                <td class="p-3.5 text-right text-blue-950 bg-blue-100/40 font-black">
                                     {{
                                         formatGrossWeight(
                                             bahanCalculations.reduce((acc, i) => acc + i.totalGrossKg, 0)
                                         )
                                     }}
                                 </td>
+                                <td colspan="5" class="text-center text-[10.5px] text-slate-500 font-medium">
+                                    Kontribusi Zat Gizi Resep
+                                </td>
                                 <td></td>
                                 <td
-                                    class="p-3.5 text-right text-blue-950 text-sm font-black"
+                                    class="p-3.5 text-right text-blue-950 text-sm font-black whitespace-nowrap"
                                 >
                                     {{ formatRupiah(grandTotalDraftMaster) }}
                                 </td>
@@ -4486,31 +4645,65 @@ watch(
 
             <!-- 1. Evaluasi Standar AKG BGN -->
             <div class="space-y-4 pt-2">
-                <!-- Info Standar BGN Banner -->
-                <div
-                    class="p-4 rounded-xl bg-blue-50 border border-blue-200/80 flex items-start gap-3"
-                >
-                    <Activity class="h-5 w-5 text-blue-700 shrink-0 mt-0.5" />
-                    <div>
-                        <h4
-                            class="font-extrabold text-xs sm:text-sm text-blue-950"
-                        >
-                            Evaluasi Kecukupan Standar Gizi AKG BGN (Badan Gizi
-                            Nasional)
-                        </h4>
-                        <p
-                            class="text-[11.5px] text-blue-800 mt-0.5 leading-relaxed"
-                        >
-                            Target nutrisi makan siang bergizi terhitung
-                            otomatis secara real-time dari formulasi resep:
-                            <strong
-                                >PK (450 - 550 kkal, Protein 15 - 22g)</strong
+                <!-- Info Standar BGN & Rumus Banner -->
+                <div class="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/90 border border-blue-200 shadow-2xs space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2.5 text-blue-950 font-black text-xs sm:text-sm">
+                            <div class="h-8 w-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                <Activity class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h4 class="font-black text-xs sm:text-sm text-blue-950">
+                                    Evaluasi Kecukupan Standar Gizi AKG BGN (Badan Gizi Nasional)
+                                </h4>
+                                <p class="text-[11px] text-blue-800 font-medium">
+                                    Target nutrisi: <strong>PK (450 - 550 kkal, Protein 15 - 22g)</strong> & <strong>PB (650 - 800 kkal, Protein 24 - 35g)</strong>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-blue-100 text-blue-900 border-blue-300 font-extrabold text-[10px] uppercase">
+                                5 Zat Gizi Terhitung
+                            </Badge>
+                            <button
+                                type="button"
+                                @click="showRumusAkg = !showRumusAkg"
+                                class="text-[11px] font-bold text-blue-800 hover:text-blue-950 underline cursor-pointer"
                             >
-                            dan
-                            <strong
-                                >PB (650 - 800 kkal, Protein 24 - 35g)</strong
-                            >.
-                        </p>
+                                {{ showRumusAkg ? 'Sembunyikan' : 'Tampilkan Rumus' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Box Rincian Rumus AKG -->
+                    <div v-show="showRumusAkg" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-blue-200/60 animate-in fade-in duration-200">
+                        <!-- Rumus Nilai Nutrisi per Bahan -->
+                        <div class="p-3 bg-white/90 rounded-xl border border-blue-200/80 shadow-2xs space-y-1.5">
+                            <p class="text-[10.5px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                <span>1. Nilai Gizi Bahan per Porsi</span>
+                            </p>
+                            <div class="p-2 bg-blue-50/90 rounded-lg font-mono text-[11px] font-bold text-blue-950 text-center border border-blue-200/70">
+                                Kandungan Database (per 100g) × (Gram Bersih ÷ 100)
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-tight">
+                                Dihitung langsung dari <strong>Gram Bersih (Edible Portion)</strong> untuk Energi (kkal), Protein (g), Lemak (g), Karbohidrat (g), dan Serat (g).
+                            </p>
+                        </div>
+
+                        <!-- Rumus Total Nutrisi Menu & Standar AKG -->
+                        <div class="p-3 bg-white/90 rounded-xl border border-blue-200/80 shadow-2xs space-y-1.5">
+                            <p class="text-[10.5px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                <span>2. Total Nutrisi Menu (Keluaran Gizi Hidangan)</span>
+                            </p>
+                            <div class="p-2 bg-indigo-50/90 rounded-lg font-mono text-[11px] font-bold text-indigo-950 text-center border border-indigo-200/70">
+                                Total Zat Gizi = Σ (Nutrisi Seluruh Bahan Resep)
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-tight">
+                                Penjumlahan kontribusi seluruh komponen bahan makanan dalam hidangan MBG untuk sasaran Porsi Kecil (PK) maupun Porsi Besar (PB).
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -5011,23 +5204,79 @@ watch(
 
             <!-- 2. Analisis Food Cost & Batas Pagu Anggaran -->
             <div class="space-y-4 pt-2">
-                <!-- Header Food Cost -->
-                <div class="flex items-center gap-2">
-                    <div
-                        class="h-6 w-6 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center font-black text-xs"
-                    >
-                        💰
+                <!-- Header Food Cost & Panduan Rumus -->
+                <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-emerald-50/90 border border-emerald-200 shadow-2xs space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2.5 text-emerald-950 font-black text-xs sm:text-sm">
+                            <div class="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                <Coins class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h4 class="font-black text-xs sm:text-sm text-emerald-950">
+                                    Analisis Food Cost & Kepatuhan Pagu Anggaran BGN
+                                </h4>
+                                <p class="text-[11px] text-emerald-800 font-medium">
+                                    Batas Maksimal Pagu Bahan Baku: <strong>PK (Rp 8.000 / porsi)</strong> & <strong>PB (Rp 10.000 / porsi)</strong>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold text-[10px] uppercase">
+                                Efisiensi Anggaran MBG
+                            </Badge>
+                            <button
+                                type="button"
+                                @click="showRumusCost = !showRumusCost"
+                                class="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                            >
+                                {{ showRumusCost ? 'Sembunyikan' : 'Tampilkan Rumus' }}
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <h4
-                            class="text-xs sm:text-sm font-black text-slate-900"
-                        >
-                            Analisis Food Cost & Kepatuhan Pagu Anggaran BGN
-                        </h4>
-                        <p class="text-[11px] text-slate-500">
-                            Monitoring biaya bahan baku per porsi terhadap batas
-                            maksimal pagu MBG nasional.
-                        </p>
+
+                    <!-- Box Rincian Rumus Food Cost -->
+                    <div v-show="showRumusCost" class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 border-t border-emerald-200/60 animate-in fade-in duration-200">
+                        <!-- Rumus Food Cost per Bahan -->
+                        <div class="p-3 bg-white/90 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1.5">
+                            <p class="text-[10.5px] font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span>1. Food Cost Bahan per Porsi (Rp)</span>
+                            </p>
+                            <div class="p-2 bg-emerald-50/90 rounded-lg font-mono text-[11px] font-bold text-emerald-950 text-center border border-emerald-200/70">
+                                Berat Kotor per Porsi (g) × (Harga Satuan ÷ 1.000)
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-tight">
+                                Biaya bahan baku riil yang dibebankan per porsi hidangan setelah memasukkan faktor BDD dan cadangan susut (Buffer).
+                            </p>
+                        </div>
+
+                        <!-- Rumus Total Food Cost Menu -->
+                        <div class="p-3 bg-white/90 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1.5">
+                            <p class="text-[10.5px] font-black uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-teal-500"></span>
+                                <span>2. Total Food Cost Menu (Rp)</span>
+                            </p>
+                            <div class="p-2 bg-teal-50/90 rounded-lg font-mono text-[11px] font-bold text-teal-950 text-center border border-teal-200/70">
+                                Total Food Cost = Σ (Food Cost Seluruh Bahan)
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-tight">
+                                Akumulasi beban belanja bahan pangan untuk 1 porsi siswa porsi kecil (PK) maupun porsi besar (PB).
+                            </p>
+                        </div>
+
+                        <!-- Rumus Margin & % Pagu Anggaran -->
+                        <div class="p-3 bg-white/90 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1.5">
+                            <p class="text-[10.5px] font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                                <span>3. Sisa Margin & % Pagu</span>
+                            </p>
+                            <div class="p-2 bg-purple-50/90 rounded-lg font-mono text-[11px] font-bold text-purple-950 text-center border border-purple-200/70">
+                                Margin = Pagu - Cost | % = (Cost ÷ Pagu) × 100%
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-tight">
+                                Standar batas pagu MBG Nasional: <strong>PK (Rp 8.000)</strong> & <strong>PB (Rp 10.000)</strong> per porsi.
+                            </p>
+                        </div>
                     </div>
                 </div>
 

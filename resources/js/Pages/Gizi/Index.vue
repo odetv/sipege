@@ -50,6 +50,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    defaultSource: {
+        type: String,
+        default: "fta",
+    },
     stats: {
         type: Object,
         default: () => ({
@@ -62,11 +66,24 @@ const props = defineProps({
     },
 });
 
-// Sumber Dataset TKPI Aktif (Default: 'fta' NutriSurvey Indo FTA)
-const selectedTkpiSource = ref(
-    typeof window !== "undefined"
-        ? localStorage.getItem("sipege_tkpi_source") || "fta"
-        : "fta"
+// Sumber Dataset TKPI Aktif (Default: 'fta' NutriSurvey Indo FTA atau dari Work Order yang diedit)
+const initialSource = (props.activeWorkOrder && props.activeWorkOrder.database_pangan)
+    ? props.activeWorkOrder.database_pangan
+    : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "fta" : "fta"));
+
+const selectedTkpiSource = ref(initialSource);
+
+watch(
+    () => props.activeWorkOrder,
+    (wo) => {
+        if (wo && wo.database_pangan) {
+            selectedTkpiSource.value = wo.database_pangan;
+            if (typeof window !== "undefined") {
+                localStorage.setItem("sipege_tkpi_source", wo.database_pangan);
+            }
+        }
+    },
+    { immediate: true }
 );
 
 function handleTkpiSourceChange(newSource) {
@@ -147,6 +164,7 @@ function selectSubMenu(tabId) {
                 :initial-step="initialStep"
                 :work-orders-list="workOrdersList"
                 :active-work-order="activeWorkOrder"
+                @update-source="handleTkpiSourceChange"
             />
 
             <!-- 5. SUB MENU 5: KALENDER MENU -->

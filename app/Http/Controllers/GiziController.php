@@ -98,6 +98,7 @@ class GiziController extends Controller
             'nama_menu' => ['required', 'string', 'max:255'],
             'siklus_ke' => ['nullable', 'integer'],
             'status' => ['required', 'string'],
+            'database_pangan' => ['nullable', 'string', 'max:30'],
             'komponen_energi' => ['nullable', 'string'],
             'komponen_protein' => ['nullable', 'string'],
             'komponen_lemak' => ['nullable', 'string'],
@@ -139,6 +140,7 @@ class GiziController extends Controller
                     'nama_menu' => $validated['nama_menu'],
                     'siklus_ke' => $validated['siklus_ke'] ?? 1,
                     'status' => $validated['status'],
+                    'database_pangan' => $validated['database_pangan'] ?? 'fta',
                     'current_step' => $validated['current_step'] ?? 1,
                     'komponen_energi' => $validated['komponen_energi'] ?? null,
                     'komponen_protein' => $validated['komponen_protein'] ?? null,
@@ -343,11 +345,18 @@ class GiziController extends Controller
         $ftaData = file_exists(database_path('data/indo.fta')) ? $this->parseFtaData(database_path('data/indo.fta')) : [];
         $csvData = file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
 
+        $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan)) 
+            ? $activeWorkOrder->database_pangan 
+            : 'fta';
+
+        $initialTkpiList = ($defaultSource === 'csv' && !empty($csvData)) ? $csvData : (!empty($ftaData) ? $ftaData : $csvData);
+
         return Inertia::render('Gizi/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
-            'tkpiList' => !empty($ftaData) ? $ftaData : $csvData,
+            'defaultSource' => $defaultSource,
+            'tkpiList' => $initialTkpiList,
             'tkpiDatasets' => [
                 'fta' => $ftaData,
                 'csv' => $csvData,

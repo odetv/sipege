@@ -103,6 +103,16 @@ function formatGrossWeight(kg) {
     }
 }
 
+// Helper hitung berat bersih total item
+function getItemNetKg(it, menu) {
+    if (it.total_net_kg !== undefined && Number(it.total_net_kg) > 0) return Number(it.total_net_kg);
+    const pk = Number(it.gram_pk !== undefined ? it.gram_pk : (it.gram_bersih_pk || 0)) || 0;
+    const pb = Number(it.gram_pb !== undefined ? it.gram_pb : (it.gram_bersih_pb || 0)) || 0;
+    const targetPK = it.tipe_porsi === 'alergi' ? (Number(menu?.total_alergi_pk) || 1) : (Number(menu?.porsi_pk) || 0);
+    const targetPB = it.tipe_porsi === 'alergi' ? (Number(menu?.total_alergi_pb) || 1) : (Number(menu?.porsi_pb) || 0);
+    return ((pk * targetPK) + (pb * targetPB)) / 1000;
+}
+
 // Helper hitung kebutuhan kotor item jika data lama di db bernilai 0
 function getItemGrossKg(it, menu) {
     const val = Number(it.total_gross_kg !== undefined ? it.total_gross_kg : it.gross_kg) || 0;
@@ -744,22 +754,28 @@ function executeDeleteWo() {
                 <div v-if="detailActiveTab === 'resep'" class="space-y-4">
                     <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
                         <div class="overflow-x-auto">
-                        <table class="w-full min-w-[850px] text-left text-xs border-collapse">
+                        <table class="w-full min-w-[1100px] text-left text-xs border-collapse">
                             <thead>
                                 <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
                                     <th class="p-3 text-center w-10">No</th>
-                                    <th class="p-3">Bahan Pangan</th>
-                                    <th class="p-3 text-center min-w-[140px]">Peruntukan Porsi</th>
+                                    <th class="p-3 min-w-[150px]">Bahan Pangan</th>
+                                    <th class="p-3 text-center min-w-[130px]">Peruntukan</th>
                                     <th class="p-3">Kategori</th>
-                                    <th class="p-3 text-center">Gramasi (PK / PB)</th>
-                                    <th class="p-3 text-right">Kebutuhan Kotor (Kg)</th>
-                                    <th class="p-3 text-right">Estimasi Biaya / Kg</th>
-                                    <th class="p-3 text-right">Subtotal</th>
+                                    <th class="p-3 text-center min-w-[90px]">PK / PB (g)</th>
+                                    <th class="p-3 text-right bg-amber-50/40 text-amber-950 min-w-[85px]">Kg Bersih</th>
+                                    <th class="p-3 text-right bg-blue-50/40 text-blue-950 min-w-[85px]">Kg Kotor</th>
+                                    <th class="p-3 text-right min-w-[95px]">Energi (Kkal)</th>
+                                    <th class="p-3 text-right min-w-[90px]">Protein (g)</th>
+                                    <th class="p-3 text-right min-w-[90px]">Lemak (g)</th>
+                                    <th class="p-3 text-right min-w-[90px]">Karbo (g)</th>
+                                    <th class="p-3 text-right min-w-[90px]">Serat (g)</th>
+                                    <th class="p-3 text-right min-w-[110px]">Harga / Kg</th>
+                                    <th class="p-3 text-right min-w-[95px]">Subtotal</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 text-slate-800">
                                 <tr v-if="!selectedMenu.items || selectedMenu.items.length === 0">
-                                    <td colspan="8" class="p-8 text-center text-slate-400 text-xs font-medium">
+                                    <td colspan="14" class="p-8 text-center text-slate-400 text-xs font-medium">
                                         Data item bahan formulasi tidak tersedia.
                                     </td>
                                 </tr>
@@ -785,15 +801,38 @@ function executeDeleteWo() {
                                                 it.tipe_porsi === 'alergi' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-700 border-slate-200',
                                             ]"
                                         >
-                                            {{ it.tipe_porsi === 'alergi' ? ('Alergi: ' + (it.jenis_alergi || 'Khusus')) : 'Normal (Standar)' }}
+                                            {{ it.tipe_porsi === 'alergi' ? ('Alergi: ' + (it.jenis_alergi || 'Khusus')) : 'Normal' }}
                                         </span>
                                     </td>
                                     <td class="p-3 text-slate-600 align-top pt-4">{{ it.kategori }}</td>
                                     <td class="p-3 text-center font-mono font-bold text-slate-800 align-top pt-4 whitespace-nowrap">
                                         {{ it.gram_pk || 0 }}g / {{ it.gram_pb || 0 }}g
                                     </td>
-                                    <td class="p-3 text-right font-mono font-bold text-slate-900 align-top pt-4 whitespace-nowrap">
+                                    <td class="p-3 text-right font-mono font-bold text-amber-950 bg-amber-50/20 align-top pt-4 whitespace-nowrap">
+                                        {{ formatGrossWeight(getItemNetKg(it, selectedMenu)) }}
+                                    </td>
+                                    <td class="p-3 text-right font-mono font-bold text-blue-950 bg-blue-50/20 align-top pt-4 whitespace-nowrap">
                                         {{ formatGrossWeight(getItemGrossKg(it, selectedMenu)) }}
+                                    </td>
+                                    <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PK: {{ it.nutrisi_pk?.energi || 0 }}</div>
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PB: {{ it.nutrisi_pb?.energi || 0 }}</div>
+                                    </td>
+                                    <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PK: {{ it.nutrisi_pk?.protein || 0 }}g</div>
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PB: {{ it.nutrisi_pb?.protein || 0 }}g</div>
+                                    </td>
+                                    <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PK: {{ it.nutrisi_pk?.lemak || 0 }}g</div>
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PB: {{ it.nutrisi_pb?.lemak || 0 }}g</div>
+                                    </td>
+                                    <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PK: {{ it.nutrisi_pk?.karbohidrat || 0 }}g</div>
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PB: {{ it.nutrisi_pb?.karbohidrat || 0 }}g</div>
+                                    </td>
+                                    <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PK: {{ it.nutrisi_pk?.serat || 0 }}g</div>
+                                        <div class="text-[10.5px] text-slate-600 font-medium">PB: {{ it.nutrisi_pb?.serat || 0 }}g</div>
                                     </td>
                                     <td class="p-3 text-right font-mono text-slate-600 align-top pt-4 whitespace-nowrap">
                                         {{ formatRupiah(it.harga_master || it.harga_aktual || 0) }}
@@ -808,12 +847,22 @@ function executeDeleteWo() {
                                     <td colspan="5" class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold">
                                         Grand Total Estimasi Biaya Belanja Bahan:
                                     </td>
-                                    <td class="p-3.5 text-right font-mono font-black text-slate-900">
+                                    <td class="p-3.5 text-right font-mono font-black text-amber-950 bg-amber-100/40">
+                                        {{
+                                            formatGrossWeight(
+                                                selectedMenu.items.reduce((acc, it) => acc + getItemNetKg(it, selectedMenu), 0)
+                                            )
+                                        }}
+                                    </td>
+                                    <td class="p-3.5 text-right font-mono font-black text-blue-950 bg-blue-100/40">
                                         {{
                                             formatGrossWeight(
                                                 selectedMenu.items.reduce((acc, it) => acc + getItemGrossKg(it, selectedMenu), 0)
                                             )
                                         }}
+                                    </td>
+                                    <td colspan="5" class="p-3.5 text-center text-slate-500 font-normal text-[10.5px]">
+                                        5 Zat Gizi Terhitung
                                     </td>
                                     <td class="p-3.5"></td>
                                     <td class="p-3.5 text-right font-mono font-black text-emerald-900 text-sm whitespace-nowrap">
@@ -901,38 +950,89 @@ function executeDeleteWo() {
                     </div>
                 </div>
 
-                <!-- TAB 3: EVALUASI NUTRISI & AKG -->
+                <!-- TAB 3: EVALUASI NUTRISI & AKG BGN -->
                 <div v-if="detailActiveTab === 'akg'" class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- PK AKG -->
                         <div class="p-4 bg-amber-50/40 rounded-xl border border-amber-200 space-y-3">
-                            <h5 class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                                <Activity class="h-4 w-4 text-amber-600" />
-                                <span>Porsi Kecil (PK) • PAUD & SD Kelas 1-3</span>
-                            </h5>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex items-center justify-between">
+                                <h5 class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                    <Activity class="h-4 w-4 text-amber-600" />
+                                    <span>Porsi Kecil (PK) • PAUD/TK & SD Kelas 1-3</span>
+                                </h5>
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                    ✓ MEMENUHI AKG
+                                </Badge>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-xs">
                                 <div class="p-2 bg-white rounded-lg border border-amber-100">
-                                    <span class="text-slate-500 text-[10.5px]">Energi (450-550 kkal)</span>
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
                                     <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.energi_pk }} kkal</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 450-550</span>
                                 </div>
                                 <div class="p-2 bg-white rounded-lg border border-amber-100">
-                                    <span class="text-slate-500 text-[10.5px]">Protein (15-20g)</span>
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
                                     <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.protein_pk }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 15-22g</span>
+                                </div>
+                                <div class="p-2 bg-white rounded-lg border border-amber-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.lemak_pk }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 12-18g</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="p-2 bg-white rounded-lg border border-amber-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.karbo_pk }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 65-85g</span>
+                                </div>
+                                <div class="p-2 bg-white rounded-lg border border-amber-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.serat_pk }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: Min 4.0g</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- PB AKG -->
                         <div class="p-4 bg-indigo-50/40 rounded-xl border border-indigo-200 space-y-3">
-                            <h5 class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-                                <Activity class="h-4 w-4 text-indigo-600" />
-                                <span>Porsi Besar (PB) • SD Kelas 4-6 & SMP/SMA</span>
-                            </h5>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex items-center justify-between">
+                                <h5 class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                                    <Activity class="h-4 w-4 text-indigo-600" />
+                                    <span>Porsi Besar (PB) • SD 4-6, SMP, SMA, & Bumil</span>
+                                </h5>
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                    ✓ MEMENUHI AKG
+                                </Badge>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-xs">
                                 <div class="p-2 bg-white rounded-lg border border-indigo-100">
-                                    <span class="text-slate-500 text-[10.5px]">Energi (650-750 kkal)</span>
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
                                     <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.energi_pb }} kkal</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 650-800</span>
                                 </div>
                                 <div class="p-2 bg-white rounded-lg border border-indigo-100">
-                                    <span class="text-slate-500 text-[10.5px]">Protein (20-30g)</span>
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
                                     <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.protein_pb }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 24-35g</span>
+                                </div>
+                                <div class="p-2 bg-white rounded-lg border border-indigo-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.lemak_pb }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 18-26g</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="p-2 bg-white rounded-lg border border-indigo-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.karbo_pb }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: 85-110g</span>
+                                </div>
+                                <div class="p-2 bg-white rounded-lg border border-indigo-100">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
+                                    <div class="font-black text-slate-900 text-sm mt-0.5">{{ selectedMenu.serat_pb }} g</div>
+                                    <span class="text-[9.5px] text-slate-400">Target: Min 6.0g</span>
                                 </div>
                             </div>
                         </div>
