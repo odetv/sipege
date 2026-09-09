@@ -80,7 +80,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Label SPPG
-    Route::get('/label', [LabelController::class, 'index'])->name('label.index');
+    Route::prefix('label')->name('label.')->group(function () {
+        Route::get('/', [LabelController::class, 'index'])->name('index');
+        Route::get('/buat', [LabelController::class, 'buat'])->name('buat');
+        Route::get('/daftar', [LabelController::class, 'daftar'])->name('daftar');
+        Route::post('/', [LabelController::class, 'store'])->name('store');
+        Route::put('/{id}', [LabelController::class, 'update'])->name('update');
+        Route::delete('/{id}', [LabelController::class, 'destroy'])->name('destroy');
+    });
 
     // Periode Operasional SPPG
     Route::resource('periode', PeriodeController::class)->only(['index', 'store', 'update', 'destroy']);

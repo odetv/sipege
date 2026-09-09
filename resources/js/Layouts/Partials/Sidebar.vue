@@ -10,6 +10,7 @@ import {
     UtensilsCrossed,
     Wallet,
     Tag,
+    Edit3,
     X,
     ChevronDown,
     Database,
@@ -115,11 +116,20 @@ const isLaporanActive = computed(() => {
     }
 });
 
+const isLabelActive = computed(() => {
+    try {
+        return route().current("label.*");
+    } catch {
+        return false;
+    }
+});
+
 // Default tertutup, hanya terbuka jika sub-menunya sedang aktif/dibuka
 const isGiziExpanded = ref(isGiziActive.value);
 const isKeuanganExpanded = ref(isKeuanganActive.value);
 const isSpjExpanded = ref(isSpjActive.value);
 const isLaporanExpanded = ref(isLaporanActive.value);
+const isLabelExpanded = ref(isLabelActive.value);
 
 watch(
     () => page.url,
@@ -129,6 +139,9 @@ watch(
         }
         if (isKeuanganActive.value) {
             isKeuanganExpanded.value = true;
+        }
+        if (isLabelActive.value) {
+            isLabelExpanded.value = true;
         }
         isSpjExpanded.value = isSpjActive.value;
         isLaporanExpanded.value = isLaporanActive.value;
@@ -158,6 +171,15 @@ function toggleKeuanganMenu() {
         isKeuanganExpanded.value = true;
     } else {
         isKeuanganExpanded.value = !isKeuanganExpanded.value;
+    }
+}
+
+function toggleLabelMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+        isLabelExpanded.value = true;
+    } else {
+        isLabelExpanded.value = !isLabelExpanded.value;
     }
 }
 
@@ -780,38 +802,74 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 5. Menu Label -->
-                <Link
-                    :href="route('label.index')"
-                    :title="isCollapsed ? 'Label' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('label.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Tag class="h-4 w-4 shrink-0" />
-                    <span
+                <!-- 5. Menu Label (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Label Button -->
+                    <button
+                        type="button"
+                        @click="toggleLabelMenu"
+                        :title="isCollapsed ? 'Label' : ''"
                         :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Label</span
-                    >
-                    <div
-                        v-if="route().current('label.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            route().current('label.*')
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
                         ]"
-                    ></div>
-                </Link>
+                    >
+                        <Tag class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Label</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isLabelExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Buat Label & Daftar Label -->
+                    <div
+                        v-if="!isCollapsed && isLabelExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Buat Label -->
+                        <Link
+                            :href="route('label.buat')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('label.buat') || (route().current('label.index') && (page.props.activeSubMenu === 'buat' || !page.props.activeSubMenu))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Edit3 class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Buat Label</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Daftar Label -->
+                        <Link
+                            :href="route('label.daftar')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('label.daftar') || (route().current('label.index') && page.props.activeSubMenu === 'daftar')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <ClipboardList class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Daftar Label</span>
+                        </Link>
+                    </div>
+                </div>
 
                 <!-- 6. Menu Periode -->
                 <Link

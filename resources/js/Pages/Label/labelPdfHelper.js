@@ -1,178 +1,494 @@
 import jsPDF from "jspdf";
-import { generateLabelSvg, renderSvgToImage } from "./labelCanvasRenderer.js";
+import html2canvas from "html2canvas";
 
 /**
- * Generate and download PDF in Single Mode (1 Page = 1 Full Label)
- * Pure Vector SVG Engine -> Instant (< 0.1s for 15+ cards).
+ * Capture an HTMLElement into high resolution Canvas
+ * Scale 2.5 produces ~400 DPI ultra-sharp print resolution
+ * while keeping memory footprint and execution time ultra-fast.
+ */
+async function captureElementToCanvas(element) {
+    if (!element) {
+        throw new Error(
+            "Elemen kartu label tidak ditemukan untuk proses render.",
+        );
+    }
+
+    const rect = element.getBoundingClientRect();
+    const elementW = Math.round(rect.width) || 555;
+    const elementH = Math.round(rect.height) || 370;
+
+    return await html2canvas(element, {
+        scale: 2.5, // 2.5x gives ~400 DPI crystal clarity & blazing speed
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: elementW,
+        windowHeight: elementH,
+        width: elementW,
+        height: elementH,
+    });
+}
+
+/**
+ * Format remaining seconds into detailed Indonesian time text:
+ * detik, menit, jam
+ */
+export function formatDetailedEta(totalSeconds) {
+    const sec = Math.max(0, Math.ceil(totalSeconds));
+    if (sec <= 0) return "Hampir selesai...";
+    if (sec === 1) return "Estimasi: ~1 detik lagi";
+    if (sec < 60) return `Estimasi: ~${sec} detik lagi`;
+
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    const remainingSec = sec % 60;
+
+    if (hours > 0) {
+        if (minutes > 0) {
+            return `Estimasi: ~${hours} jam ${minutes} menit lagi`;
+        }
+        return `Estimasi: ~${hours} jam lagi`;
+    }
+
+    if (remainingSec > 0) {
+        return `Estimasi: ~${minutes} menit ${remainingSec} detik lagi`;
+    }
+    return `Estimasi: ~${minutes} menit lagi`;
+}
+
+/**
+ * Pre-render unique target group templates once.
+ * Progressively updates Phase 1 progress (0% - 75%) with real-time ETA.
+ */
+async function preRenderUniqueTemplates({
+    printableKelompokList = [],
+    getRenderElement,
+    startTime = Date.now(),
+    onProgress = () => {},
+}) {
+    const uniqueMap = new Map();
+    for (let i = 0; i < printableKelompokList.length; i++) {
+        const k = printableKelompokList[i];
+        const key = `${k?.id || i}_${k?.nama_kelompok || k?.nama || ""}_${k?.kategori || ""}_${k?.status_alergi ? "1" : "0"}`;
+        if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, {
+                key,
+                kelompok: k,
+                alias: `tpl_${uniqueMap.size}`,
+            });
+        }
+    }
+
+    const uniqueList = Array.from(uniqueMap.values());
+    const totalUnique = uniqueList.length;
+    const renderedTemplates = new Map();
+
+    for (let t = 0; t < totalUnique; t++) {
+        const item = uniqueList[t];
+
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const avgPerTpl = t > 0 ? elapsedSec / t : 0.25;
+        const remainingTpl = totalUnique - t;
+        const etaSeconds = remainingTpl * avgPerTpl;
+
+        const percentage = Math.max(
+            5,
+            Math.min(75, Math.round(((t + 1) / totalUnique) * 75)),
+        );
+
+        onProgress({
+            phase: "template",
+            current: t + 1,
+            total: totalUnique,
+            percentage,
+            message: `Menyiapkan template desain label (${t + 1} dari ${totalUnique})...`,
+            etaText: formatDetailedEta(etaSeconds),
+            speedText:
+                t > 0
+                    ? `${(t / Math.max(0.1, elapsedSec)).toFixed(1)} desain/dtk`
+                    : "",
+        });
+
+        const element = await getRenderElement(item.kelompok);
+        const canvas = await captureElementToCanvas(element);
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        renderedTemplates.set(item.key, { imgData, alias: item.alias });
+    }
+
+    const fallback = Array.from(renderedTemplates.values())[0];
+
+    return {
+        getTemplate: (kelompok, idx) => {
+            if (!kelompok) return fallback;
+            const key = `${kelompok?.id || idx}_${kelompok?.nama_kelompok || kelompok?.nama || ""}_${kelompok?.kategori || ""}_${kelompok?.status_alergi ? "1" : "0"}`;
+            return renderedTemplates.get(key) || fallback;
+        },
+    };
+}
+
+/**
+ * Download Single Mode PDF (Exact 9cm x 6cm Fixed Landscape per Page)
+ * Supports thousands of labels with ultra-fast aliased image insertion & ETA.
  */
 export async function downloadPdfSingleMode({
     printableKelompokList = [],
-    templateConfig,
-    unitSppg,
-    tanggalProduksi,
-    jamProduksi,
-    batasKonsumsi,
-    petunjukMenu,
-    giziData,
-    filename = "Label_BGN_Tunggal_1PerHalaman.pdf",
+    customCount = null,
+    getRenderElement,
+    filename = "Label_BGN_9x6cm_Tunggal.pdf",
     onProgress = () => {},
 }) {
     if (!printableKelompokList || printableKelompokList.length === 0) {
-        throw new Error("Tidak ada kelompok sasaran yang dipilih untuk di-download.");
+        throw new Error("Tidak ada kelompok sasaran yang dipilih.");
     }
 
-    const total = printableKelompokList.length;
-    const aspectRatio = templateConfig?.aspect_ratio || "4/3";
+    const total =
+        customCount && Number(customCount) > 0
+            ? parseInt(customCount, 10)
+            : printableKelompokList.length;
 
-    let pageW = 120;
-    let pageH = 90;
+    const pageW = 90;
+    const pageH = 60;
 
-    if (aspectRatio === "1/1") {
-        pageW = 110;
-        pageH = 110;
-    } else if (aspectRatio === "16/9") {
-        pageW = 160;
-        pageH = 90;
-    } else if (aspectRatio === "3/2") {
-        pageW = 135;
-        pageH = 90;
-    }
-
-    const orientation = pageW >= pageH ? "landscape" : "portrait";
     const doc = new jsPDF({
-        orientation,
+        orientation: "landscape",
         unit: "mm",
         format: [pageW, pageH],
         compress: true,
     });
 
+    const startTime = Date.now();
+
+    const { getTemplate } = await preRenderUniqueTemplates({
+        printableKelompokList,
+        getRenderElement,
+        startTime,
+        onProgress,
+    });
+
+    const phase2Start = Date.now();
+    const updateInterval = Math.max(1, Math.min(25, Math.floor(total / 50)));
+
     for (let i = 0; i < total; i++) {
-        const kelompok = printableKelompokList[i];
-
-        onProgress({
-            current: i + 1,
-            total,
-            percentage: Math.round(((i + 1) / total) * 90),
-            message: `Memproses label ${i + 1} dari ${total}...`,
-        });
-
-        const svgString = generateLabelSvg({
-            templateConfig,
-            kelompok,
-            unitSppg,
-            tanggalProduksi,
-            jamProduksi,
-            batasKonsumsi,
-            petunjukMenu,
-            giziData,
-        });
-
-        const canvas = await renderSvgToImage(svgString, 1000, aspectRatio === "1/1" ? 1000 : 750);
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const kelompokIndex = i % printableKelompokList.length;
+        const kelompok = printableKelompokList[kelompokIndex];
+        const template = getTemplate(kelompok, kelompokIndex);
 
         if (i > 0) {
-            doc.addPage([pageW, pageH], orientation);
+            doc.addPage([pageW, pageH], "landscape");
         }
 
-        doc.addImage(imgData, "JPEG", 0, 0, pageW, pageH);
+        // Add aliased image to PDF
+        doc.addImage(
+            template.imgData,
+            "JPEG",
+            0,
+            0,
+            pageW,
+            pageH,
+            template.alias,
+            "FAST",
+        );
+
+        if (i % updateInterval === 0 || i === total - 1) {
+            const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
+            const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+            const remaining = total - (i + 1);
+            const etaSec = Math.ceil(remaining / Math.max(1, speed));
+            const percentage = Math.min(
+                95,
+                75 + Math.round(((i + 1) / total) * 20),
+            );
+
+            onProgress({
+                phase: "assembly",
+                current: i + 1,
+                total,
+                totalPages: total,
+                currentPage: i + 1,
+                percentage,
+                etaText: formatDetailedEta(etaSec),
+                speedText: `${Math.round(speed)} label/dtk`,
+                message: `Menyusun dokumen PDF label (${i + 1} dari ${total})...`,
+            });
+
+            // Yield to browser thread for smooth UI update
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
     }
 
     onProgress({
+        phase: "saving",
         current: total,
         total,
-        percentage: 100,
-        message: "File PDF selesai dibuat!",
+        totalPages: total,
+        currentPage: total,
+        percentage: 98,
+        etaText: "Menyimpan file...",
+        speedText: "",
+        message: "Menyimpan dokumen PDF 9x6cm...",
     });
 
     doc.save(filename);
+
+    onProgress({
+        phase: "done",
+        current: total,
+        total,
+        totalPages: total,
+        currentPage: total,
+        percentage: 100,
+        etaText: "Selesai!",
+        speedText: "",
+        message: `File PDF 9x6cm (${total} Label) berhasil didownload!`,
+    });
 }
 
 /**
- * Generate and download PDF in A4 Sheet Mode (9 Labels per Page, Grid 3x3 on A4 Portrait)
- * Pure Vector SVG Engine -> Instant (< 0.1s for 15+ cards).
+ * Direct Print Single Mode (Opens Print Dialog with Exact 90mm x 60mm Full Page)
+ */
+export async function printPdfSingleMode({
+    printableKelompokList = [],
+    getRenderElement,
+    onProgress = () => {},
+}) {
+    if (!printableKelompokList || printableKelompokList.length === 0) {
+        throw new Error("Tidak ada kelompok sasaran yang dipilih.");
+    }
+
+    const total = printableKelompokList.length;
+    const pageW = 90;
+    const pageH = 60;
+
+    const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: [pageW, pageH],
+        compress: true,
+    });
+
+    const startTime = Date.now();
+
+    const { getTemplate } = await preRenderUniqueTemplates({
+        printableKelompokList,
+        getRenderElement,
+        startTime,
+        onProgress,
+    });
+
+    const phase2Start = Date.now();
+
+    for (let i = 0; i < total; i++) {
+        const kelompok = printableKelompokList[i];
+        const template = getTemplate(kelompok, i);
+
+        if (i > 0) {
+            doc.addPage([pageW, pageH], "landscape");
+        }
+
+        doc.addImage(
+            template.imgData,
+            "JPEG",
+            0,
+            0,
+            pageW,
+            pageH,
+            template.alias,
+            "FAST",
+        );
+
+        const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
+        const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+        const remaining = total - (i + 1);
+        const etaSec = Math.ceil(remaining / Math.max(1, speed));
+        const percentage = Math.min(
+            95,
+            75 + Math.round(((i + 1) / total) * 20),
+        );
+
+        onProgress({
+            phase: "assembly",
+            current: i + 1,
+            total,
+            totalPages: total,
+            currentPage: i + 1,
+            percentage,
+            etaText: formatDetailedEta(etaSec),
+            speedText: `${Math.round(speed)} label/dtk`,
+            message: `Menyiapkan label ${i + 1} dari ${total} untuk dicetak...`,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    onProgress({
+        phase: "done",
+        current: total,
+        total,
+        totalPages: total,
+        currentPage: total,
+        percentage: 100,
+        etaText: "Siap cetak!",
+        speedText: "",
+        message: "Membuka dialog cetak 9x6cm...",
+    });
+
+    doc.autoPrint();
+    const blobUrl = doc.output("bloburl");
+    const printFrame = document.createElement("iframe");
+    printFrame.style.position = "fixed";
+    printFrame.style.right = "0";
+    printFrame.style.bottom = "0";
+    printFrame.style.width = "0";
+    printFrame.style.height = "0";
+    printFrame.style.border = "0";
+    printFrame.src = blobUrl;
+    document.body.appendChild(printFrame);
+    printFrame.onload = () => {
+        try {
+            printFrame.contentWindow.focus();
+            printFrame.contentWindow.print();
+        } catch (e) {
+            window.open(blobUrl, "_blank");
+        }
+    };
+}
+
+/**
+ * Download A4 Sheet Mode PDF (9cm x 6cm Labels on A4 Landscape: 9 Labels / Page: 3 cols x 3 rows)
+ * Ultra-fast generation for 1000s of labels using aliased image embedding + real-time ETA.
  */
 export async function downloadPdfA4GridMode({
     printableKelompokList = [],
-    templateConfig,
-    unitSppg,
-    tanggalProduksi,
-    jamProduksi,
-    batasKonsumsi,
-    petunjukMenu,
-    giziData,
+    customCount = null,
+    getRenderElement,
     filename = "Label_BGN_Lembar_A4_9PerHalaman.pdf",
     onProgress = () => {},
 }) {
     if (!printableKelompokList || printableKelompokList.length === 0) {
-        throw new Error("Tidak ada kelompok sasaran yang dipilih untuk di-download.");
+        throw new Error("Tidak ada kelompok sasaran yang dipilih.");
     }
 
-    const total = printableKelompokList.length;
-    const aspectRatio = templateConfig?.aspect_ratio || "4/3";
+    const total =
+        customCount && Number(customCount) > 0
+            ? parseInt(customCount, 10)
+            : printableKelompokList.length;
+
     const doc = new jsPDF({
-        orientation: "portrait",
+        orientation: "landscape",
         unit: "mm",
-        format: "a4", // 210mm x 297mm
+        format: "a4", // 297mm x 210mm
         compress: true,
     });
 
-    // A4 Grid Layout: 3 Columns x 3 Rows = 9 labels per page
-    const labelW = 58;
-    const labelH = 43.5; // Exact 4:3 Ratio
-    const gapX = 6;
-    const gapY = 8;
-    const startX = 12; // (210 - (58*3 + 6*2)) / 2 = 12mm
-    const startY = 16; // Top margin
+    // 90mm x 60mm labels on A4 Landscape (297mm x 210mm)
+    // 3 Columns x 3 Rows = 9 labels per A4 Landscape page
+    const labelW = 90;
+    const labelH = 60;
+    const gapX = 3.5;
+    const startX = 10; // (297 - (90*3 + 3.5*2)) / 2 = 10mm
+    const gapY = 3.5;
+    const startY = 11.5; // (210 - (60*3 + 3.5*2)) / 2 = 11.5mm
+    const labelsPerPage = 9;
+    const totalPages = Math.ceil(total / labelsPerPage);
+
+    const startTime = Date.now();
+
+    const { getTemplate } = await preRenderUniqueTemplates({
+        printableKelompokList,
+        getRenderElement,
+        startTime,
+        onProgress,
+    });
+
+    const phase2Start = Date.now();
+    const updateInterval = Math.max(
+        1,
+        Math.min(18, Math.floor(total / 40)),
+    ); // Update every 1-2 pages
 
     for (let i = 0; i < total; i++) {
-        const kelompok = printableKelompokList[i];
+        const kelompokIndex = i % printableKelompokList.length;
+        const kelompok = printableKelompokList[kelompokIndex];
+        const template = getTemplate(kelompok, kelompokIndex);
 
-        onProgress({
-            current: i + 1,
-            total,
-            percentage: Math.round(((i + 1) / total) * 90),
-            message: `Memproses label ${i + 1} dari ${total} untuk lembar A4...`,
-        });
+        const pageIndex = Math.floor(i / labelsPerPage);
+        const slotIndex = i % labelsPerPage;
 
-        const svgString = generateLabelSvg({
-            templateConfig,
-            kelompok,
-            unitSppg,
-            tanggalProduksi,
-            jamProduksi,
-            batasKonsumsi,
-            petunjukMenu,
-            giziData,
-        });
-
-        const canvas = await renderSvgToImage(svgString, 800, aspectRatio === "1/1" ? 800 : 600);
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
-
-        const positionOnPage = i % 9;
-        const col = positionOnPage % 3;
-        const row = Math.floor(positionOnPage / 3);
-
-        if (i > 0 && positionOnPage === 0) {
-            doc.addPage("a4", "portrait");
+        if (pageIndex > 0 && slotIndex === 0) {
+            doc.addPage("a4", "landscape");
         }
 
-        const posX = startX + col * (labelW + gapX);
-        const posY = startY + row * (labelH + gapY);
+        const col = slotIndex % 3;
+        const row = Math.floor(slotIndex / 3);
 
-        // Draw fine cutting guideline around each label position
-        doc.setDrawColor(215, 220, 230);
-        doc.setLineWidth(0.12);
-        doc.rect(posX - 0.4, posY - 0.4, labelW + 0.8, labelH + 0.8);
+        const x = startX + col * (labelW + gapX);
+        const y = startY + row * (labelH + gapY);
 
-        doc.addImage(imgData, "JPEG", posX, posY, labelW, labelH);
+        doc.addImage(
+            template.imgData,
+            "JPEG",
+            x,
+            y,
+            labelW,
+            labelH,
+            template.alias,
+            "FAST",
+        );
+
+        if (i % updateInterval === 0 || i === total - 1) {
+            const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
+            const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+            const remaining = total - (i + 1);
+            const etaSec = Math.ceil(remaining / Math.max(1, speed));
+            const percentage = Math.min(
+                95,
+                75 + Math.round(((i + 1) / total) * 20),
+            );
+            const currentPage = Math.floor(i / labelsPerPage) + 1;
+
+            onProgress({
+                phase: "assembly",
+                current: i + 1,
+                total,
+                totalPages,
+                currentPage,
+                percentage,
+                etaText: formatDetailedEta(etaSec),
+                speedText: `${Math.round(speed)} label/dtk`,
+                message: `Menyusun lembar A4 label ${i + 1} dari ${total} (Hal. ${currentPage}/${totalPages})...`,
+            });
+
+            // Yield to event loop to keep browser animations silky smooth
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
     }
 
     onProgress({
+        phase: "saving",
         current: total,
         total,
-        percentage: 100,
-        message: "File PDF A4 selesai dibuat!",
+        totalPages,
+        currentPage: totalPages,
+        percentage: 98,
+        etaText: "Menyimpan file...",
+        speedText: "",
+        message: `Menyimpan dokumen PDF Lembar A4 (${totalPages} Halaman)...`,
     });
 
     doc.save(filename);
+
+    onProgress({
+        phase: "done",
+        current: total,
+        total,
+        totalPages,
+        currentPage: totalPages,
+        percentage: 100,
+        etaText: "Selesai!",
+        speedText: "",
+        message: `File PDF Lembar A4 (${total} Label, ${totalPages} Hal) berhasil didownload!`,
+    });
 }

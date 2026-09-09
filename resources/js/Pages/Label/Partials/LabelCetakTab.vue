@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
+import { router } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -13,16 +14,12 @@ import {
     Printer,
     Calendar,
     Clock,
+    Zap,
     Utensils,
     PackageCheck,
     Check,
     Sparkles,
-    UserX,
     Edit3,
-    Flame,
-    Hourglass,
-    ChevronDown,
-    Layout,
     Download,
     FileText,
     Layers,
@@ -30,10 +27,19 @@ import {
     CheckCircle2,
     AlertCircle,
     X,
+    Plus,
+    Trash2,
+    Save,
+    BookmarkCheck,
+    ArrowLeft,
+    Coins,
+    Flame,
+    Building2,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
     downloadPdfA4GridMode,
+    printPdfSingleMode,
 } from "../labelPdfHelper.js";
 
 const props = defineProps({
@@ -57,13 +63,13 @@ const props = defineProps({
         type: Object,
         default: null,
     },
-    activeTemplate: {
+    editingLabel: {
         type: Object,
-        required: true,
+        default: null,
     },
 });
 
-const emit = defineEmits(["go-to-template"]);
+const emit = defineEmits(["cancel-edit"]);
 
 function getTodayDateString() {
     const d = new Date();
@@ -78,7 +84,7 @@ const todayStr = getTodayDateString();
 // Mode cetak label: 'auto' (Sesuai Work Order) | 'manual' (Input Bebas)
 const labelMode = ref("auto");
 
-// Setup parameter cetak label
+// Selected Work Order ID
 const selectedWoId = ref(
     props.initialActiveWo?.id ||
         props.workOrders.find(
@@ -97,33 +103,6 @@ const todayWorkOrder = computed(() => {
     );
 });
 
-const categorizedWorkOrders = computed(() => {
-    const todayList = [];
-    const upcomingList = [];
-    const pastList = [];
-
-    (props.workOrders || []).forEach((w) => {
-        const tgl = (w.tanggal || "").substring(0, 10);
-        if (tgl === todayStr) {
-            todayList.push(w);
-        } else if (tgl > todayStr) {
-            upcomingList.push(w);
-        } else {
-            pastList.push(w);
-        }
-    });
-
-    return {
-        today: todayList,
-        upcoming: upcomingList.sort((a, b) =>
-            (a.tanggal || "").localeCompare(b.tanggal || ""),
-        ),
-        past: pastList.sort((a, b) =>
-            (b.tanggal || "").localeCompare(a.tanggal || ""),
-        ),
-    };
-});
-
 const activeWorkOrder = computed(() => {
     if (labelMode.value !== "auto") return null;
     if (!props.workOrders || props.workOrders.length === 0) return null;
@@ -139,37 +118,57 @@ const activeWorkOrder = computed(() => {
     return todayWorkOrder.value || props.workOrders[0];
 });
 
-function selectTodayWo() {
-    if (todayWorkOrder.value) {
-        selectedWoId.value = todayWorkOrder.value.id;
-    }
-}
+// Parameter Identitas & Header
+const namaSppg = ref(props.unitSppg?.nama || "SPPG BULELENG BANJAR DENCARIK");
+const zonaWaktu = ref("WITA");
 
-// Parameter Label
+// Parameter Area Isolasi / Perekat Kemasan (cm) - Default 2cm
+const tinggiIsolasiCm = ref(2);
+
+// Parameter Waktu
 const tanggalProduksi = ref(todayStr);
-const jamProduksi = ref("07:00");
-const batasKonsumsi = ref("09:00");
-const petunjukMenu = ref(
-    "Nasi Putih - Dori Finger with Yellow Mayonaise - Steam Tahu - Buncis & Jagung Manis - Buah Pepaya",
-);
+const jamProduksi = ref("12:14");
+const tanggalExpired = ref(todayStr);
+const jamExpired = ref("12:14");
 
-// Nilai AKG Kandungan Gizi
+// Parameter Waktu Maksimal & Larangan
+const waktuMaksimal = ref("2 JAM SETELAH DITERIMA!");
+const teksLaranganHeader = ref("MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT.");
+const teksLaranganSub = ref("DILARANG MEMBAWA PULANG!");
+
+// Parameter Komponen Menu Makanan
+const menuItems = ref([
+    "NASI PUTIH",
+    "AYAM CRISPY",
+    "TEMPE MANIS DADU",
+    "SELADA, TIMUN",
+    "MELON",
+]);
+
+// Parameter Kandungan Gizi
 const giziData = ref({
-    energi_pk: "386.3",
-    energi_pb: "547.3",
-    karbo_pk: "50.9",
-    karbo_pb: "80",
-    protein_pk: "18.3",
-    protein_pb: "21.6",
-    lemak_pk: "13",
-    lemak_pb: "17.2",
-    serat_pk: "3.6",
-    serat_pb: "6.4",
+    energi_pb: "624",
+    prot_pb: "29.8",
+    lmk_pb: "18.8",
+    karbo_pb: "82.4",
+    serat_pb: "2.0",
+    energi_pk: "469",
+    prot_pk: "23.4",
+    lmk_pk: "15.0",
+    karbo_pk: "58.9",
+    serat_pk: "1.5",
 });
 
-const showGiziCustomizer = ref(false);
+// Parameter Rincian Harga Satuan per Item
+const hargaItems = ref([
+    { nama: "Nasi Putih", harga_pb: 1155, harga_pk: 770 },
+    { nama: "Ayam Crispy", harga_pb: 5812, harga_pk: 4838 },
+    { nama: "Tempe Manis Dadu", harga_pb: 1085, harga_pk: 844 },
+    { nama: "Selada, Timun", harga_pb: 1046, harga_pk: 792 },
+    { nama: "Melon", harga_pb: 1931, harga_pk: 1931 },
+]);
 
-// Kelompok list synced with active Work Order snapshot or Master PM
+// Kelompok Penerima Manfaat
 const activeKelompokList = computed(() => {
     if (labelMode.value === "manual") {
         return (props.kelompokList || []).map((k) => ({
@@ -222,41 +221,7 @@ const activeKelompokList = computed(() => {
     });
 });
 
-// State kelompok terpilih
 const selectedKelompokIds = ref([]);
-
-watch(
-    [labelMode, activeWorkOrder],
-    () => {
-        if (labelMode.value === "auto" && activeWorkOrder.value) {
-            tanggalProduksi.value = activeWorkOrder.value.tanggal || todayStr;
-            petunjukMenu.value =
-                activeWorkOrder.value.nama ||
-                (activeWorkOrder.value.komponen &&
-                activeWorkOrder.value.komponen.length > 0
-                    ? activeWorkOrder.value.komponen.join(" - ")
-                    : "Nasi Putih - Dori Finger with Yellow Mayonaise - Steam Tahu - Buncis & Jagung Manis - Buah Pepaya");
-            selectedKelompokIds.value = activeKelompokList.value
-                .filter((k) => k.is_menerima !== false)
-                .map((k) => k.id);
-        } else if (labelMode.value === "manual") {
-            selectedKelompokIds.value = (props.kelompokList || []).map(
-                (k) => k.id,
-            );
-        }
-    },
-    { immediate: true },
-);
-
-function setLabelMode(mode) {
-    labelMode.value = mode;
-    if (mode === "auto") {
-        if (activeWorkOrder.value) {
-            tanggalProduksi.value = activeWorkOrder.value.tanggal || todayStr;
-            petunjukMenu.value = activeWorkOrder.value.nama || "";
-        }
-    }
-}
 
 const receivingKelompokList = computed(() => {
     return activeKelompokList.value.filter((k) => k.is_menerima !== false);
@@ -298,23 +263,292 @@ function toggleKelompok(k) {
     }
 }
 
+function setLabelMode(mode) {
+    labelMode.value = mode;
+    if (mode === "auto" && activeWorkOrder.value) {
+        syncDataFromWorkOrder(activeWorkOrder.value);
+    }
+}
+
+function syncDataFromWorkOrder(wo) {
+    if (!wo) return;
+    tanggalProduksi.value = wo.tanggal || todayStr;
+    tanggalExpired.value = wo.tanggal || todayStr;
+
+    // Sinkronisasi komponen menu
+    if (Array.isArray(wo.items) && wo.items.length > 0) {
+        menuItems.value = wo.items.map((it) => it.nama);
+        hargaItems.value = wo.items.map((it) => ({
+            nama: it.nama,
+            harga_pb: it.cost_pb || 0,
+            harga_pk: it.cost_pk || 0,
+        }));
+    } else if (Array.isArray(wo.komponen) && wo.komponen.length > 0) {
+        menuItems.value = wo.komponen.map((k) => k);
+        hargaItems.value = wo.komponen.map((k) => ({
+            nama: k,
+            harga_pb: 0,
+            harga_pk: 0,
+        }));
+    }
+
+    // Sinkronisasi AKG
+    if (wo.akg_pb && wo.akg_pk) {
+        giziData.value = {
+            energi_pb: String(wo.akg_pb.energi || "624"),
+            prot_pb: String(wo.akg_pb.protein || "29.8"),
+            lmk_pb: String(wo.akg_pb.lemak || "18.8"),
+            karbo_pb: String(wo.akg_pb.karbohidrat || "82.4"),
+            serat_pb: String(wo.akg_pb.serat || "2.0"),
+            energi_pk: String(wo.akg_pk.energi || "469"),
+            prot_pk: String(wo.akg_pk.protein || "23.4"),
+            lmk_pk: String(wo.akg_pk.lemak || "15.0"),
+            karbo_pk: String(wo.akg_pk.karbohidrat || "58.9"),
+            serat_pk: String(wo.akg_pk.serat || "1.5"),
+        };
+    }
+
+    selectedKelompokIds.value = activeKelompokList.value
+        .filter((k) => k.is_menerima !== false)
+        .map((k) => k.id);
+}
+
+watch(
+    [labelMode, activeWorkOrder],
+    () => {
+        if (labelMode.value === "auto" && activeWorkOrder.value) {
+            syncDataFromWorkOrder(activeWorkOrder.value);
+        } else if (labelMode.value === "manual") {
+            selectedKelompokIds.value = (props.kelompokList || []).map(
+                (k) => k.id,
+            );
+        }
+    },
+    { immediate: true },
+);
+
+// Watch editingLabel
+watch(
+    () => props.editingLabel,
+    (item) => {
+        if (item) {
+            labelMode.value = "manual";
+            tanggalProduksi.value =
+                (item.tanggal_produksi || "").substring(0, 10) || todayStr;
+            tanggalExpired.value =
+                (item.tanggal_produksi || "").substring(0, 10) || todayStr;
+            jamProduksi.value = item.jam_produksi || "12:14";
+            jamExpired.value = item.batas_konsumsi || "12:14";
+
+            if (item.petunjuk_menu) {
+                const parts = item.petunjuk_menu
+                    .split("\n")
+                    .map((p) => p.replace(/^[•\-\*]\s*/, "").trim())
+                    .filter(Boolean);
+                if (parts.length > 0) {
+                    menuItems.value = parts;
+                }
+            }
+
+            if (item.gizi_data) {
+                giziData.value = { ...giziData.value, ...item.gizi_data };
+            }
+
+            if (Array.isArray(item.selected_kelompok_ids)) {
+                selectedKelompokIds.value = [...item.selected_kelompok_ids];
+            }
+        }
+    },
+    { immediate: true },
+);
+
+// Menu item helpers
+function addMenuItem() {
+    menuItems.value.push("KOMPONEN BARU");
+    hargaItems.value.push({ nama: "Komponen Baru", harga_pb: 0, harga_pk: 0 });
+}
+
+function removeMenuItem(idx) {
+    if (menuItems.value.length <= 1) return;
+    menuItems.value.splice(idx, 1);
+    if (hargaItems.value[idx]) {
+        hargaItems.value.splice(idx, 1);
+    }
+}
+
+function updateMenuItemName(idx, val) {
+    menuItems.value[idx] = val;
+    if (hargaItems.value[idx]) {
+        hargaItems.value.nama = val;
+    }
+}
+
+// Simpan Label ke Database
+const isSaving = ref(false);
+
+function saveLabelToDatabase() {
+    if (menuItems.value.length === 0) {
+        alert("Silakan isi minimal 1 komponen menu makanan.");
+        return;
+    }
+
+    if (printableKelompokList.value.length === 0) {
+        alert("Silakan pilih minimal 1 kelompok sasaran.");
+        return;
+    }
+
+    isSaving.value = true;
+
+    const namaMenuHeader = menuItems.value.join(", ");
+
+    const payload = {
+        work_order_id:
+            labelMode.value === "auto"
+                ? activeWorkOrder.value?.id || activeWorkOrder.value?.nomor_wo
+                : null,
+        nama_menu: (
+            activeWorkOrder.value?.nama ||
+            namaMenuHeader ||
+            "Menu SPPG BGN"
+        ).substring(0, 255),
+        tanggal_produksi: tanggalProduksi.value,
+        jam_produksi: jamProduksi.value,
+        batas_konsumsi: jamExpired.value,
+        petunjuk_menu: menuItems.value.join("\n"),
+        template_id: "bgn_standard_fixed_white",
+        template_name: "Standar Resmi BGN (Putih)",
+        aspect_ratio: "4:3",
+        gizi_data: giziData.value,
+        selected_kelompok_ids: selectedKelompokIds.value,
+        kelompoks_snapshot: printableKelompokList.value.map((k) => ({
+            id: k.id,
+            nama_kelompok: k.nama_kelompok,
+            kategori: k.kategori,
+            total_penerima:
+                k.total_penerima ||
+                (k.total_porsi_kecil || 0) + (k.total_porsi_besar || 0),
+            total_porsi_kecil: k.total_porsi_kecil || 0,
+            total_porsi_besar: k.total_porsi_besar || 0,
+            status_alergi:
+                k.status_alergi ||
+                (k.detail_alergi && k.detail_alergi.length > 0),
+            detail_alergi: k.detail_alergi || [],
+        })),
+        total_sasaran: printableKelompokList.value.length,
+        total_porsi: printableKelompokList.value.reduce(
+            (sum, k) =>
+                sum +
+                Number(
+                    k.total_penerima ||
+                        (k.total_porsi_kecil || 0) + (k.total_porsi_besar || 0),
+                ),
+            0,
+        ),
+        total_pk: printableKelompokList.value.reduce(
+            (sum, k) => sum + Number(k.total_porsi_kecil || 0),
+            0,
+        ),
+        total_pb: printableKelompokList.value.reduce(
+            (sum, k) => sum + Number(k.total_porsi_besar || 0),
+            0,
+        ),
+    };
+
+    if (props.editingLabel?.id) {
+        router.put(route("label.update", props.editingLabel.id), payload, {
+            preserveScroll: true,
+            onFinish: () => {
+                isSaving.value = false;
+            },
+        });
+    } else {
+        router.post(route("label.store"), payload, {
+            preserveScroll: true,
+            onFinish: () => {
+                isSaving.value = false;
+            },
+        });
+    }
+}
+
+// Total porsi Work Order di hari tersebut untuk auto-fill custom label
+const totalWoPorsi = computed(() => {
+    if (activeWorkOrder.value) {
+        if (
+            activeWorkOrder.value.total_porsi &&
+            Number(activeWorkOrder.value.total_porsi) > 0
+        ) {
+            return Number(activeWorkOrder.value.total_porsi);
+        }
+        if (
+            activeWorkOrder.value.total_penerima &&
+            Number(activeWorkOrder.value.total_penerima) > 0
+        ) {
+            return Number(activeWorkOrder.value.total_penerima);
+        }
+        if (
+            activeWorkOrder.value.total_sasaran &&
+            Number(activeWorkOrder.value.total_sasaran) > 0
+        ) {
+            return Number(activeWorkOrder.value.total_sasaran);
+        }
+    }
+    const list =
+        printableKelompokList.value.length > 0
+            ? printableKelompokList.value
+            : activeKelompokList.value;
+    const sum = list.reduce((acc, k) => {
+        const porsiKecil = Number(k.total_porsi_kecil) || 0;
+        const porsiBesar = Number(k.total_porsi_besar) || 0;
+        const penerima = Number(k.total_penerima) || porsiKecil + porsiBesar;
+        return acc + penerima;
+    }, 0);
+    return sum > 0 ? sum : 9;
+});
+
 // PDF Download State & Handlers
 const isDownloading = ref(false);
-const downloadType = ref(""); // 'single' | 'a4_grid'
+const downloadType = ref("");
+const downloadFormatOption = ref("single");
+const customLabelCount = ref(totalWoPorsi.value || 9);
+
+// Auto-populate custom label count when WO / kelompok changes, but keep it freely editable
+watch(
+    totalWoPorsi,
+    (val) => {
+        if (val > 0) {
+            customLabelCount.value = val;
+        }
+    },
+    { immediate: true },
+);
+
+watch(downloadFormatOption, (newFormat) => {
+    if (newFormat === "custom") {
+        if (!customLabelCount.value || customLabelCount.value <= 0) {
+            customLabelCount.value = totalWoPorsi.value || 9;
+        }
+    }
+});
+
 const downloadProgress = ref({
+    phase: "template",
     current: 0,
     total: 0,
+    totalPages: 0,
+    currentPage: 0,
     percentage: 0,
+    etaText: "",
+    speedText: "",
     message: "",
 });
 const downloadError = ref("");
 const downloadSuccess = ref(false);
 
-// Isolated Sandbox Card State for ultra-fast and 100% pixel-perfect rendering
 const sandboxKelompok = ref(null);
 const sandboxCardRef = ref(null);
 
-async function renderSandboxCard(kelompok) {
+async function getSandboxCardElement(kelompok) {
     sandboxKelompok.value = kelompok;
     await nextTick();
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -324,17 +558,28 @@ async function renderSandboxCard(kelompok) {
     );
 }
 
-async function startDownload(type) {
+async function startDownload(type = null) {
+    const selectedType = type || downloadFormatOption.value || "single";
     if (printableKelompokList.value.length === 0) return;
     isDownloading.value = true;
-    downloadType.value = type;
+    downloadType.value = selectedType;
     downloadError.value = "";
     downloadSuccess.value = false;
+
+    const totalCount =
+        selectedType === "custom"
+            ? parseInt(customLabelCount.value, 10) || 9
+            : printableKelompokList.value.length;
+
     downloadProgress.value = {
         current: 0,
-        total: printableKelompokList.value.length,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / 9),
+        currentPage: 1,
         percentage: 0,
-        message: "Menyiapkan elemen kartu label...",
+        etaText: "Menyiapkan render...",
+        speedText: "",
+        message: "Menyiapkan elemen kartu label resmi BGN...",
     };
 
     try {
@@ -343,31 +588,27 @@ async function startDownload(type) {
             "",
         );
 
-        const downloadParams = {
-            printableKelompokList: printableKelompokList.value,
-            templateConfig: props.activeTemplate,
-            unitSppg: props.unitSppg,
-            tanggalProduksi: tanggalProduksi.value,
-            jamProduksi: jamProduksi.value,
-            batasKonsumsi: batasKonsumsi.value,
-            petunjukMenu: petunjukMenu.value,
-            giziData: giziData.value,
-            onProgress: (p) => {
-                downloadProgress.value = p;
-            },
-        };
-
-        if (type === "single") {
-            const filename = `Label_BGN_Tunggal_1PerHalaman_${dateSuffix}.pdf`;
+        if (selectedType === "single") {
+            const filename = `Label_BGN_9x6cm_Tunggal_${dateSuffix}.pdf`;
             await downloadPdfSingleMode({
-                ...downloadParams,
+                printableKelompokList: printableKelompokList.value,
+                customCount: totalCount,
+                getRenderElement: getSandboxCardElement,
                 filename,
+                onProgress: (p) => {
+                    downloadProgress.value = { ...downloadProgress.value, ...p };
+                },
             });
-        } else if (type === "a4_grid") {
-            const filename = `Label_BGN_Lembar_A4_9Label_${dateSuffix}.pdf`;
+        } else if (selectedType === "a4" || selectedType === "custom") {
+            const filename = `Label_BGN_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
             await downloadPdfA4GridMode({
-                ...downloadParams,
+                printableKelompokList: printableKelompokList.value,
+                customCount: totalCount,
+                getRenderElement: getSandboxCardElement,
                 filename,
+                onProgress: (p) => {
+                    downloadProgress.value = { ...downloadProgress.value, ...p };
+                },
             });
         }
 
@@ -376,34 +617,104 @@ async function startDownload(type) {
             if (downloadSuccess.value) {
                 isDownloading.value = false;
             }
-        }, 1500);
+        }, 1200);
     } catch (err) {
-        console.error("Gagal men-download PDF label:", err);
+        console.error("Gagal download PDF label:", err);
         downloadError.value =
             err.message || "Terjadi kesalahan saat memproses file PDF.";
     }
 }
 
-function formatTanggalIndo(dateStr) {
-    if (!dateStr) return "-";
+async function startPrintDirect() {
+    if (printableKelompokList.value.length === 0) {
+        alert("Silakan pilih minimal 1 kelompok sasaran.");
+        return;
+    }
+    isDownloading.value = true;
+    downloadType.value = "print";
+    downloadError.value = "";
+    downloadSuccess.value = false;
+    downloadProgress.value = {
+        current: 0,
+        total: printableKelompokList.value.length,
+        totalPages: printableKelompokList.value.length,
+        currentPage: 1,
+        percentage: 0,
+        etaText: "Menyiapkan cetakan...",
+        speedText: "",
+        message: "Menyiapkan label ukuran 9x6cm untuk dicetak...",
+    };
+
     try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString("id-ID", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
+        await printPdfSingleMode({
+            printableKelompokList: printableKelompokList.value,
+            getRenderElement: getSandboxCardElement,
+            onProgress: (p) => {
+                downloadProgress.value = { ...downloadProgress.value, ...p };
+            },
         });
-    } catch {
-        return dateStr;
+
+        downloadSuccess.value = true;
+        setTimeout(() => {
+            if (downloadSuccess.value) {
+                isDownloading.value = false;
+            }
+        }, 1000);
+    } catch (err) {
+        console.error("Gagal mencetak label:", err);
+        downloadError.value =
+            err.message || "Terjadi kesalahan saat menyiapkan cetakan.";
     }
 }
 </script>
 
 <template>
     <div class="space-y-6">
-        <!-- 1. Header Control Panel (Disembunyikan saat Print) -->
+        <!-- 1. Header Control Panel -->
         <div class="print:hidden space-y-6">
+            <!-- Edit Mode Banner -->
+            <div
+                v-if="editingLabel"
+                class="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in"
+            >
+                <div class="flex items-center gap-3">
+                    <div
+                        class="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                    >
+                        <Edit3 class="h-5 w-5" />
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="text-xs font-black uppercase tracking-wider text-amber-800"
+                            >
+                                Mode Edit Label
+                            </span>
+                            <span
+                                class="font-mono font-bold text-amber-900 bg-amber-200/60 px-2 py-0.5 rounded text-[11px]"
+                            >
+                                {{ editingLabel.nomor_label }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-amber-900 mt-0.5 font-medium">
+                            Anda sedang mengedit data label:
+                            <strong>{{ editingLabel.nama_menu }}</strong
+                            >. Klik "Perbarui Simpanan Label" untuk menyimpan
+                            perubahan.
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    type="button"
+                    @click="emit('cancel-edit')"
+                    className="h-9 px-3.5 bg-white hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0"
+                >
+                    <ArrowLeft class="h-4 w-4" />
+                    <span>Batal Edit / Buat Baru</span>
+                </Button>
+            </div>
+
+            <!-- Top Action Header -->
             <Card className="bg-white border-slate-200/80 shadow-xs">
                 <CardHeader
                     className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50"
@@ -418,641 +729,817 @@ function formatTanggalIndo(dateStr) {
                                 >
                                     <Tag class="h-5 w-5 text-primary" />
                                     <span
-                                        >Konfigurasi & Cetak Label Stiker
-                                        Box</span
+                                        >Konfigurasi & Cetak Label Resmi SPPG
+                                        BGN (9 x 6 cm)</span
                                     >
                                 </CardTitle>
                                 <span
                                     class="bg-blue-100 text-blue-900 border border-blue-200 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"
                                 >
-                                    <Layout class="h-3 w-3 text-primary" />
                                     <span
-                                        >Template:
-                                        {{ activeTemplate.name }}</span
+                                        >Ukuran Fixed 9 x 6 cm (Landscape)</span
                                     >
                                 </span>
                             </div>
                             <CardDescription class="text-xs sm:text-sm mt-0.5">
-                                Sesuaikan data distribusi hari ini, pilih
-                                sasaran kelompok, dan cetak stiker box secara
-                                instan.
+                                Seluruh data terisi dinamis dari Work Order /
+                                input manual dan siap dicetak dalam format
+                                stiker standar 9 x 6 cm.
                             </CardDescription>
                         </div>
+
+                        <!-- Action Buttons -->
                         <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                            <!-- Tombol SIMPAN LABEL -->
                             <Button
                                 type="button"
-                                @click="emit('go-to-template')"
-                                className="h-10 px-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                @click="saveLabelToDatabase"
+                                :disabled="
+                                    printableKelompokList.length === 0 ||
+                                    isSaving
+                                "
+                                className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 rounded-xl shadow-xs cursor-pointer"
+                                :title="
+                                    editingLabel
+                                        ? 'Perbarui data label ini di Daftar Label'
+                                        : 'Simpan konfigurasi label ini ke Daftar Label'
+                                "
                             >
-                                <Layout class="h-4 w-4 text-primary" />
-                                <span>Ganti Template</span>
+                                <Loader2
+                                    v-if="isSaving"
+                                    class="h-4 w-4 animate-spin"
+                                />
+                                <BookmarkCheck v-else class="h-4 w-4" />
+                                <span>{{
+                                    isSaving
+                                        ? "Menyimpan..."
+                                        : editingLabel
+                                          ? "Simpan Perubahan"
+                                          : "Simpan Label"
+                                }}</span>
                             </Button>
 
-                            <!-- Download PDF Option 1: 1 Label / Halaman -->
+                            <!-- Select Format & Download PDF Button -->
+                            <div
+                                class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap"
+                            >
+                                <select
+                                    v-model="downloadFormatOption"
+                                    class="h-8 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                >
+                                    <option value="single">Label Tunggal (9x6 cm)</option>
+                                    <option value="a4">Lembar A4 (9 Label/Hal)</option>
+                                    <option value="custom">Custom Jumlah Label (A4)</option>
+                                </select>
+
+                                <!-- Custom Count Input (Appears when Custom is selected) -->
+                                <div
+                                    v-if="downloadFormatOption === 'custom'"
+                                    class="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 h-8 shadow-2xs"
+                                >
+                                    <span class="text-[11px] font-bold text-slate-500">Jml:</span>
+                                    <input
+                                        type="number"
+                                        v-model.number="customLabelCount"
+                                        min="1"
+                                        max="50000"
+                                        class="w-16 h-6 text-center text-xs font-black text-slate-800 border-none p-0 focus:outline-none focus:ring-0"
+                                        title="Jumlah label otomatis terisi dari total porsi WO hari ini (dapat diubah manual sesuai kebutuhan)"
+                                    />
+                                    <span class="text-[10px] font-semibold text-slate-400">pcs</span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    @click="startDownload(downloadFormatOption)"
+                                    :disabled="
+                                        printableKelompokList.length === 0 ||
+                                        isDownloading
+                                    "
+                                    className="h-8 px-3.5 bg-primary hover:bg-primary/90 text-white font-bold text-xs flex items-center gap-1.5 rounded-lg shadow-xs cursor-pointer"
+                                    title="Download file PDF sesuai format yang dipilih"
+                                >
+                                    <Loader2
+                                        v-if="
+                                            isDownloading &&
+                                            (downloadType === 'single' ||
+                                                downloadType === 'a4' ||
+                                                downloadType === 'custom')
+                                        "
+                                        class="h-3.5 w-3.5 animate-spin"
+                                    />
+                                    <Download v-else class="h-3.5 w-3.5" />
+                                    <span>Download PDF</span>
+                                </Button>
+                            </div>
+
+                            <!-- Print Direct Exact 9x6cm (Icon Only) -->
                             <Button
                                 type="button"
-                                @click="startDownload('single')"
+                                @click="startPrintDirect"
                                 :disabled="
                                     printableKelompokList.length === 0 ||
                                     isDownloading
                                 "
-                                className="h-10 px-4 bg-primary hover:bg-primary/90 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer"
-                                title="Download 1 file PDF berisi semua label PM (1 label penuh per halaman)"
+                                className="h-10 w-10 p-0 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center rounded-xl shadow-xs cursor-pointer shrink-0"
+                                title="Cetak Langsung Label (9x6 cm)"
                             >
-                                <Download class="h-4 w-4" />
-                                <span>Download PDF (1 Label / Hal)</span>
-                                <span
-                                    class="bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-mono"
-                                >
-                                    {{ printableKelompokList.length }} Hal
-                                </span>
-                            </Button>
-
-                            <!-- Download PDF Option 2: Lembaran A4 (9 Label / Hal) -->
-                            <Button
-                                type="button"
-                                @click="startDownload('a4_grid')"
-                                :disabled="
-                                    printableKelompokList.length === 0 ||
-                                    isDownloading
-                                "
-                                className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer"
-                                title="Download 1 file PDF ukuran kertas A4 Portrait (9 label per halaman lembar A4)"
-                            >
-                                <FileText class="h-4 w-4" />
-                                <span>Download Lembar A4 (9 Label / Hal)</span>
-                                <span
-                                    class="bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-mono"
-                                >
-                                    {{
-                                        Math.ceil(
-                                            printableKelompokList.length / 9,
-                                        )
-                                    }}
-                                    Lembar
-                                </span>
+                                <Loader2
+                                    v-if="isDownloading && downloadType === 'print'"
+                                    class="h-4 w-4 animate-spin"
+                                />
+                                <Printer v-else class="h-4 w-4 text-white" />
                             </Button>
                         </div>
                     </div>
                 </CardHeader>
+            </Card>
 
-                <CardContent className="p-4 sm:p-5 space-y-4">
-                    <!-- Mode Switcher: Otomatis vs Manual -->
-                    <div
-                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100"
-                    >
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-700"
-                                >Sumber Data:</span
-                            >
+            <!-- Main Layout: Left Form Inputs + Right Live Preview -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- ================= LEFT COLUMN: FORM INPUTS ================= -->
+                <div class="lg:col-span-6 space-y-5">
+                    <!-- 1. Mode Switcher & WO Selector -->
+                    <Card className="bg-white border-slate-200/80 shadow-2xs">
+                        <CardContent className="p-4 sm:p-5 space-y-4">
                             <div
-                                class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200"
+                                class="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 flex-wrap"
                             >
-                                <button
-                                    type="button"
-                                    @click="setLabelMode('auto')"
-                                    :class="[
-                                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                        labelMode === 'auto'
-                                            ? 'bg-white text-primary shadow-2xs border border-slate-200 font-extrabold'
-                                            : 'text-slate-600 hover:text-slate-900 font-semibold',
-                                    ]"
-                                >
-                                    <Utensils class="h-3.5 w-3.5" />
-                                    <span>⚡ Otomatis (Sesuai Work Order)</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="setLabelMode('manual')"
-                                    :class="[
-                                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                        labelMode === 'manual'
-                                            ? 'bg-white text-amber-700 shadow-2xs border border-slate-200 font-extrabold'
-                                            : 'text-slate-600 hover:text-slate-900 font-semibold',
-                                    ]"
-                                >
-                                    <Edit3 class="h-3.5 w-3.5" />
-                                    <span>✍️ Manual (Input Bebas)</span>
-                                </button>
-                            </div>
-                        </div>
-                        <span class="text-[11px] text-slate-500 italic">
-                            {{
-                                labelMode === "auto"
-                                    ? "Data menu, tanggal, & sasaran tersinkronisasi otomatis dari Work Order."
-                                    : "Anda bebas mengatur nama menu, tanggal, dan memilih sasaran tanpa data WO."
-                            }}
-                        </span>
-                    </div>
-
-                    <!-- Panel Mode Otomatis (WO Selector) -->
-                    <div
-                        v-if="labelMode === 'auto'"
-                        class="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                    >
-                        <div class="flex items-center gap-2.5 min-w-0">
-                            <div
-                                class="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center font-bold shrink-0 shadow-2xs"
-                            >
-                                <Utensils class="h-4 w-4" />
-                            </div>
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-2 flex-wrap">
+                                <div class="flex items-center gap-2">
                                     <span
-                                        class="font-black text-slate-900 text-xs sm:text-sm truncate"
+                                        class="text-xs font-bold text-slate-700"
+                                        >Sumber Data:</span
                                     >
-                                        {{
-                                            activeWorkOrder
-                                                ? activeWorkOrder.nama
-                                                : "Belum Ada Work Order"
-                                        }}
-                                    </span>
-                                    <span
-                                        v-if="activeWorkOrder"
-                                        class="font-mono font-bold text-primary bg-white px-2 py-0.5 rounded border border-blue-200 text-[10.5px]"
+                                    <div
+                                        class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200"
                                     >
-                                        {{ activeWorkOrder.id }}
-                                    </span>
-                                    <Badge
-                                        v-if="
-                                            activeWorkOrder?.tanggal ===
-                                            todayStr
-                                        "
-                                        class="bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
-                                    >
-                                        ⭐ Menu Hari Ini
-                                    </Badge>
+                                        <button
+                                            type="button"
+                                            @click="setLabelMode('auto')"
+                                            :class="[
+                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                                labelMode === 'auto'
+                                                    ? 'bg-white text-primary shadow-2xs font-extrabold'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                            ]"
+                                        >
+                                            <Utensils class="h-3.5 w-3.5" />
+                                            <span
+                                                >⚡ Otomatis (Work Order)</span
+                                            >
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="setLabelMode('manual')"
+                                            :class="[
+                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                                labelMode === 'manual'
+                                                    ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                            ]"
+                                        >
+                                            <Edit3 class="h-3.5 w-3.5" />
+                                            <span>✍️ Input Manual</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <p class="text-[11px] text-slate-500 mt-0.5">
-                                    Total Distribusi:
-                                    <strong
-                                        >{{
-                                            Number(
-                                                activeWorkOrder?.total_porsi ||
-                                                    0,
-                                            ).toLocaleString("id-ID")
-                                        }}
-                                        Porsi</strong
-                                    >
-                                    ({{ activeWorkOrder?.porsi_pk || 0 }} PK /
-                                    {{ activeWorkOrder?.porsi_pb || 0 }}
-                                    PB)
-                                </p>
                             </div>
-                        </div>
 
-                        <!-- Selector Dropdown WO -->
-                        <div
-                            class="flex items-center gap-2 shrink-0 self-start md:self-auto w-full md:w-auto"
-                        >
-                            <div
-                                v-if="workOrders.length > 1"
-                                class="relative flex-1 md:flex-none"
-                            >
-                                <select
-                                    v-model="selectedWoId"
-                                    class="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-slate-700 hover:border-slate-300 focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-colors cursor-pointer"
-                                >
-                                    <optgroup
-                                        v-if="
-                                            categorizedWorkOrders.today.length >
-                                            0
-                                        "
-                                        label="⭐ Menu Hari Ini"
+                            <!-- Selector WO jika Mode Otomatis -->
+                            <div v-if="labelMode === 'auto'" class="space-y-3">
+                                <div class="space-y-1.5">
+                                    <label
+                                        class="text-xs font-bold text-slate-700"
+                                        >Pilih Work Order Menu:</label
+                                    >
+                                    <select
+                                        v-model="selectedWoId"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
                                     >
                                         <option
-                                            v-for="w in categorizedWorkOrders.today"
-                                            :key="w.id"
-                                            :value="w.id"
+                                            v-for="wo in workOrders"
+                                            :key="wo.id"
+                                            :value="wo.id"
                                         >
-                                            ⭐ Hari Ini • {{ w.id }} •
-                                            {{ w.nama }}
-                                        </option>
-                                    </optgroup>
-
-                                    <optgroup
-                                        v-if="
-                                            categorizedWorkOrders.upcoming
-                                                .length > 0
-                                        "
-                                        label="📅 Menu Rencana Mendatang"
-                                    >
-                                        <option
-                                            v-for="w in categorizedWorkOrders.upcoming"
-                                            :key="w.id"
-                                            :value="w.id"
-                                        >
-                                            📅 {{ w.id }} • {{ w.nama }} ({{
-                                                formatTanggalIndo(w.tanggal)
+                                            {{ wo.tanggal }} - {{ wo.nama }} ({{
+                                                wo.id
                                             }})
                                         </option>
-                                    </optgroup>
-
-                                    <optgroup
-                                        v-if="
-                                            categorizedWorkOrders.past.length >
-                                            0
-                                        "
-                                        label="🕒 Riwayat Menu Terdahulu"
-                                    >
-                                        <option
-                                            v-for="w in categorizedWorkOrders.past"
-                                            :key="w.id"
-                                            :value="w.id"
-                                        >
-                                            🕒 {{ w.id }} • {{ w.nama }} ({{
-                                                formatTanggalIndo(w.tanggal)
-                                            }})
-                                        </option>
-                                    </optgroup>
-                                </select>
-                            </div>
-
-                            <button
-                                v-if="
-                                    todayWorkOrder &&
-                                    activeWorkOrder &&
-                                    activeWorkOrder.id !== todayWorkOrder.id
-                                "
-                                type="button"
-                                @click="selectTodayWo"
-                                class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0"
-                                title="Pilih Menu Hari Ini"
-                            >
-                                <Sparkles
-                                    class="h-3.5 w-3.5 text-emerald-600"
-                                />
-                                <span>Hari Ini</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Panel Mode Manual -->
-                    <div
-                        v-else
-                        class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between gap-3 text-xs"
-                    >
-                        <div class="flex items-center gap-2.5">
-                            <div
-                                class="h-8 w-8 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-2xs"
-                            >
-                                <Edit3 class="h-4 w-4" />
-                            </div>
-                            <div>
-                                <p class="font-bold text-amber-950">
-                                    Mode Input Manual Bebas Aktif
-                                </p>
-                                <p class="text-[11px] text-amber-800 mt-0.5">
-                                    Ketik nama menu masakan, tanggal, jam masak,
-                                    batas konsumsi, serta sesuaikan kandungan
-                                    gizi dan sasaran.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Parameter Form Fields -->
-                    <div
-                        :class="[
-                            'grid gap-4',
-                            labelMode === 'auto'
-                                ? 'grid-cols-1 sm:grid-cols-2'
-                                : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
-                        ]"
-                    >
-                        <!-- Tanggal Produksi (Hanya di Mode Manual) -->
-                        <div v-if="labelMode === 'manual'" class="space-y-1.5">
-                            <label
-                                class="text-xs font-bold text-slate-700 flex items-center gap-1.5"
-                            >
-                                <Calendar class="h-3.5 w-3.5 text-primary" />
-                                <span>Tanggal Produksi:</span>
-                            </label>
-                            <input
-                                type="date"
-                                v-model="tanggalProduksi"
-                                class="w-full text-xs font-semibold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2"
-                            />
-                        </div>
-
-                        <!-- Jam Produksi -->
-                        <div class="space-y-1.5">
-                            <label
-                                class="text-xs font-bold text-slate-700 flex items-center gap-1.5"
-                            >
-                                <Clock class="h-3.5 w-3.5 text-primary" />
-                                <span>Jam Produksi:</span>
-                            </label>
-                            <input
-                                type="time"
-                                v-model="jamProduksi"
-                                class="w-full text-xs font-semibold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2 bg-white cursor-pointer"
-                            />
-                        </div>
-
-                        <!-- Batas Konsumsi -->
-                        <div class="space-y-1.5">
-                            <label
-                                class="text-xs font-bold text-slate-700 flex items-center gap-1.5"
-                            >
-                                <Hourglass class="h-3.5 w-3.5 text-amber-600" />
-                                <span>Batas Konsumsi:</span>
-                            </label>
-                            <input
-                                type="time"
-                                v-model="batasKonsumsi"
-                                class="w-full text-xs font-semibold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2 text-amber-900 bg-amber-50/40 cursor-pointer"
-                            />
-                        </div>
-
-                        <!-- Menu Makanan (Hanya di Mode Manual) -->
-                        <div v-if="labelMode === 'manual'" class="space-y-1.5">
-                            <label
-                                class="text-xs font-bold text-slate-700 flex items-center gap-1.5"
-                            >
-                                <Utensils
-                                    class="h-3.5 w-3.5 text-emerald-600"
-                                />
-                                <span>Rincian Menu Makanan:</span>
-                            </label>
-                            <input
-                                type="text"
-                                v-model="petunjukMenu"
-                                placeholder="Nasi Putih - Dori Finger with Yellow Mayonaise - Steam Tahu..."
-                                class="w-full text-xs font-semibold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Toggle Customizer Kandungan Gizi -->
-                    <div
-                        v-if="activeTemplate.show_kandungan_gizi !== false"
-                        class="pt-2"
-                    >
-                        <button
-                            type="button"
-                            @click="showGiziCustomizer = !showGiziCustomizer"
-                            class="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-1.5 cursor-pointer"
-                        >
-                            <Flame class="h-3.5 w-3.5" />
-                            <span>{{
-                                showGiziCustomizer
-                                    ? "Sembunyikan"
-                                    : "Kustomisasi Nilai Kandungan Gizi (Energi, Karbo, Protein, Lemak, Serat)"
-                            }}</span>
-                            <ChevronDown
-                                class="h-3.5 w-3.5 transition-transform"
-                                :class="showGiziCustomizer ? 'rotate-180' : ''"
-                            />
-                        </button>
-
-                        <div
-                            v-if="showGiziCustomizer"
-                            class="mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3"
-                        >
-                            <div
-                                class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs"
-                            >
-                                <div class="space-y-1">
-                                    <span class="font-bold text-slate-700 block"
-                                        >Energi (Kkal)</span
-                                    >
-                                    <div class="flex gap-1.5">
-                                        <input
-                                            v-model="giziData.energi_pk"
-                                            placeholder="PK"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Kecil"
-                                        />
-                                        <input
-                                            v-model="giziData.energi_pb"
-                                            placeholder="PB"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Besar"
-                                        />
-                                    </div>
+                                    </select>
                                 </div>
-                                <div class="space-y-1">
-                                    <span class="font-bold text-slate-700 block"
-                                        >Karbohidrat (g)</span
-                                    >
-                                    <div class="flex gap-1.5">
-                                        <input
-                                            v-model="giziData.karbo_pk"
-                                            placeholder="PK"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Kecil"
-                                        />
-                                        <input
-                                            v-model="giziData.karbo_pb"
-                                            placeholder="PB"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Besar"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="font-bold text-slate-700 block"
-                                        >Protein (g)</span
-                                    >
-                                    <div class="flex gap-1.5">
-                                        <input
-                                            v-model="giziData.protein_pk"
-                                            placeholder="PK"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Kecil"
-                                        />
-                                        <input
-                                            v-model="giziData.protein_pb"
-                                            placeholder="PB"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Besar"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="font-bold text-slate-700 block"
-                                        >Lemak (g)</span
-                                    >
-                                    <div class="flex gap-1.5">
-                                        <input
-                                            v-model="giziData.lemak_pk"
-                                            placeholder="PK"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Kecil"
-                                        />
-                                        <input
-                                            v-model="giziData.lemak_pb"
-                                            placeholder="PB"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Besar"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="font-bold text-slate-700 block"
-                                        >Serat (g)</span
-                                    >
-                                    <div class="flex gap-1.5">
-                                        <input
-                                            v-model="giziData.serat_pk"
-                                            placeholder="PK"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Kecil"
-                                        />
-                                        <input
-                                            v-model="giziData.serat_pb"
-                                            placeholder="PB"
-                                            class="w-full text-xs p-1.5 border rounded bg-white"
-                                            title="Porsi Besar"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Filter Kelompok Terpilih -->
-                    <div class="pt-3 border-t border-slate-100 space-y-2">
-                        <div
-                            class="flex items-center justify-between flex-wrap gap-2"
-                        >
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold text-slate-700"
-                                    >Pilih Sasaran Kelompok yang Dicetak:</span
+                                <!-- Ringkasan Mode Otomatis -->
+                                <div
+                                    class="p-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-start gap-2.5 text-xs text-blue-900"
                                 >
-                                <span class="text-[11px] text-slate-500">
-                                    ({{ printableKelompokList.length }} dari
-                                    {{ receivingKelompokList.length }}
-                                    Menerima)
+                                    <Sparkles
+                                        class="h-4 w-4 text-blue-600 shrink-0 mt-0.5"
+                                    />
+                                    <div class="space-y-0.5">
+                                        <p class="font-bold">
+                                            Mode Otomatis Work Order Aktif
+                                        </p>
+                                        <p
+                                            class="text-[11px] text-blue-700 leading-relaxed"
+                                        >
+                                            Seluruh data (Komponen Menu,
+                                            Kandungan Gizi, Tanggal, dan
+                                            Sasaran) secara otomatis terhubung
+                                            dari Work Order yang dipilih.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Pengaturan Dimensi & Area Tempel Isolasi (Berlaku untuk Mode Otomatis & Manual) -->
+                    <Card className="bg-white border-slate-200/80 shadow-2xs">
+                        <CardHeader className="p-4 pb-2 border-b border-slate-100">
+                            <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <Layers class="h-4 w-4 text-primary" />
+                                    <span>Area Tempel Isolasi / Perekat</span>
+                                </div>
+                                <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                    Tinggi Total: 6 cm
                                 </span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-3 text-xs">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <label class="font-bold text-slate-700 block">
+                                        Lebar Atas-Bawah / Tinggi Area Isolasi (cm):
+                                    </label>
+                                    <p class="text-[11px] text-slate-500 mt-0.5">
+                                        Mengatur tinggi area kosong perekat pada bagian atas label (Default: 2 cm).
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <div class="relative w-28">
+                                        <input
+                                            v-model.number="tinggiIsolasiCm"
+                                            type="number"
+                                            step="0.1"
+                                            min="0.5"
+                                            max="3.5"
+                                            class="w-full px-3 py-1.5 pr-9 border border-slate-300 rounded-lg font-black text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none text-center"
+                                        />
+                                        <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">cm</span>
+                                    </div>
+                                </div>
                             </div>
+
+                            <!-- Preset Cepat -->
+                            <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                <span class="text-[11px] font-bold text-slate-400 mr-1">Preset:</span>
+                                <button
+                                    type="button"
+                                    v-for="preset in [1.0, 1.5, 2.0, 2.5]"
+                                    :key="preset"
+                                    @click="tinggiIsolasiCm = preset"
+                                    :class="[
+                                        'px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer border',
+                                        Number(tinggiIsolasiCm) === preset
+                                            ? 'bg-primary text-white border-primary shadow-2xs font-extrabold'
+                                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                    ]"
+                                >
+                                    {{ preset === 2 ? '2 cm (Default)' : preset + ' cm' }}
+                                </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- FORM KHUSUS MODE MANUAL -->
+                    <template v-if="labelMode === 'manual'">
+                        <!-- 2. Identitas Header & Waktu -->
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Building2 class="h-4 w-4 text-primary" />
+                                    <span>Identitas Header & Waktu</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3 text-xs">
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                                >
+                                    <div class="sm:col-span-2">
+                                        <label class="font-bold text-slate-600"
+                                            >Nama SPPG:</label
+                                        >
+                                        <input
+                                            v-model="namaSppg"
+                                            type="text"
+                                            class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Zona Waktu:</label
+                                        >
+                                        <select
+                                            v-model="zonaWaktu"
+                                            class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                        >
+                                            <option value="WIB">WIB</option>
+                                            <option value="WITA">WITA</option>
+                                            <option value="WIT">WIT</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1"
+                                >
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Tanggal Produksi:</label
+                                        >
+                                        <input
+                                            v-model="tanggalProduksi"
+                                            type="date"
+                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Jam Produksi:</label
+                                        >
+                                        <input
+                                            v-model="jamProduksi"
+                                            type="text"
+                                            placeholder="12:14"
+                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Jam Expired:</label
+                                        >
+                                        <input
+                                            v-model="jamExpired"
+                                            type="text"
+                                            placeholder="12:14"
+                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- 3. Pengaturan Waktu Konsumsi & Teks Larangan (Bisa Diubah di Mode Manual) -->
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Clock class="h-4 w-4 text-amber-600" />
+                                    <span
+                                        >Waktu Maksimal & Peringatan
+                                        Larangan</span
+                                    >
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3 text-xs">
+                                <div>
+                                    <label class="font-bold text-slate-600"
+                                        >Waktu Maksimal Konsumsi:</label
+                                    >
+                                    <input
+                                        v-model="waktuMaksimal"
+                                        type="text"
+                                        placeholder="2 JAM SETELAH DITERIMA!"
+                                        class="w-full mt-1 px-3 py-1.5 border border-amber-200 bg-amber-50/50 rounded-lg font-black text-amber-900 focus:ring-2 focus:ring-amber-200 outline-none"
+                                    />
+                                </div>
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                                >
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Teks Larangan (Baris 1):</label
+                                        >
+                                        <input
+                                            v-model="teksLaranganHeader"
+                                            type="text"
+                                            placeholder="MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT."
+                                            class="w-full mt-1 px-3 py-1.5 border border-rose-200 bg-rose-50/50 rounded-lg font-bold text-rose-900 focus:ring-2 focus:ring-rose-200 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="font-bold text-slate-600"
+                                            >Teks Larangan (Baris 2):</label
+                                        >
+                                        <input
+                                            v-model="teksLaranganSub"
+                                            type="text"
+                                            placeholder="DILARANG MEMBAWA PULANG!"
+                                            class="w-full mt-1 px-3 py-1.5 border border-rose-200 bg-rose-50/50 rounded-lg font-black text-rose-900 focus:ring-2 focus:ring-rose-200 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- 4. Komponen Menu Makanan -->
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Utensils class="h-4 w-4 text-primary" />
+                                    <span>Komponen Menu Makanan</span>
+                                </CardTitle>
+                                <button
+                                    type="button"
+                                    @click="addMenuItem"
+                                    class="px-2.5 py-1 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-lg font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                    <Plus class="h-3.5 w-3.5" />
+                                    <span>Tambah Menu</span>
+                                </button>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-2 text-xs">
+                                <div
+                                    v-for="(item, idx) in menuItems"
+                                    :key="idx"
+                                    class="flex items-center gap-2"
+                                >
+                                    <span
+                                        class="font-mono font-bold text-slate-400 w-4"
+                                        >{{ idx + 1 }}.</span
+                                    >
+                                    <input
+                                        :value="item"
+                                        @input="
+                                            updateMenuItemName(
+                                                idx,
+                                                $event.target.value,
+                                            )
+                                        "
+                                        type="text"
+                                        placeholder="Contoh: AYAM CRISPY"
+                                        class="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg font-extrabold uppercase text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="removeMenuItem(idx)"
+                                        class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Hapus baris ini"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- 5. Kandungan Gizi (AKG) -->
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Flame class="h-4 w-4 text-amber-500" />
+                                    <span>Nilai Kandungan Gizi (AKG)</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3 text-xs">
+                                <!-- Porsi Besar -->
+                                <div>
+                                    <p class="font-bold text-slate-700 mb-1.5">
+                                        Porsi Besar:
+                                    </p>
+                                    <div class="grid grid-cols-5 gap-1.5">
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Energi (kcal)</label
+                                            >
+                                            <input
+                                                v-model="giziData.energi_pb"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Prot (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.prot_pb"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Lmk (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.lmk_pb"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Karbo (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.karbo_pb"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Serat (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.serat_pb"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Porsi Kecil -->
+                                <div class="pt-2 border-t border-slate-100">
+                                    <p class="font-bold text-slate-700 mb-1.5">
+                                        Porsi Kecil:
+                                    </p>
+                                    <div class="grid grid-cols-5 gap-1.5">
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Energi (kcal)</label
+                                            >
+                                            <input
+                                                v-model="giziData.energi_pk"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Prot (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.prot_pk"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Lmk (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.lmk_pk"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Karbo (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.karbo_pk"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="text-[10.5px] text-slate-500"
+                                                >Serat (g)</label
+                                            >
+                                            <input
+                                                v-model="giziData.serat_pk"
+                                                type="text"
+                                                class="w-full mt-0.5 px-2 py-1 border border-slate-200 rounded font-bold text-center"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- 6. Rincian Harga Satuan per Item -->
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Coins class="h-4 w-4 text-emerald-600" />
+                                    <span>Rincian Harga Satuan per Item</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-2 text-xs">
+                                <div
+                                    v-for="(item, idx) in hargaItems"
+                                    :key="idx"
+                                    class="grid grid-cols-12 gap-2 items-center"
+                                >
+                                    <div
+                                        class="col-span-6 font-bold text-slate-700 truncate"
+                                    >
+                                        {{ item.nama }}
+                                    </div>
+                                    <div class="col-span-3">
+                                        <input
+                                            v-model="item.harga_pb"
+                                            type="number"
+                                            placeholder="P. Besar"
+                                            class="w-full px-2 py-1 border border-slate-200 rounded font-bold text-right text-xs"
+                                        />
+                                    </div>
+                                    <div class="col-span-3">
+                                        <input
+                                            v-model="item.harga_pk"
+                                            type="number"
+                                            placeholder="P. Kecil"
+                                            class="w-full px-2 py-1 border border-slate-200 rounded font-bold text-right text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </template>
+
+                    <!-- 7. Sasaran Kelompok Penerima -->
+                    <Card className="bg-white border-slate-200/80 shadow-2xs">
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
+                        >
+                            <CardTitle
+                                class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                            >
+                                <PackageCheck class="h-4 w-4 text-primary" />
+                                <span
+                                    >Sasaran Kelompok PM ({{
+                                        printableKelompokList.length
+                                    }}
+                                    Terpilih)</span
+                                >
+                            </CardTitle>
                             <label
-                                v-if="receivingKelompokList.length > 0"
                                 class="flex items-center gap-1.5 text-xs font-bold text-primary cursor-pointer"
                             >
                                 <input
                                     type="checkbox"
                                     v-model="isAllSelected"
-                                    class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                                    class="rounded text-primary focus:ring-primary"
                                 />
-                                <span
-                                    >Pilih Semua yang Menerima ({{
-                                        receivingKelompokList.length
-                                    }})</span
-                                >
+                                <span>Pilih Semua</span>
                             </label>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            <template
+                        </CardHeader>
+                        <CardContent
+                            className="p-4 max-h-56 overflow-y-auto space-y-1.5 text-xs"
+                        >
+                            <div
                                 v-for="k in activeKelompokList"
                                 :key="k.id"
+                                @click="toggleKelompok(k)"
+                                :class="[
+                                    'p-2 rounded-xl border flex items-center justify-between transition-colors cursor-pointer',
+                                    selectedKelompokIds.includes(k.id)
+                                        ? 'bg-primary/5 border-primary/30 text-slate-900 font-bold'
+                                        : 'bg-slate-50 border-slate-200 text-slate-500',
+                                ]"
                             >
-                                <!-- Jika kelompok Tidak Menerima: Label disabled -->
-                                <button
-                                    v-if="k.is_menerima === false"
-                                    type="button"
-                                    disabled
-                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold border bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50 select-none flex items-center gap-1.5 line-through"
-                                    title="Kelompok ini Tidak Menerima pada Work Order yang dipilih"
-                                >
-                                    <UserX class="h-3 w-3 text-slate-400" />
-                                    <span>{{ k.nama_kelompok }}</span>
-                                    <span
-                                        class="text-[9.5px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded"
-                                    >
-                                        Tidak Menerima (Non-Aktif)
-                                    </span>
-                                </button>
-
-                                <!-- Jika kelompok Menerima: Tombol interaktif -->
-                                <button
-                                    v-else
-                                    type="button"
-                                    @click="toggleKelompok(k)"
-                                    :class="[
-                                        'px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5',
-                                        selectedKelompokIds.includes(k.id)
-                                            ? 'bg-primary/10 text-primary border-primary/30 shadow-2xs font-bold'
-                                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100',
-                                    ]"
-                                >
-                                    <Check
-                                        v-if="
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        :checked="
                                             selectedKelompokIds.includes(k.id)
                                         "
-                                        class="h-3.5 w-3.5 text-primary"
+                                        class="rounded text-primary focus:ring-primary"
                                     />
                                     <span>{{ k.nama_kelompok }}</span>
-                                    <span
-                                        class="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200"
-                                    >
-                                        {{ k.total_penerima }} porsi
-                                    </span>
-                                </button>
-                            </template>
+                                </div>
+                                <span class="font-mono text-[11px]">
+                                    {{ k.total_porsi_kecil || 0 }} PK /
+                                    {{ k.total_porsi_besar || 0 }} PB
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <!-- ================= RIGHT COLUMN: LIVE PREVIEW ================= -->
+                <div class="lg:col-span-6 space-y-4">
+                    <div class="sticky top-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3
+                                class="text-sm font-black text-slate-900 flex items-center gap-2"
+                            >
+                                <Sparkles class="h-4 w-4 text-primary" />
+                                <span>Live Preview Label Resmi BGN</span>
+                            </h3>
+                            <span
+                                class="text-[11px] text-slate-500 font-medium"
+                            >
+                                Ukuran Cetak Stiker Box Makanan
+                            </span>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
 
-        <!-- 2. Printable Label Grid Cards (Rendered using active template) -->
-        <div class="space-y-4">
-            <div class="flex items-center justify-between print:hidden">
-                <h3
-                    class="text-sm font-bold text-slate-800 flex items-center gap-2"
-                >
-                    <PackageCheck class="h-4 w-4 text-primary" />
-                    <span
-                        >Pratinjau Label Cetak ({{
-                            printableKelompokList.length
-                        }}
-                        Kartu Label)</span
-                    >
-                </h3>
-                <span class="text-xs text-slate-500">
-                    Menggunakan Template:
-                    <strong>{{ activeTemplate.name }}</strong> (Rasio
-                    {{ activeTemplate.aspect_ratio || "4:3" }})
-                </span>
-            </div>
-
-            <!-- Print Container Grid (2 Kolom Kartu) -->
-            <div
-                class="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-1 print:gap-6"
-            >
-                <div
-                    v-for="k in printableKelompokList"
-                    :key="k.id"
-                    class="w-full flex justify-center"
-                >
-                    <div
-                        class="bgn-label-card-rendered w-full max-w-[640px] flex justify-center"
-                    >
-                        <LabelCardItem
-                            :template-config="activeTemplate"
-                            :kelompok="k"
-                            :unit-sppg="unitSppg"
-                            :tanggal-produksi="tanggalProduksi"
-                            :jam-produksi="jamProduksi"
-                            :batas-konsumsi="batasKonsumsi"
-                            :petunjuk-menu="petunjukMenu"
-                            :gizi-data="giziData"
-                        />
+                        <!-- Card Preview Container -->
+                        <div
+                            class="p-4 bg-slate-100/80 rounded-3xl border border-slate-200 flex items-center justify-center"
+                        >
+                            <LabelCardItem
+                                :unit-sppg="unitSppg"
+                                :nama-sppg="namaSppg"
+                                :zona-waktu="zonaWaktu"
+                                :tinggi-isolasi-cm="tinggiIsolasiCm"
+                                :tanggal-produksi="tanggalProduksi"
+                                :jam-produksi="jamProduksi"
+                                :tanggal-expired="tanggalExpired"
+                                :jam-expired="jamExpired"
+                                :waktu-maksimal="waktuMaksimal"
+                                :teks-larangan-header="teksLaranganHeader"
+                                :teks-larangan-sub="teksLaranganSub"
+                                :menu-items="menuItems"
+                                :gizi-data="giziData"
+                                :harga-items="hargaItems"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
+        <!-- ================= PRINT VIEW CONTAINER ================= -->
+        <div
+            :class="[
+                'hidden print:block',
+                printScaleMode === 'fixed9x6'
+                    ? 'print-mode-9x6'
+                    : 'print-mode-full',
+            ]"
+        >
             <div
-                v-if="printableKelompokList.length === 0"
-                class="p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-400 font-semibold print:hidden"
+                v-for="kelompok in printableKelompokList"
+                :key="kelompok.id"
+                class="bgn-print-page"
             >
-                Tidak ada kelompok sasaran yang dipilih untuk di-download.
+                <div class="bgn-print-card-wrapper">
+                    <LabelCardItem
+                        :unit-sppg="unitSppg"
+                        :nama-sppg="namaSppg"
+                        :zona-waktu="zonaWaktu"
+                        :tinggi-isolasi-cm="tinggiIsolasiCm"
+                        :tanggal-produksi="tanggalProduksi"
+                        :jam-produksi="jamProduksi"
+                        :tanggal-expired="tanggalExpired"
+                        :jam-expired="jamExpired"
+                        :waktu-maksimal="waktuMaksimal"
+                        :teks-larangan-header="teksLaranganHeader"
+                        :teks-larangan-sub="teksLaranganSub"
+                        :menu-items="menuItems"
+                        :gizi-data="giziData"
+                        :harga-items="hargaItems"
+                        :kelompok="kelompok"
+                    />
+                </div>
             </div>
         </div>
 
-        <!-- 3. Download Progress Modal Dialog (Teleported to body for 100% full screen backdrop) -->
+        <!-- Download Progress Modal -->
         <Teleport to="body">
             <div
                 v-if="isDownloading"
@@ -1081,35 +1568,41 @@ function formatTanggalIndo(dateStr) {
 
                     <div>
                         <h4
-                            class="text-base sm:text-lg font-black text-slate-900"
+                            class="text-base font-bold text-slate-900 tracking-tight"
                         >
                             {{
                                 downloadSuccess
-                                    ? "File PDF Berhasil Dibuat & Diunduh!"
+                                    ? downloadType === "print"
+                                        ? "Dialog Cetak 9x6cm Siap!"
+                                        : "File PDF Berhasil Dibuat!"
                                     : downloadError
-                                      ? "Gagal Membuat PDF"
-                                      : downloadType === "single"
-                                        ? "Membuat PDF Tunggal (1 Label / Halaman)..."
-                                        : "Membuat PDF Lembar A4 (9 Label / Halaman)..."
+                                      ? "Gagal Memproses"
+                                      : downloadType === "print"
+                                        ? "Menyiapkan Dialog Cetak Langsung..."
+                                        : downloadType === "single"
+                                          ? "Membuat PDF Label Tunggal (9x6 cm)..."
+                                          : downloadType === "custom"
+                                            ? `Membuat PDF Lembar A4 (${customLabelCount} Label)...`
+                                            : "Membuat PDF Lembar A4 (9 Label / Halaman)..."
                             }}
                         </h4>
-                        <p class="text-xs text-slate-500 mt-1">
+                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">
                             {{
                                 downloadError
                                     ? downloadError
                                     : downloadProgress.message ||
-                                      "Sedang merender halaman stiker label..."
+                                      "Sedang memproses dokumen label..."
                             }}
                         </p>
                     </div>
 
-                    <!-- Progress Bar -->
-                    <div v-if="!downloadError" class="space-y-1.5 pt-1">
+                    <!-- Progress Bar & Metrics -->
+                    <div v-if="!downloadError" class="space-y-2 pt-1">
                         <div
                             class="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5"
                         >
                             <div
-                                class="h-full transition-all duration-300 rounded-full"
+                                class="h-full transition-all duration-200 rounded-full"
                                 :class="
                                     downloadSuccess
                                         ? 'bg-emerald-500'
@@ -1120,14 +1613,47 @@ function formatTanggalIndo(dateStr) {
                                 }"
                             ></div>
                         </div>
+
                         <div
-                            class="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 px-1"
+                            class="flex items-center justify-between text-[11px] font-mono font-bold text-slate-600 px-1"
                         >
-                            <span
-                                >{{ downloadProgress.current }} dari
-                                {{ downloadProgress.total }} Label</span
+                            <span v-if="downloadProgress.phase === 'template'">
+                                {{ downloadProgress.current }} dari {{ downloadProgress.total }} Desain Label
+                                <span class="text-slate-400 font-sans font-normal"> (Render Desain)</span>
+                            </span>
+                            <span v-else>
+                                {{ downloadProgress.current }} dari
+                                {{ downloadProgress.total }} Label
+                                <span v-if="(downloadType === 'a4' || downloadType === 'custom') && downloadProgress.totalPages > 1" class="text-slate-400 font-sans font-normal">
+                                    ({{ downloadProgress.totalPages }} Hal A4)
+                                </span>
+                                <span v-else-if="(downloadType === 'single' || downloadType === 'print') && downloadProgress.totalPages > 1" class="text-slate-400 font-sans font-normal">
+                                    ({{ downloadProgress.totalPages }} Lembar)
+                                </span>
+                            </span>
+                            <span class="text-primary font-black">{{ downloadProgress.percentage }}%</span>
+                        </div>
+
+                        <!-- ETA & Speed Badges -->
+                        <div
+                            v-if="!downloadSuccess && (downloadProgress.etaText || downloadProgress.speedText)"
+                            class="flex items-center justify-center gap-2 pt-1 flex-wrap"
+                        >
+                            <div
+                                v-if="downloadProgress.etaText"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800"
                             >
-                            <span>{{ downloadProgress.percentage }}%</span>
+                                <Clock class="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                                <span>{{ downloadProgress.etaText }}</span>
+                            </div>
+
+                            <div
+                                v-if="downloadProgress.speedText"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-[11px] font-bold text-blue-800"
+                            >
+                                <Zap class="h-3.5 w-3.5 text-blue-600" />
+                                <span>{{ downloadProgress.speedText }}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1144,30 +1670,37 @@ function formatTanggalIndo(dateStr) {
             </div>
         </Teleport>
 
-        <!-- 4. Isolated Sandbox Render Container for High-Speed and Pixel-Perfect PDF Generation -->
+        <!-- Sandbox Render Container for High-Speed PDF Generation -->
         <div
             style="
                 position: fixed;
-                left: -99999px;
+                left: -9999px;
                 top: 0;
-                width: 640px;
+                width: 555px;
+                height: 370px;
                 pointer-events: none;
-                opacity: 0;
                 overflow: hidden;
-                z-index: -10;
+                z-index: -99999;
+                background: #ffffff;
             "
         >
-            <div ref="sandboxCardRef" style="width: 640px; background: white">
+            <div ref="sandboxCardRef" style="width: 555px; height: 370px; background: white">
                 <LabelCardItem
-                    v-if="sandboxKelompok"
-                    :template-config="activeTemplate"
-                    :kelompok="sandboxKelompok"
                     :unit-sppg="unitSppg"
+                    :nama-sppg="namaSppg"
+                    :zona-waktu="zonaWaktu"
+                    :tinggi-isolasi-cm="tinggiIsolasiCm"
                     :tanggal-produksi="tanggalProduksi"
                     :jam-produksi="jamProduksi"
-                    :batas-konsumsi="batasKonsumsi"
-                    :petunjuk-menu="petunjukMenu"
+                    :tanggal-expired="tanggalExpired"
+                    :jam-expired="jamExpired"
+                    :waktu-maksimal="waktuMaksimal"
+                    :teks-larangan-header="teksLaranganHeader"
+                    :teks-larangan-sub="teksLaranganSub"
+                    :menu-items="menuItems"
                     :gizi-data="giziData"
+                    :harga-items="hargaItems"
+                    :kelompok="sandboxKelompok"
                 />
             </div>
         </div>

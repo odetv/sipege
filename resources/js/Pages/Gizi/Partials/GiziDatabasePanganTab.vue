@@ -80,6 +80,15 @@ const tkpiCategoryList = computed(() => {
     return ["Semua", ...Array.from(cats)];
 });
 
+const avgBdd = computed(() => {
+    if (!tkpiItems.value || tkpiItems.value.length === 0) return "0.0%";
+    const totalBdd = tkpiItems.value.reduce(
+        (acc, item) => acc + (Number(item.bdd) || 0),
+        0
+    );
+    return (totalBdd / tkpiItems.value.length).toFixed(1) + "%";
+});
+
 function formatRupiah(val) {
     if (!val && val !== 0) return "Rp 0";
     return new Intl.NumberFormat("id-ID", {
@@ -113,8 +122,8 @@ function formatRupiah(val) {
                             Pilih sumber database acuan untuk seluruh modul perencanaan & rancang formula menu:
                             <strong class="text-slate-800">{{
                                 selectedSource === 'fta'
-                                    ? 'NutriSurvey Indo (indo.fta - 1.105 Bahan)'
-                                    : 'TKPI 2020 Kemenkes (tkpi2020.csv - 1.146 Bahan)'
+                                    ? `NutriSurvey Indo (indo.fta - ${tkpiDatasets.fta?.length || (selectedSource === 'fta' ? tkpiItems.length : 1105)} Bahan)`
+                                    : `TKPI 2020 Kemenkes (tkpi2020.csv - ${tkpiDatasets.csv?.length || (selectedSource === 'csv' ? tkpiItems.length : 1066)} Bahan)`
                             }}</strong>.
                         </CardDescription>
                     </div>
@@ -141,7 +150,7 @@ function formatRupiah(val) {
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="selectedSource === 'fta' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-600'"
                             >
-                                {{ tkpiDatasets.fta?.length || 1105 }}
+                                {{ tkpiDatasets.fta?.length || (selectedSource === 'fta' ? tkpiItems.length : 1105) }}
                             </span>
                         </button>
 
@@ -165,7 +174,7 @@ function formatRupiah(val) {
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="selectedSource === 'csv' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-600'"
                             >
-                                {{ tkpiDatasets.csv?.length || 1146 }}
+                                {{ tkpiDatasets.csv?.length || (selectedSource === 'csv' ? tkpiItems.length : 1066) }}
                             </span>
                         </button>
                     </div>
@@ -223,7 +232,7 @@ function formatRupiah(val) {
                         <h4
                             class="text-xl font-black text-amber-950 mt-1"
                         >
-                            88.2%
+                            {{ avgBdd }}
                             <span
                                 class="text-xs font-medium text-slate-500"
                                 >Dapat Dimakan</span
