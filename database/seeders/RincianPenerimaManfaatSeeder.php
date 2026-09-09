@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\KelompokPenerimaManfaat;
 use App\Models\RincianPenerimaManfaat;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class RincianPenerimaManfaatSeeder extends Seeder
 {
@@ -12,6 +14,13 @@ class RincianPenerimaManfaatSeeder extends Seeder
      */
     public function run(): void
     {
+        $driver = DB::getDriverName();
+        if ($driver === 'pgsql') {
+            DB::statement('TRUNCATE TABLE rincian_penerima_manfaat RESTART IDENTITY CASCADE;');
+        } else {
+            DB::table('rincian_penerima_manfaat')->delete();
+        }
+
         $now = now();
 
         $rincianRaw = [
@@ -21,7 +30,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [1, 'Pendukung (Tenaga Kependidikan)', 'Porsi Besar', 0, 2],
 
             // 2. TK Al-Khairiyah Arsyadiyah (ID KPM = 2)
-            [2, 'Pelajar', 'Porsi Kecil', 28, 26],
+            [2, 'Pelajar', 'Porsi Kecil', 29, 27],
             [2, 'Pendukung (Guru)', 'Porsi Besar', 0, 4],
             [2, 'Pendukung (Tenaga Kependidikan)', 'Porsi Besar', 0, 2],
 
@@ -44,10 +53,9 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [5, 'Kelas 2', 'Porsi Kecil', 25, 48],
             [5, 'Kelas 3', 'Porsi Kecil', 40, 28],
             [5, 'Kelas 4', 'Porsi Besar', 31, 30],
-            [5, 'Kelas 5', 'Porsi Besar', 23, 36],
-            [5, 'Kelas 6', 'Porsi Besar', 25, 30],
+            [5, 'Kelas 5', 'Porsi Besar', 34, 40],
+            [5, 'Kelas 6', 'Porsi Besar', 20, 31],
             [5, 'Pendukung (Guru)', 'Porsi Besar', 7, 16],
-            [5, 'Pendukung (Tenaga Kependidikan)', 'Porsi Besar', 6, 5],
 
             // 6. MTs Al-Khairiyah (ID KPM = 6)
             [6, 'Kelas 7', 'Porsi Besar', 24, 23],
@@ -141,6 +149,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
 
         $batch = [];
         $idCounter = 1;
+        $kpmSummary = [];
 
         foreach ($rincianRaw as $item) {
             [$kpmId, $subKategori, $jenisPorsi, $l, $p] = $item;
@@ -155,8 +164,32 @@ class RincianPenerimaManfaatSeeder extends Seeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
+
+            if (!isset($kpmSummary[$kpmId])) {
+                $kpmSummary[$kpmId] = [
+                    'total_laki_laki' => 0,
+                    'total_perempuan' => 0,
+                    'total_porsi_kecil' => 0,
+                    'total_porsi_besar' => 0,
+                    'total_penerima' => 0,
+                ];
+            }
+
+            $kpmSummary[$kpmId]['total_laki_laki'] += $l;
+            $kpmSummary[$kpmId]['total_perempuan'] += $p;
+            if ($jenisPorsi === 'Porsi Kecil') {
+                $kpmSummary[$kpmId]['total_porsi_kecil'] += ($l + $p);
+            } else {
+                $kpmSummary[$kpmId]['total_porsi_besar'] += ($l + $p);
+            }
+            $kpmSummary[$kpmId]['total_penerima'] += ($l + $p);
         }
 
         RincianPenerimaManfaat::insert($batch);
+
+        // Sinkronisasi otomatis total kalkulasi ke tabel kelompok_penerima_manfaat
+        foreach ($kpmSummary as $kpmId => $summary) {
+            KelompokPenerimaManfaat::where('id', $kpmId)->update($summary);
+        }
     }
 }

@@ -170,8 +170,22 @@ async function getSandboxSavedCardElement(kelompok) {
     );
 }
 
-async function startDownloadSavedLabel(item, type) {
-    const kelompokList = item.kelompoks_snapshot || [];
+const isDownloadCancelled = ref(false);
+
+function cancelDownloadProcess() {
+    isDownloadCancelled.value = true;
+    downloadProgress.value = {
+        ...downloadProgress.value,
+        message: "Membatalkan proses...",
+    };
+    setTimeout(() => {
+        isDownloading.value = false;
+        isDownloadCancelled.value = false;
+    }, 250);
+}
+
+async function handleDownload(item, type) {
+    const kelompokList = item.kelompok_list || [];
     if (kelompokList.length === 0) {
         alert("Tidak ada kelompok sasaran pada data label ini.");
         return;
@@ -180,6 +194,7 @@ async function startDownloadSavedLabel(item, type) {
     sandboxLabelData.value = item;
 
     isDownloading.value = true;
+    isDownloadCancelled.value = false;
     downloadType.value = type;
     downloadError.value = "";
     downloadSuccess.value = false;
@@ -201,6 +216,7 @@ async function startDownloadSavedLabel(item, type) {
                 printableKelompokList: kelompokList,
                 getRenderElement: getSandboxSavedCardElement,
                 filename,
+                isCancelled: () => isDownloadCancelled.value,
                 onProgress: (p) => {
                     downloadProgress.value = p;
                 },
@@ -211,19 +227,27 @@ async function startDownloadSavedLabel(item, type) {
                 printableKelompokList: kelompokList,
                 getRenderElement: getSandboxSavedCardElement,
                 filename,
+                isCancelled: () => isDownloadCancelled.value,
                 onProgress: (p) => {
                     downloadProgress.value = p;
                 },
             });
         }
 
-        downloadSuccess.value = true;
-        setTimeout(() => {
-            if (downloadSuccess.value) {
-                isDownloading.value = false;
-            }
-        }, 1500);
+        if (!isDownloadCancelled.value) {
+            downloadSuccess.value = true;
+            setTimeout(() => {
+                if (downloadSuccess.value) {
+                    isDownloading.value = false;
+                }
+            }, 1500);
+        }
     } catch (err) {
+        if (err.name === "AbortError" || isDownloadCancelled.value) {
+            isDownloading.value = false;
+            isDownloadCancelled.value = false;
+            return;
+        }
         console.error("Gagal download PDF label:", err);
         downloadError.value =
             err.message || "Terjadi kesalahan saat memproses file PDF.";
@@ -688,6 +712,22 @@ function formatTanggalIndo(dateStr) {
                             >
                             <span>{{ downloadProgress.percentage }}%</span>
                         </div>
+                    </div>
+
+                    <!-- Tombol Aksi Modal (Batal saat proses / Tutup jika error) -->
+                    <div
+                        v-if="!downloadSuccess && !downloadError"
+                        class="pt-2 flex justify-center"
+                    >
+                        <button
+                            type="button"
+                            @click="cancelDownloadProcess"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 font-bold text-xs transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Hentikan dan batalkan proses download"
+                        >
+                            <X class="h-3.5 w-3.5" />
+                            <span>Batalkan Proses</span>
+                        </button>
                     </div>
 
                     <div v-if="downloadError" class="pt-2">

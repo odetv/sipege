@@ -67,6 +67,7 @@ async function preRenderUniqueTemplates({
     printableKelompokList = [],
     getRenderElement,
     startTime = Date.now(),
+    isCancelled = () => false,
     onProgress = () => {},
 }) {
     const uniqueMap = new Map();
@@ -87,6 +88,12 @@ async function preRenderUniqueTemplates({
     const renderedTemplates = new Map();
 
     for (let t = 0; t < totalUnique; t++) {
+        if (isCancelled && isCancelled()) {
+            const err = new Error("Proses dibatalkan.");
+            err.name = "AbortError";
+            throw err;
+        }
+
         const item = uniqueList[t];
 
         const elapsedSec = (Date.now() - startTime) / 1000;
@@ -113,6 +120,12 @@ async function preRenderUniqueTemplates({
         });
 
         const element = await getRenderElement(item.kelompok);
+        if (isCancelled && isCancelled()) {
+            const err = new Error("Proses dibatalkan.");
+            err.name = "AbortError";
+            throw err;
+        }
+
         const canvas = await captureElementToCanvas(element);
         const imgData = canvas.toDataURL("image/jpeg", 0.95);
         renderedTemplates.set(item.key, { imgData, alias: item.alias });
@@ -138,6 +151,7 @@ export async function downloadPdfSingleMode({
     customCount = null,
     getRenderElement,
     filename = "Label_BGN_9x6cm_Tunggal.pdf",
+    isCancelled = () => false,
     onProgress = () => {},
 }) {
     if (!printableKelompokList || printableKelompokList.length === 0) {
@@ -165,13 +179,26 @@ export async function downloadPdfSingleMode({
         printableKelompokList,
         getRenderElement,
         startTime,
+        isCancelled,
         onProgress,
     });
+
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
+    }
 
     const phase2Start = Date.now();
     const updateInterval = Math.max(1, Math.min(25, Math.floor(total / 50)));
 
     for (let i = 0; i < total; i++) {
+        if (isCancelled && isCancelled()) {
+            const err = new Error("Proses dibatalkan.");
+            err.name = "AbortError";
+            throw err;
+        }
+
         const kelompokIndex = i % printableKelompokList.length;
         const kelompok = printableKelompokList[kelompokIndex];
         const template = getTemplate(kelompok, kelompokIndex);
@@ -219,6 +246,12 @@ export async function downloadPdfSingleMode({
         }
     }
 
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
+    }
+
     onProgress({
         phase: "saving",
         current: total,
@@ -252,6 +285,7 @@ export async function downloadPdfSingleMode({
 export async function printPdfSingleMode({
     printableKelompokList = [],
     getRenderElement,
+    isCancelled = () => false,
     onProgress = () => {},
 }) {
     if (!printableKelompokList || printableKelompokList.length === 0) {
@@ -275,12 +309,25 @@ export async function printPdfSingleMode({
         printableKelompokList,
         getRenderElement,
         startTime,
+        isCancelled,
         onProgress,
     });
+
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
+    }
 
     const phase2Start = Date.now();
 
     for (let i = 0; i < total; i++) {
+        if (isCancelled && isCancelled()) {
+            const err = new Error("Proses dibatalkan.");
+            err.name = "AbortError";
+            throw err;
+        }
+
         const kelompok = printableKelompokList[i];
         const template = getTemplate(kelompok, i);
 
@@ -321,6 +368,12 @@ export async function printPdfSingleMode({
         });
 
         await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
     }
 
     onProgress({
@@ -365,6 +418,7 @@ export async function downloadPdfA4GridMode({
     customCount = null,
     getRenderElement,
     filename = "Label_BGN_Lembar_A4_9PerHalaman.pdf",
+    isCancelled = () => false,
     onProgress = () => {},
 }) {
     if (!printableKelompokList || printableKelompokList.length === 0) {
@@ -400,8 +454,15 @@ export async function downloadPdfA4GridMode({
         printableKelompokList,
         getRenderElement,
         startTime,
+        isCancelled,
         onProgress,
     });
+
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
+    }
 
     const phase2Start = Date.now();
     const updateInterval = Math.max(
@@ -410,6 +471,12 @@ export async function downloadPdfA4GridMode({
     ); // Update every 1-2 pages
 
     for (let i = 0; i < total; i++) {
+        if (isCancelled && isCancelled()) {
+            const err = new Error("Proses dibatalkan.");
+            err.name = "AbortError";
+            throw err;
+        }
+
         const kelompokIndex = i % printableKelompokList.length;
         const kelompok = printableKelompokList[kelompokIndex];
         const template = getTemplate(kelompok, kelompokIndex);
@@ -464,6 +531,12 @@ export async function downloadPdfA4GridMode({
             // Yield to event loop to keep browser animations silky smooth
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
+    }
+
+    if (isCancelled && isCancelled()) {
+        const err = new Error("Proses dibatalkan.");
+        err.name = "AbortError";
+        throw err;
     }
 
     onProgress({

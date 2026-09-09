@@ -35,6 +35,7 @@ import {
     Coins,
     Flame,
     Building2,
+    RotateCcw,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
@@ -128,8 +129,10 @@ const tinggiIsolasiCm = ref(2);
 // Parameter Waktu
 const tanggalProduksi = ref(todayStr);
 const jamProduksi = ref("12:14");
+const gunakanJamProduksi = ref(false);
 const tanggalExpired = ref(todayStr);
 const jamExpired = ref("12:14");
+const gunakanJamExpired = ref(false);
 
 // Parameter Waktu Maksimal & Larangan
 const waktuMaksimal = ref("2 JAM SETELAH DITERIMA!");
@@ -338,7 +341,9 @@ watch(
             tanggalExpired.value =
                 (item.tanggal_produksi || "").substring(0, 10) || todayStr;
             jamProduksi.value = item.jam_produksi || "12:14";
+            gunakanJamProduksi.value = item.tampilkan_jam_produksi ?? false;
             jamExpired.value = item.batas_konsumsi || "12:14";
+            gunakanJamExpired.value = item.tampilkan_jam_expired ?? false;
 
             if (item.petunjuk_menu) {
                 const parts = item.petunjuk_menu
@@ -413,7 +418,9 @@ function saveLabelToDatabase() {
         ).substring(0, 255),
         tanggal_produksi: tanggalProduksi.value,
         jam_produksi: jamProduksi.value,
+        tampilkan_jam_produksi: gunakanJamProduksi.value,
         batas_konsumsi: jamExpired.value,
+        tampilkan_jam_expired: gunakanJamExpired.value,
         petunjuk_menu: menuItems.value.join("\n"),
         template_id: "bgn_standard_fixed_white",
         template_name: "Standar Resmi BGN (Putih)",
@@ -544,6 +551,101 @@ const downloadProgress = ref({
 });
 const downloadError = ref("");
 const downloadSuccess = ref(false);
+const isDownloadCancelled = ref(false);
+
+function cancelDownloadProcess() {
+    isDownloadCancelled.value = true;
+    downloadProgress.value = {
+        ...downloadProgress.value,
+        message: "Membatalkan proses...",
+    };
+    setTimeout(() => {
+        isDownloading.value = false;
+        isDownloadCancelled.value = false;
+    }, 250);
+}
+
+function resetLabelToDefault() {
+    if (
+        !confirm(
+            "Apakah Anda yakin ingin mengembalikan semua konfigurasi dan isian label ke kondisi awal / default?",
+        )
+    ) {
+        return;
+    }
+
+    // Reset Mode & Selected WO
+    labelMode.value = "auto";
+    selectedWoId.value =
+        props.initialActiveWo?.id ||
+        props.workOrders.find(
+            (w) => (w.tanggal || "").substring(0, 10) === todayStr,
+        )?.id ||
+        props.workOrders[0]?.id ||
+        null;
+
+    // Reset Dimensi & Header
+    tinggiIsolasiCm.value = 2;
+    namaSppg.value = props.unitSppg?.nama || "SPPG BULELENG BANJAR DENCARIK";
+    zonaWaktu.value = "WITA";
+
+    // Reset Waktu
+    tanggalProduksi.value = todayStr;
+    jamProduksi.value = "12:14";
+    gunakanJamProduksi.value = false;
+    tanggalExpired.value = todayStr;
+    jamExpired.value = "12:14";
+    gunakanJamExpired.value = false;
+
+    // Reset Waktu Maksimal & Larangan
+    waktuMaksimal.value = "2 JAM SETELAH DITERIMA!";
+    teksLaranganHeader.value = "MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT.";
+    teksLaranganSub.value = "DILARANG MEMBAWA PULANG!";
+
+    // Reset Menu Makanan
+    menuItems.value = [
+        "NASI PUTIH",
+        "AYAM CRISPY",
+        "TEMPE MANIS DADU",
+        "SELADA, TIMUN",
+        "MELON",
+    ];
+
+    // Reset Kandungan Gizi
+    giziData.value = {
+        energi_pb: "624",
+        prot_pb: "29.8",
+        lmk_pb: "18.8",
+        karbo_pb: "82.4",
+        serat_pb: "2.0",
+        energi_pk: "469",
+        prot_pk: "23.4",
+        lmk_pk: "15.0",
+        karbo_pk: "58.9",
+        serat_pk: "1.5",
+    };
+
+    // Reset Rincian Harga
+    hargaItems.value = [
+        { nama: "Nasi Putih", harga_pb: 1155, harga_pk: 770 },
+        { nama: "Ayam Crispy", harga_pb: 5812, harga_pk: 4838 },
+        { nama: "Tempe Manis Dadu", harga_pb: 1085, harga_pk: 844 },
+        { nama: "Selada, Timun", harga_pb: 1046, harga_pk: 792 },
+        { nama: "Melon", harga_pb: 1931, harga_pk: 1931 },
+    ];
+
+    // Reset Sasaran Kelompok
+    selectedKelompokIds.value = receivingKelompokList.value.map((k) => k.id);
+
+    // Reset Download Option
+    downloadFormatOption.value = "single";
+    customLabelCount.value = totalWoPorsi.value || 9;
+
+    // Jika sedang dalam mode edit label dari daftar, batalkan edit mode
+    if (props.editingLabel) {
+        emit("cancel-edit");
+    }
+}
 
 const sandboxKelompok = ref(null);
 const sandboxCardRef = ref(null);
@@ -562,6 +664,7 @@ async function startDownload(type = null) {
     const selectedType = type || downloadFormatOption.value || "single";
     if (printableKelompokList.value.length === 0) return;
     isDownloading.value = true;
+    isDownloadCancelled.value = false;
     downloadType.value = selectedType;
     downloadError.value = "";
     downloadSuccess.value = false;
@@ -595,6 +698,7 @@ async function startDownload(type = null) {
                 customCount: totalCount,
                 getRenderElement: getSandboxCardElement,
                 filename,
+                isCancelled: () => isDownloadCancelled.value,
                 onProgress: (p) => {
                     downloadProgress.value = { ...downloadProgress.value, ...p };
                 },
@@ -606,19 +710,27 @@ async function startDownload(type = null) {
                 customCount: totalCount,
                 getRenderElement: getSandboxCardElement,
                 filename,
+                isCancelled: () => isDownloadCancelled.value,
                 onProgress: (p) => {
                     downloadProgress.value = { ...downloadProgress.value, ...p };
                 },
             });
         }
 
-        downloadSuccess.value = true;
-        setTimeout(() => {
-            if (downloadSuccess.value) {
-                isDownloading.value = false;
-            }
-        }, 1200);
+        if (!isDownloadCancelled.value) {
+            downloadSuccess.value = true;
+            setTimeout(() => {
+                if (downloadSuccess.value) {
+                    isDownloading.value = false;
+                }
+            }, 1200);
+        }
     } catch (err) {
+        if (err.name === "AbortError" || isDownloadCancelled.value) {
+            isDownloading.value = false;
+            isDownloadCancelled.value = false;
+            return;
+        }
         console.error("Gagal download PDF label:", err);
         downloadError.value =
             err.message || "Terjadi kesalahan saat memproses file PDF.";
@@ -631,6 +743,7 @@ async function startPrintDirect() {
         return;
     }
     isDownloading.value = true;
+    isDownloadCancelled.value = false;
     downloadType.value = "print";
     downloadError.value = "";
     downloadSuccess.value = false;
@@ -649,18 +762,26 @@ async function startPrintDirect() {
         await printPdfSingleMode({
             printableKelompokList: printableKelompokList.value,
             getRenderElement: getSandboxCardElement,
+            isCancelled: () => isDownloadCancelled.value,
             onProgress: (p) => {
                 downloadProgress.value = { ...downloadProgress.value, ...p };
             },
         });
 
-        downloadSuccess.value = true;
-        setTimeout(() => {
-            if (downloadSuccess.value) {
-                isDownloading.value = false;
-            }
-        }, 1000);
+        if (!isDownloadCancelled.value) {
+            downloadSuccess.value = true;
+            setTimeout(() => {
+                if (downloadSuccess.value) {
+                    isDownloading.value = false;
+                }
+            }, 1000);
+        }
     } catch (err) {
+        if (err.name === "AbortError" || isDownloadCancelled.value) {
+            isDownloading.value = false;
+            isDownloadCancelled.value = false;
+            return;
+        }
         console.error("Gagal mencetak label:", err);
         downloadError.value =
             err.message || "Terjadi kesalahan saat menyiapkan cetakan.";
@@ -750,6 +871,18 @@ async function startPrintDirect() {
 
                         <!-- Action Buttons -->
                         <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                            <!-- Tombol RESET KE AWAL -->
+                            <Button
+                                type="button"
+                                @click="resetLabelToDefault"
+                                :disabled="isSaving || isDownloading"
+                                className="h-10 px-3.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300 font-bold text-xs flex items-center gap-1.5 rounded-xl shadow-xs cursor-pointer"
+                                title="Kembalikan semua pengaturan dan data label ke konfigurasi default / awal"
+                            >
+                                <RotateCcw class="h-4 w-4 text-slate-500" />
+                                <span>Reset Awal</span>
+                            </Button>
+
                             <!-- Tombol SIMPAN LABEL -->
                             <Button
                                 type="button"
@@ -1070,26 +1203,51 @@ async function startPrintDirect() {
                                         />
                                     </div>
                                     <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Jam Produksi:</label
-                                        >
+                                        <div class="flex items-center justify-between">
+                                            <label class="font-bold text-slate-600"
+                                                >Jam Produksi:</label
+                                            >
+                                            <label class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600">
+                                                <input
+                                                    type="checkbox"
+                                                    v-model="gunakanJamProduksi"
+                                                    class="rounded text-primary focus:ring-primary h-3.5 w-3.5"
+                                                />
+                                                <span>Tampilkan Jam</span>
+                                            </label>
+                                        </div>
                                         <input
                                             v-model="jamProduksi"
                                             type="text"
                                             placeholder="12:14"
-                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                            :disabled="!gunakanJamProduksi"
+                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         />
                                     </div>
-                                    <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Jam Expired:</label
-                                        >
+                                    <div class="sm:col-span-2">
+                                        <div class="flex items-center justify-between">
+                                            <label class="font-bold text-slate-600"
+                                                >Jam Expired (Batas Konsumsi):</label
+                                            >
+                                            <label class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600">
+                                                <input
+                                                    type="checkbox"
+                                                    v-model="gunakanJamExpired"
+                                                    class="rounded text-primary focus:ring-primary h-3.5 w-3.5"
+                                                />
+                                                <span>Gunakan Jam pada Batas Konsumsi</span>
+                                            </label>
+                                        </div>
                                         <input
                                             v-model="jamExpired"
                                             type="text"
-                                            placeholder="12:14"
-                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none"
+                                            placeholder="Contoh: 14:14"
+                                            :disabled="!gunakanJamExpired"
+                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         />
+                                        <p class="text-[10.5px] text-slate-400 mt-1">
+                                            * Jika dicentang, kotak oranye 'WAKTU MAKSIMAL KONSUMSI' akan otomatis menampilkan jam batas konsumsi (contoh: SEBELUM JAM 14:14 WITA).
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -1488,8 +1646,10 @@ async function startPrintDirect() {
                                 :tinggi-isolasi-cm="tinggiIsolasiCm"
                                 :tanggal-produksi="tanggalProduksi"
                                 :jam-produksi="jamProduksi"
+                                :tampilkan-jam-produksi="gunakanJamProduksi"
                                 :tanggal-expired="tanggalExpired"
                                 :jam-expired="jamExpired"
+                                :tampilkan-jam-expired="gunakanJamExpired"
                                 :waktu-maksimal="waktuMaksimal"
                                 :teks-larangan-header="teksLaranganHeader"
                                 :teks-larangan-sub="teksLaranganSub"
@@ -1525,8 +1685,10 @@ async function startPrintDirect() {
                         :tinggi-isolasi-cm="tinggiIsolasiCm"
                         :tanggal-produksi="tanggalProduksi"
                         :jam-produksi="jamProduksi"
+                        :tampilkan-jam-produksi="gunakanJamProduksi"
                         :tanggal-expired="tanggalExpired"
                         :jam-expired="jamExpired"
+                        :tampilkan-jam-expired="gunakanJamExpired"
                         :waktu-maksimal="waktuMaksimal"
                         :teks-larangan-header="teksLaranganHeader"
                         :teks-larangan-sub="teksLaranganSub"
@@ -1657,6 +1819,22 @@ async function startPrintDirect() {
                         </div>
                     </div>
 
+                    <!-- Tombol Aksi Modal (Batal saat proses / Tutup jika error) -->
+                    <div
+                        v-if="!downloadSuccess && !downloadError"
+                        class="pt-2 flex justify-center"
+                    >
+                        <button
+                            type="button"
+                            @click="cancelDownloadProcess"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 font-bold text-xs transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Hentikan dan batalkan proses render / download"
+                        >
+                            <X class="h-3.5 w-3.5" />
+                            <span>Batalkan Proses</span>
+                        </button>
+                    </div>
+
                     <div v-if="downloadError" class="pt-2">
                         <button
                             type="button"
@@ -1692,8 +1870,10 @@ async function startPrintDirect() {
                     :tinggi-isolasi-cm="tinggiIsolasiCm"
                     :tanggal-produksi="tanggalProduksi"
                     :jam-produksi="jamProduksi"
+                    :tampilkan-jam-produksi="gunakanJamProduksi"
                     :tanggal-expired="tanggalExpired"
                     :jam-expired="jamExpired"
+                    :tampilkan-jam-expired="gunakanJamExpired"
                     :waktu-maksimal="waktuMaksimal"
                     :teks-larangan-header="teksLaranganHeader"
                     :teks-larangan-sub="teksLaranganSub"
