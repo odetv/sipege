@@ -413,7 +413,13 @@ const jadwalMenuBulan = computed(() => {
             if (wo.items && wo.items.length > 0) {
                 wo.items.forEach(it => komponenList.push(it.nama_po || it.nama));
             } else {
-                [wo.komponen_energi, wo.komponen_protein, wo.komponen_lemak, wo.komponen_karbohidrat, wo.komponen_serat]
+                [
+                    wo.sub_menu_1 ?? wo.komponen_energi,
+                    wo.sub_menu_2 ?? wo.komponen_protein,
+                    wo.sub_menu_3 ?? wo.komponen_lemak,
+                    wo.sub_menu_4 ?? wo.komponen_karbohidrat,
+                    wo.sub_menu_5 ?? wo.komponen_serat,
+                ]
                     .filter(Boolean)
                     .forEach(k => komponenList.push(k));
             }
@@ -706,7 +712,7 @@ function handleOpenMenuFromKalender(item) {
                         <p
                             class="text-[11px] font-bold text-slate-400 uppercase mb-1.5"
                         >
-                            Komponen Bahan Baku
+                            Rincian Sub Menu
                         </p>
                         <div class="flex flex-wrap gap-1.5">
                             <span

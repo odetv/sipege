@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { router } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
@@ -498,11 +498,11 @@ const woNo = computed(() => {
 });
 const namaMenuAktif = ref("");
 const subMenuKomponen = ref({
-    energi: "",
-    protein: "",
-    lemak: "",
-    karbohidrat: "",
-    serat: "",
+    sub_menu_1: "",
+    sub_menu_2: "",
+    sub_menu_3: "",
+    sub_menu_4: "",
+    sub_menu_5: "",
 });
 const woStatus = ref("draft"); // 'draft' | 'in_progress' | 'completed'
 
@@ -694,7 +694,10 @@ const modalGrandTotalAlergi = computed(() => {
 function handleSimpanEditDetailPm() {
     if (!editingKelompok.value) return;
 
-    if (modalTotalPm.value === 0 && editingKelompok.value.status_menerima !== false) {
+    if (
+        modalTotalPm.value === 0 &&
+        editingKelompok.value.status_menerima !== false
+    ) {
         modalPmError.value = `Total porsi untuk "${editingKelompok.value.nama_kelompok}" minimal 1 porsi. Jika tidak menerima distribusi, silakan tandai status kelompok menjadi 'Tidak Menerima'.`;
         return;
     }
@@ -744,28 +747,40 @@ function formatTanggalIndo(dateStr) {
     }
 }
 
-// Menu rekomendasi dari kalender siklus bulan berjalan yang sesuai tanggal atau saran
-const menuSaranDariKalender = computed(() => {
-    return (
-        jadwalMenuBulan.value.find((j) => j.tanggal === tanggalRencana.value) ||
-        null
-    );
-});
+function setTanggalHariIni() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    tanggalRencana.value = `${year}-${month}-${day}`;
+    clearError("tanggalRencana");
+}
 
-function handleGunakanMenuSaran(item) {
-    if (item) {
-        namaMenuAktif.value = item.namaMenu || "";
-        if (Array.isArray(item.komponen) && item.komponen.length > 0) {
-            subMenuKomponen.value.energi = item.komponen[0] || "";
-            subMenuKomponen.value.karbohidrat = item.komponen[0] || "";
-            subMenuKomponen.value.protein = item.komponen[1] || "";
-            subMenuKomponen.value.lemak = item.komponen[2] || "";
-            subMenuKomponen.value.serat =
-                item.komponen.length > 4
-                    ? `${item.komponen[3]}, ${item.komponen[4]}`
-                    : item.komponen[3] || "";
-        }
-    }
+function setTanggalBesok() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+    const day = String(tomorrow.getDate()).padStart(2, "0");
+    tanggalRencana.value = `${year}-${month}-${day}`;
+    clearError("tanggalRencana");
+}
+
+// Isi otomatis template contoh menu MBG
+function handleGunakanContoh() {
+    namaMenuAktif.value = "Ayam Guling Khas Bali";
+    subMenuKomponen.value.sub_menu_1 = "Nasi Putih";
+    subMenuKomponen.value.sub_menu_2 = "Ayam Guling";
+    subMenuKomponen.value.sub_menu_3 = "Tempe Goreng";
+    subMenuKomponen.value.sub_menu_4 = "Sayur Bening Bayam";
+    subMenuKomponen.value.sub_menu_5 = "Buah Jeruk";
+
+    clearError("namaMenuAktif");
+    clearError("sub_menu_1");
+    clearError("sub_menu_2");
+    clearError("sub_menu_3");
+    clearError("sub_menu_4");
+    clearError("sub_menu_5");
 }
 
 // Resep Bahan Baku Baku Terpilih dari Database Resmi TKPI 2020 (Default Kosong dari 0)
@@ -796,7 +811,8 @@ function calculateGrossWeightKg(
 }
 
 function formatGrossWeight(kg) {
-    if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg))) return "0 kg";
+    if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg)))
+        return "0 kg";
     const num = Number(kg);
     if (num <= 0) return "0 kg";
     if (num < 0.001) {
@@ -848,10 +864,13 @@ const filteredTkpiList = computed(() => {
     }
     const q = searchTkpiQuery.value.toLowerCase().trim();
     const searchTerms = q.split(/\s+/).filter(Boolean);
-    return list.filter((item) => {
-        const itemStr = `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
-        return searchTerms.every((term) => itemStr.includes(term));
-    }).slice(0, 100);
+    return list
+        .filter((item) => {
+            const itemStr =
+                `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
+            return searchTerms.every((term) => itemStr.includes(term));
+        })
+        .slice(0, 100);
 });
 
 function selectTkpiItem(master) {
@@ -915,6 +934,37 @@ function clearError(field) {
     }
 }
 
+function scrollToFirstError() {
+    nextTick(() => {
+        // Cari elemen dengan indikator error pertama
+        const firstErrorEl = document.querySelector(
+            ".border-rose-400, .border-rose-500, [data-error-target], .bg-rose-50\\/20, #error-kelompok-target",
+        );
+        if (firstErrorEl) {
+            firstErrorEl.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+            });
+            // Fokuskan jika elemen atau child merupakan field input
+            if (
+                typeof firstErrorEl.focus === "function" &&
+                (firstErrorEl.tagName === "INPUT" ||
+                    firstErrorEl.tagName === "SELECT" ||
+                    firstErrorEl.tagName === "TEXTAREA")
+            ) {
+                firstErrorEl.focus();
+            } else {
+                const innerInput = firstErrorEl.querySelector(
+                    "input, select, textarea",
+                );
+                if (innerInput && typeof innerInput.focus === "function") {
+                    innerInput.focus();
+                }
+            }
+        }
+    });
+}
+
 function validateStep1() {
     const errs = {};
     if (!tanggalRencana.value) {
@@ -922,9 +972,15 @@ function validateStep1() {
     } else {
         // Cek duplikasi tanggal (hanya boleh 1 WO per tanggal)
         const duplicateDateWo = (props.workOrdersList || []).find((w) => {
-            const wTgl = typeof w.tanggal_distribusi === 'string' ? w.tanggal_distribusi.substring(0, 10) : '';
+            const wTgl =
+                typeof w.tanggal_distribusi === "string"
+                    ? w.tanggal_distribusi.substring(0, 10)
+                    : "";
             const isSameDate = wTgl === tanggalRencana.value;
-            const isDifferentWo = w.nomor_wo !== woNo.value && w.uuid !== props.activeWorkOrder?.uuid && w.id !== props.activeWorkOrder?.id;
+            const isDifferentWo =
+                w.nomor_wo !== woNo.value &&
+                w.uuid !== props.activeWorkOrder?.uuid &&
+                w.id !== props.activeWorkOrder?.id;
             return isSameDate && isDifferentWo;
         });
         if (duplicateDateWo) {
@@ -932,81 +988,169 @@ function validateStep1() {
         }
     }
     if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
-        errs.namaMenuAktif = "Nama menu paket MBG wajib diisi.";
+        errs.namaMenuAktif = "Nama menu wajib diisi.";
     }
-    if (!subMenuKomponen.value.energi || !subMenuKomponen.value.energi.trim()) {
-        errs.energi = "Komponen energi wajib diisi.";
+    if (
+        !subMenuKomponen.value.sub_menu_1 ||
+        !subMenuKomponen.value.sub_menu_1.trim()
+    ) {
+        errs.sub_menu_1 = "Sub Menu 1 wajib diisi.";
     }
-    if (!subMenuKomponen.value.protein || !subMenuKomponen.value.protein.trim()) {
-        errs.protein = "Komponen protein wajib diisi.";
+    if (
+        !subMenuKomponen.value.sub_menu_2 ||
+        !subMenuKomponen.value.sub_menu_2.trim()
+    ) {
+        errs.sub_menu_2 = "Sub Menu 2 wajib diisi.";
     }
-    if (!subMenuKomponen.value.lemak || !subMenuKomponen.value.lemak.trim()) {
-        errs.lemak = "Komponen lemak wajib diisi.";
+    if (
+        !subMenuKomponen.value.sub_menu_3 ||
+        !subMenuKomponen.value.sub_menu_3.trim()
+    ) {
+        errs.sub_menu_3 = "Sub Menu 3 wajib diisi.";
     }
-    if (!subMenuKomponen.value.karbohidrat || !subMenuKomponen.value.karbohidrat.trim()) {
-        errs.karbohidrat = "Komponen karbohidrat wajib diisi.";
+    if (
+        !subMenuKomponen.value.sub_menu_4 ||
+        !subMenuKomponen.value.sub_menu_4.trim()
+    ) {
+        errs.sub_menu_4 = "Sub Menu 4 wajib diisi.";
     }
-    if (!subMenuKomponen.value.serat || !subMenuKomponen.value.serat.trim()) {
-        errs.serat = "Komponen serat wajib diisi.";
+    if (
+        !subMenuKomponen.value.sub_menu_5 ||
+        !subMenuKomponen.value.sub_menu_5.trim()
+    ) {
+        errs.sub_menu_5 = "Sub Menu 5 wajib diisi.";
     }
     if (kelompokMenerimaAktif.value.length === 0) {
-        errs.kelompok = "Minimal 1 kelompok sasaran penerima manfaat harus berstatus Menerima.";
+        errs.kelompok =
+            "Minimal 1 kelompok sasaran penerima manfaat harus berstatus Menerima.";
     } else {
-        const zeroReceiving = woKelompokList.value.find(k => k.status_menerima !== false && ((Number(k.total_porsi_kecil) || 0) + (Number(k.total_porsi_besar) || 0) <= 0));
+        const zeroReceiving = woKelompokList.value.find(
+            (k) =>
+                k.status_menerima !== false &&
+                (Number(k.total_porsi_kecil) || 0) +
+                    (Number(k.total_porsi_besar) || 0) <=
+                    0,
+        );
         if (zeroReceiving) {
             errs.kelompok = `Kelompok "${zeroReceiving.nama_kelompok}" berstatus Menerima tetapi memiliki 0 porsi. Wajib minimal 1 porsi atau tandai 'Tidak Menerima'.`;
         }
     }
     validationErrors.value = errs;
-    return Object.keys(errs).length === 0;
+    const isValid = Object.keys(errs).length === 0;
+    if (!isValid) {
+        scrollToFirstError();
+    }
+    return isValid;
 }
 
 function validateStep2() {
     const isStep1Valid = validateStep1();
+    if (!isStep1Valid) {
+        return false;
+    }
     const errs = { ...validationErrors.value };
 
     if (!selectedBahanList.value || selectedBahanList.value.length === 0) {
-        errs.selectedBahan = "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database TKPI 2020.";
+        errs.selectedBahan =
+            "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database TKPI 2020.";
     }
 
     selectedBahanList.value.forEach((b, i) => {
-        if (b.tipe_porsi === 'alergi' && (!b.jenis_alergi || !b.jenis_alergi.trim())) {
-            errs['bahan_' + i + '_alergi'] = "Jenis alergi wajib dipilih.";
+        if (
+            b.tipe_porsi === "alergi" &&
+            (!b.jenis_alergi || !b.jenis_alergi.trim())
+        ) {
+            errs["bahan_" + i + "_alergi"] = "Jenis alergi wajib dipilih.";
         }
         const pkVal = Number(b.gram_pk) || 0;
         const pbVal = Number(b.gram_pb) || 0;
         if (pkVal <= 0 && pbVal <= 0) {
-            errs['bahan_' + i + '_gram'] = "Wajib isi minimal salah satu (PK atau PB) > 0";
+            errs["bahan_" + i + "_gram"] =
+                "Wajib isi minimal salah satu (PK atau PB) > 0";
         }
-        if (b.bdd === null || b.bdd === undefined || b.bdd === '' || Number(b.bdd) <= 0) {
-            errs['bahan_' + i + '_bdd'] = "BDD > 0%";
+        if (
+            b.bdd === null ||
+            b.bdd === undefined ||
+            b.bdd === "" ||
+            Number(b.bdd) <= 0
+        ) {
+            errs["bahan_" + i + "_bdd"] = "BDD > 0%";
         }
-        if (b.buffer === null || b.buffer === undefined || b.buffer === '' || Number(b.buffer) < 0) {
-            errs['bahan_' + i + '_buffer'] = "Wajib >= 0%";
+        if (
+            b.buffer === null ||
+            b.buffer === undefined ||
+            b.buffer === "" ||
+            Number(b.buffer) < 0
+        ) {
+            errs["bahan_" + i + "_buffer"] = "Wajib >= 0%";
         }
     });
 
     validationErrors.value = errs;
-    return isStep1Valid && Object.keys(errs).length === 0;
+    const isValid = Object.keys(errs).length === 0;
+    if (!isValid) {
+        scrollToFirstError();
+    }
+    return isValid;
 }
 
 function handleSwitchSubTab(targetTab) {
-    if (targetTab === 'pre_order' || targetTab === 'formula-gizi' || targetTab === 'formula_gizi') {
-        if (!validateStep1()) {
-            return;
-        }
-    } else if (targetTab === 'order' || targetTab === 'pembelian_bahan' || targetTab === 'pembelian-bahan') {
-        if (!validateStep2()) {
-            return;
-        }
+    if (targetTab === "work_order") {
+        buatMenuSubTab.value = "work_order";
+        return;
     }
+
+    // Step 1 WAJIB VALID untuk dapat berpindah ke Step 2, 3, atau 4
+    if (!validateStep1()) {
+        buatMenuSubTab.value = "work_order";
+        return;
+    }
+
+    if (targetTab === "bahan_pangan" || targetTab === "pre_order") {
+        buatMenuSubTab.value = "bahan_pangan";
+        return;
+    }
+
+    if (targetTab === "formula-gizi" || targetTab === "formula_gizi") {
+        if (!validateStep2()) {
+            buatMenuSubTab.value = "bahan_pangan";
+            return;
+        }
+        if (
+            !selectedGiziBahanList.value ||
+            selectedGiziBahanList.value.length === 0
+        ) {
+            syncGiziFromBahan();
+        }
+        buatMenuSubTab.value = "formula_gizi";
+        return;
+    }
+
+    if (
+        targetTab === "order" ||
+        targetTab === "pembelian_bahan" ||
+        targetTab === "pembelian-bahan"
+    ) {
+        if (!validateStep2()) {
+            buatMenuSubTab.value = "bahan_pangan";
+            return;
+        }
+        if (!validateStep3()) {
+            buatMenuSubTab.value = "formula_gizi";
+            return;
+        }
+        buatMenuSubTab.value = "order";
+        return;
+    }
+
     buatMenuSubTab.value = normalizeStep(targetTab);
 }
 
 function handleMulaiFormulasiWo() {
-    if (validateStep1()) {
-        buatMenuSubTab.value = "bahan_pangan";
+    if (!validateStep1()) {
+        return;
     }
+    buatMenuSubTab.value = "bahan_pangan";
 }
 
 function handleRemoveBahan(index) {
@@ -1015,68 +1159,84 @@ function handleRemoveBahan(index) {
     delete validationErrors.value.selectedBahan;
 }
 
-
 function validateStep3() {
     const isStep1Valid = validateStep1();
+    if (!isStep1Valid) return false;
     const isStep2Valid = validateStep2();
+    if (!isStep2Valid) return false;
     const errs = { ...validationErrors.value };
 
-    if (!selectedGiziBahanList.value || selectedGiziBahanList.value.length === 0) {
-        errs.selectedGiziBahan = "Minimal pilih 1 bahan makanan untuk formulasi gizi siap santap.";
+    if (
+        !selectedGiziBahanList.value ||
+        selectedGiziBahanList.value.length === 0
+    ) {
+        errs.selectedGiziBahan =
+            "Minimal pilih 1 bahan makanan untuk formulasi gizi siap santap.";
     }
 
     selectedGiziBahanList.value.forEach((b, i) => {
-        if (b.tipe_porsi === 'alergi' && (!b.jenis_alergi || !b.jenis_alergi.trim())) {
-            errs['gizi_bahan_' + i + '_alergi'] = "Jenis alergi wajib dipilih.";
+        if (
+            b.tipe_porsi === "alergi" &&
+            (!b.jenis_alergi || !b.jenis_alergi.trim())
+        ) {
+            errs["gizi_bahan_" + i + "_alergi"] = "Jenis alergi wajib dipilih.";
         }
         const pkVal = Number(b.gram_pk) || 0;
         const pbVal = Number(b.gram_pb) || 0;
         if (pkVal <= 0 && pbVal <= 0) {
-            errs['gizi_bahan_' + i + '_gram'] = "Wajib isi minimal salah satu (PK atau PB) > 0";
+            errs["gizi_bahan_" + i + "_gram"] =
+                "Wajib isi minimal salah satu (PK atau PB) > 0";
         }
     });
 
     validationErrors.value = errs;
-    return isStep1Valid && isStep2Valid && Object.keys(errs).length === 0;
+    const isValid = Object.keys(errs).length === 0;
+    if (!isValid) {
+        scrollToFirstError();
+    }
+    return isValid;
 }
 
 function handleLanjutStep3() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     if (!validateStep2()) {
         return;
     }
     // Auto-sync jika Step 3 masih kosong
-    if (!selectedGiziBahanList.value || selectedGiziBahanList.value.length === 0) {
+    if (
+        !selectedGiziBahanList.value ||
+        selectedGiziBahanList.value.length === 0
+    ) {
         syncGiziFromBahan();
     }
-    buatMenuSubTab.value = 'formula_gizi';
+    buatMenuSubTab.value = "formula_gizi";
 }
 
 function handleLanjutStep4() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     if (!validateStep2()) {
-        buatMenuSubTab.value = 'bahan_pangan';
+        buatMenuSubTab.value = "bahan_pangan";
         return;
     }
     if (!validateStep3()) {
         return;
     }
-    buatMenuSubTab.value = 'order';
+    buatMenuSubTab.value = "order";
 }
 
 function simpanDraftStep3() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     if (!validateStep2()) {
-        buatMenuSubTab.value = 'bahan_pangan';
+        buatMenuSubTab.value = "bahan_pangan";
         return;
     }
     if (!validateStep3()) return;
@@ -1084,15 +1244,17 @@ function simpanDraftStep3() {
     statusPengajuanWo.value = "Draft";
     const payload = getPayload("Draft", 4);
 
-    router.post('/gizi/work-order', payload, {
+    router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
-            triggerSubmitSuccess("Draft Langkah 3 (Formula Gizi Siap Santap) berhasil disimpan!");
+            triggerSubmitSuccess(
+                "Draft Langkah 3 (Formula Gizi Siap Santap) berhasil disimpan!",
+            );
         },
         onError: () => {
             isSubmitting.value = false;
-        }
+        },
     });
 }
 
@@ -1143,6 +1305,22 @@ const totalPB = computed(() => {
 });
 const totalPM = computed(() => {
     return totalPK.value + totalPB.value;
+});
+
+const grandTotalSemuaPM = computed(() => {
+    return woKelompokList.value.reduce(
+        (acc, k) =>
+            acc +
+            (Number(k.total_porsi_kecil) || 0) +
+            (Number(k.total_porsi_besar) || 0),
+        0,
+    );
+});
+
+const persentasePmMenerima = computed(() => {
+    if (grandTotalSemuaPM.value === 0) return 0;
+    const pct = (totalPM.value / grandTotalSemuaPM.value) * 100;
+    return Number.isInteger(pct) ? pct : parseFloat(pct.toFixed(1));
 });
 
 // Rekapitulasi Alergi KPM
@@ -1310,11 +1488,11 @@ const rekapAlergiDetailPm = computed(() => {
 const analisaAlergiMenu = computed(() => {
     const combinedText = [
         namaMenuAktif.value || "",
-        subMenuKomponen.value.energi || "",
-        subMenuKomponen.value.protein || "",
-        subMenuKomponen.value.lemak || "",
-        subMenuKomponen.value.karbohidrat || "",
-        subMenuKomponen.value.serat || "",
+        subMenuKomponen.value.sub_menu_1 || "",
+        subMenuKomponen.value.sub_menu_2 || "",
+        subMenuKomponen.value.sub_menu_3 || "",
+        subMenuKomponen.value.sub_menu_4 || "",
+        subMenuKomponen.value.sub_menu_5 || "",
     ].join(" ");
     const menuLower = combinedText.toLowerCase();
     const activeAlergi = rekapAlergiDetailPm.value;
@@ -1645,10 +1823,14 @@ const bahanCalculations = computed(() => {
                 ? b.tkpi
                 : tkpiItems.value.find(
                       (i) =>
-                          (b.tkpi_id && (i.id === b.tkpi_id || i.code === b.tkpi_id)) ||
+                          (b.tkpi_id &&
+                              (i.id === b.tkpi_id || i.code === b.tkpi_id)) ||
                           (b.id && (i.id === b.id || i.code === b.id)) ||
                           (b.code && (i.id === b.code || i.code === b.code)) ||
-                          (i.nama && b.nama && i.nama.toLowerCase().trim() === b.nama.toLowerCase().trim()),
+                          (i.nama &&
+                              b.nama &&
+                              i.nama.toLowerCase().trim() ===
+                                  b.nama.toLowerCase().trim()),
                   ) || {};
         const bdd = b.bdd || 100;
         const buffer = b.buffer || 0;
@@ -1716,14 +1898,24 @@ const bahanCalculations = computed(() => {
 
         // Biaya PO
         let subtotalMaster = Math.round(totalGrossKg * (b.harga_master || 0));
-        if (totalGrossKg > 0 && (b.harga_master || 0) > 0 && subtotalMaster === 0) {
+        if (
+            totalGrossKg > 0 &&
+            (b.harga_master || 0) > 0 &&
+            subtotalMaster === 0
+        ) {
             subtotalMaster = Math.ceil(totalGrossKg * b.harga_master);
         }
         let subtotalAktual = Math.round(
             totalGrossKg * (b.harga_aktual || b.harga_master || 0),
         );
-        if (totalGrossKg > 0 && (b.harga_aktual || b.harga_master || 0) > 0 && subtotalAktual === 0) {
-            subtotalAktual = Math.ceil(totalGrossKg * (b.harga_aktual || b.harga_master));
+        if (
+            totalGrossKg > 0 &&
+            (b.harga_aktual || b.harga_master || 0) > 0 &&
+            subtotalAktual === 0
+        ) {
+            subtotalAktual = Math.ceil(
+                totalGrossKg * (b.harga_aktual || b.harga_master),
+            );
         }
 
         // Food cost per porsi
@@ -1783,7 +1975,6 @@ const grandTotalAktual = computed(() => {
     );
 });
 
-
 // ==========================================
 // STATE & DATA FORMULA GIZI SIAP SANTAP (LANGKAH 3)
 // ==========================================
@@ -1797,12 +1988,14 @@ const filteredGiziTkpiList = computed(() => {
         return (props.tkpiList || []).slice(0, 100);
     }
     const q = searchTkpiGiziQuery.value.toLowerCase();
-    return (props.tkpiList || []).filter(
-        (it) =>
-            (it.nama && it.nama.toLowerCase().includes(q)) ||
-            (it.kategori && it.kategori.toLowerCase().includes(q)) ||
-            (it.code && String(it.code).toLowerCase().includes(q))
-    ).slice(0, 100);
+    return (props.tkpiList || [])
+        .filter(
+            (it) =>
+                (it.nama && it.nama.toLowerCase().includes(q)) ||
+                (it.kategori && it.kategori.toLowerCase().includes(q)) ||
+                (it.code && String(it.code).toLowerCase().includes(q)),
+        )
+        .slice(0, 100);
 });
 
 function selectTkpiGiziItem(item) {
@@ -1816,7 +2009,7 @@ function handleAddGiziBahan() {
     if (!selectedTkpiGiziItem.value) return;
     const it = selectedTkpiGiziItem.value;
     const exists = selectedGiziBahanList.value.some(
-        (b) => (b.id && b.id === it.id) || (b.code && b.code === it.code)
+        (b) => (b.id && b.id === it.id) || (b.code && b.code === it.code),
     );
     if (!exists) {
         selectedGiziBahanList.value.push({
@@ -1844,7 +2037,8 @@ function handleRemoveGiziBahan(index) {
 }
 
 function syncGiziFromBahan() {
-    if (!selectedBahanList.value || selectedBahanList.value.length === 0) return;
+    if (!selectedBahanList.value || selectedBahanList.value.length === 0)
+        return;
     selectedGiziBahanList.value = selectedBahanList.value.map((b) => ({
         id: b.id || b.code,
         code: b.code,
@@ -1858,7 +2052,11 @@ function syncGiziFromBahan() {
         bdd: b.bdd || 100,
         buffer: b.buffer || 0,
         harga_master: b.harga_master || 0,
-        tkpi: b.tkpi || (props.tkpiList || []).find((x) => x.id === b.id || x.code === b.code || x.nama === b.nama),
+        tkpi:
+            b.tkpi ||
+            (props.tkpiList || []).find(
+                (x) => x.id === b.id || x.code === b.code || x.nama === b.nama,
+            ),
     }));
 }
 
@@ -1871,7 +2069,7 @@ const giziCalculations = computed(() => {
                 (item) =>
                     item.id === b.id ||
                     item.code === b.code ||
-                    item.nama === b.nama
+                    item.nama === b.nama,
             ) ||
             b;
 
@@ -2097,11 +2295,13 @@ const totalFoodCostPBAlergi = computed(() => {
     }, 0);
 });
 
-
 // Food Cost per Porsi Khusus Varian Alergi (Disesuaikan dengan bahan aman + substitusi)
 const activeAlergiFoodCostList = computed(() => {
     const alergiBahanList = giziCalculations.value.filter(
-        (b) => b.tipe_porsi === "alergi" && b.jenis_alergi && b.jenis_alergi.trim()
+        (b) =>
+            b.tipe_porsi === "alergi" &&
+            b.jenis_alergi &&
+            b.jenis_alergi.trim(),
     );
     if (alergiBahanList.length === 0) return [];
 
@@ -2172,16 +2372,16 @@ function getPayload(statusStr, stepNumber = 3) {
     return {
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
-        nama_menu: namaMenuAktif.value || 'Menu MBG',
+        nama_menu: namaMenuAktif.value || "Menu MBG",
         siklus_ke: 1,
         status: statusStr,
-        database_pangan: props.selectedSource || 'fta',
+        database_pangan: props.selectedSource || "fta",
         current_step: stepNumber,
-        komponen_energi: subMenuKomponen.value.energi || null,
-        komponen_protein: subMenuKomponen.value.protein || null,
-        komponen_lemak: subMenuKomponen.value.lemak || null,
-        komponen_karbohidrat: subMenuKomponen.value.karbohidrat || null,
-        komponen_serat: subMenuKomponen.value.serat || null,
+        sub_menu_1: subMenuKomponen.value.sub_menu_1 || null,
+        sub_menu_2: subMenuKomponen.value.sub_menu_2 || null,
+        sub_menu_3: subMenuKomponen.value.sub_menu_3 || null,
+        sub_menu_4: subMenuKomponen.value.sub_menu_4 || null,
+        sub_menu_5: subMenuKomponen.value.sub_menu_5 || null,
         total_pm: totalPM.value,
         total_pk: totalPK.value,
         total_pb: totalPB.value,
@@ -2192,12 +2392,12 @@ function getPayload(statusStr, stepNumber = 3) {
         food_cost_pk: totalFoodCostPKNormal.value,
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
-        items: (bahanCalculations.value || []).map(b => ({
+        items: (bahanCalculations.value || []).map((b) => ({
             tkpi_id: b.id || b.code,
             nama: b.nama,
             nama_po: b.nama_po || b.nama,
             kategori: b.kategori,
-            tipe_porsi: b.tipe_porsi || 'normal',
+            tipe_porsi: b.tipe_porsi || "normal",
             jenis_alergi: b.jenis_alergi || null,
             alergen: b.alergen || null,
             gram_pk: b.gram_pk || 0,
@@ -2212,8 +2412,9 @@ function getPayload(statusStr, stepNumber = 3) {
             nutrisiPK: b.nutrisiPK || null,
             nutrisiPB: b.nutrisiPB || null,
         })),
-        kelompoks: woKelompokList.value.map(k => {
-            const masterK = (props.kelompokList || []).find(x => x.id === k.id) || {};
+        kelompoks: woKelompokList.value.map((k) => {
+            const masterK =
+                (props.kelompokList || []).find((x) => x.id === k.id) || {};
             return {
                 id: k.id,
                 nama_kelompok: k.nama_kelompok,
@@ -2221,10 +2422,20 @@ function getPayload(statusStr, stepNumber = 3) {
                 is_menerima: k.status_menerima !== false,
                 total_porsi_kecil: Number(k.total_porsi_kecil) || 0,
                 total_porsi_besar: Number(k.total_porsi_besar) || 0,
-                total_penerima: Number(k.total_penerima) || ((Number(k.total_porsi_kecil) || 0) + (Number(k.total_porsi_besar) || 0)),
-                status_alergi: k.has_alergi ? 'Ada Alergi' : 'Tidak Ada Alergi',
-                rincian: Array.isArray(k.rincian) && k.rincian.length > 0 ? k.rincian : (masterK.rincian || []),
-                detail_alergi: Array.isArray(k.keterangan_alergi) && k.keterangan_alergi.length > 0 ? k.keterangan_alergi : (masterK.keterangan_alergi || []),
+                total_penerima:
+                    Number(k.total_penerima) ||
+                    (Number(k.total_porsi_kecil) || 0) +
+                        (Number(k.total_porsi_besar) || 0),
+                status_alergi: k.has_alergi ? "Ada Alergi" : "Tidak Ada Alergi",
+                rincian:
+                    Array.isArray(k.rincian) && k.rincian.length > 0
+                        ? k.rincian
+                        : masterK.rincian || [],
+                detail_alergi:
+                    Array.isArray(k.keterangan_alergi) &&
+                    k.keterangan_alergi.length > 0
+                        ? k.keterangan_alergi
+                        : masterK.keterangan_alergi || [],
             };
         }),
     };
@@ -2236,21 +2447,23 @@ function simpanDraftStep1() {
     statusPengajuanWo.value = "Draft";
     const payload = getPayload("Draft", 1);
 
-    router.post('/gizi/work-order', payload, {
+    router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
-            triggerSubmitSuccess("Draft Langkah 1 (Perencanaan Produksi) berhasil disimpan ke Database!");
+            triggerSubmitSuccess(
+                "Draft Langkah 1 (Perencanaan Produksi) berhasil disimpan ke Database!",
+            );
         },
         onError: () => {
             isSubmitting.value = false;
-        }
+        },
     });
 }
 
 function simpanDraftStep2() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     if (!validateStep2()) return;
@@ -2258,61 +2471,63 @@ function simpanDraftStep2() {
     statusPengajuanWo.value = "Draft";
     const payload = getPayload("Draft", 2);
 
-    router.post('/gizi/work-order', payload, {
+    router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
-            triggerSubmitSuccess("Draft Langkah 2 (Bahan Pangan) berhasil disimpan ke Database!");
+            triggerSubmitSuccess(
+                "Draft Langkah 2 (Bahan Pangan) berhasil disimpan ke Database!",
+            );
         },
         onError: () => {
             isSubmitting.value = false;
-        }
+        },
     });
 }
 
 function simpanSebagaiDraft() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     isSubmitting.value = true;
     statusPengajuanWo.value = "Draft";
     const payload = getPayload("Draft", 3);
 
-    router.post('/gizi/work-order', payload, {
+    router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
-            router.visit('/gizi/daftar-menu');
+            router.visit("/gizi/daftar-menu");
         },
         onError: () => {
             isSubmitting.value = false;
-        }
+        },
     });
 }
 
 function ajukanKeKeuangan() {
     if (!validateStep1()) {
-        buatMenuSubTab.value = 'work_order';
+        buatMenuSubTab.value = "work_order";
         return;
     }
     if (!validateStep2()) {
-        buatMenuSubTab.value = 'bahan_pangan';
+        buatMenuSubTab.value = "bahan_pangan";
         return;
     }
     isSubmitting.value = true;
     statusPengajuanWo.value = "Diajukan ke Keuangan";
     const payload = getPayload("Diajukan ke Keuangan", 4);
 
-    router.post('/gizi/work-order', payload, {
+    router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
-            router.visit('/gizi/daftar-menu');
+            router.visit("/gizi/daftar-menu");
         },
         onError: () => {
             isSubmitting.value = false;
-        }
+        },
     });
 }
 
@@ -2321,31 +2536,54 @@ watch(
     () => props.activeWorkOrder,
     (wo) => {
         if (wo) {
-            if (wo.database_pangan && wo.database_pangan !== props.selectedSource) {
+            if (
+                wo.database_pangan &&
+                wo.database_pangan !== props.selectedSource
+            ) {
                 emit("update-source", wo.database_pangan);
             }
             woNo.value = wo.nomor_wo || woNo.value;
-            tanggalRencana.value = typeof wo.tanggal_distribusi === 'string' ? wo.tanggal_distribusi.substring(0, 10) : (wo.tanggal_distribusi || tanggalRencana.value);
+            tanggalRencana.value =
+                typeof wo.tanggal_distribusi === "string"
+                    ? wo.tanggal_distribusi.substring(0, 10)
+                    : wo.tanggal_distribusi || tanggalRencana.value;
             namaMenuAktif.value = wo.nama_menu || namaMenuAktif.value;
             statusPengajuanWo.value = wo.status || "Draft";
-            if (wo.komponen_energi || wo.komponen_protein || wo.komponen_lemak || wo.komponen_karbohidrat || wo.komponen_serat) {
+            if (
+                wo.sub_menu_1 ||
+                wo.sub_menu_2 ||
+                wo.sub_menu_3 ||
+                wo.sub_menu_4 ||
+                wo.sub_menu_5 ||
+                wo.komponen_energi ||
+                wo.komponen_protein ||
+                wo.komponen_lemak ||
+                wo.komponen_karbohidrat ||
+                wo.komponen_serat
+            ) {
                 subMenuKomponen.value = {
-                    energi: wo.komponen_energi || "",
-                    protein: wo.komponen_protein || "",
-                    lemak: wo.komponen_lemak || "",
-                    karbohidrat: wo.komponen_karbohidrat || "",
-                    serat: wo.komponen_serat || "",
+                    sub_menu_1: wo.sub_menu_1 || wo.komponen_energi || "",
+                    sub_menu_2: wo.sub_menu_2 || wo.komponen_protein || "",
+                    sub_menu_3: wo.sub_menu_3 || wo.komponen_lemak || "",
+                    sub_menu_4: wo.sub_menu_4 || wo.komponen_karbohidrat || "",
+                    sub_menu_5: wo.sub_menu_5 || wo.komponen_serat || "",
                 };
             }
 
             // 1. Populate selectedBahanList with full TKPI nutritional lookup
             if (wo.items && wo.items.length > 0) {
                 selectedBahanList.value = wo.items.map((it) => {
-                    const matchedTkpi = tkpiItems.value.find(
-                        (t) =>
-                            (it.tkpi_id && (t.id === it.tkpi_id || t.code === it.tkpi_id)) ||
-                            (t.nama && it.nama && t.nama.toLowerCase().trim() === it.nama.toLowerCase().trim())
-                    ) || {};
+                    const matchedTkpi =
+                        tkpiItems.value.find(
+                            (t) =>
+                                (it.tkpi_id &&
+                                    (t.id === it.tkpi_id ||
+                                        t.code === it.tkpi_id)) ||
+                                (t.nama &&
+                                    it.nama &&
+                                    t.nama.toLowerCase().trim() ===
+                                        it.nama.toLowerCase().trim()),
+                        ) || {};
 
                     return {
                         id: matchedTkpi.id || it.tkpi_id || it.id,
@@ -2353,16 +2591,29 @@ watch(
                         tkpi_id: matchedTkpi.id || it.tkpi_id || it.id,
                         nama: it.nama || matchedTkpi.nama,
                         nama_po: it.nama_po || it.nama || matchedTkpi.nama,
-                        kategori: it.kategori || matchedTkpi.kategori || 'Lainnya',
-                        tipe_porsi: it.tipe_porsi || 'normal',
-                        jenis_alergi: it.jenis_alergi || '',
-                        alergen: it.alergen || matchedTkpi.alergen || '',
+                        kategori:
+                            it.kategori || matchedTkpi.kategori || "Lainnya",
+                        tipe_porsi: it.tipe_porsi || "normal",
+                        jenis_alergi: it.jenis_alergi || "",
+                        alergen: it.alergen || matchedTkpi.alergen || "",
                         gram_pk: Number(it.gram_pk) || 0,
                         gram_pb: Number(it.gram_pb) || 0,
                         bdd: Number(it.bdd) || matchedTkpi.bdd || 100,
-                        buffer: (it.buffer !== undefined && it.buffer !== null && it.buffer !== '') ? Number(it.buffer) : 0,
-                        harga_master: Number(it.harga_master) || matchedTkpi.harga_master || 0,
-                        harga_aktual: Number(it.harga_aktual) || it.harga_master || matchedTkpi.harga_master || 0,
+                        buffer:
+                            it.buffer !== undefined &&
+                            it.buffer !== null &&
+                            it.buffer !== ""
+                                ? Number(it.buffer)
+                                : 0,
+                        harga_master:
+                            Number(it.harga_master) ||
+                            matchedTkpi.harga_master ||
+                            0,
+                        harga_aktual:
+                            Number(it.harga_aktual) ||
+                            it.harga_master ||
+                            matchedTkpi.harga_master ||
+                            0,
                         tkpi: matchedTkpi,
                     };
                 });
@@ -2370,31 +2621,52 @@ watch(
 
             // 2. Populate woKelompokList with saved KPM participation and class breakdown
             if (wo.kelompoks && wo.kelompoks.length > 0) {
-                woKelompokList.value = (props.kelompokList || []).map((masterK) => {
-                    const savedK = wo.kelompoks.find(
-                        (sk) => sk.kelompok_id === masterK.id || sk.nama_kelompok === masterK.nama_kelompok
-                    );
-                    const norm = normalizeKelompokForWo(masterK);
-                    if (savedK) {
-                        return {
-                            ...norm,
-                            status_menerima: savedK.is_menerima !== false,
-                            total_porsi_kecil: savedK.porsi_kecil !== undefined ? Number(savedK.porsi_kecil) : norm.total_porsi_kecil,
-                            total_porsi_besar: savedK.porsi_besar !== undefined ? Number(savedK.porsi_besar) : norm.total_porsi_besar,
-                            total_penerima: savedK.total_penerima !== undefined ? Number(savedK.total_penerima) : norm.total_penerima,
-                            status_alergi: savedK.status_alergi || norm.status_alergi,
-                            rincian: Array.isArray(savedK.rincian) && savedK.rincian.length > 0 ? savedK.rincian : norm.rincian,
-                            keterangan_alergi: Array.isArray(savedK.detail_alergi) && savedK.detail_alergi.length > 0 ? savedK.detail_alergi : norm.keterangan_alergi,
-                        };
-                    }
-                    return norm;
-                });
+                woKelompokList.value = (props.kelompokList || []).map(
+                    (masterK) => {
+                        const savedK = wo.kelompoks.find(
+                            (sk) =>
+                                sk.kelompok_id === masterK.id ||
+                                sk.nama_kelompok === masterK.nama_kelompok,
+                        );
+                        const norm = normalizeKelompokForWo(masterK);
+                        if (savedK) {
+                            return {
+                                ...norm,
+                                status_menerima: savedK.is_menerima !== false,
+                                total_porsi_kecil:
+                                    savedK.porsi_kecil !== undefined
+                                        ? Number(savedK.porsi_kecil)
+                                        : norm.total_porsi_kecil,
+                                total_porsi_besar:
+                                    savedK.porsi_besar !== undefined
+                                        ? Number(savedK.porsi_besar)
+                                        : norm.total_porsi_besar,
+                                total_penerima:
+                                    savedK.total_penerima !== undefined
+                                        ? Number(savedK.total_penerima)
+                                        : norm.total_penerima,
+                                status_alergi:
+                                    savedK.status_alergi || norm.status_alergi,
+                                rincian:
+                                    Array.isArray(savedK.rincian) &&
+                                    savedK.rincian.length > 0
+                                        ? savedK.rincian
+                                        : norm.rincian,
+                                keterangan_alergi:
+                                    Array.isArray(savedK.detail_alergi) &&
+                                    savedK.detail_alergi.length > 0
+                                        ? savedK.detail_alergi
+                                        : norm.keterangan_alergi,
+                            };
+                        }
+                        return norm;
+                    },
+                );
             }
         }
     },
-    { immediate: true }
+    { immediate: true },
 );
-
 </script>
 
 <template>
@@ -2419,7 +2691,7 @@ watch(
                     </h4>
                     <p class="text-[11px] text-emerald-700 mt-0.5">
                         Status dokumen:
-                        <strong class="uppercase font-mono">{{
+                        <strong class="uppercase">{{
                             statusPengajuanWo
                         }}</strong>
                     </p>
@@ -2463,14 +2735,14 @@ watch(
             <div class="space-y-1.5 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span
-                        class="px-2.5 py-0.5 text-xs font-mono font-black rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30"
+                        class="px-2.5 py-0.5 text-xs font-black rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30"
                     >
                         {{ woNo }}
                     </span>
                     <span
                         class="px-2.5 py-0.5 text-xs font-bold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1"
                     >
-                        <CheckCircle2 class="h-3.5 w-3.5" /> Kuota PM Terkunci
+                        <CheckCircle2 class="h-3.5 w-3.5" />PM Terkunci
                     </span>
                     <span class="text-xs text-slate-300 font-medium">
                         📅 Tanggal Distribusi:
@@ -2486,43 +2758,43 @@ watch(
                 </h3>
                 <div
                     v-if="
-                        subMenuKomponen.energi ||
-                        subMenuKomponen.protein ||
-                        subMenuKomponen.lemak ||
-                        subMenuKomponen.karbohidrat ||
-                        subMenuKomponen.serat
+                        subMenuKomponen.sub_menu_1 ||
+                        subMenuKomponen.sub_menu_2 ||
+                        subMenuKomponen.sub_menu_3 ||
+                        subMenuKomponen.sub_menu_4 ||
+                        subMenuKomponen.sub_menu_5
                     "
                     class="flex items-center gap-1.5 flex-wrap text-[11px] font-medium"
                 >
                     <span
-                        v-if="subMenuKomponen.energi"
+                        v-if="subMenuKomponen.sub_menu_1"
                         class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-200 border border-amber-400/30"
                     >
-                        ⚡ Energi: {{ subMenuKomponen.energi }}
+                        {{ subMenuKomponen.sub_menu_1 }}
                     </span>
                     <span
-                        v-if="subMenuKomponen.protein"
+                        v-if="subMenuKomponen.sub_menu_2"
                         class="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-200 border border-rose-400/30"
                     >
-                        🍗 Protein: {{ subMenuKomponen.protein }}
+                        {{ subMenuKomponen.sub_menu_2 }}
                     </span>
                     <span
-                        v-if="subMenuKomponen.lemak"
+                        v-if="subMenuKomponen.sub_menu_3"
                         class="px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-200 border border-yellow-400/30"
                     >
-                        🧈 Lemak: {{ subMenuKomponen.lemak }}
+                        {{ subMenuKomponen.sub_menu_3 }}
                     </span>
                     <span
-                        v-if="subMenuKomponen.karbohidrat"
+                        v-if="subMenuKomponen.sub_menu_4"
                         class="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-200 border border-blue-400/30"
                     >
-                        🌾 Karbo: {{ subMenuKomponen.karbohidrat }}
+                        {{ subMenuKomponen.sub_menu_4 }}
                     </span>
                     <span
-                        v-if="subMenuKomponen.serat"
+                        v-if="subMenuKomponen.sub_menu_5"
                         class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 border border-emerald-400/30"
                     >
-                        🥗 Serat: {{ subMenuKomponen.serat }}
+                        {{ subMenuKomponen.sub_menu_5 }}
                     </span>
                 </div>
                 <div
@@ -2552,17 +2824,35 @@ watch(
                             >{{ totalPKAlergi + totalPBAlergi }} Porsi</strong
                         ></span
                     >
-                    <span>• Terjadwal:
+                    <span
+                        >• Terjadwal:
                         <strong class="text-slate-200 font-black">
                             {{ woKelompokList.length }} Kelompok
-                            <span class="text-[11px] font-normal text-slate-300">
-                                ({{ kelompokMenerimaAktif.length }} Menerima<span v-if="woKelompokList.length - kelompokMenerimaAktif.length > 0">, {{ woKelompokList.length - kelompokMenerimaAktif.length }} Tidak Menerima</span>)
+                            <span
+                                class="text-[11px] font-normal text-slate-300"
+                            >
+                                ({{
+                                    kelompokMenerimaAktif.length
+                                }}
+                                Menerima<span
+                                    v-if="
+                                        woKelompokList.length -
+                                            kelompokMenerimaAktif.length >
+                                        0
+                                    "
+                                    >,
+                                    {{
+                                        woKelompokList.length -
+                                        kelompokMenerimaAktif.length
+                                    }}
+                                    Tidak Menerima</span
+                                >)
                             </span>
                         </strong>
                     </span>
                 </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <!-- <div class="flex items-center gap-2 shrink-0">
                 <Button
                     type="button"
                     @click="buatMenuSubTab = 'work_order'"
@@ -2571,7 +2861,7 @@ watch(
                     <Edit3 class="h-3.5 w-3.5" />
                     <span>Ubah Work Order</span>
                 </Button>
-            </div>
+            </div> -->
         </div>
 
         <!-- ========================================================================================= -->
@@ -2580,16 +2870,31 @@ watch(
         <div v-if="buatMenuSubTab === 'work_order'" class="space-y-6">
             <!-- Banner Catatan Penolakan jika WO ini sebelumnya ditolak oleh Keuangan -->
             <div
-                v-if="props.activeWorkOrder && (props.activeWorkOrder.status?.toLowerCase().includes('ditolak') || props.activeWorkOrder.catatan_keuangan)"
+                v-if="
+                    props.activeWorkOrder &&
+                    (props.activeWorkOrder.status
+                        ?.toLowerCase()
+                        .includes('ditolak') ||
+                        props.activeWorkOrder.catatan_keuangan)
+                "
                 class="p-4 sm:p-5 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-900 space-y-2 shadow-xs"
             >
-                <div class="flex items-center gap-2 font-black text-rose-800 text-sm">
+                <div
+                    class="flex items-center gap-2 font-black text-rose-800 text-sm"
+                >
                     <AlertCircle class="h-5 w-5 text-rose-600 shrink-0" />
                     <span>Work Order Ini Sebelumnya Ditolak oleh Keuangan</span>
                 </div>
-                <div class="bg-white p-3.5 rounded-xl border border-rose-200/80 text-xs font-medium text-slate-800 whitespace-pre-wrap leading-relaxed shadow-2xs">
-                    <strong class="text-rose-900 block mb-1">Catatan Verifikator Keuangan:</strong>
-                    {{ props.activeWorkOrder.catatan_keuangan || 'Silakan sesuaikan formula gizi atau anggaran belanja pada langkah berikutnya, kemudian ajukan kembali ke bagian keuangan.' }}
+                <div
+                    class="bg-white p-3.5 rounded-xl border border-rose-200/80 text-xs font-medium text-slate-800 whitespace-pre-wrap leading-relaxed shadow-2xs"
+                >
+                    <strong class="text-rose-900 block mb-1"
+                        >Catatan Verifikator Keuangan:</strong
+                    >
+                    {{
+                        props.activeWorkOrder.catatan_keuangan ||
+                        "Silakan sesuaikan formula gizi atau anggaran belanja pada langkah berikutnya, kemudian ajukan kembali ke bagian keuangan."
+                    }}
                 </div>
             </div>
             <Card
@@ -2618,11 +2923,11 @@ watch(
                                     Langkah 1 dari 3
                                 </Badge>
                             </div>
-                            <CardDescription class="text-xs sm:text-sm mt-0.5">
+                            <!-- <CardDescription class="text-xs sm:text-sm mt-0.5">
                                 Penetapan jadwal distribusi menu, penamaan paket
                                 MBG, dan penguncian kuota Penerima Manfaat (PM)
                                 resmi SPPG.
-                            </CardDescription>
+                            </CardDescription> -->
                         </div>
                         <!-- <div class="flex items-center gap-2">
                                     <Button
@@ -2647,32 +2952,72 @@ watch(
                             <label
                                 class="text-xs font-bold text-slate-700 block truncate"
                             >
-                                No. Perencanaan Produksi:
+                                No. Perencanaan Produksi
                             </label>
                             <input
                                 type="text"
                                 :value="woNo"
                                 readonly
                                 disabled
-                                class="w-full text-xs font-mono font-black text-slate-800 rounded-lg border-slate-200 bg-slate-100/80 p-2.5 cursor-not-allowed select-all"
+                                class="w-full text-xs font-black text-slate-800 rounded-lg border-slate-200 bg-slate-100/80 p-2.5 cursor-not-allowed select-all"
                                 title="Nomor Perencanaan Produksi otomatis mengacu pada tanggal distribusi kalender menu"
                             />
                         </div>
 
                         <!-- Kolom 2: Tanggal Distribusi Menu -->
                         <div class="space-y-1.5">
-                            <label
-                                class="text-xs font-bold text-slate-700 block truncate"
+                            <div
+                                class="flex items-center justify-between gap-1"
                             >
-                                Tanggal Distribusi Menu:
-                                <span class="text-rose-500">*</span>
-                            </label>
+                                <label
+                                    class="text-xs font-bold text-slate-700 block truncate"
+                                >
+                                    Tanggal Distribusi Menu
+                                    <span class="text-rose-500">*</span>
+                                </label>
+                                <div
+                                    class="flex items-center gap-1.5 shrink-0 text-[10.5px] font-bold text-primary"
+                                >
+                                    <button
+                                        type="button"
+                                        @click="setTanggalHariIni"
+                                        class="hover:underline cursor-pointer"
+                                        title="Pilih Tanggal Hari Ini"
+                                    >
+                                        Hari Ini
+                                    </button>
+                                    <span class="text-slate-300">•</span>
+                                    <button
+                                        type="button"
+                                        @click="setTanggalBesok"
+                                        class="hover:underline cursor-pointer"
+                                        title="Pilih Tanggal Besok"
+                                    >
+                                        Besok
+                                    </button>
+                                </div>
+                            </div>
                             <input
                                 type="date"
-                                v-model="tanggalRencana" @change="clearError('tanggalRencana')"
+                                v-model="tanggalRencana"
+                                @change="clearError('tanggalRencana')"
                                 required
-                                class="w-full text-xs font-bold rounded-lg border-slate-300 focus:ring-primary focus:border-primary p-2.5 bg-white"
+                                :class="[
+                                    'w-full text-xs font-bold rounded-lg border p-2.5 bg-white',
+                                    validationErrors.tanggalRencana
+                                        ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                        : 'border-slate-300 focus:ring-primary focus:border-primary',
+                                ]"
                             />
+                            <p
+                                v-if="validationErrors.tanggalRencana"
+                                class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                <span>{{
+                                    validationErrors.tanggalRencana
+                                }}</span>
+                            </p>
                         </div>
 
                         <!-- Kolom 3: Nama Menu Produksi MBG -->
@@ -2683,27 +3028,19 @@ watch(
                                 <label
                                     class="text-xs font-bold text-slate-700 truncate"
                                 >
-                                    Nama Menu Produksi MBG:
+                                    Nama Menu Produksi
                                     <span class="text-rose-500">*</span>
                                 </label>
                                 <button
-                                    v-if="menuSaranDariKalender"
                                     type="button"
-                                    @click="
-                                        handleGunakanMenuSaran(
-                                            menuSaranDariKalender,
-                                        )
-                                    "
+                                    @click="handleGunakanContoh"
                                     class="text-[10.5px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 truncate max-w-[150px]"
-                                    :title="
-                                        'Gunakan Rekomendasi Kalender: ' +
-                                        menuSaranDariKalender.namaMenu
-                                    "
+                                    title="Gunakan Contoh Menu: Ayam Guling Khas Bali"
                                 >
-                                    <Sparkles class="h-3 w-3 shrink-0" />
-                                    <span class="truncate"
-                                        >Gunakan Kalender</span
-                                    >
+                                    <Sparkles
+                                        class="h-3 w-3 shrink-0 text-amber-500"
+                                    />
+                                    <span class="truncate">Gunakan Contoh</span>
                                 </button>
                             </div>
                             <input
@@ -2711,15 +3048,22 @@ watch(
                                 v-model="namaMenuAktif"
                                 @input="clearError('namaMenuAktif')"
                                 required
-                                placeholder="Contoh: Nasi Liwet Sunda, Ayam Goreng..."
+                                placeholder="Contoh: Mujair Nyat-Nyat Kintamani"
                                 :class="[
                                     'w-full text-xs font-bold text-slate-900 rounded-lg border p-2.5 bg-white',
-                                    validationErrors.namaMenuAktif ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20' : 'border-slate-300 focus:ring-primary focus:border-primary'
+                                    validationErrors.namaMenuAktif
+                                        ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                        : 'border-slate-300 focus:ring-primary focus:border-primary',
                                 ]"
                             />
-                            <p v-if="validationErrors.namaMenuAktif" class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                            <p
+                                v-if="validationErrors.namaMenuAktif"
+                                class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1"
+                            >
                                 <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                <span>{{ validationErrors.namaMenuAktif }}</span>
+                                <span>{{
+                                    validationErrors.namaMenuAktif
+                                }}</span>
                             </p>
                         </div>
                     </div>
@@ -2739,12 +3083,11 @@ watch(
                                     <h4
                                         class="text-xs font-black text-slate-900"
                                     >
-                                        Rincian Sub Menu (Komponen Gizi MBG)
+                                        Rincian Sub Menu
                                     </h4>
                                     <p class="text-[10.5px] text-slate-500">
-                                        Input rincian nama hidangan per
-                                        masing-masing komponen makronutrisi &
-                                        serat pangan.
+                                        Input rincian untuk masing-masing Sub
+                                        Menu 1 hingga Sub Menu 5.
                                     </p>
                                 </div>
                             </div>
@@ -2753,10 +3096,14 @@ watch(
                         <div
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
                         >
-                            <!-- Sub Menu Energi -->
+                            <!-- Sub Menu 1 -->
                             <div
                                 class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
-                                :class="validationErrors.energi ? 'border-rose-400 bg-rose-50/20' : 'border-amber-200/90'"
+                                :class="
+                                    validationErrors.sub_menu_1
+                                        ? 'border-rose-400 bg-rose-50/20'
+                                        : 'border-amber-200/90'
+                                "
                             >
                                 <label
                                     class="text-[11px] font-black text-amber-900 flex items-center gap-1.5"
@@ -2764,24 +3111,44 @@ watch(
                                     <span
                                         class="h-2 w-2 rounded-full bg-amber-500"
                                     ></span>
-                                    <span>Energi <strong class="text-rose-500">*</strong></span>
+                                    <span
+                                        >Sub Menu 1
+                                        <strong class="text-rose-500"
+                                            >*</strong
+                                        ></span
+                                    >
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.energi" @input="clearError('energi')"
-                                    placeholder="Contoh: Nasi Putih Gurih"
-                                    class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-amber-500 focus:border-amber-500 p-2 bg-slate-50/50"
+                                    v-model="subMenuKomponen.sub_menu_1"
+                                    @input="clearError('sub_menu_1')"
+                                    placeholder="Karbohidrat"
+                                    :class="[
+                                        'w-full text-xs font-semibold rounded-lg border p-2',
+                                        validationErrors.sub_menu_1
+                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                            : 'border-slate-200 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50',
+                                    ]"
                                 />
-                                <p v-if="validationErrors.energi" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                <p
+                                    v-if="validationErrors.sub_menu_1"
+                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                >
                                     <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{ validationErrors.energi }}</span>
+                                    <span>{{
+                                        validationErrors.sub_menu_1
+                                    }}</span>
                                 </p>
                             </div>
 
-                            <!-- Sub Menu Protein -->
+                            <!-- Sub Menu 2 -->
                             <div
                                 class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
-                                :class="validationErrors.protein ? 'border-rose-400 bg-rose-50/20' : 'border-rose-200/90'"
+                                :class="
+                                    validationErrors.sub_menu_2
+                                        ? 'border-rose-400 bg-rose-50/20'
+                                        : 'border-rose-200/90'
+                                "
                             >
                                 <label
                                     class="text-[11px] font-black text-rose-900 flex items-center gap-1.5"
@@ -2789,24 +3156,44 @@ watch(
                                     <span
                                         class="h-2 w-2 rounded-full bg-rose-500"
                                     ></span>
-                                    <span>Protein <strong class="text-rose-500">*</strong></span>
+                                    <span
+                                        >Sub Menu 2
+                                        <strong class="text-rose-500"
+                                            >*</strong
+                                        ></span
+                                    >
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.protein" @input="clearError('protein')"
-                                    placeholder="Contoh: Ayam Goreng Lengkuas"
-                                    class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-rose-500 focus:border-rose-500 p-2 bg-slate-50/50"
+                                    v-model="subMenuKomponen.sub_menu_2"
+                                    @input="clearError('sub_menu_2')"
+                                    placeholder="Protein Hewani"
+                                    :class="[
+                                        'w-full text-xs font-semibold rounded-lg border p-2',
+                                        validationErrors.sub_menu_2
+                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                            : 'border-slate-200 focus:ring-rose-500 focus:border-rose-500 bg-slate-50/50',
+                                    ]"
                                 />
-                                <p v-if="validationErrors.protein" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                <p
+                                    v-if="validationErrors.sub_menu_2"
+                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                >
                                     <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{ validationErrors.protein }}</span>
+                                    <span>{{
+                                        validationErrors.sub_menu_2
+                                    }}</span>
                                 </p>
                             </div>
 
-                            <!-- Sub Menu Lemak -->
+                            <!-- Sub Menu 3 -->
                             <div
                                 class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
-                                :class="validationErrors.lemak ? 'border-rose-400 bg-rose-50/20' : 'border-yellow-200/90'"
+                                :class="
+                                    validationErrors.sub_menu_3
+                                        ? 'border-rose-400 bg-rose-50/20'
+                                        : 'border-yellow-200/90'
+                                "
                             >
                                 <label
                                     class="text-[11px] font-black text-yellow-900 flex items-center gap-1.5"
@@ -2814,24 +3201,44 @@ watch(
                                     <span
                                         class="h-2 w-2 rounded-full bg-yellow-500"
                                     ></span>
-                                    <span>Lemak <strong class="text-rose-500">*</strong></span>
+                                    <span
+                                        >Sub Menu 3
+                                        <strong class="text-rose-500"
+                                            >*</strong
+                                        ></span
+                                    >
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.lemak" @input="clearError('lemak')"
-                                    placeholder="Contoh: Tahu Bacem Goreng"
-                                    class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 p-2 bg-slate-50/50"
+                                    v-model="subMenuKomponen.sub_menu_3"
+                                    @input="clearError('sub_menu_3')"
+                                    placeholder="Protein Nabati"
+                                    :class="[
+                                        'w-full text-xs font-semibold rounded-lg border p-2',
+                                        validationErrors.sub_menu_3
+                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                            : 'border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 bg-slate-50/50',
+                                    ]"
                                 />
-                                <p v-if="validationErrors.lemak" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                <p
+                                    v-if="validationErrors.sub_menu_3"
+                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                >
                                     <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{ validationErrors.lemak }}</span>
+                                    <span>{{
+                                        validationErrors.sub_menu_3
+                                    }}</span>
                                 </p>
                             </div>
 
-                            <!-- Sub Menu Karbohidrat -->
+                            <!-- Sub Menu 4 -->
                             <div
                                 class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
-                                :class="validationErrors.karbohidrat ? 'border-rose-400 bg-rose-50/20' : 'border-blue-200/90'"
+                                :class="
+                                    validationErrors.sub_menu_4
+                                        ? 'border-rose-400 bg-rose-50/20'
+                                        : 'border-blue-200/90'
+                                "
                             >
                                 <label
                                     class="text-[11px] font-black text-blue-900 flex items-center gap-1.5"
@@ -2839,24 +3246,44 @@ watch(
                                     <span
                                         class="h-2 w-2 rounded-full bg-blue-500"
                                     ></span>
-                                    <span>Karbohidrat <strong class="text-rose-500">*</strong></span>
+                                    <span
+                                        >Sub Menu 4
+                                        <strong class="text-rose-500"
+                                            >*</strong
+                                        ></span
+                                    >
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.karbohidrat" @input="clearError('karbohidrat')"
-                                    placeholder="Contoh: Nasi Liwet / Ubi"
-                                    class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-blue-500 focus:border-blue-500 p-2 bg-slate-50/50"
+                                    v-model="subMenuKomponen.sub_menu_4"
+                                    @input="clearError('sub_menu_4')"
+                                    placeholder="Sayur"
+                                    :class="[
+                                        'w-full text-xs font-semibold rounded-lg border p-2',
+                                        validationErrors.sub_menu_4
+                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                            : 'border-slate-200 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50',
+                                    ]"
                                 />
-                                <p v-if="validationErrors.karbohidrat" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                <p
+                                    v-if="validationErrors.sub_menu_4"
+                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                >
                                     <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{ validationErrors.karbohidrat }}</span>
+                                    <span>{{
+                                        validationErrors.sub_menu_4
+                                    }}</span>
                                 </p>
                             </div>
 
-                            <!-- Sub Menu Serat -->
+                            <!-- Sub Menu 5 -->
                             <div
                                 class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
-                                :class="validationErrors.serat ? 'border-rose-400 bg-rose-50/20' : 'border-emerald-200/90'"
+                                :class="
+                                    validationErrors.sub_menu_5
+                                        ? 'border-rose-400 bg-rose-50/20'
+                                        : 'border-emerald-200/90'
+                                "
                             >
                                 <label
                                     class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5"
@@ -2864,17 +3291,33 @@ watch(
                                     <span
                                         class="h-2 w-2 rounded-full bg-emerald-500"
                                     ></span>
-                                    <span>Serat <strong class="text-rose-500">*</strong></span>
+                                    <span
+                                        >Sub Menu 5
+                                        <strong class="text-rose-500"
+                                            >*</strong
+                                        ></span
+                                    >
                                 </label>
                                 <input
                                     type="text"
-                                    v-model="subMenuKomponen.serat" @input="clearError('serat')"
-                                    placeholder="Contoh: Lalapan Sayur & Melon"
-                                    class="w-full text-xs font-semibold rounded-lg border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 p-2 bg-slate-50/50"
+                                    v-model="subMenuKomponen.sub_menu_5"
+                                    @input="clearError('sub_menu_5')"
+                                    placeholder="Buah"
+                                    :class="[
+                                        'w-full text-xs font-semibold rounded-lg border p-2',
+                                        validationErrors.sub_menu_5
+                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                            : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50/50',
+                                    ]"
                                 />
-                                <p v-if="validationErrors.serat" class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5">
+                                <p
+                                    v-if="validationErrors.sub_menu_5"
+                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                >
                                     <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{ validationErrors.serat }}</span>
+                                    <span>{{
+                                        validationErrors.sub_menu_5
+                                    }}</span>
                                 </p>
                             </div>
                         </div>
@@ -2889,23 +3332,23 @@ watch(
                                 >
                                     <Users class="h-4 w-4 text-primary" />
                                     <span
-                                        >Data Kuota Penerima Manfaat (PM) Fix
-                                        per Tanggal Distribusi</span
+                                        >Data Penerima Manfaat (PM) per Tanggal
+                                        Distribusi</span
                                     >
                                 </h4>
-                                <p class="text-xs text-slate-500 mt-0.5">
+                                <!-- <p class="text-xs text-slate-500 mt-0.5">
                                     Kuota porsi terkunci otomatis berdasarkan
-                                    data rekapitulasi porsi sasaran & penerima aktif
-                                    SPPG pada tanggal tersebut.
-                                </p>
+                                    data rekapitulasi porsi sasaran & penerima
+                                    aktif SPPG pada tanggal tersebut.
+                                </p> -->
                             </div>
-                            <Badge
+                            <!-- <Badge
                                 variant="outline"
                                 class="bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold text-xs"
                             >
                                 <CheckCircle2 class="h-3 w-3 mr-1" />
                                 Terverifikasi
-                            </Badge>
+                            </Badge> -->
                         </div>
 
                         <!-- 4 Metric Cards Kuota PM Fix -->
@@ -2917,7 +3360,7 @@ watch(
                                 <p
                                     class="text-[11px] font-bold text-blue-700 uppercase tracking-wider"
                                 >
-                                    Total Sasaran PM Fix
+                                    Total PM
                                 </p>
                                 <h3 class="text-2xl font-black text-blue-950">
                                     {{ totalPM.toLocaleString("id-ID") }}
@@ -2929,7 +3372,8 @@ watch(
                                 <p
                                     class="text-[10.5px] text-blue-600 font-medium"
                                 >
-                                    100% Kuota Distribusi Harian
+                                    {{ persentasePmMenerima }}% Kuota Distribusi
+                                    Harian
                                 </p>
                             </div>
 
@@ -2952,7 +3396,7 @@ watch(
                                 <p
                                     class="text-[10.5px] text-amber-700 font-medium"
                                 >
-                                    TK, PAUD, SD 1-3 & Balita
+                                    TK/RA, PAUD, SD/MI 1-3 & Balita
                                 </p>
                             </div>
 
@@ -2975,8 +3419,8 @@ watch(
                                 <p
                                     class="text-[10.5px] text-indigo-700 font-medium"
                                 >
-                                    SD 4-6, SMP, SMA, Guru, Tendik, Bumil &
-                                    Busui
+                                    SD/MI 4-6, SMP/MTs, SMA/SMK/MA, Guru,
+                                    Tendik, Bumil & Busui
                                 </p>
                             </div>
 
@@ -3021,7 +3465,7 @@ watch(
                                     <h5
                                         class="text-xs font-bold text-slate-800 uppercase tracking-wider"
                                     >
-                                        Daftar Kelompok Sasaran Distribusi ({{
+                                        Daftar Kelompok Penerima Manfaat ({{
                                             woKelompokList.length
                                         }}
                                         Kelompok)
@@ -3069,142 +3513,238 @@ watch(
                                 </Button>
                             </div>
                         </div>
-                        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
-                        <div class="overflow-x-auto">
-                            <table class="w-full min-w-[650px] text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
-                                        <th class="py-3.5 px-3 text-center">Status</th>
-                                        <th class="py-3.5 px-3">Nama Kelompok Sasaran</th>
-                                        <th class="py-3.5 px-3">Kategori</th>
-                                        <th class="py-3.5 px-3 text-center">Porsi Kecil (PK)</th>
-                                        <th class="py-3.5 px-3 text-center">Porsi Besar (PB)</th>
-                                        <th class="py-3.5 px-3 text-center">Total PM</th>
-                                        <th class="py-3.5 px-3">Status Alergi</th>
-                                        <th class="py-3.5 px-3 text-center w-28">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody
-                                    class="divide-y divide-slate-100 text-slate-800"
+                        <div
+                            class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white"
+                        >
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full min-w-[650px] text-left text-xs border-collapse"
                                 >
-                                    <tr
-                                        v-for="k in woKelompokList"
-                                        :key="k.id"
-                                        :class="[
-                                            'transition-colors',
-                                            k.status_menerima === false
-                                                ? 'bg-slate-50/90 text-slate-400 opacity-60 select-none'
-                                                : 'hover:bg-slate-50/60',
-                                        ]"
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                        >
+                                            <th
+                                                class="py-3.5 px-3 text-center w-10"
+                                            >
+                                                No
+                                            </th>
+                                            <th class="py-3.5 px-3 text-center">
+                                                Status
+                                            </th>
+                                            <th class="py-3.5 px-3">
+                                                Nama Kelompok Sasaran
+                                            </th>
+                                            <th class="py-3.5 px-3">
+                                                Kategori
+                                            </th>
+                                            <th class="py-3.5 px-3 text-center">
+                                                Porsi Kecil (PK)
+                                            </th>
+                                            <th class="py-3.5 px-3 text-center">
+                                                Porsi Besar (PB)
+                                            </th>
+                                            <th class="py-3.5 px-3 text-center">
+                                                Total PM
+                                            </th>
+                                            <th class="py-3.5 px-3">
+                                                Status Alergi
+                                            </th>
+                                            <th
+                                                class="py-3.5 px-3 text-center w-28"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody
+                                        class="divide-y divide-slate-100 text-slate-800"
                                     >
-                                        <!-- Status Badge -->
-                                        <td
-                                            class="p-3 text-center align-middle"
-                                        >
-                                            <span
-                                                v-if="
-                                                    k.status_menerima !== false
-                                                "
-                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                            >
-                                                <UserCheck
-                                                    class="h-3 w-3 mr-1"
-                                                />
-                                                Menerima
-                                            </span>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-80 select-none"
-                                            >
-                                                <UserX class="h-3 w-3 mr-1 text-slate-400" />
-                                                Tidak Menerima
-                                            </span>
-                                        </td>
-
-                                        <!-- Nama Kelompok -->
-                                        <td
-                                            class="p-3 font-bold align-middle"
-                                            :class="
+                                        <tr
+                                            v-for="(k, idx) in woKelompokList"
+                                            :key="k.id"
+                                            :class="[
+                                                'transition-colors',
                                                 k.status_menerima === false
-                                                    ? 'text-slate-400 line-through opacity-70'
-                                                    : 'text-slate-900'
-                                            "
+                                                    ? 'bg-slate-50/90 text-slate-400 opacity-60 select-none'
+                                                    : 'hover:bg-slate-50/60',
+                                            ]"
                                         >
-                                            {{ k.nama_kelompok }}
-                                            <span
-                                                class="block text-[10px] text-slate-400 font-normal no-underline"
-                                            >
-                                                {{ k.desa_kelurahan }},
-                                                {{ k.kecamatan }}
-                                            </span>
-                                        </td>
-
-                                        <!-- Kategori -->
-                                        <td class="p-3 align-middle">
-                                            <Badge
-                                                variant="outline"
-                                                :class="[
-                                                    'font-bold text-[11px]',
+                                            <!-- Kolom Nomor -->
+                                            <td
+                                                class="p-3 text-center font-bold text-xs align-middle"
+                                                :class="
                                                     k.status_menerima === false
-                                                        ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-60'
-                                                        : 'bg-slate-50 text-slate-700'
-                                                ]"
-                                            >
-                                                {{ k.kategori }}
-                                            </Badge>
-                                        </td>
-
-                                        <!-- Porsi Kecil -->
-                                        <td
-                                            class="p-3 text-center align-middle font-bold"
-                                            :class="
-                                                k.status_menerima === false
-                                                    ? 'text-slate-300 line-through font-normal'
-                                                    : 'text-amber-900 bg-amber-50/20'
-                                            "
-                                        >
-                                            {{ k.total_porsi_kecil }}
-                                        </td>
-
-                                        <!-- Porsi Besar -->
-                                        <td
-                                            class="p-3 text-center align-middle font-bold"
-                                            :class="
-                                                k.status_menerima === false
-                                                    ? 'text-slate-300 line-through font-normal'
-                                                    : 'text-indigo-900 bg-indigo-50/20'
-                                            "
-                                        >
-                                            {{ k.total_porsi_besar }}
-                                        </td>
-
-                                        <!-- Total PM -->
-                                        <td
-                                            class="p-3 text-center font-black text-sm align-middle"
-                                            :class="
-                                                k.status_menerima === false
-                                                    ? 'text-slate-300 line-through font-normal'
-                                                    : 'text-slate-900'
-                                            "
-                                        >
-                                            {{ k.total_penerima }}
-                                        </td>
-
-                                        <!-- Alergi (Detail Breakdown per Jenis) -->
-                                        <td class="p-3 align-middle">
-                                            <div
-                                                v-if="
-                                                    k.keterangan_alergi &&
-                                                    k.keterangan_alergi.length >
-                                                        0
+                                                        ? 'text-slate-300'
+                                                        : 'text-slate-500'
                                                 "
-                                                class="space-y-1"
                                             >
+                                                {{ idx + 1 }}
+                                            </td>
+
+                                            <!-- Status Badge -->
+                                            <td
+                                                class="p-3 text-center align-middle"
+                                            >
+                                                <span
+                                                    v-if="
+                                                        k.status_menerima !==
+                                                        false
+                                                    "
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                >
+                                                    <UserCheck
+                                                        class="h-3 w-3 mr-1"
+                                                    />
+                                                    Menerima
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-80 select-none"
+                                                >
+                                                    <UserX
+                                                        class="h-3 w-3 mr-1 text-slate-400"
+                                                    />
+                                                    Tidak Menerima
+                                                </span>
+                                            </td>
+
+                                            <!-- Nama Kelompok -->
+                                            <td
+                                                class="p-3 font-bold align-middle"
+                                                :class="
+                                                    k.status_menerima === false
+                                                        ? 'text-slate-400 line-through opacity-70'
+                                                        : 'text-slate-900'
+                                                "
+                                            >
+                                                {{ k.nama_kelompok }}
+                                                <span
+                                                    class="block text-[10px] text-slate-400 font-normal no-underline"
+                                                >
+                                                    {{ k.desa_kelurahan }},
+                                                    {{ k.kecamatan }}
+                                                </span>
+                                            </td>
+
+                                            <!-- Kategori -->
+                                            <td class="p-3 align-middle">
+                                                <Badge
+                                                    variant="outline"
+                                                    :class="[
+                                                        'font-bold text-[11px]',
+                                                        k.status_menerima ===
+                                                        false
+                                                            ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-60'
+                                                            : 'bg-slate-50 text-slate-700',
+                                                    ]"
+                                                >
+                                                    {{ k.kategori }}
+                                                </Badge>
+                                            </td>
+
+                                            <!-- Porsi Kecil -->
+                                            <td
+                                                class="p-3 text-center align-middle font-bold"
+                                                :class="
+                                                    k.status_menerima === false
+                                                        ? 'text-slate-300 line-through font-normal'
+                                                        : 'text-amber-900 bg-amber-50/20'
+                                                "
+                                            >
+                                                {{ k.total_porsi_kecil }}
+                                            </td>
+
+                                            <!-- Porsi Besar -->
+                                            <td
+                                                class="p-3 text-center align-middle font-bold"
+                                                :class="
+                                                    k.status_menerima === false
+                                                        ? 'text-slate-300 line-through font-normal'
+                                                        : 'text-indigo-900 bg-indigo-50/20'
+                                                "
+                                            >
+                                                {{ k.total_porsi_besar }}
+                                            </td>
+
+                                            <!-- Total PM -->
+                                            <td
+                                                class="p-3 text-center font-black text-sm align-middle"
+                                                :class="
+                                                    k.status_menerima === false
+                                                        ? 'text-slate-300 line-through font-normal'
+                                                        : 'text-slate-900'
+                                                "
+                                            >
+                                                {{ k.total_penerima }}
+                                            </td>
+
+                                            <!-- Alergi (Detail Breakdown per Jenis) -->
+                                            <td class="p-3 align-middle">
                                                 <div
-                                                    v-for="(
-                                                        al, alIdx
-                                                    ) in k.keterangan_alergi"
-                                                    :key="alIdx"
+                                                    v-if="
+                                                        k.keterangan_alergi &&
+                                                        k.keterangan_alergi
+                                                            .length > 0
+                                                    "
+                                                    class="space-y-1"
+                                                >
+                                                    <div
+                                                        v-for="(
+                                                            al, alIdx
+                                                        ) in k.keterangan_alergi"
+                                                        :key="alIdx"
+                                                        class="text-[11px] font-bold"
+                                                        :class="
+                                                            k.status_menerima ===
+                                                            false
+                                                                ? 'text-slate-300 line-through font-normal'
+                                                                : 'text-rose-700'
+                                                        "
+                                                    >
+                                                        ⚠️
+                                                        {{ al.jenis_alergi }}:
+                                                        <span
+                                                            class="font-black text-rose-900 ml-0.5"
+                                                            :class="
+                                                                k.status_menerima ===
+                                                                false
+                                                                    ? 'text-slate-300 line-through'
+                                                                    : ''
+                                                            "
+                                                        >
+                                                            {{
+                                                                (Number(
+                                                                    al.porsi_kecil,
+                                                                ) || 0) +
+                                                                (Number(
+                                                                    al.porsi_besar,
+                                                                ) || 0)
+                                                            }}
+                                                        </span>
+                                                        <span
+                                                            class="text-[10px] text-slate-500 font-normal ml-1"
+                                                        >
+                                                            (PK:
+                                                            {{
+                                                                al.porsi_kecil ||
+                                                                0
+                                                            }}, PB:
+                                                            {{
+                                                                al.porsi_besar ||
+                                                                0
+                                                            }})
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    v-else-if="
+                                                        (k.alergi_porsi_kecil ||
+                                                            0) +
+                                                            (k.alergi_porsi_besar ||
+                                                                0) >
+                                                        0
+                                                    "
                                                     class="text-[11px] font-bold"
                                                     :class="
                                                         k.status_menerima ===
@@ -3214,124 +3754,128 @@ watch(
                                                     "
                                                 >
                                                     ⚠️
-                                                    {{ al.jenis_alergi }}:
+                                                    {{
+                                                        (k.alergi_porsi_kecil ||
+                                                            0) +
+                                                        (k.alergi_porsi_besar ||
+                                                            0)
+                                                    }}
+                                                    Alergi
                                                     <span
-                                                        class="font-black text-rose-900 ml-0.5"
-                                                        :class="k.status_menerima === false ? 'text-slate-300 line-through' : ''"
+                                                        class="block text-[10px] text-slate-500 font-normal"
                                                     >
+                                                        PK:
                                                         {{
-                                                            (Number(
-                                                                al.porsi_kecil,
-                                                            ) || 0) +
-                                                            (Number(
-                                                                al.porsi_besar,
-                                                            ) || 0)
+                                                            k.alergi_porsi_kecil ||
+                                                            0
+                                                        }}
+                                                        • PB:
+                                                        {{
+                                                            k.alergi_porsi_besar ||
+                                                            0
                                                         }}
                                                     </span>
-                                                    <span
-                                                        class="text-[10px] text-slate-500 font-normal ml-1"
-                                                    >
-                                                        (PK:
-                                                        {{
-                                                            al.porsi_kecil || 0
-                                                        }}, PB:
-                                                        {{
-                                                            al.porsi_besar || 0
-                                                        }})
-                                                    </span>
                                                 </div>
-                                            </div>
-                                            <div
-                                                v-else-if="
-                                                    (k.alergi_porsi_kecil ||
-                                                        0) +
-                                                        (k.alergi_porsi_besar ||
-                                                            0) >
-                                                    0
-                                                "
-                                                class="text-[11px] font-bold"
-                                                :class="
-                                                    k.status_menerima === false
-                                                        ? 'text-slate-300 line-through font-normal'
-                                                        : 'text-rose-700'
-                                                "
-                                            >
-                                                ⚠️
-                                                {{
-                                                    (k.alergi_porsi_kecil ||
-                                                        0) +
-                                                    (k.alergi_porsi_besar || 0)
-                                                }}
-                                                Alergi
-                                                <span
-                                                    class="block text-[10px] text-slate-500 font-normal"
-                                                >
-                                                    PK:
-                                                    {{
-                                                        k.alergi_porsi_kecil ||
-                                                        0
-                                                    }}
-                                                    • PB:
-                                                    {{
-                                                        k.alergi_porsi_besar ||
-                                                        0
-                                                    }}
-                                                </span>
-                                            </div>
-                                            <div
-                                                v-else
-                                                class="text-[11px] font-medium"
-                                                :class="k.status_menerima === false ? 'text-slate-300 line-through' : 'text-emerald-700'"
-                                            >
-                                                ✓ Normal
-                                            </div>
-                                        </td>
-
-                                        <!-- Aksi -->
-                                        <td class="py-3 px-3 text-center align-middle">
-                                            <div class="flex items-center justify-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    :disabled="k.status_menerima === false"
-                                                    @click="handleOpenModalEditPm(k)"
-                                                    :class="[
-                                                        k.status_menerima === false
-                                                            ? 'opacity-30 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 pointer-events-none'
-                                                            : 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200/80 cursor-pointer shadow-2xs',
-                                                        'h-8 w-8 rounded-lg border flex items-center justify-center transition-colors'
-                                                    ]"
-                                                    :title="k.status_menerima === false ? 'Kelompok Tidak Menerima (Non-Aktif)' : 'Edit Detail PM per Sub-Sub Kategori'"
-                                                >
-                                                    <Edit3 class="h-4 w-4" />
-                                                </button>
-
-                                                <button
-                                                    v-if="k.status_menerima !== false"
-                                                    type="button"
-                                                    @click="handleToggleStatusMenerima(k, false)"
-                                                    class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                                    title="Tandai TIDAK MENERIMA Menu Hari Ini"
-                                                >
-                                                    <UserX class="h-4 w-4" />
-                                                </button>
-                                                <button
+                                                <div
                                                     v-else
-                                                    type="button"
-                                                    @click="handleToggleStatusMenerima(k, true)"
-                                                    class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                                    title="Aktifkan Kembali Penerimaan"
+                                                    class="text-[11px] font-medium"
+                                                    :class="
+                                                        k.status_menerima ===
+                                                        false
+                                                            ? 'text-slate-300 line-through'
+                                                            : 'text-emerald-700'
+                                                    "
                                                 >
-                                                    <RotateCcw class="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                                    ✓ Normal
+                                                </div>
+                                            </td>
+
+                                            <!-- Aksi -->
+                                            <td
+                                                class="py-3 px-3 text-center align-middle"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-center gap-1.5"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        :disabled="
+                                                            k.status_menerima ===
+                                                            false
+                                                        "
+                                                        @click="
+                                                            handleOpenModalEditPm(
+                                                                k,
+                                                            )
+                                                        "
+                                                        :class="[
+                                                            k.status_menerima ===
+                                                            false
+                                                                ? 'opacity-30 cursor-not-allowed bg-slate-100 text-slate-300 border-slate-200 pointer-events-none'
+                                                                : 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200/80 cursor-pointer shadow-2xs',
+                                                            'h-8 w-8 rounded-lg border flex items-center justify-center transition-colors',
+                                                        ]"
+                                                        :title="
+                                                            k.status_menerima ===
+                                                            false
+                                                                ? 'Kelompok Tidak Menerima (Non-Aktif)'
+                                                                : 'Edit Detail PM per Sub-Sub Kategori'
+                                                        "
+                                                    >
+                                                        <Edit3
+                                                            class="h-4 w-4"
+                                                        />
+                                                    </button>
+
+                                                    <button
+                                                        v-if="
+                                                            k.status_menerima !==
+                                                            false
+                                                        "
+                                                        type="button"
+                                                        @click="
+                                                            handleToggleStatusMenerima(
+                                                                k,
+                                                                false,
+                                                            )
+                                                        "
+                                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                                        title="Tandai TIDAK MENERIMA Menu Hari Ini"
+                                                    >
+                                                        <UserX
+                                                            class="h-4 w-4"
+                                                        />
+                                                    </button>
+                                                    <button
+                                                        v-else
+                                                        type="button"
+                                                        @click="
+                                                            handleToggleStatusMenerima(
+                                                                k,
+                                                                true,
+                                                            )
+                                                        "
+                                                        class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                                        title="Aktifkan Kembali Penerimaan"
+                                                    >
+                                                        <RotateCcw
+                                                            class="h-4 w-4"
+                                                        />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                    <div v-if="validationErrors.kelompok" class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2 mt-3">
-                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+                        <div
+                            v-if="validationErrors.kelompok"
+                            class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2 mt-3"
+                        >
+                            <AlertCircle
+                                class="h-4 w-4 shrink-0 text-rose-600"
+                            />
                             <span>{{ validationErrors.kelompok }}</span>
                         </div>
                     </div>
@@ -3411,8 +3955,13 @@ watch(
 
                     <!-- Modal Body: Tabel Sub-Sub Kategori -->
                     <div class="space-y-4">
-                        <div v-if="modalPmError" class="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2">
-                            <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+                        <div
+                            v-if="modalPmError"
+                            class="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2"
+                        >
+                            <AlertCircle
+                                class="h-4 w-4 shrink-0 text-rose-600"
+                            />
                             <span>{{ modalPmError }}</span>
                         </div>
                         <div class="flex items-center justify-between">
@@ -3733,7 +4282,10 @@ watch(
                                     class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                                 >
                                     <Package class="h-5 w-5 text-primary" />
-                                    <span>Langkah 2: Pemilihan Bahan Pangan & Estimasi Belanja (Bahan Mentah)</span>
+                                    <span
+                                        >Langkah 2: Pemilihan Bahan Pangan &
+                                        Estimasi Belanja (Bahan Mentah)</span
+                                    >
                                 </CardTitle>
                                 <span
                                     class="px-2.5 py-0.5 text-xs font-extrabold rounded-md bg-amber-50 text-amber-700 border border-amber-200"
@@ -3741,8 +4293,12 @@ watch(
                                     Belanja Bahan Baku (PO)
                                 </span>
                             </div>
-                            <CardDescription class="text-xs text-slate-500 mt-1">
-                                Pilih bahan baku mentah dari database master pangan, tentukan gramasi porsi, BDD, buffer, dan estimasi biaya belanja (Food Cost).
+                            <CardDescription
+                                class="text-xs text-slate-500 mt-1"
+                            >
+                                Pilih bahan baku mentah dari database master
+                                pangan, tentukan gramasi porsi, BDD, buffer, dan
+                                estimasi biaya belanja (Food Cost).
                             </CardDescription>
                         </div>
                     </div>
@@ -3751,12 +4307,21 @@ watch(
                     <!-- Selector Tambah Bahan dari Master Database Pangan -->
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
-                            <label class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <label
+                                class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5"
+                            >
                                 <Search class="h-3.5 w-3.5 text-primary" />
                                 <span>Pilih & Tambah Bahan Baku Mentah:</span>
                             </label>
-                            <span class="text-[11px] text-slate-500 font-medium">
-                                Database: <strong class="text-slate-800">{{ selectedSource === 'csv' ? 'TKPI 2020' : 'NutriSurvey FTA' }}</strong>
+                            <span
+                                class="text-[11px] text-slate-500 font-medium"
+                            >
+                                Database:
+                                <strong class="text-slate-800">{{
+                                    selectedSource === "csv"
+                                        ? "TKPI 2020"
+                                        : "NutriSurvey FTA"
+                                }}</strong>
                             </span>
                         </div>
 
@@ -3766,19 +4331,41 @@ watch(
                                 @click="isComboboxOpen = !isComboboxOpen"
                                 class="w-full min-h-[46px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs"
                             >
-                                <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                                    <div class="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <div
+                                    class="flex items-center gap-2.5 min-w-0 flex-1"
+                                >
+                                    <div
+                                        class="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"
+                                    >
                                         <Plus class="h-4 w-4" />
                                     </div>
-                                    <span v-if="!selectedTkpiItem" class="text-xs text-slate-400 font-normal truncate">
-                                        Ketik nama bahan atau klik untuk memilih bahan pangan...
+                                    <span
+                                        v-if="!selectedTkpiItem"
+                                        class="text-xs text-slate-400 font-normal truncate"
+                                    >
+                                        Ketik nama bahan atau klik untuk memilih
+                                        bahan pangan...
                                     </span>
-                                    <div v-else class="flex items-center gap-2 min-w-0 truncate">
-                                        <span class="text-xs font-bold text-slate-900 truncate">{{ selectedTkpiItem.nama }}</span>
-                                        <span class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium">{{ selectedTkpiItem.kategori }}</span>
+                                    <div
+                                        v-else
+                                        class="flex items-center gap-2 min-w-0 truncate"
+                                    >
+                                        <span
+                                            class="text-xs font-bold text-slate-900 truncate"
+                                            >{{ selectedTkpiItem.nama }}</span
+                                        >
+                                        <span
+                                            class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium"
+                                            >{{
+                                                selectedTkpiItem.kategori
+                                            }}</span
+                                        >
                                     </div>
                                 </div>
-                                <ChevronDown class="h-4 w-4 text-slate-400 shrink-0 transition-transform" :class="{ 'rotate-180': isComboboxOpen }" />
+                                <ChevronDown
+                                    class="h-4 w-4 text-slate-400 shrink-0 transition-transform"
+                                    :class="{ 'rotate-180': isComboboxOpen }"
+                                />
                             </div>
 
                             <!-- Dropdown Panel -->
@@ -3786,9 +4373,13 @@ watch(
                                 v-if="isComboboxOpen"
                                 class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                             >
-                                <div class="p-2.5 border-b border-slate-100 bg-slate-50/70">
+                                <div
+                                    class="p-2.5 border-b border-slate-100 bg-slate-50/70"
+                                >
                                     <div class="relative">
-                                        <Search class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Search
+                                            class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                                        />
                                         <input
                                             type="text"
                                             v-model="searchTkpiQuery"
@@ -3798,7 +4389,9 @@ watch(
                                         />
                                     </div>
                                 </div>
-                                <div class="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                                <div
+                                    class="max-h-60 overflow-y-auto divide-y divide-slate-100"
+                                >
                                     <div
                                         v-for="item in filteredTkpiList"
                                         :key="item.id || item.code"
@@ -3806,20 +4399,45 @@ watch(
                                         class="p-3 hover:bg-primary/5 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
                                     >
                                         <div class="min-w-0">
-                                            <div class="font-bold text-slate-800 truncate">{{ item.nama }}</div>
-                                            <div class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                            <div
+                                                class="font-bold text-slate-800 truncate"
+                                            >
+                                                {{ item.nama }}
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5"
+                                            >
                                                 <span>{{ item.kategori }}</span>
                                                 <span>•</span>
-                                                <span>BDD: {{ item.bdd || 100 }}%</span>
+                                                <span
+                                                    >BDD:
+                                                    {{ item.bdd || 100 }}%</span
+                                                >
                                                 <span>•</span>
-                                                <span>{{ formatRupiah(item.harga || item.harga_master || 0) }} / Kg</span>
+                                                <span
+                                                    >{{
+                                                        formatRupiah(
+                                                            item.harga ||
+                                                                item.harga_master ||
+                                                                0,
+                                                        )
+                                                    }}
+                                                    / Kg</span
+                                                >
                                             </div>
                                         </div>
-                                        <Button type="button" size="sm" className="bg-primary/10 text-primary hover:bg-primary hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-primary/10 text-primary hover:bg-primary hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0"
+                                        >
                                             + Pilih
                                         </Button>
                                     </div>
-                                    <div v-if="filteredTkpiList.length === 0" class="p-6 text-center text-xs text-slate-400">
+                                    <div
+                                        v-if="filteredTkpiList.length === 0"
+                                        class="p-6 text-center text-xs text-slate-400"
+                                    >
                                         Bahan tidak ditemukan.
                                     </div>
                                 </div>
@@ -3828,181 +4446,393 @@ watch(
                     </div>
 
                     <!-- Panduan / Rumus Kebutuhan Bahan Mentah (Toggleable) -->
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2">
+                    <div
+                        class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2"
+                    >
                         <div class="flex items-center justify-between">
-                            <span class="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                            <span
+                                class="font-bold text-slate-700 flex items-center gap-1.5 text-xs"
+                            >
                                 <HelpCircle class="h-3.5 w-3.5 text-primary" />
-                                Panduan Rumus Perhitungan Kebutuhan Bahan Baku Mentah
+                                Panduan Rumus Perhitungan Kebutuhan Bahan Baku
+                                Mentah
                             </span>
                             <button
                                 type="button"
                                 @click="showRumusBahan = !showRumusBahan"
                                 class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
                             >
-                                {{ showRumusBahan ? 'Sembunyikan Rumus' : 'Tampilkan Rumus' }}
+                                {{
+                                    showRumusBahan
+                                        ? "Sembunyikan Rumus"
+                                        : "Tampilkan Rumus"
+                                }}
                             </button>
                         </div>
-                        <div v-if="showRumusBahan" class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600">
-                            <div class="p-2 bg-white rounded-lg border border-slate-200">
-                                <strong class="text-slate-800 block mb-0.5">1. Berat Bersih (Net Kg):</strong>
+                        <div
+                            v-if="showRumusBahan"
+                            class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600"
+                        >
+                            <div
+                                class="p-2 bg-white rounded-lg border border-slate-200"
+                            >
+                                <strong class="text-slate-800 block mb-0.5"
+                                    >1. Berat Bersih (Net Kg):</strong
+                                >
                                 <code>(Gram Bersih × Target PM) ÷ 1.000</code>
                             </div>
-                            <div class="p-2 bg-white rounded-lg border border-slate-200">
-                                <strong class="text-slate-800 block mb-0.5">2. Berat Kotor (Gross Kg):</strong>
-                                <code>(Net Gram ÷ (BDD/100)) × (1 + Buffer%) × PM ÷ 1.000</code>
+                            <div
+                                class="p-2 bg-white rounded-lg border border-slate-200"
+                            >
+                                <strong class="text-slate-800 block mb-0.5"
+                                    >2. Berat Kotor (Gross Kg):</strong
+                                >
+                                <code
+                                    >(Net Gram ÷ (BDD/100)) × (1 + Buffer%) × PM
+                                    ÷ 1.000</code
+                                >
                             </div>
-                            <div class="p-2 bg-white rounded-lg border border-slate-200">
-                                <strong class="text-slate-800 block mb-0.5">3. Subtotal Biaya PO:</strong>
+                            <div
+                                class="p-2 bg-white rounded-lg border border-slate-200"
+                            >
+                                <strong class="text-slate-800 block mb-0.5"
+                                    >3. Subtotal Biaya PO:</strong
+                                >
                                 <code>Gross Kg × Harga Satuan Master (Rp)</code>
                             </div>
                         </div>
                     </div>
 
                     <!-- Tabel Detail Bahan Baku Mentah -->
-                    <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
-                        <div class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
-                            <span class="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                                Daftar Bahan Baku Mentah untuk Pengadaan & Belanja (PO)
+                    <div
+                        class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                    >
+                        <div
+                            class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                        >
+                            <span
+                                class="text-xs font-extrabold text-slate-800 uppercase tracking-wider"
+                            >
+                                Daftar Bahan Baku Mentah untuk Pengadaan &
+                                Belanja (PO)
                             </span>
                             <span class="text-xs font-bold text-slate-500">
                                 Total: {{ selectedBahanList.length }} Bahan Baku
                             </span>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full min-w-[1000px] text-left text-xs border-collapse">
+                            <table
+                                class="w-full min-w-[1000px] text-left text-xs border-collapse"
+                            >
                                 <thead>
-                                    <tr class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                                    <tr
+                                        class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                    >
                                         <th class="p-3 text-center w-10">No</th>
-                                        <th class="p-3 min-w-[150px]">Bahan Pangan</th>
-                                        <th class="p-3 min-w-[130px]">Nama di PO</th>
-                                        <th class="p-3 min-w-[100px]">Peruntukan</th>
-                                        <th class="p-3 min-w-[80px]">Kategori</th>
-                                        <th class="p-3 text-center min-w-[85px]">PK (g)</th>
-                                        <th class="p-3 text-center min-w-[85px]">PB (g)</th>
-                                        <th class="p-3 text-center min-w-[65px]">BDD (%)</th>
-                                        <th class="p-3 text-center min-w-[70px]">Buffer (%)</th>
-                                        <th class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[85px]">Kg Bersih</th>
-                                        <th class="p-3 text-right bg-blue-50/50 text-blue-950 min-w-[85px]">Kg Kotor</th>
-                                        <th class="p-3 text-right min-w-[105px]">Harga / Kg</th>
-                                        <th class="p-3 text-right min-w-[95px]">Subtotal</th>
-                                        <th class="p-3 text-center w-12">Aksi</th>
+                                        <th class="p-3 min-w-[150px]">
+                                            Bahan Pangan
+                                        </th>
+                                        <th class="p-3 min-w-[130px]">
+                                            Nama di PO
+                                        </th>
+                                        <th class="p-3 min-w-[100px]">
+                                            Peruntukan
+                                        </th>
+                                        <th class="p-3 min-w-[80px]">
+                                            Kategori
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[85px]"
+                                        >
+                                            PK (g)
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[85px]"
+                                        >
+                                            PB (g)
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[65px]"
+                                        >
+                                            BDD (%)
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[70px]"
+                                        >
+                                            Buffer (%)
+                                        </th>
+                                        <th
+                                            class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[85px]"
+                                        >
+                                            Kg Bersih
+                                        </th>
+                                        <th
+                                            class="p-3 text-right bg-blue-50/50 text-blue-950 min-w-[85px]"
+                                        >
+                                            Kg Kotor
+                                        </th>
+                                        <th
+                                            class="p-3 text-right min-w-[105px]"
+                                        >
+                                            Harga / Kg
+                                        </th>
+                                        <th class="p-3 text-right min-w-[95px]">
+                                            Subtotal
+                                        </th>
+                                        <th class="p-3 text-center w-12">
+                                            Aksi
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-slate-800">
+                                <tbody
+                                    class="divide-y divide-slate-100 text-slate-800"
+                                >
                                     <tr v-if="selectedBahanList.length === 0">
-                                        <td colspan="14" class="p-8 text-center text-slate-400 font-medium">
-                                            Belum ada bahan baku yang dipilih. Silakan pilih bahan melalui form di atas.
+                                        <td
+                                            colspan="14"
+                                            class="p-8 text-center text-slate-400 font-medium"
+                                        >
+                                            Belum ada bahan baku yang dipilih.
+                                            Silakan pilih bahan melalui form di
+                                            atas.
                                         </td>
                                     </tr>
-                                    <tr v-for="(it, idx) in bahanCalculations" :key="idx" class="hover:bg-slate-50/70 transition-colors">
-                                        <td class="p-3 text-center font-bold text-slate-400 align-top pt-4">{{ idx + 1 }}</td>
-                                        <td class="p-3 font-bold text-slate-900 align-top pt-4">
+                                    <tr
+                                        v-for="(it, idx) in bahanCalculations"
+                                        :key="idx"
+                                        class="hover:bg-slate-50/70 transition-colors"
+                                    >
+                                        <td
+                                            class="p-3 text-center font-bold text-slate-400 align-top pt-4"
+                                        >
+                                            {{ idx + 1 }}
+                                        </td>
+                                        <td
+                                            class="p-3 font-bold text-slate-900 align-top pt-4"
+                                        >
                                             <div>{{ it.nama }}</div>
-                                            <span v-if="it.alergen" class="block text-[9.5px] text-amber-700 font-normal mt-0.5">
+                                            <span
+                                                v-if="it.alergen"
+                                                class="block text-[9.5px] text-amber-700 font-normal mt-0.5"
+                                            >
                                                 Alergen: {{ it.alergen }}
                                             </span>
                                         </td>
                                         <td class="p-3 align-top pt-3">
                                             <input
                                                 type="text"
-                                                v-model="selectedBahanList[idx].nama_po"
+                                                v-model="
+                                                    selectedBahanList[idx]
+                                                        .nama_po
+                                                "
                                                 :placeholder="it.nama"
                                                 class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
                                             />
                                         </td>
-                                        <td class="p-3 align-top pt-3 min-w-[150px]">
+                                        <td
+                                            class="p-3 align-top pt-3 min-w-[150px]"
+                                        >
                                             <select
-                                                v-model="selectedBahanList[idx].tipe_porsi"
+                                                v-model="
+                                                    selectedBahanList[idx]
+                                                        .tipe_porsi
+                                                "
                                                 class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-medium"
                                             >
-                                                <option value="normal">Normal (Semua Sasaran)</option>
-                                                <option value="alergi">Khusus Porsi Alergi</option>
+                                                <option value="normal">
+                                                    Normal (Semua Sasaran)
+                                                </option>
+                                                <option value="alergi">
+                                                    Khusus Porsi Alergi
+                                                </option>
                                             </select>
                                             <!-- Info PM Normal -->
-                                            <div v-if="selectedBahanList[idx].tipe_porsi !== 'alergi'" class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80">
+                                            <div
+                                                v-if="
+                                                    selectedBahanList[idx]
+                                                        .tipe_porsi !== 'alergi'
+                                                "
+                                                class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80"
+                                            >
                                                 <span>Sasaran:</span>
-                                                <span class="font-mono font-bold text-slate-900">{{ totalPM }} Porsi (PK: {{ totalPK }}, PB: {{ totalPB }})</span>
+                                                <span
+                                                    class="font-bold text-slate-900"
+                                                    >{{ totalPM }} Porsi (PK:
+                                                    {{ totalPK }}, PB:
+                                                    {{ totalPB }})</span
+                                                >
                                             </div>
                                             <!-- Select & Info PM Alergi -->
-                                            <div v-else class="mt-1.5 space-y-1">
+                                            <div
+                                                v-else
+                                                class="mt-1.5 space-y-1"
+                                            >
                                                 <select
-                                                    v-model="selectedBahanList[idx].jenis_alergi"
+                                                    v-model="
+                                                        selectedBahanList[idx]
+                                                            .jenis_alergi
+                                                    "
                                                     class="w-full px-2 py-1 text-[11px] font-bold border border-rose-300 rounded-lg bg-rose-50/60 text-rose-900 focus:outline-hidden focus:border-rose-500"
                                                 >
-                                                    <option value="" disabled>-- Pilih Jenis Alergi --</option>
-                                                    <option
-                                                        v-for="alOpt in rekapAlergiDetailPm"
-                                                        :key="alOpt.jenis_alergi"
-                                                        :value="alOpt.jenis_alergi"
-                                                    >
-                                                        {{ alOpt.jenis_alergi }} ({{ alOpt.total }} Porsi • PK: {{ alOpt.porsi_kecil }}, PB: {{ alOpt.porsi_besar }})
+                                                    <option value="" disabled>
+                                                        -- Pilih Jenis Alergi --
                                                     </option>
                                                     <option
-                                                        v-if="rekapAlergiDetailPm.length === 0"
+                                                        v-for="alOpt in rekapAlergiDetailPm"
+                                                        :key="
+                                                            alOpt.jenis_alergi
+                                                        "
+                                                        :value="
+                                                            alOpt.jenis_alergi
+                                                        "
+                                                    >
+                                                        {{ alOpt.jenis_alergi }}
+                                                        ({{ alOpt.total }} Porsi
+                                                        • PK:
+                                                        {{ alOpt.porsi_kecil }},
+                                                        PB:
+                                                        {{ alOpt.porsi_besar }})
+                                                    </option>
+                                                    <option
+                                                        v-if="
+                                                            rekapAlergiDetailPm.length ===
+                                                            0
+                                                        "
                                                         value="Alergi Khusus"
                                                     >
                                                         Alergi Khusus
                                                     </option>
                                                 </select>
-                                                <div class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200">
+                                                <div
+                                                    class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200"
+                                                >
                                                     <span>Sasaran:</span>
-                                                    <span class="font-mono font-bold">{{ it.totalTargetCount }} Porsi (PK: {{ it.targetPKCount }}, PB: {{ it.targetPBCount }})</span>
+                                                    <span class="font-bold"
+                                                        >{{
+                                                            it.totalTargetCount
+                                                        }}
+                                                        Porsi (PK:
+                                                        {{ it.targetPKCount }},
+                                                        PB:
+                                                        {{
+                                                            it.targetPBCount
+                                                        }})</span
+                                                    >
                                                 </div>
-                                                <p v-if="validationErrors['bahan_' + idx + '_alergi']" class="text-[10px] text-rose-600 font-bold mt-0.5">
-                                                    {{ validationErrors['bahan_' + idx + '_alergi'] }}
+                                                <p
+                                                    v-if="
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                idx +
+                                                                '_alergi'
+                                                        ]
+                                                    "
+                                                    class="text-[10px] text-rose-600 font-bold mt-0.5"
+                                                >
+                                                    {{
+                                                        validationErrors[
+                                                            "bahan_" +
+                                                                idx +
+                                                                "_alergi"
+                                                        ]
+                                                    }}
                                                 </p>
                                             </div>
                                         </td>
-                                        <td class="p-3 text-slate-600 align-top pt-4">{{ it.kategori }}</td>
-                                        <td class="p-3 align-top pt-3 text-center">
+                                        <td
+                                            class="p-3 text-slate-600 align-top pt-4"
+                                        >
+                                            {{ it.kategori }}
+                                        </td>
+                                        <td
+                                            class="p-3 align-top pt-3 text-center"
+                                        >
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                v-model.number="selectedBahanList[idx].gram_pk"
+                                                v-model.number="
+                                                    selectedBahanList[idx]
+                                                        .gram_pk
+                                                "
                                                 placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-mono font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
+                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
                                             />
-                                            <div class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100">
+                                            <div
+                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                            >
                                                 × {{ it.targetPKCount }} porsi
                                             </div>
                                         </td>
-                                        <td class="p-3 align-top pt-3 text-center">
+                                        <td
+                                            class="p-3 align-top pt-3 text-center"
+                                        >
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                v-model.number="selectedBahanList[idx].gram_pb"
+                                                v-model.number="
+                                                    selectedBahanList[idx]
+                                                        .gram_pb
+                                                "
                                                 placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-mono font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
+                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
                                             />
-                                            <div class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100">
+                                            <div
+                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                            >
                                                 × {{ it.targetPBCount }} porsi
                                             </div>
                                         </td>
-                                        <td class="p-3 text-center align-top pt-4 font-mono text-slate-700">{{ it.bdd || 100 }}%</td>
-                                        <td class="p-3 align-top pt-3">
-                                            <input
-                                                type="number"
-                                                v-model.number="selectedBahanList[idx].buffer"
-                                                class="w-14 text-center px-1.5 py-1 text-xs font-mono border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
-                                            />
-                                        </td>
-                                        <td class="p-3 text-right font-mono font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap">
-                                            {{ formatGrossWeight(it.totalNetKg) }}
-                                        </td>
-                                        <td class="p-3 text-right font-mono font-bold text-blue-950 bg-blue-50/30 align-top pt-4 whitespace-nowrap">
-                                            {{ formatGrossWeight(it.totalGrossKg) }}
+                                        <td
+                                            class="p-3 text-center align-top pt-4 text-slate-700"
+                                        >
+                                            {{ it.bdd || 100 }}%
                                         </td>
                                         <td class="p-3 align-top pt-3">
                                             <input
                                                 type="number"
-                                                v-model.number="selectedBahanList[idx].harga_master"
-                                                class="w-24 text-right px-2 py-1 text-xs font-mono border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
+                                                v-model.number="
+                                                    selectedBahanList[idx]
+                                                        .buffer
+                                                "
+                                                class="w-14 text-center px-1.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
                                             />
                                         </td>
-                                        <td class="p-3 text-right font-mono font-bold text-emerald-800 align-top pt-4 whitespace-nowrap">
-                                            {{ formatRupiah(it.subtotalMaster) }}
+                                        <td
+                                            class="p-3 text-right font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(it.totalNetKg)
+                                            }}
                                         </td>
-                                        <td class="p-3 text-center align-top pt-3.5">
+                                        <td
+                                            class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-top pt-4 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    it.totalGrossKg,
+                                                )
+                                            }}
+                                        </td>
+                                        <td class="p-3 align-top pt-3">
+                                            <input
+                                                type="number"
+                                                v-model.number="
+                                                    selectedBahanList[idx]
+                                                        .harga_master
+                                                "
+                                                class="w-24 text-right px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
+                                            />
+                                        </td>
+                                        <td
+                                            class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatRupiah(it.subtotalMaster)
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-center align-top pt-3.5"
+                                        >
                                             <button
                                                 type="button"
                                                 @click="handleRemoveBahan(idx)"
@@ -4014,20 +4844,54 @@ watch(
                                         </td>
                                     </tr>
                                 </tbody>
-                                <tfoot v-if="selectedBahanList.length > 0" class="bg-slate-50/90 font-bold border-t border-slate-200">
+                                <tfoot
+                                    v-if="selectedBahanList.length > 0"
+                                    class="bg-slate-50/90 font-bold border-t border-slate-200"
+                                >
                                     <tr>
-                                        <td colspan="9" class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold">
-                                            Total Estimasi Belanja Bahan Baku (PO):
+                                        <td
+                                            colspan="9"
+                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
+                                        >
+                                            Total Estimasi Belanja Bahan Baku
+                                            (PO):
                                         </td>
-                                        <td class="p-3.5 text-right font-mono font-black text-amber-950 bg-amber-100/40 whitespace-nowrap">
-                                            {{ formatGrossWeight(bahanCalculations.reduce((acc, it) => acc + it.totalNetKg, 0)) }}
+                                        <td
+                                            class="p-3.5 text-right font-black text-amber-950 bg-amber-100/40 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    bahanCalculations.reduce(
+                                                        (acc, it) =>
+                                                            acc + it.totalNetKg,
+                                                        0,
+                                                    ),
+                                                )
+                                            }}
                                         </td>
-                                        <td class="p-3.5 text-right font-mono font-black text-blue-950 bg-blue-100/40 whitespace-nowrap">
-                                            {{ formatGrossWeight(bahanCalculations.reduce((acc, it) => acc + it.totalGrossKg, 0)) }}
+                                        <td
+                                            class="p-3.5 text-right font-black text-blue-950 bg-blue-100/40 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    bahanCalculations.reduce(
+                                                        (acc, it) =>
+                                                            acc +
+                                                            it.totalGrossKg,
+                                                        0,
+                                                    ),
+                                                )
+                                            }}
                                         </td>
                                         <td></td>
-                                        <td class="p-3.5 text-right font-mono font-black text-emerald-900 text-sm whitespace-nowrap">
-                                            {{ formatRupiah(grandTotalDraftMaster) }}
+                                        <td
+                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatRupiah(
+                                                    grandTotalDraftMaster,
+                                                )
+                                            }}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -4039,166 +4903,459 @@ watch(
                     <!-- Analisis Food Cost & Batas Pagu Anggaran Mentah -->
                     <div class="space-y-4 pt-2">
                         <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                            <h4
+                                class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"
+                            >
                                 <Coins class="h-4 w-4 text-emerald-600" />
-                                <span>Analisis Food Cost & Evaluasi Pagu Anggaran MBG</span>
+                                <span
+                                    >Analisis Food Cost & Evaluasi Pagu Anggaran
+                                    MBG</span
+                                >
                             </h4>
                             <button
                                 type="button"
                                 @click="showRumusCost = !showRumusCost"
                                 class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
                             >
-                                {{ showRumusCost ? 'Sembunyikan Rumus Cost' : 'Tampilkan Rumus Cost' }}
+                                {{
+                                    showRumusCost
+                                        ? "Sembunyikan Rumus Cost"
+                                        : "Tampilkan Rumus Cost"
+                                }}
                             </button>
                         </div>
 
-                        <div v-if="showRumusCost" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-600">
-                            <div><strong>Food Cost PK:</strong> <code>Total Biaya Porsi PK ÷ Jumlah Siswa PK</code></div>
-                            <div><strong>Food Cost PB:</strong> <code>Total Biaya Porsi PB ÷ Jumlah Siswa PB</code></div>
+                        <div
+                            v-if="showRumusCost"
+                            class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-600"
+                        >
+                            <div>
+                                <strong>Food Cost PK:</strong>
+                                <code
+                                    >Total Biaya Porsi PK ÷ Jumlah Siswa
+                                    PK</code
+                                >
+                            </div>
+                            <div>
+                                <strong>Food Cost PB:</strong>
+                                <code
+                                    >Total Biaya Porsi PB ÷ Jumlah Siswa
+                                    PB</code
+                                >
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- Card Food Cost PK -->
-                            <div class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3" :class="totalFoodCostPKNormal <= 8000 ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'">
+                            <div
+                                class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                :class="
+                                    totalFoodCostPKNormal <= 8000
+                                        ? 'border-emerald-200 bg-emerald-50/20'
+                                        : 'border-rose-200 bg-rose-50/20'
+                                "
+                            >
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Food Cost Porsi Kecil (PK)</span>
-                                    <span class="text-xs font-black px-2.5 py-0.5 rounded-lg border" :class="totalFoodCostPKNormal <= 8000 ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'">
-                                        {{ totalFoodCostPKNormal <= 8000 ? '✓ Sesuai Pagu' : '⚠ Melebihi Pagu' }}
+                                    <span
+                                        class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                        >Food Cost Porsi Kecil (PK)</span
+                                    >
+                                    <span
+                                        class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                        :class="
+                                            totalFoodCostPKNormal <= 8000
+                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300'
+                                        "
+                                    >
+                                        {{
+                                            totalFoodCostPKNormal <= 8000
+                                                ? "✓ Sesuai Pagu"
+                                                : "⚠ Melebihi Pagu"
+                                        }}
                                     </span>
                                 </div>
-                                <div class="flex items-baseline justify-between">
-                                    <div class="text-2xl font-black text-slate-900 font-mono">{{ formatRupiah(totalFoodCostPKNormal) }}</div>
-                                    <div class="text-xs text-slate-500">Batas Pagu: <strong>Rp 8.000</strong></div>
+                                <div
+                                    class="flex items-baseline justify-between"
+                                >
+                                    <div
+                                        class="text-2xl font-black text-slate-900"
+                                    >
+                                        {{
+                                            formatRupiah(totalFoodCostPKNormal)
+                                        }}
+                                    </div>
+                                    <div class="text-xs text-slate-500">
+                                        Batas Pagu: <strong>Rp 8.000</strong>
+                                    </div>
                                 </div>
-                                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div
+                                    class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                >
                                     <div
                                         class="h-full transition-all"
-                                        :class="totalFoodCostPKNormal <= 8000 ? 'bg-emerald-500' : 'bg-rose-500'"
-                                        :style="{ width: Math.min((totalFoodCostPKNormal / 8000) * 100, 100) + '%' }"
+                                        :class="
+                                            totalFoodCostPKNormal <= 8000
+                                                ? 'bg-emerald-500'
+                                                : 'bg-rose-500'
+                                        "
+                                        :style="{
+                                            width:
+                                                Math.min(
+                                                    (totalFoodCostPKNormal /
+                                                        8000) *
+                                                        100,
+                                                    100,
+                                                ) + '%',
+                                        }"
                                     ></div>
                                 </div>
                             </div>
 
                             <!-- Card Food Cost PB -->
-                            <div class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3" :class="totalFoodCostPBNormal <= 10000 ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'">
+                            <div
+                                class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                :class="
+                                    totalFoodCostPBNormal <= 10000
+                                        ? 'border-emerald-200 bg-emerald-50/20'
+                                        : 'border-rose-200 bg-rose-50/20'
+                                "
+                            >
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Food Cost Porsi Besar (PB)</span>
-                                    <span class="text-xs font-black px-2.5 py-0.5 rounded-lg border" :class="totalFoodCostPBNormal <= 10000 ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'">
-                                        {{ totalFoodCostPBNormal <= 10000 ? '✓ Sesuai Pagu' : '⚠ Melebihi Pagu' }}
+                                    <span
+                                        class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                        >Food Cost Porsi Besar (PB)</span
+                                    >
+                                    <span
+                                        class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                        :class="
+                                            totalFoodCostPBNormal <= 10000
+                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                : 'bg-rose-100 text-rose-800 border-rose-300'
+                                        "
+                                    >
+                                        {{
+                                            totalFoodCostPBNormal <= 10000
+                                                ? "✓ Sesuai Pagu"
+                                                : "⚠ Melebihi Pagu"
+                                        }}
                                     </span>
                                 </div>
-                                <div class="flex items-baseline justify-between">
-                                    <div class="text-2xl font-black text-slate-900 font-mono">{{ formatRupiah(totalFoodCostPBNormal) }}</div>
-                                    <div class="text-xs text-slate-500">Batas Pagu: <strong>Rp 10.000</strong></div>
+                                <div
+                                    class="flex items-baseline justify-between"
+                                >
+                                    <div
+                                        class="text-2xl font-black text-slate-900"
+                                    >
+                                        {{
+                                            formatRupiah(totalFoodCostPBNormal)
+                                        }}
+                                    </div>
+                                    <div class="text-xs text-slate-500">
+                                        Batas Pagu: <strong>Rp 10.000</strong>
+                                    </div>
                                 </div>
-                                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div
+                                    class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                >
                                     <div
                                         class="h-full transition-all"
-                                        :class="totalFoodCostPBNormal <= 10000 ? 'bg-emerald-500' : 'bg-rose-500'"
-                                        :style="{ width: Math.min((totalFoodCostPBNormal / 10000) * 100, 100) + '%' }"
+                                        :class="
+                                            totalFoodCostPBNormal <= 10000
+                                                ? 'bg-emerald-500'
+                                                : 'bg-rose-500'
+                                        "
+                                        :style="{
+                                            width:
+                                                Math.min(
+                                                    (totalFoodCostPBNormal /
+                                                        10000) *
+                                                        100,
+                                                    100,
+                                                ) + '%',
+                                        }"
                                     ></div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Kartu Evaluasi AKG Varian Khusus Alergi (Layout & Style Sama dengan Normal) -->
-                        <div v-if="activeAlergiAkgList.length > 0" class="space-y-6 pt-4 border-t border-slate-200">
+                        <div
+                            v-if="activeAlergiAkgList.length > 0"
+                            class="space-y-6 pt-4 border-t border-slate-200"
+                        >
                             <div
                                 v-for="alRes in activeAlergiAkgList"
                                 :key="alRes.jenis_alergi"
                                 class="space-y-3 bg-rose-50/30 p-4 rounded-3xl border border-rose-200/80 shadow-2xs"
                             >
-                                <div class="flex items-center justify-between flex-wrap gap-2">
-                                    <h5 class="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2">
-                                        <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
-                                        <span>Evaluasi Standar AKG Varian Khusus Alergi: {{ alRes.jenis_alergi }}</span>
+                                <div
+                                    class="flex items-center justify-between flex-wrap gap-2"
+                                >
+                                    <h5
+                                        class="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2"
+                                    >
+                                        <AlertTriangle
+                                            class="h-4 w-4 text-rose-600 shrink-0"
+                                        />
+                                        <span
+                                            >Evaluasi Standar AKG Varian Khusus
+                                            Alergi:
+                                            {{ alRes.jenis_alergi }}</span
+                                        >
                                     </h5>
-                                    <span class="px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold">
-                                        Sasaran: {{ alRes.total_siswa }} Porsi (PK: {{ alRes.jml_pk }}, PB: {{ alRes.jml_pb }})
+                                    <span
+                                        class="px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold"
+                                    >
+                                        Sasaran: {{ alRes.total_siswa }} Porsi
+                                        (PK: {{ alRes.jml_pk }}, PB:
+                                        {{ alRes.jml_pb }})
                                     </span>
                                 </div>
 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                >
                                     <!-- Card AKG Porsi Kecil (PK) Alergi -->
-                                    <div class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs">
-                                        <div class="flex items-center justify-between">
-                                            <h6 class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                                                <Activity class="h-4 w-4 text-amber-600" />
-                                                <span>Porsi Kecil (PK) • Varian {{ alRes.jenis_alergi }}</span>
+                                    <div
+                                        class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <h6
+                                                class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
+                                            >
+                                                <Activity
+                                                    class="h-4 w-4 text-amber-600"
+                                                />
+                                                <span
+                                                    >Porsi Kecil (PK) • Varian
+                                                    {{
+                                                        alRes.jenis_alergi
+                                                    }}</span
+                                                >
                                             </h6>
-                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                            <Badge
+                                                variant="outline"
+                                                className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                            >
                                                 ✓ MEMENUHI STANDAR AKG BGN
                                             </Badge>
                                         </div>
-                                        <div class="grid grid-cols-3 gap-2 text-xs">
-                                            <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pk.energi }} kkal</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 450 - 550</span>
+                                        <div
+                                            class="grid grid-cols-3 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Energi</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pk.energi }} kkal
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 450 - 550</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pk.protein }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 15 - 22 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Protein</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pk.protein }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 15 - 22 g</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pk.lemak }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 12 - 18 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Lemak</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pk.lemak }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 12 - 18 g</span
+                                                >
                                             </div>
                                         </div>
-                                        <div class="grid grid-cols-2 gap-2 text-xs">
-                                            <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pk.karbohidrat }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 65 - 85 g</span>
+                                        <div
+                                            class="grid grid-cols-2 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Karbohidrat</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pk.karbohidrat }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 65 - 85 g</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pk.serat }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: Min 4.0 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Serat</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pk.serat }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: Min 4.0 g</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Card AKG Porsi Besar (PB) Alergi -->
-                                    <div class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs">
-                                        <div class="flex items-center justify-between">
-                                            <h6 class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-                                                <Activity class="h-4 w-4 text-indigo-600" />
-                                                <span>Porsi Besar (PB) • Varian {{ alRes.jenis_alergi }}</span>
+                                    <div
+                                        class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <h6
+                                                class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
+                                            >
+                                                <Activity
+                                                    class="h-4 w-4 text-indigo-600"
+                                                />
+                                                <span
+                                                    >Porsi Besar (PB) • Varian
+                                                    {{
+                                                        alRes.jenis_alergi
+                                                    }}</span
+                                                >
                                             </h6>
-                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                            <Badge
+                                                variant="outline"
+                                                className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                            >
                                                 ✓ MEMENUHI STANDAR AKG BGN
                                             </Badge>
                                         </div>
-                                        <div class="grid grid-cols-3 gap-2 text-xs">
-                                            <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pb.energi }} kkal</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 650 - 800</span>
+                                        <div
+                                            class="grid grid-cols-3 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Energi</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pb.energi }} kkal
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 650 - 800</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pb.protein }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 24 - 35 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Protein</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pb.protein }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 24 - 35 g</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pb.lemak }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 18 - 26 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Lemak</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pb.lemak }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 18 - 26 g</span
+                                                >
                                             </div>
                                         </div>
-                                        <div class="grid grid-cols-2 gap-2 text-xs">
-                                            <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pb.karbohidrat }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: 85 - 110 g</span>
+                                        <div
+                                            class="grid grid-cols-2 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Karbohidrat</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pb.karbohidrat }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: 85 - 110 g</span
+                                                >
                                             </div>
-                                            <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                                <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
-                                                <div class="font-black text-slate-900 text-sm mt-0.5">{{ alRes.pb.serat }} g</div>
-                                                <span class="text-[9.5px] text-slate-400">Target: Min 6.0 g</span>
+                                            <div
+                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                            >
+                                                <span
+                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                    >Serat</span
+                                                >
+                                                <div
+                                                    class="font-black text-slate-900 text-sm mt-0.5"
+                                                >
+                                                    {{ alRes.pb.serat }} g
+                                                </div>
+                                                <span
+                                                    class="text-[9.5px] text-slate-400"
+                                                    >Target: Min 6.0 g</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
@@ -4210,17 +5367,26 @@ watch(
             </Card>
 
             <!-- Bottom Action Bar Step 2 -->
-            <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800">
+            <div
+                class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800"
+            >
                 <div>
-                    <h4 class="text-sm font-black text-white flex items-center gap-2">
-                        <CheckCircle2 class="h-4 w-4 text-emerald-400 shrink-0" />
+                    <h4
+                        class="text-sm font-black text-white flex items-center gap-2"
+                    >
+                        <CheckCircle2
+                            class="h-4 w-4 text-emerald-400 shrink-0"
+                        />
                         <span>Kebutuhan Bahan Pangan & Biaya Belanja Siap</span>
                     </h4>
                     <p class="text-xs text-slate-300 leading-relaxed mt-0.5">
-                        Lanjutkan ke Langkah 3 untuk memformulasi gizi matang dan mengevaluasi standar AKG siap santap.
+                        Lanjutkan ke Langkah 3 untuk memformulasi gizi matang
+                        dan mengevaluasi standar AKG siap santap.
                     </p>
                 </div>
-                <div class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto">
+                <div
+                    class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto"
+                >
                     <Button
                         type="button"
                         @click="buatMenuSubTab = 'work_order'"
@@ -4267,8 +5433,14 @@ watch(
                                 <CardTitle
                                     class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                                 >
-                                    <ClipboardList class="h-5 w-5 text-primary" />
-                                    <span>Langkah 3: Formulasi Menu Matang & Evaluasi Nilai Gizi AKG (Siap Santap)</span>
+                                    <ClipboardList
+                                        class="h-5 w-5 text-primary"
+                                    />
+                                    <span
+                                        >Langkah 3: Formulasi Menu Matang &
+                                        Evaluasi Nilai Gizi AKG (Siap
+                                        Santap)</span
+                                    >
                                 </CardTitle>
                                 <span
                                     class="px-2.5 py-0.5 text-xs font-extrabold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -4276,8 +5448,12 @@ watch(
                                     Evaluasi AKG BGN
                                 </span>
                             </div>
-                            <CardDescription class="text-xs text-slate-500 mt-1">
-                                Formulasi komposisi hidangan matang siap santap untuk mengevaluasi pemenuhan Angka Kecukupan Gizi (AKG) standar Badan Gizi Nasional (BGN).
+                            <CardDescription
+                                class="text-xs text-slate-500 mt-1"
+                            >
+                                Formulasi komposisi hidangan matang siap santap
+                                untuk mengevaluasi pemenuhan Angka Kecukupan
+                                Gizi (AKG) standar Badan Gizi Nasional (BGN).
                             </CardDescription>
                         </div>
                         <div class="flex items-center gap-2">
@@ -4289,7 +5465,10 @@ watch(
                                 className="text-xs font-bold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             >
                                 <RotateCcw class="h-3.5 w-3.5 text-primary" />
-                                <span>Sinkronkan dari Bahan Pangan (Langkah 2)</span>
+                                <span
+                                    >Sinkronkan dari Bahan Pangan (Langkah
+                                    2)</span
+                                >
                             </Button>
                         </div>
                     </div>
@@ -4298,34 +5477,74 @@ watch(
                     <!-- Selector Tambah Bahan Menu Siap Santap -->
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
-                            <label class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <label
+                                class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5"
+                            >
                                 <Search class="h-3.5 w-3.5 text-primary" />
-                                <span>Tambah Menu / Bahan Siap Santap Tambahan:</span>
+                                <span
+                                    >Tambah Menu / Bahan Siap Santap
+                                    Tambahan:</span
+                                >
                             </label>
-                            <span class="text-[11px] text-slate-500 font-medium">
-                                Database: <strong class="text-slate-800">{{ selectedSource === 'csv' ? 'TKPI 2020' : 'NutriSurvey FTA' }}</strong>
+                            <span
+                                class="text-[11px] text-slate-500 font-medium"
+                            >
+                                Database:
+                                <strong class="text-slate-800">{{
+                                    selectedSource === "csv"
+                                        ? "TKPI 2020"
+                                        : "NutriSurvey FTA"
+                                }}</strong>
                             </span>
                         </div>
 
                         <!-- Combobox Selector Step 3 -->
                         <div class="relative" @click.stop>
                             <div
-                                @click="isComboboxGiziOpen = !isComboboxGiziOpen"
+                                @click="
+                                    isComboboxGiziOpen = !isComboboxGiziOpen
+                                "
                                 class="w-full min-h-[46px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs"
                             >
-                                <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                                    <div class="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center shrink-0">
+                                <div
+                                    class="flex items-center gap-2.5 min-w-0 flex-1"
+                                >
+                                    <div
+                                        class="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center shrink-0"
+                                    >
                                         <Plus class="h-4 w-4" />
                                     </div>
-                                    <span v-if="!selectedTkpiGiziItem" class="text-xs text-slate-400 font-normal truncate">
-                                        Ketik nama bahan/hidangan matang untuk ditambahkan ke formulasi gizi...
+                                    <span
+                                        v-if="!selectedTkpiGiziItem"
+                                        class="text-xs text-slate-400 font-normal truncate"
+                                    >
+                                        Ketik nama bahan/hidangan matang untuk
+                                        ditambahkan ke formulasi gizi...
                                     </span>
-                                    <div v-else class="flex items-center gap-2 min-w-0 truncate">
-                                        <span class="text-xs font-bold text-slate-900 truncate">{{ selectedTkpiGiziItem.nama }}</span>
-                                        <span class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium">{{ selectedTkpiGiziItem.kategori }}</span>
+                                    <div
+                                        v-else
+                                        class="flex items-center gap-2 min-w-0 truncate"
+                                    >
+                                        <span
+                                            class="text-xs font-bold text-slate-900 truncate"
+                                            >{{
+                                                selectedTkpiGiziItem.nama
+                                            }}</span
+                                        >
+                                        <span
+                                            class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium"
+                                            >{{
+                                                selectedTkpiGiziItem.kategori
+                                            }}</span
+                                        >
                                     </div>
                                 </div>
-                                <ChevronDown class="h-4 w-4 text-slate-400 shrink-0 transition-transform" :class="{ 'rotate-180': isComboboxGiziOpen }" />
+                                <ChevronDown
+                                    class="h-4 w-4 text-slate-400 shrink-0 transition-transform"
+                                    :class="{
+                                        'rotate-180': isComboboxGiziOpen,
+                                    }"
+                                />
                             </div>
 
                             <!-- Dropdown Panel Step 3 -->
@@ -4333,9 +5552,13 @@ watch(
                                 v-if="isComboboxGiziOpen"
                                 class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                             >
-                                <div class="p-2.5 border-b border-slate-100 bg-slate-50/70">
+                                <div
+                                    class="p-2.5 border-b border-slate-100 bg-slate-50/70"
+                                >
                                     <div class="relative">
-                                        <Search class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Search
+                                            class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                                        />
                                         <input
                                             type="text"
                                             v-model="searchTkpiGiziQuery"
@@ -4345,7 +5568,9 @@ watch(
                                         />
                                     </div>
                                 </div>
-                                <div class="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                                <div
+                                    class="max-h-60 overflow-y-auto divide-y divide-slate-100"
+                                >
                                     <div
                                         v-for="item in filteredGiziTkpiList"
                                         :key="item.id || item.code"
@@ -4353,20 +5578,42 @@ watch(
                                         class="p-3 hover:bg-emerald-50/40 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
                                     >
                                         <div class="min-w-0">
-                                            <div class="font-bold text-slate-800 truncate">{{ item.nama }}</div>
-                                            <div class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                            <div
+                                                class="font-bold text-slate-800 truncate"
+                                            >
+                                                {{ item.nama }}
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5"
+                                            >
                                                 <span>{{ item.kategori }}</span>
                                                 <span>•</span>
-                                                <span>Energi: {{ item.energi || 0 }} kkal</span>
+                                                <span
+                                                    >Energi:
+                                                    {{ item.energi || 0 }}
+                                                    kkal</span
+                                                >
                                                 <span>•</span>
-                                                <span>Protein: {{ item.protein || 0 }}g</span>
+                                                <span
+                                                    >Protein:
+                                                    {{
+                                                        item.protein || 0
+                                                    }}g</span
+                                                >
                                             </div>
                                         </div>
-                                        <Button type="button" size="sm" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0"
+                                        >
                                             + Tambah
                                         </Button>
                                     </div>
-                                    <div v-if="filteredGiziTkpiList.length === 0" class="p-6 text-center text-xs text-slate-400">
+                                    <div
+                                        v-if="filteredGiziTkpiList.length === 0"
+                                        class="p-6 text-center text-xs text-slate-400"
+                                    >
                                         Bahan matang tidak ditemukan.
                                     </div>
                                 </div>
@@ -4375,170 +5622,429 @@ watch(
                     </div>
 
                     <!-- Panduan Rumus AKG (Toggleable) -->
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2">
+                    <div
+                        class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2"
+                    >
                         <div class="flex items-center justify-between">
-                            <span class="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                            <span
+                                class="font-bold text-slate-700 flex items-center gap-1.5 text-xs"
+                            >
                                 <HelpCircle class="h-3.5 w-3.5 text-primary" />
-                                Panduan Rumus Perhitungan Nilai Gizi & Standar AKG Siap Santap
+                                Panduan Rumus Perhitungan Nilai Gizi & Standar
+                                AKG Siap Santap
                             </span>
                             <button
                                 type="button"
                                 @click="showRumusAkg = !showRumusAkg"
                                 class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
                             >
-                                {{ showRumusAkg ? 'Sembunyikan Rumus AKG' : 'Tampilkan Rumus AKG' }}
+                                {{
+                                    showRumusAkg
+                                        ? "Sembunyikan Rumus AKG"
+                                        : "Tampilkan Rumus AKG"
+                                }}
                             </button>
                         </div>
-                        <div v-if="showRumusAkg" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600">
-                            <div class="p-2 bg-white rounded-lg border border-slate-200">
-                                <strong class="text-slate-800 block mb-0.5">Rumus Nilai Gizi per Porsi:</strong>
-                                <code>(Gram Bersih Matang ÷ 100) × Nilai Gizi Database Master per 100g</code>
+                        <div
+                            v-if="showRumusAkg"
+                            class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600"
+                        >
+                            <div
+                                class="p-2 bg-white rounded-lg border border-slate-200"
+                            >
+                                <strong class="text-slate-800 block mb-0.5"
+                                    >Rumus Nilai Gizi per Porsi:</strong
+                                >
+                                <code
+                                    >(Gram Bersih Matang ÷ 100) × Nilai Gizi
+                                    Database Master per 100g</code
+                                >
                             </div>
-                            <div class="p-2 bg-white rounded-lg border border-slate-200">
-                                <strong class="text-slate-800 block mb-0.5">Rumus Total AKG Menu:</strong>
-                                <code>Σ (Nilai Gizi per Bahan) untuk seluruh komponen menu siap santap</code>
+                            <div
+                                class="p-2 bg-white rounded-lg border border-slate-200"
+                            >
+                                <strong class="text-slate-800 block mb-0.5"
+                                    >Rumus Total AKG Menu:</strong
+                                >
+                                <code
+                                    >Σ (Nilai Gizi per Bahan) untuk seluruh
+                                    komponen menu siap santap</code
+                                >
                             </div>
                         </div>
                     </div>
 
                     <!-- Tabel Formulasi Menu Siap Santap & Kandungan Gizi Lengkap -->
-                    <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
-                        <div class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
-                            <span class="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                                Daftar Komposisi Hidangan Matang & Kandungan Gizi Siap Santap
+                    <div
+                        class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                    >
+                        <div
+                            class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                        >
+                            <span
+                                class="text-xs font-extrabold text-slate-800 uppercase tracking-wider"
+                            >
+                                Daftar Komposisi Hidangan Matang & Kandungan
+                                Gizi Siap Santap
                             </span>
                             <span class="text-xs font-bold text-slate-500">
-                                Total: {{ selectedGiziBahanList.length }} Komponen
+                                Total:
+                                {{ selectedGiziBahanList.length }} Komponen
                             </span>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full min-w-[1100px] text-left text-xs border-collapse">
+                            <table
+                                class="w-full min-w-[1100px] text-left text-xs border-collapse"
+                            >
                                 <thead>
-                                    <tr class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                                    <tr
+                                        class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                    >
                                         <th class="p-3 text-center w-10">No</th>
-                                        <th class="p-3 min-w-[160px]">Bahan / Hidangan Matang</th>
-                                        <th class="p-3 min-w-[110px]">Peruntukan</th>
-                                        <th class="p-3 min-w-[90px]">Kategori</th>
-                                        <th class="p-3 text-center min-w-[85px]">PK (g)</th>
-                                        <th class="p-3 text-center min-w-[85px]">PB (g)</th>
-                                        <th class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[90px]">Kg Bersih</th>
-                                        <th class="p-3 text-right min-w-[95px]">Energi (Kkal)</th>
-                                        <th class="p-3 text-right min-w-[90px]">Protein (g)</th>
-                                        <th class="p-3 text-right min-w-[90px]">Lemak (g)</th>
-                                        <th class="p-3 text-right min-w-[90px]">Karbo (g)</th>
-                                        <th class="p-3 text-right min-w-[90px]">Serat (g)</th>
-                                        <th class="p-3 text-center w-12">Aksi</th>
+                                        <th class="p-3 min-w-[160px]">
+                                            Bahan / Hidangan Matang
+                                        </th>
+                                        <th class="p-3 min-w-[110px]">
+                                            Peruntukan
+                                        </th>
+                                        <th class="p-3 min-w-[90px]">
+                                            Kategori
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[85px]"
+                                        >
+                                            PK (g)
+                                        </th>
+                                        <th
+                                            class="p-3 text-center min-w-[85px]"
+                                        >
+                                            PB (g)
+                                        </th>
+                                        <th
+                                            class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[90px]"
+                                        >
+                                            Kg Bersih
+                                        </th>
+                                        <th class="p-3 text-right min-w-[95px]">
+                                            Energi (Kkal)
+                                        </th>
+                                        <th class="p-3 text-right min-w-[90px]">
+                                            Protein (g)
+                                        </th>
+                                        <th class="p-3 text-right min-w-[90px]">
+                                            Lemak (g)
+                                        </th>
+                                        <th class="p-3 text-right min-w-[90px]">
+                                            Karbo (g)
+                                        </th>
+                                        <th class="p-3 text-right min-w-[90px]">
+                                            Serat (g)
+                                        </th>
+                                        <th class="p-3 text-center w-12">
+                                            Aksi
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-slate-800">
-                                    <tr v-if="selectedGiziBahanList.length === 0">
-                                        <td colspan="13" class="p-8 text-center text-slate-400 font-medium">
-                                            Belum ada komposisi gizi siap santap. Klik tombol "Sinkronkan dari Bahan Pangan" di atas atau tambahkan bahan baru.
+                                <tbody
+                                    class="divide-y divide-slate-100 text-slate-800"
+                                >
+                                    <tr
+                                        v-if="
+                                            selectedGiziBahanList.length === 0
+                                        "
+                                    >
+                                        <td
+                                            colspan="13"
+                                            class="p-8 text-center text-slate-400 font-medium"
+                                        >
+                                            Belum ada komposisi gizi siap
+                                            santap. Klik tombol "Sinkronkan dari
+                                            Bahan Pangan" di atas atau tambahkan
+                                            bahan baru.
                                         </td>
                                     </tr>
-                                    <tr v-for="(it, idx) in giziCalculations" :key="idx" class="hover:bg-slate-50/70 transition-colors">
-                                        <td class="p-3 text-center font-bold text-slate-400 align-top pt-4">{{ idx + 1 }}</td>
-                                        <td class="p-3 font-bold text-slate-900 align-top pt-4">
+                                    <tr
+                                        v-for="(it, idx) in giziCalculations"
+                                        :key="idx"
+                                        class="hover:bg-slate-50/70 transition-colors"
+                                    >
+                                        <td
+                                            class="p-3 text-center font-bold text-slate-400 align-top pt-4"
+                                        >
+                                            {{ idx + 1 }}
+                                        </td>
+                                        <td
+                                            class="p-3 font-bold text-slate-900 align-top pt-4"
+                                        >
                                             <div>{{ it.nama }}</div>
-                                            <div class="text-[10px] text-slate-400 font-medium mt-0.5">
-                                                Master/100g: {{ it.tkpi?.energi || 0 }} kkal, {{ it.tkpi?.protein || 0 }}g Prot
+                                            <div
+                                                class="text-[10px] text-slate-400 font-medium mt-0.5"
+                                            >
+                                                Master/100g:
+                                                {{ it.tkpi?.energi || 0 }} kkal,
+                                                {{ it.tkpi?.protein || 0 }}g
+                                                Prot
                                             </div>
                                         </td>
-                                        <td class="p-3 align-top pt-3 min-w-[150px]">
+                                        <td
+                                            class="p-3 align-top pt-3 min-w-[150px]"
+                                        >
                                             <select
-                                                v-model="selectedGiziBahanList[idx].tipe_porsi"
+                                                v-model="
+                                                    selectedGiziBahanList[idx]
+                                                        .tipe_porsi
+                                                "
                                                 class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-medium"
                                             >
-                                                <option value="normal">Normal (Semua Sasaran)</option>
-                                                <option value="alergi">Khusus Porsi Alergi</option>
+                                                <option value="normal">
+                                                    Normal (Semua Sasaran)
+                                                </option>
+                                                <option value="alergi">
+                                                    Khusus Porsi Alergi
+                                                </option>
                                             </select>
                                             <!-- Info PM Normal -->
-                                            <div v-if="selectedGiziBahanList[idx].tipe_porsi !== 'alergi'" class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80">
+                                            <div
+                                                v-if="
+                                                    selectedGiziBahanList[idx]
+                                                        .tipe_porsi !== 'alergi'
+                                                "
+                                                class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80"
+                                            >
                                                 <span>Sasaran:</span>
-                                                <span class="font-mono font-bold text-slate-900">{{ totalPM }} Porsi (PK: {{ totalPK }}, PB: {{ totalPB }})</span>
+                                                <span
+                                                    class="font-bold text-slate-900"
+                                                    >{{ totalPM }} Porsi (PK:
+                                                    {{ totalPK }}, PB:
+                                                    {{ totalPB }})</span
+                                                >
                                             </div>
                                             <!-- Select & Info PM Alergi -->
-                                            <div v-else class="mt-1.5 space-y-1">
+                                            <div
+                                                v-else
+                                                class="mt-1.5 space-y-1"
+                                            >
                                                 <select
-                                                    v-model="selectedGiziBahanList[idx].jenis_alergi"
+                                                    v-model="
+                                                        selectedGiziBahanList[
+                                                            idx
+                                                        ].jenis_alergi
+                                                    "
                                                     class="w-full px-2 py-1 text-[11px] font-bold border border-rose-300 rounded-lg bg-rose-50/60 text-rose-900 focus:outline-hidden focus:border-rose-500"
                                                 >
-                                                    <option value="" disabled>-- Pilih Jenis Alergi --</option>
-                                                    <option
-                                                        v-for="alOpt in rekapAlergiDetailPm"
-                                                        :key="alOpt.jenis_alergi"
-                                                        :value="alOpt.jenis_alergi"
-                                                    >
-                                                        {{ alOpt.jenis_alergi }} ({{ alOpt.total }} Porsi • PK: {{ alOpt.porsi_kecil }}, PB: {{ alOpt.porsi_besar }})
+                                                    <option value="" disabled>
+                                                        -- Pilih Jenis Alergi --
                                                     </option>
                                                     <option
-                                                        v-if="rekapAlergiDetailPm.length === 0"
+                                                        v-for="alOpt in rekapAlergiDetailPm"
+                                                        :key="
+                                                            alOpt.jenis_alergi
+                                                        "
+                                                        :value="
+                                                            alOpt.jenis_alergi
+                                                        "
+                                                    >
+                                                        {{ alOpt.jenis_alergi }}
+                                                        ({{ alOpt.total }} Porsi
+                                                        • PK:
+                                                        {{ alOpt.porsi_kecil }},
+                                                        PB:
+                                                        {{ alOpt.porsi_besar }})
+                                                    </option>
+                                                    <option
+                                                        v-if="
+                                                            rekapAlergiDetailPm.length ===
+                                                            0
+                                                        "
                                                         value="Alergi Khusus"
                                                     >
                                                         Alergi Khusus
                                                     </option>
                                                 </select>
-                                                <div class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200">
+                                                <div
+                                                    class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200"
+                                                >
                                                     <span>Sasaran:</span>
-                                                    <span class="font-mono font-bold">{{ it.totalTargetCount }} Porsi (PK: {{ it.targetPKCount }}, PB: {{ it.targetPBCount }})</span>
+                                                    <span class="font-bold"
+                                                        >{{
+                                                            it.totalTargetCount
+                                                        }}
+                                                        Porsi (PK:
+                                                        {{ it.targetPKCount }},
+                                                        PB:
+                                                        {{
+                                                            it.targetPBCount
+                                                        }})</span
+                                                    >
                                                 </div>
-                                                <p v-if="validationErrors['gizi_bahan_' + idx + '_alergi']" class="text-[10px] text-rose-600 font-bold mt-0.5">
-                                                    {{ validationErrors['gizi_bahan_' + idx + '_alergi'] }}
+                                                <p
+                                                    v-if="
+                                                        validationErrors[
+                                                            'gizi_bahan_' +
+                                                                idx +
+                                                                '_alergi'
+                                                        ]
+                                                    "
+                                                    class="text-[10px] text-rose-600 font-bold mt-0.5"
+                                                >
+                                                    {{
+                                                        validationErrors[
+                                                            "gizi_bahan_" +
+                                                                idx +
+                                                                "_alergi"
+                                                        ]
+                                                    }}
                                                 </p>
                                             </div>
                                         </td>
-                                        <td class="p-3 text-slate-600 align-top pt-4">{{ it.kategori }}</td>
-                                        <td class="p-3 align-top pt-3 text-center">
+                                        <td
+                                            class="p-3 text-slate-600 align-top pt-4"
+                                        >
+                                            {{ it.kategori }}
+                                        </td>
+                                        <td
+                                            class="p-3 align-top pt-3 text-center"
+                                        >
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                v-model.number="selectedGiziBahanList[idx].gram_pk"
+                                                v-model.number="
+                                                    selectedGiziBahanList[idx]
+                                                        .gram_pk
+                                                "
                                                 placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-mono font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
+                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
                                             />
-                                            <div class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100">
+                                            <div
+                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                            >
                                                 × {{ it.targetPKCount }} porsi
                                             </div>
                                         </td>
-                                        <td class="p-3 align-top pt-3 text-center">
+                                        <td
+                                            class="p-3 align-top pt-3 text-center"
+                                        >
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                v-model.number="selectedGiziBahanList[idx].gram_pb"
+                                                v-model.number="
+                                                    selectedGiziBahanList[idx]
+                                                        .gram_pb
+                                                "
                                                 placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-mono font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
+                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
                                             />
-                                            <div class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100">
+                                            <div
+                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                            >
                                                 × {{ it.targetPBCount }} porsi
                                             </div>
                                         </td>
-                                        <td class="p-3 text-right font-mono font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap">
-                                            {{ formatGrossWeight(it.totalNetKg) }}
+                                        <td
+                                            class="p-3 text-right font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(it.totalNetKg)
+                                            }}
                                         </td>
-                                        <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PK: {{ it.nutrisiPK?.energi || 0 }}</div>
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PB: {{ it.nutrisiPB?.energi || 0 }}</div>
+                                        <td
+                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PK:
+                                                {{ it.nutrisiPK?.energi || 0 }}
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PB:
+                                                {{ it.nutrisiPB?.energi || 0 }}
+                                            </div>
                                         </td>
-                                        <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PK: {{ it.nutrisiPK?.protein || 0 }}g</div>
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PB: {{ it.nutrisiPB?.protein || 0 }}g</div>
+                                        <td
+                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PK:
+                                                {{
+                                                    it.nutrisiPK?.protein || 0
+                                                }}g
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PB:
+                                                {{
+                                                    it.nutrisiPB?.protein || 0
+                                                }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PK: {{ it.nutrisiPK?.lemak || 0 }}g</div>
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PB: {{ it.nutrisiPB?.lemak || 0 }}g</div>
+                                        <td
+                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PK:
+                                                {{ it.nutrisiPK?.lemak || 0 }}g
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PB:
+                                                {{ it.nutrisiPB?.lemak || 0 }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PK: {{ it.nutrisiPK?.karbohidrat || 0 }}g</div>
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PB: {{ it.nutrisiPB?.karbohidrat || 0 }}g</div>
+                                        <td
+                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PK:
+                                                {{
+                                                    it.nutrisiPK?.karbohidrat ||
+                                                    0
+                                                }}g
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PB:
+                                                {{
+                                                    it.nutrisiPB?.karbohidrat ||
+                                                    0
+                                                }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3 text-right align-top pt-3.5 whitespace-nowrap">
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PK: {{ it.nutrisiPK?.serat || 0 }}g</div>
-                                            <div class="text-[10.5px] text-slate-700 font-bold">PB: {{ it.nutrisiPB?.serat || 0 }}g</div>
+                                        <td
+                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PK:
+                                                {{ it.nutrisiPK?.serat || 0 }}g
+                                            </div>
+                                            <div
+                                                class="text-[10.5px] text-slate-700 font-bold"
+                                            >
+                                                PB:
+                                                {{ it.nutrisiPB?.serat || 0 }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3 text-center align-top pt-3.5">
+                                        <td
+                                            class="p-3 text-center align-top pt-3.5"
+                                        >
                                             <button
                                                 type="button"
-                                                @click="handleRemoveGiziBahan(idx)"
+                                                @click="
+                                                    handleRemoveGiziBahan(idx)
+                                                "
                                                 class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                                 title="Hapus Bahan Siap Santap"
                                             >
@@ -4547,33 +6053,113 @@ watch(
                                         </td>
                                     </tr>
                                 </tbody>
-                                <tfoot v-if="selectedGiziBahanList.length > 0" class="bg-slate-50/90 font-bold border-t border-slate-200">
+                                <tfoot
+                                    v-if="selectedGiziBahanList.length > 0"
+                                    class="bg-slate-50/90 font-bold border-t border-slate-200"
+                                >
                                     <tr>
-                                        <td colspan="6" class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold">
+                                        <td
+                                            colspan="6"
+                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
+                                        >
                                             Total Akumulasi Gizi Siap Santap:
                                         </td>
-                                        <td class="p-3.5 text-right font-mono font-black text-amber-950 bg-amber-100/40 whitespace-nowrap">
-                                            {{ formatGrossWeight(giziCalculations.reduce((acc, it) => acc + it.totalNetKg, 0)) }}
+                                        <td
+                                            class="p-3.5 text-right font-black text-amber-950 bg-amber-100/40 whitespace-nowrap"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    giziCalculations.reduce(
+                                                        (acc, it) =>
+                                                            acc + it.totalNetKg,
+                                                        0,
+                                                    ),
+                                                )
+                                            }}
                                         </td>
-                                        <td class="p-3.5 text-right whitespace-nowrap">
-                                            <div class="font-black text-slate-900">PK: {{ akgResultPKNormal.energi }}</div>
-                                            <div class="font-black text-slate-900">PB: {{ akgResultPBNormal.energi }}</div>
+                                        <td
+                                            class="p-3.5 text-right whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PK:
+                                                {{ akgResultPKNormal.energi }}
+                                            </div>
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PB:
+                                                {{ akgResultPBNormal.energi }}
+                                            </div>
                                         </td>
-                                        <td class="p-3.5 text-right whitespace-nowrap">
-                                            <div class="font-black text-slate-900">PK: {{ akgResultPKNormal.protein }}g</div>
-                                            <div class="font-black text-slate-900">PB: {{ akgResultPBNormal.protein }}g</div>
+                                        <td
+                                            class="p-3.5 text-right whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PK:
+                                                {{ akgResultPKNormal.protein }}g
+                                            </div>
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PB:
+                                                {{ akgResultPBNormal.protein }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3.5 text-right whitespace-nowrap">
-                                            <div class="font-black text-slate-900">PK: {{ akgResultPKNormal.lemak }}g</div>
-                                            <div class="font-black text-slate-900">PB: {{ akgResultPBNormal.lemak }}g</div>
+                                        <td
+                                            class="p-3.5 text-right whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PK:
+                                                {{ akgResultPKNormal.lemak }}g
+                                            </div>
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PB:
+                                                {{ akgResultPBNormal.lemak }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3.5 text-right whitespace-nowrap">
-                                            <div class="font-black text-slate-900">PK: {{ akgResultPKNormal.karbohidrat }}g</div>
-                                            <div class="font-black text-slate-900">PB: {{ akgResultPBNormal.karbohidrat }}g</div>
+                                        <td
+                                            class="p-3.5 text-right whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PK:
+                                                {{
+                                                    akgResultPKNormal.karbohidrat
+                                                }}g
+                                            </div>
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PB:
+                                                {{
+                                                    akgResultPBNormal.karbohidrat
+                                                }}g
+                                            </div>
                                         </td>
-                                        <td class="p-3.5 text-right whitespace-nowrap">
-                                            <div class="font-black text-slate-900">PK: {{ akgResultPKNormal.serat }}g</div>
-                                            <div class="font-black text-slate-900">PB: {{ akgResultPBNormal.serat }}g</div>
+                                        <td
+                                            class="p-3.5 text-right whitespace-nowrap"
+                                        >
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PK:
+                                                {{ akgResultPKNormal.serat }}g
+                                            </div>
+                                            <div
+                                                class="font-black text-slate-900"
+                                            >
+                                                PB:
+                                                {{ akgResultPBNormal.serat }}g
+                                            </div>
                                         </td>
                                         <td></td>
                                     </tr>
@@ -4585,93 +6171,244 @@ watch(
                     <!-- Real-time Evaluasi Standar AKG BGN -->
                     <div class="space-y-4 pt-2">
                         <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                            <h4
+                                class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"
+                            >
                                 <Activity class="h-4 w-4 text-emerald-600" />
-                                <span>Evaluasi Standar Angka Kecukupan Gizi (AKG) Badan Gizi Nasional (BGN)</span>
+                                <span
+                                    >Evaluasi Standar Angka Kecukupan Gizi (AKG)
+                                    Badan Gizi Nasional (BGN)</span
+                                >
                             </h4>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- Card AKG Porsi Kecil (PK) -->
-                            <div class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs">
+                            <div
+                                class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
+                            >
                                 <div class="flex items-center justify-between">
-                                    <h5 class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                                        <Activity class="h-4 w-4 text-amber-600" />
-                                        <span>Porsi Kecil (PK) • PAUD/TK & SD Kelas 1-3</span>
+                                    <h5
+                                        class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
+                                    >
+                                        <Activity
+                                            class="h-4 w-4 text-amber-600"
+                                        />
+                                        <span
+                                            >Porsi Kecil (PK) • PAUD/TK & SD
+                                            Kelas 1-3</span
+                                        >
                                     </h5>
-                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                    <Badge
+                                        variant="outline"
+                                        className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                    >
                                         ✓ MEMENUHI STANDAR AKG BGN
                                     </Badge>
                                 </div>
                                 <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPKNormal.energi }} kkal</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 450 - 550</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Energi</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPKNormal.energi }} kkal
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 450 - 550</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPKNormal.protein }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 15 - 22 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Protein</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPKNormal.protein }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 15 - 22 g</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPKNormal.lemak }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 12 - 18 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Lemak</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPKNormal.lemak }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 12 - 18 g</span
+                                        >
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 text-xs">
-                                    <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPKNormal.karbohidrat }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 65 - 85 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Karbohidrat</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPKNormal.karbohidrat }}
+                                            g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 65 - 85 g</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-amber-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPKNormal.serat }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: Min 4.0 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Serat</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPKNormal.serat }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: Min 4.0 g</span
+                                        >
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Card AKG Porsi Besar (PB) -->
-                            <div class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs">
+                            <div
+                                class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
+                            >
                                 <div class="flex items-center justify-between">
-                                    <h5 class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-                                        <Activity class="h-4 w-4 text-indigo-600" />
-                                        <span>Porsi Besar (PB) • SD 4-6, SMP, SMA, & Bumil</span>
+                                    <h5
+                                        class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
+                                    >
+                                        <Activity
+                                            class="h-4 w-4 text-indigo-600"
+                                        />
+                                        <span
+                                            >Porsi Besar (PB) • SD 4-6, SMP,
+                                            SMA, & Bumil</span
+                                        >
                                     </h5>
-                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                                    <Badge
+                                        variant="outline"
+                                        className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                    >
                                         ✓ MEMENUHI STANDAR AKG BGN
                                     </Badge>
                                 </div>
                                 <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Energi</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPBNormal.energi }} kkal</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 650 - 800</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Energi</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPBNormal.energi }} kkal
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 650 - 800</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Protein</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPBNormal.protein }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 24 - 35 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Protein</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPBNormal.protein }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 24 - 35 g</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Lemak</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPBNormal.lemak }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 18 - 26 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Lemak</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPBNormal.lemak }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 18 - 26 g</span
+                                        >
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 text-xs">
-                                    <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Karbohidrat</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPBNormal.karbohidrat }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: 85 - 110 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Karbohidrat</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPBNormal.karbohidrat }}
+                                            g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: 85 - 110 g</span
+                                        >
                                     </div>
-                                    <div class="p-2.5 bg-white rounded-xl border border-indigo-100">
-                                        <span class="text-slate-500 text-[10px] uppercase font-bold block">Serat</span>
-                                        <div class="font-black text-slate-900 text-sm mt-0.5">{{ akgResultPBNormal.serat }} g</div>
-                                        <span class="text-[9.5px] text-slate-400">Target: Min 6.0 g</span>
+                                    <div
+                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                    >
+                                        <span
+                                            class="text-slate-500 text-[10px] uppercase font-bold block"
+                                            >Serat</span
+                                        >
+                                        <div
+                                            class="font-black text-slate-900 text-sm mt-0.5"
+                                        >
+                                            {{ akgResultPBNormal.serat }} g
+                                        </div>
+                                        <span
+                                            class="text-[9.5px] text-slate-400"
+                                            >Target: Min 6.0 g</span
+                                        >
                                     </div>
                                 </div>
                             </div>
@@ -4681,17 +6418,28 @@ watch(
             </Card>
 
             <!-- Bottom Action Bar Step 3 -->
-            <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800">
+            <div
+                class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800"
+            >
                 <div>
-                    <h4 class="text-sm font-black text-white flex items-center gap-2">
-                        <CheckCircle2 class="h-4 w-4 text-emerald-400 shrink-0" />
-                        <span>Formulasi Gizi Matang Siap Santap Tervalidasi</span>
+                    <h4
+                        class="text-sm font-black text-white flex items-center gap-2"
+                    >
+                        <CheckCircle2
+                            class="h-4 w-4 text-emerald-400 shrink-0"
+                        />
+                        <span
+                            >Formulasi Gizi Matang Siap Santap Tervalidasi</span
+                        >
                     </h4>
                     <p class="text-xs text-slate-300 leading-relaxed mt-0.5">
-                        Lanjutkan ke Langkah 4 untuk mereview rangkuman dokumen dan mengajukan Work Order ke Bagian Keuangan.
+                        Lanjutkan ke Langkah 4 untuk mereview rangkuman dokumen
+                        dan mengajukan Work Order ke Bagian Keuangan.
                     </p>
                 </div>
-                <div class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto">
+                <div
+                    class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto"
+                >
                     <Button
                         type="button"
                         @click="buatMenuSubTab = 'bahan_pangan'"
@@ -4724,7 +6472,6 @@ watch(
         <!-- Bagian 3: Order Pembelian Bahan & Verifikasi Akuntan (Step 3) -->
         <!-- ========================================================================================= -->
         <div v-if="buatMenuSubTab === 'order'" class="space-y-6">
-
             <!-- Header Langkah 3: Review & Pengajuan -->
             <Card className="bg-white border-slate-200 shadow-xs">
                 <CardHeader
@@ -4781,7 +6528,7 @@ watch(
                                 No. Work Order
                             </p>
                             <p
-                                class="text-sm sm:text-base font-black font-mono text-primary mt-1"
+                                class="text-sm sm:text-base font-black text-primary mt-1"
                             >
                                 {{ woNo }}
                             </p>
@@ -5203,23 +6950,27 @@ watch(
                                             {{ b.kategori }}
                                         </td>
                                         <td
-                                            class="p-3 text-center font-mono font-bold text-slate-800 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-center font-bold text-slate-800 align-top pt-4 whitespace-nowrap"
                                         >
                                             {{ b.gram_pk || 0 }}g /
                                             {{ b.gram_pb || 0 }}g
                                         </td>
                                         <td
-                                            class="p-3 text-right font-mono font-bold text-slate-900 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right font-bold text-slate-900 align-top pt-4 whitespace-nowrap"
                                         >
-                                            {{ formatGrossWeight(b.totalGrossKg) }}
+                                            {{
+                                                formatGrossWeight(
+                                                    b.totalGrossKg,
+                                                )
+                                            }}
                                         </td>
                                         <td
-                                            class="p-3 text-right font-mono text-slate-600 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right text-slate-600 align-top pt-4 whitespace-nowrap"
                                         >
                                             {{ formatRupiah(b.harga_master) }}
                                         </td>
                                         <td
-                                            class="p-3 text-right font-mono font-bold text-emerald-800 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap"
                                         >
                                             {{ formatRupiah(b.subtotalMaster) }}
                                         </td>
@@ -5237,7 +6988,7 @@ watch(
                                             Bahan:
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-mono font-black text-slate-900 whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap"
                                         >
                                             {{
                                                 grandTotalDraftMaster
@@ -5254,7 +7005,7 @@ watch(
                                         </td>
                                         <td></td>
                                         <td
-                                            class="p-3.5 text-right font-mono font-black text-emerald-900 text-sm whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap"
                                         >
                                             {{
                                                 formatRupiah(
