@@ -504,6 +504,362 @@ const subMenuKomponen = ref({
     sub_menu_4: "",
     sub_menu_5: "",
 });
+
+// Opsi Menu Pengganti Alergi per masing-masing Sub Menu (Opsional & Dinamis)
+const subMenuAlergi = ref({
+    sub_menu_1: [],
+    sub_menu_2: [],
+    sub_menu_3: [],
+    sub_menu_4: [],
+    sub_menu_5: [],
+});
+
+// Sumber kelompok sasaran yang aktif & konsisten (mencegah duplikasi data PM)
+const activeKelompoksSource = computed(() => {
+    if (
+        Array.isArray(woKelompokList.value) &&
+        woKelompokList.value.length > 0
+    ) {
+        return woKelompokList.value;
+    }
+    return props.kelompokList || [];
+});
+
+// Opsi Alergi khusus yang benar-benar ada/tercatat pada data Penerima Manfaat (PM)
+const availableAlergiOptions = computed(() => {
+    const set = new Set();
+    activeKelompoksSource.value.forEach((k) => {
+        if (Array.isArray(k.keterangan_alergi)) {
+            k.keterangan_alergi.forEach((item) => {
+                const j = typeof item === "string" ? item : item?.jenis_alergi;
+                const pk = Number(item?.porsi_kecil) || 0;
+                const pb = Number(item?.porsi_besar) || 0;
+                const total = typeof item === "string" ? 1 : pk + pb;
+                if (j && typeof j === "string" && j.trim() && total > 0) {
+                    set.add(j.trim());
+                }
+            });
+        }
+    });
+    return Array.from(set);
+});
+
+// Kamus kata kunci sinonim alergen umum untuk pencocokan pintar realtime
+const allergenKeywordsMap = {
+    telur: [
+        "telur",
+        "egg",
+        "dadar",
+        "ceplok",
+        "omelet",
+        "mayones",
+        "mayonnaise",
+        "kuning telur",
+        "putih telur",
+    ],
+    ayam: ["ayam", "chicken", "unggas"],
+    bebek: ["bebek", "duck", "unggas"],
+    daging: ["daging", "sapi", "kambing", "beef", "lamb"],
+    ikan: [
+        "ikan",
+        "fish",
+        "tongkol",
+        "tuna",
+        "lele",
+        "nila",
+        "gurame",
+        "salmon",
+        "bandeng",
+        "teri",
+        "patin",
+        "cakalang",
+        "dori",
+        "kakap",
+        "tenggiri",
+        "bawal",
+        "kembung",
+        "mujair",
+        "mas",
+    ],
+    seafood: [
+        "seafood",
+        "udang",
+        "cumi",
+        "kepiting",
+        "lobster",
+        "kerang",
+        "ikan laut",
+        "cumi-cumi",
+        "gurita",
+    ],
+    udang: ["udang", "prawn", "shrimp", "ebi"],
+    cumi: ["cumi", "squid", "sotong", "gurita"],
+    kepiting: ["kepiting", "crab", "rajungan"],
+    susu: [
+        "susu",
+        "milk",
+        "keju",
+        "cheese",
+        "butter",
+        "mentega",
+        "dairy",
+        "laktosa",
+        "yogurt",
+        "krim",
+        "cream",
+    ],
+    kacang: [
+        "kacang",
+        "peanut",
+        "nut",
+        "almond",
+        "mete",
+        "kedelai",
+        "pecel",
+        "gado-gado",
+        "bumbu kacang",
+        "tofu",
+        "tahu",
+        "tempe",
+        "edamame",
+    ],
+    gandum: [
+        "gandum",
+        "gluten",
+        "terigu",
+        "roti",
+        "mie",
+        "pasta",
+        "bakmi",
+        "spaghetti",
+        "biskuit",
+    ],
+};
+
+// Rekapitulasi porsi & jumlah PM terdampak per jenis alergi
+const pmAlergiStats = computed(() => {
+    const map = {};
+    activeKelompoksSource.value.forEach((k) => {
+        if (Array.isArray(k.keterangan_alergi)) {
+            k.keterangan_alergi.forEach((item) => {
+                const jenis =
+                    typeof item === "string" ? item : item?.jenis_alergi;
+                if (!jenis || typeof jenis !== "string" || !jenis.trim())
+                    return;
+                const cleanJenis = jenis.trim();
+                const pk = Number(item?.porsi_kecil) || 0;
+                const pb = Number(item?.porsi_besar) || 0;
+                const totalPorsi = typeof item === "string" ? 1 : pk + pb;
+
+                if (!map[cleanJenis]) {
+                    map[cleanJenis] = {
+                        jenis: cleanJenis,
+                        total_pm: 0,
+                        pk: 0,
+                        pb: 0,
+                        kelompokNames: [],
+                    };
+                }
+                map[cleanJenis].total_pm += totalPorsi;
+                map[cleanJenis].pk += pk;
+                map[cleanJenis].pb += pb;
+                if (
+                    k.nama_kelompok &&
+                    !map[cleanJenis].kelompokNames.includes(k.nama_kelompok)
+                ) {
+                    map[cleanJenis].kelompokNames.push(k.nama_kelompok);
+                }
+            });
+        }
+    });
+    return map;
+});
+
+// Cek apakah string input cocok dengan jenis alergi tertentu
+function checkTextContainsAllergen(text, allergenName) {
+    if (!text || typeof text !== "string" || !allergenName) return false;
+    const lowerText = text.toLowerCase().trim();
+    const lowerAllergen = allergenName.toLowerCase().trim();
+    if (!lowerText || !lowerAllergen) return false;
+
+    // 1. Direct match / substring
+    if (
+        lowerText.includes(lowerAllergen) ||
+        lowerAllergen.includes(lowerText)
+    ) {
+        return true;
+    }
+
+    // 2. Tokenized word match
+    const textWords = lowerText.split(/[\s,./\-_+&()]+/);
+    if (textWords.some((w) => w.length >= 3 && lowerAllergen.includes(w))) {
+        return true;
+    }
+
+    // 3. Keyword dictionary match
+    for (const [key, keywords] of Object.entries(allergenKeywordsMap)) {
+        const allergenMatchesKey =
+            lowerAllergen.includes(key) || key.includes(lowerAllergen);
+        if (allergenMatchesKey) {
+            if (keywords.some((kw) => lowerText.includes(kw))) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+// Deteksi seluruh alergen yang cocok pada sebuah teks
+function detectAllergensInText(text) {
+    if (!text || !text.trim()) return [];
+    const detected = [];
+    const stats = pmAlergiStats.value;
+    for (const [jenis, data] of Object.entries(stats)) {
+        if (checkTextContainsAllergen(text, jenis)) {
+            detected.push(data);
+        }
+    }
+    return detected;
+}
+
+// Deteksi Realtime pada Nama Menu Utama
+const detectedAllergensMenuUtama = computed(() => {
+    return detectAllergensInText(namaMenuAktif.value);
+});
+
+// Deteksi Realtime per Sub Menu 1..5
+const detectedAllergensPerSubMenu = computed(() => ({
+    sub_menu_1: detectAllergensInText(subMenuKomponen.value.sub_menu_1),
+    sub_menu_2: detectAllergensInText(subMenuKomponen.value.sub_menu_2),
+    sub_menu_3: detectAllergensInText(subMenuKomponen.value.sub_menu_3),
+    sub_menu_4: detectAllergensInText(subMenuKomponen.value.sub_menu_4),
+    sub_menu_5: detectAllergensInText(subMenuKomponen.value.sub_menu_5),
+}));
+
+// Tambahkan Pengganti Alergi dengan Preset Otomatis
+function addPenggantiAlergiWithPreset(subKey, jenisAlergiDefault = "") {
+    if (!subMenuAlergi.value[subKey]) {
+        subMenuAlergi.value[subKey] = [];
+    }
+    const exists = subMenuAlergi.value[subKey].some(
+        (p) => p.jenis_alergi === jenisAlergiDefault,
+    );
+    if (!exists) {
+        subMenuAlergi.value[subKey].push({
+            jenis_alergi: jenisAlergiDefault,
+            menu_pengganti: "",
+        });
+    }
+}
+
+// Ringkasan semua alergi yang terdeteksi secara real-time di Step 1
+const realTimeAllergyAlerts = computed(() => {
+    const alerts = [];
+    const subMenus = [
+        {
+            key: "sub_menu_1",
+            label: "Sub Menu 1",
+            val: subMenuKomponen.value.sub_menu_1,
+        },
+        {
+            key: "sub_menu_2",
+            label: "Sub Menu 2",
+            val: subMenuKomponen.value.sub_menu_2,
+        },
+        {
+            key: "sub_menu_3",
+            label: "Sub Menu 3",
+            val: subMenuKomponen.value.sub_menu_3,
+        },
+        {
+            key: "sub_menu_4",
+            label: "Sub Menu 4",
+            val: subMenuKomponen.value.sub_menu_4,
+        },
+        {
+            key: "sub_menu_5",
+            label: "Sub Menu 5",
+            val: subMenuKomponen.value.sub_menu_5,
+        },
+    ];
+
+    subMenus.forEach((sm) => {
+        if (sm.val && sm.val.trim()) {
+            const detected = detectAllergensInText(sm.val);
+            detected.forEach((al) => {
+                const existing = (subMenuAlergi.value[sm.key] || []).find(
+                    (p) =>
+                        p.jenis_alergi === al.jenis ||
+                        (p.jenis_alergi &&
+                            al.jenis
+                                .toLowerCase()
+                                .includes(p.jenis_alergi.toLowerCase())),
+                );
+                alerts.push({
+                    subKey: sm.key,
+                    subLabel: sm.label,
+                    menuName: sm.val,
+                    allergen: al.jenis,
+                    totalPm: al.total_pm,
+                    pk: al.pk,
+                    pb: al.pb,
+                    hasReplacement: !!(
+                        existing &&
+                        existing.menu_pengganti &&
+                        existing.menu_pengganti.trim()
+                    ),
+                    replacementName: existing?.menu_pengganti || "",
+                });
+            });
+        }
+    });
+    return alerts;
+});
+
+function addPenggantiAlergi(subKey) {
+    if (!subMenuAlergi.value[subKey]) {
+        subMenuAlergi.value[subKey] = [];
+    }
+    // Default dikosongkan terlebih dahulu saat tombol pengganti diklik
+    subMenuAlergi.value[subKey].push({
+        jenis_alergi: "",
+        menu_pengganti: "",
+    });
+}
+
+function removePenggantiAlergi(subKey, index) {
+    if (subMenuAlergi.value[subKey]) {
+        subMenuAlergi.value[subKey].splice(index, 1);
+        clearError(`alergi_${subKey}_${index}_jenis`);
+        clearError(`alergi_${subKey}_${index}_menu`);
+    }
+}
+
+// Format tampilan sub menu dengan isi dalam kurung jika ada menu pengganti alergi
+function formatSubMenuDisplay(subKey) {
+    const mainText = subMenuKomponen.value[subKey];
+    if (!mainText) return "";
+    const alergiList = subMenuAlergi.value[subKey];
+    if (!Array.isArray(alergiList) || alergiList.length === 0) {
+        return mainText;
+    }
+    const penggantiItems = alergiList
+        .map((item) => {
+            if (item.menu_pengganti && item.menu_pengganti.trim()) {
+                return item.menu_pengganti.trim();
+            }
+            if (item.jenis_alergi && item.jenis_alergi.trim()) {
+                return item.jenis_alergi.trim();
+            }
+            return null;
+        })
+        .filter(Boolean);
+
+    if (penggantiItems.length === 0) return mainText;
+    return `${mainText} (Pengganti: ${penggantiItems.join(", ")})`;
+}
+
 const woStatus = ref("draft"); // 'draft' | 'in_progress' | 'completed'
 
 function normalizeAlergiItems(data, pkAlergi = 0, pbAlergi = 0) {
@@ -1020,6 +1376,31 @@ function validateStep1() {
     ) {
         errs.sub_menu_5 = "Sub Menu 5 wajib diisi.";
     }
+
+    // Validasi menu pengganti alergi (jika ditambahkan, jenis dan nama menu pengganti TIDAK BOLEH KOSONG)
+    [
+        "sub_menu_1",
+        "sub_menu_2",
+        "sub_menu_3",
+        "sub_menu_4",
+        "sub_menu_5",
+    ].forEach((subKey, idx) => {
+        const list = subMenuAlergi.value[subKey];
+        if (Array.isArray(list) && list.length > 0) {
+            list.forEach((item, itemIdx) => {
+                const subLabel = `Sub Menu ${idx + 1}`;
+                if (!item.jenis_alergi || !item.jenis_alergi.trim()) {
+                    errs[`alergi_${subKey}_${itemIdx}_jenis`] =
+                        `Pilih jenis alergi untuk ${subLabel}.`;
+                }
+                if (!item.menu_pengganti || !item.menu_pengganti.trim()) {
+                    errs[`alergi_${subKey}_${itemIdx}_menu`] =
+                        `Menu pengganti ${subLabel} wajib diisi.`;
+                }
+            });
+        }
+    });
+
     if (kelompokMenerimaAktif.value.length === 0) {
         errs.kelompok =
             "Minimal 1 kelompok sasaran penerima manfaat harus berstatus Menerima.";
@@ -2382,6 +2763,7 @@ function getPayload(statusStr, stepNumber = 3) {
         sub_menu_3: subMenuKomponen.value.sub_menu_3 || null,
         sub_menu_4: subMenuKomponen.value.sub_menu_4 || null,
         sub_menu_5: subMenuKomponen.value.sub_menu_5 || null,
+        sub_menu_alergi: subMenuAlergi.value,
         total_pm: totalPM.value,
         total_pk: totalPK.value,
         total_pb: totalPB.value,
@@ -2567,6 +2949,34 @@ watch(
                     sub_menu_3: wo.sub_menu_3 || wo.komponen_lemak || "",
                     sub_menu_4: wo.sub_menu_4 || wo.komponen_karbohidrat || "",
                     sub_menu_5: wo.sub_menu_5 || wo.komponen_serat || "",
+                };
+            }
+
+            if (wo.sub_menu_alergi && typeof wo.sub_menu_alergi === "object") {
+                subMenuAlergi.value = {
+                    sub_menu_1: Array.isArray(wo.sub_menu_alergi.sub_menu_1)
+                        ? wo.sub_menu_alergi.sub_menu_1
+                        : [],
+                    sub_menu_2: Array.isArray(wo.sub_menu_alergi.sub_menu_2)
+                        ? wo.sub_menu_alergi.sub_menu_2
+                        : [],
+                    sub_menu_3: Array.isArray(wo.sub_menu_alergi.sub_menu_3)
+                        ? wo.sub_menu_alergi.sub_menu_3
+                        : [],
+                    sub_menu_4: Array.isArray(wo.sub_menu_alergi.sub_menu_4)
+                        ? wo.sub_menu_alergi.sub_menu_4
+                        : [],
+                    sub_menu_5: Array.isArray(wo.sub_menu_alergi.sub_menu_5)
+                        ? wo.sub_menu_alergi.sub_menu_5
+                        : [],
+                };
+            } else {
+                subMenuAlergi.value = {
+                    sub_menu_1: [],
+                    sub_menu_2: [],
+                    sub_menu_3: [],
+                    sub_menu_4: [],
+                    sub_menu_5: [],
                 };
             }
 
@@ -2770,31 +3180,31 @@ watch(
                         v-if="subMenuKomponen.sub_menu_1"
                         class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-200 border border-amber-400/30"
                     >
-                        {{ subMenuKomponen.sub_menu_1 }}
+                        {{ formatSubMenuDisplay("sub_menu_1") }}
                     </span>
                     <span
                         v-if="subMenuKomponen.sub_menu_2"
                         class="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-200 border border-rose-400/30"
                     >
-                        {{ subMenuKomponen.sub_menu_2 }}
+                        {{ formatSubMenuDisplay("sub_menu_2") }}
                     </span>
                     <span
                         v-if="subMenuKomponen.sub_menu_3"
                         class="px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-200 border border-yellow-400/30"
                     >
-                        {{ subMenuKomponen.sub_menu_3 }}
+                        {{ formatSubMenuDisplay("sub_menu_3") }}
                     </span>
                     <span
                         v-if="subMenuKomponen.sub_menu_4"
                         class="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-200 border border-blue-400/30"
                     >
-                        {{ subMenuKomponen.sub_menu_4 }}
+                        {{ formatSubMenuDisplay("sub_menu_4") }}
                     </span>
                     <span
                         v-if="subMenuKomponen.sub_menu_5"
                         class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 border border-emerald-400/30"
                     >
-                        {{ subMenuKomponen.sub_menu_5 }}
+                        {{ formatSubMenuDisplay("sub_menu_5") }}
                     </span>
                 </div>
                 <div
@@ -2914,20 +3324,19 @@ watch(
                                     <FileSpreadsheet
                                         class="h-5 w-5 text-primary"
                                     />
-                                    <span>Perencanaan Produksi</span>
+                                    <span>Menyusun Perencanaan Produksi</span>
                                 </CardTitle>
-                                <Badge
+                                <!-- <Badge
                                     variant="outline"
                                     class="bg-blue-50 text-blue-700 border-blue-300 font-extrabold text-xs"
                                 >
                                     Langkah 1 dari 3
-                                </Badge>
+                                </Badge> -->
                             </div>
-                            <!-- <CardDescription class="text-xs sm:text-sm mt-0.5">
-                                Penetapan jadwal distribusi menu, penamaan paket
-                                MBG, dan penguncian kuota Penerima Manfaat (PM)
-                                resmi SPPG.
-                            </CardDescription> -->
+                            <CardDescription class="text-xs sm:text-sm mt-0.5">
+                                Penetapan jadwal distribusi menu, penamaan menu,
+                                dan menentukan Penerima Manfaat (PM).
+                            </CardDescription>
                         </div>
                         <!-- <div class="flex items-center gap-2">
                                     <Button
@@ -3065,10 +3474,32 @@ watch(
                                     validationErrors.namaMenuAktif
                                 }}</span>
                             </p>
+                            <!-- Real-time Warning Alergi pada Nama Menu Utama -->
+                            <div
+                                v-if="detectedAllergensMenuUtama.length > 0"
+                                class="flex flex-wrap items-center gap-1.5 pt-1"
+                            >
+                                <span
+                                    class="text-[10.5px] font-extrabold text-amber-800 flex items-center gap-1"
+                                >
+                                    <AlertTriangle
+                                        class="h-3.5 w-3.5 text-amber-600 shrink-0"
+                                    />
+                                    <span>Alergen PM Terdeteksi:</span>
+                                </span>
+                                <span
+                                    v-for="al in detectedAllergensMenuUtama"
+                                    :key="al.jenis"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/90 text-amber-900 border border-amber-300 text-[10.5px] font-bold shadow-2xs"
+                                >
+                                    ⚠️ {{ al.jenis }} ({{ al.total_pm }} Siswa
+                                    PM)
+                                </span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Rincian Sub Menu Komponen Gizi (Energi, Protein, Lemak, Karbohidrat, Serat) -->
+                    <!-- Rincian Sub Menu Komponen Gizi (Sub Menu 1 s.d. Sub Menu 5) -->
                     <div
                         class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3"
                     >
@@ -3093,232 +3524,1451 @@ watch(
                             </div>
                         </div>
 
+                        <!-- Banner Real-time Deteksi Alergi PM (Muncul otomatis saat ada kata kunci alergen terketik) -->
                         <div
-                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+                            v-if="realTimeAllergyAlerts.length > 0"
+                            class="p-3 rounded-xl bg-amber-50 border border-amber-300/90 text-amber-900 space-y-2 text-xs shadow-2xs transition-all duration-300"
+                        >
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-1"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5 font-black text-amber-900 text-xs"
+                                >
+                                    <ShieldAlert
+                                        class="h-4 w-4 text-amber-600 shrink-0"
+                                    />
+                                    <span
+                                        >Peringatan: Terdeteksi
+                                        {{ realTimeAllergyAlerts.length }} Sub
+                                        Menu Mengandung Bahan Alergi PM</span
+                                    >
+                                </div>
+                                <span
+                                    class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200"
+                                >
+                                    ⚡ Realtime Deteksi Alergi
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-2 text-[11px]">
+                                <div
+                                    v-for="(al, alIdx) in realTimeAllergyAlerts"
+                                    :key="alIdx"
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-white shadow-2xs"
+                                    :class="
+                                        al.hasReplacement
+                                            ? 'border-emerald-300 text-emerald-900'
+                                            : 'border-rose-300 text-rose-900'
+                                    "
+                                >
+                                    <span class="font-extrabold text-slate-900"
+                                        >{{ al.subLabel }}:</span
+                                    >
+                                    <span class="font-bold text-slate-700"
+                                        >"{{ al.menuName }}"</span
+                                    >
+                                    <span class="text-slate-500">➔</span>
+                                    <span class="font-bold text-rose-700"
+                                        >Alergi {{ al.allergen }} ({{
+                                            al.totalPm
+                                        }}
+                                        Siswa)</span
+                                    >
+                                    <span
+                                        v-if="al.hasReplacement"
+                                        class="inline-flex items-center gap-0.5 text-emerald-700 font-extrabold text-[10px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200"
+                                    >
+                                        ✓ Pengganti: {{ al.replacementName }}
+                                    </span>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        @click="
+                                            addPenggantiAlergiWithPreset(
+                                                al.subKey,
+                                                al.allergen,
+                                            )
+                                        "
+                                        class="inline-flex items-center gap-0.5 text-rose-700 hover:text-rose-900 font-extrabold text-[10px] bg-rose-50 hover:bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 cursor-pointer"
+                                        title="Tambahkan menu pengganti sekarang"
+                                    >
+                                        + Pengganti
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-start"
                         >
                             <!-- Sub Menu 1 -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit"
                                 :class="
                                     validationErrors.sub_menu_1
                                         ? 'border-rose-400 bg-rose-50/20'
                                         : 'border-amber-200/90'
                                 "
                             >
-                                <label
-                                    class="text-[11px] font-black text-amber-900 flex items-center gap-1.5"
-                                >
-                                    <span
-                                        class="h-2 w-2 rounded-full bg-amber-500"
-                                    ></span>
-                                    <span
-                                        >Sub Menu 1
-                                        <strong class="text-rose-500"
-                                            >*</strong
-                                        ></span
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-[11px] font-black text-amber-900 flex items-center gap-1.5"
                                     >
-                                </label>
-                                <input
-                                    type="text"
-                                    v-model="subMenuKomponen.sub_menu_1"
-                                    @input="clearError('sub_menu_1')"
-                                    placeholder="Karbohidrat"
-                                    :class="[
-                                        'w-full text-xs font-semibold rounded-lg border p-2',
-                                        validationErrors.sub_menu_1
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-200 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.sub_menu_1"
-                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                        <span
+                                            class="h-2 w-2 rounded-full bg-amber-500"
+                                        ></span>
+                                        <span
+                                            >Sub Menu 1
+                                            <strong class="text-rose-500"
+                                                >*</strong
+                                            ></span
+                                        >
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="subMenuKomponen.sub_menu_1"
+                                        @input="clearError('sub_menu_1')"
+                                        placeholder="Karbohidrat"
+                                        :class="[
+                                            'w-full text-xs font-semibold rounded-lg border p-2',
+                                            validationErrors.sub_menu_1
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : 'border-slate-200 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50',
+                                        ]"
+                                    />
+                                    <p
+                                        v-if="validationErrors.sub_menu_1"
+                                        class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                    >
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{
+                                            validationErrors.sub_menu_1
+                                        }}</span>
+                                    </p>
+
+                                    <!-- Warning Realtime Alergi Sub Menu 1 -->
+                                    <div
+                                        v-if="
+                                            detectedAllergensPerSubMenu
+                                                .sub_menu_1.length > 0
+                                        "
+                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                    >
+                                        <div
+                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3 w-3 text-amber-600 shrink-0"
+                                            />
+                                            <span>Alergi PM Terdeteksi:</span>
+                                        </div>
+                                        <div
+                                            v-for="al in detectedAllergensPerSubMenu.sub_menu_1"
+                                            :key="al.jenis"
+                                            class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
+                                        >
+                                            <span
+                                                >⚠️
+                                                <strong
+                                                    >{{
+                                                        al.total_pm
+                                                    }}
+                                                    PM</strong
+                                                >
+                                                alergi
+                                                <strong>{{
+                                                    al.jenis
+                                                }}</strong></span
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    addPenggantiAlergiWithPreset(
+                                                        'sub_menu_1',
+                                                        al.jenis,
+                                                    )
+                                                "
+                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                title="Tambah opsi pengganti untuk alergi ini"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Opsi Menu Pengganti Alergi -->
+                                <div
+                                    class="pt-2 border-t border-slate-100 space-y-1.5"
                                 >
-                                    <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{
-                                        validationErrors.sub_menu_1
-                                    }}</span>
-                                </p>
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
+                                        >
+                                            <span>🛡️ Alergi:</span>
+                                            <span
+                                                v-if="
+                                                    subMenuAlergi.sub_menu_1 &&
+                                                    subMenuAlergi.sub_menu_1
+                                                        .length > 0
+                                                "
+                                                class="text-rose-600 font-extrabold"
+                                                >({{
+                                                    subMenuAlergi.sub_menu_1
+                                                        .length
+                                                }})</span
+                                            >
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergi('sub_menu_1')
+                                            "
+                                            class="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                            <span>Pengganti</span>
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-for="(
+                                            alItem, alIdx
+                                        ) in subMenuAlergi.sub_menu_1"
+                                        :key="alIdx"
+                                        class="p-1.5 rounded-lg border space-y-1 transition-all"
+                                        :class="
+                                            validationErrors[
+                                                'alergi_sub_menu_1_' +
+                                                    alIdx +
+                                                    '_jenis'
+                                            ] ||
+                                            validationErrors[
+                                                'alergi_sub_menu_1_' +
+                                                    alIdx +
+                                                    '_menu'
+                                            ]
+                                                ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
+                                                : 'bg-rose-50/60 border-rose-200'
+                                        "
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <select
+                                                v-model="alItem.jenis_alergi"
+                                                @change="
+                                                    clearError(
+                                                        'alergi_sub_menu_1_' +
+                                                            alIdx +
+                                                            '_jenis',
+                                                    )
+                                                "
+                                                :class="[
+                                                    'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
+                                                    validationErrors[
+                                                        'alergi_sub_menu_1_' +
+                                                            alIdx +
+                                                            '_jenis'
+                                                    ]
+                                                        ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
+                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                ]"
+                                            >
+                                                <option value="" disabled>
+                                                    {{
+                                                        availableAlergiOptions.length >
+                                                        0
+                                                            ? "-- Pilih Alergi PM (Wajib) --"
+                                                            : "-- Belum ada data alergi di PM --"
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="opt in availableAlergiOptions"
+                                                    :key="opt"
+                                                    :value="opt"
+                                                >
+                                                    ⚠️ {{ opt }}
+                                                </option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    removePenggantiAlergi(
+                                                        'sub_menu_1',
+                                                        alIdx,
+                                                    )
+                                                "
+                                                class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
+                                                title="Hapus opsi ini"
+                                            >
+                                                <Trash2 class="h-2.5 w-2.5" />
+                                            </button>
+                                        </div>
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_1_' +
+                                                        alIdx +
+                                                        '_jenis'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_1_" +
+                                                        alIdx +
+                                                        "_jenis"
+                                                ]
+                                            }}</span>
+                                        </p>
+
+                                        <input
+                                            type="text"
+                                            v-model="alItem.menu_pengganti"
+                                            @input="
+                                                clearError(
+                                                    'alergi_sub_menu_1_' +
+                                                        alIdx +
+                                                        '_menu',
+                                                )
+                                            "
+                                            placeholder="Menu pengganti (wajib)..."
+                                            :class="[
+                                                'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
+                                                validationErrors[
+                                                    'alergi_sub_menu_1_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                                    ? 'border border-rose-400 focus:ring-rose-400'
+                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_1_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_1_" +
+                                                        alIdx +
+                                                        "_menu"
+                                                ]
+                                            }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Sub Menu 2 -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit"
                                 :class="
                                     validationErrors.sub_menu_2
                                         ? 'border-rose-400 bg-rose-50/20'
                                         : 'border-rose-200/90'
                                 "
                             >
-                                <label
-                                    class="text-[11px] font-black text-rose-900 flex items-center gap-1.5"
-                                >
-                                    <span
-                                        class="h-2 w-2 rounded-full bg-rose-500"
-                                    ></span>
-                                    <span
-                                        >Sub Menu 2
-                                        <strong class="text-rose-500"
-                                            >*</strong
-                                        ></span
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-[11px] font-black text-rose-900 flex items-center gap-1.5"
                                     >
-                                </label>
-                                <input
-                                    type="text"
-                                    v-model="subMenuKomponen.sub_menu_2"
-                                    @input="clearError('sub_menu_2')"
-                                    placeholder="Protein Hewani"
-                                    :class="[
-                                        'w-full text-xs font-semibold rounded-lg border p-2',
-                                        validationErrors.sub_menu_2
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-200 focus:ring-rose-500 focus:border-rose-500 bg-slate-50/50',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.sub_menu_2"
-                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                        <span
+                                            class="h-2 w-2 rounded-full bg-rose-500"
+                                        ></span>
+                                        <span
+                                            >Sub Menu 2
+                                            <strong class="text-rose-500"
+                                                >*</strong
+                                            ></span
+                                        >
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="subMenuKomponen.sub_menu_2"
+                                        @input="clearError('sub_menu_2')"
+                                        placeholder="Protein Hewani"
+                                        :class="[
+                                            'w-full text-xs font-semibold rounded-lg border p-2',
+                                            validationErrors.sub_menu_2
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : 'border-slate-200 focus:ring-rose-500 focus:border-rose-500 bg-slate-50/50',
+                                        ]"
+                                    />
+                                    <p
+                                        v-if="validationErrors.sub_menu_2"
+                                        class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                    >
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{
+                                            validationErrors.sub_menu_2
+                                        }}</span>
+                                    </p>
+
+                                    <!-- Warning Realtime Alergi Sub Menu 2 -->
+                                    <div
+                                        v-if="
+                                            detectedAllergensPerSubMenu
+                                                .sub_menu_2.length > 0
+                                        "
+                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                    >
+                                        <div
+                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3 w-3 text-amber-600 shrink-0"
+                                            />
+                                            <span>Alergi PM Terdeteksi:</span>
+                                        </div>
+                                        <div
+                                            v-for="al in detectedAllergensPerSubMenu.sub_menu_2"
+                                            :key="al.jenis"
+                                            class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
+                                        >
+                                            <span
+                                                >⚠️
+                                                <strong
+                                                    >{{
+                                                        al.total_pm
+                                                    }}
+                                                    PM</strong
+                                                >
+                                                alergi
+                                                <strong>{{
+                                                    al.jenis
+                                                }}</strong></span
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    addPenggantiAlergiWithPreset(
+                                                        'sub_menu_2',
+                                                        al.jenis,
+                                                    )
+                                                "
+                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                title="Tambah opsi pengganti untuk alergi ini"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Opsi Menu Pengganti Alergi -->
+                                <div
+                                    class="pt-2 border-t border-slate-100 space-y-1.5"
                                 >
-                                    <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{
-                                        validationErrors.sub_menu_2
-                                    }}</span>
-                                </p>
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
+                                        >
+                                            <span>🛡️ Alergi:</span>
+                                            <span
+                                                v-if="
+                                                    subMenuAlergi.sub_menu_2 &&
+                                                    subMenuAlergi.sub_menu_2
+                                                        .length > 0
+                                                "
+                                                class="text-rose-600 font-extrabold"
+                                                >({{
+                                                    subMenuAlergi.sub_menu_2
+                                                        .length
+                                                }})</span
+                                            >
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergi('sub_menu_2')
+                                            "
+                                            class="text-[10px] font-bold text-rose-700 hover:text-rose-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                            <span>Pengganti</span>
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-for="(
+                                            alItem, alIdx
+                                        ) in subMenuAlergi.sub_menu_2"
+                                        :key="alIdx"
+                                        class="p-1.5 rounded-lg border space-y-1 transition-all"
+                                        :class="
+                                            validationErrors[
+                                                'alergi_sub_menu_2_' +
+                                                    alIdx +
+                                                    '_jenis'
+                                            ] ||
+                                            validationErrors[
+                                                'alergi_sub_menu_2_' +
+                                                    alIdx +
+                                                    '_menu'
+                                            ]
+                                                ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
+                                                : 'bg-rose-50/60 border-rose-200'
+                                        "
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <select
+                                                v-model="alItem.jenis_alergi"
+                                                @change="
+                                                    clearError(
+                                                        'alergi_sub_menu_2_' +
+                                                            alIdx +
+                                                            '_jenis',
+                                                    )
+                                                "
+                                                :class="[
+                                                    'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
+                                                    validationErrors[
+                                                        'alergi_sub_menu_2_' +
+                                                            alIdx +
+                                                            '_jenis'
+                                                    ]
+                                                        ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
+                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                ]"
+                                            >
+                                                <option value="" disabled>
+                                                    {{
+                                                        availableAlergiOptions.length >
+                                                        0
+                                                            ? "-- Pilih Alergi PM (Wajib) --"
+                                                            : "-- Belum ada data alergi di PM --"
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="opt in availableAlergiOptions"
+                                                    :key="opt"
+                                                    :value="opt"
+                                                >
+                                                    ⚠️ {{ opt }}
+                                                </option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    removePenggantiAlergi(
+                                                        'sub_menu_2',
+                                                        alIdx,
+                                                    )
+                                                "
+                                                class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
+                                                title="Hapus opsi ini"
+                                            >
+                                                <Trash2 class="h-2.5 w-2.5" />
+                                            </button>
+                                        </div>
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_2_' +
+                                                        alIdx +
+                                                        '_jenis'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_2_" +
+                                                        alIdx +
+                                                        "_jenis"
+                                                ]
+                                            }}</span>
+                                        </p>
+
+                                        <input
+                                            type="text"
+                                            v-model="alItem.menu_pengganti"
+                                            @input="
+                                                clearError(
+                                                    'alergi_sub_menu_2_' +
+                                                        alIdx +
+                                                        '_menu',
+                                                )
+                                            "
+                                            placeholder="Menu pengganti (wajib)..."
+                                            :class="[
+                                                'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
+                                                validationErrors[
+                                                    'alergi_sub_menu_2_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                                    ? 'border border-rose-400 focus:ring-rose-400'
+                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_2_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_2_" +
+                                                        alIdx +
+                                                        "_menu"
+                                                ]
+                                            }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Sub Menu 3 -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit"
                                 :class="
                                     validationErrors.sub_menu_3
                                         ? 'border-rose-400 bg-rose-50/20'
                                         : 'border-yellow-200/90'
                                 "
                             >
-                                <label
-                                    class="text-[11px] font-black text-yellow-900 flex items-center gap-1.5"
-                                >
-                                    <span
-                                        class="h-2 w-2 rounded-full bg-yellow-500"
-                                    ></span>
-                                    <span
-                                        >Sub Menu 3
-                                        <strong class="text-rose-500"
-                                            >*</strong
-                                        ></span
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-[11px] font-black text-yellow-900 flex items-center gap-1.5"
                                     >
-                                </label>
-                                <input
-                                    type="text"
-                                    v-model="subMenuKomponen.sub_menu_3"
-                                    @input="clearError('sub_menu_3')"
-                                    placeholder="Protein Nabati"
-                                    :class="[
-                                        'w-full text-xs font-semibold rounded-lg border p-2',
-                                        validationErrors.sub_menu_3
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 bg-slate-50/50',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.sub_menu_3"
-                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                        <span
+                                            class="h-2 w-2 rounded-full bg-yellow-500"
+                                        ></span>
+                                        <span
+                                            >Sub Menu 3
+                                            <strong class="text-rose-500"
+                                                >*</strong
+                                            ></span
+                                        >
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="subMenuKomponen.sub_menu_3"
+                                        @input="clearError('sub_menu_3')"
+                                        placeholder="Protein Nabati"
+                                        :class="[
+                                            'w-full text-xs font-semibold rounded-lg border p-2',
+                                            validationErrors.sub_menu_3
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : 'border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 bg-slate-50/50',
+                                        ]"
+                                    />
+                                    <p
+                                        v-if="validationErrors.sub_menu_3"
+                                        class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                    >
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{
+                                            validationErrors.sub_menu_3
+                                        }}</span>
+                                    </p>
+
+                                    <!-- Warning Realtime Alergi Sub Menu 3 -->
+                                    <div
+                                        v-if="
+                                            detectedAllergensPerSubMenu
+                                                .sub_menu_3.length > 0
+                                        "
+                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                    >
+                                        <div
+                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3 w-3 text-amber-600 shrink-0"
+                                            />
+                                            <span>Alergi PM Terdeteksi:</span>
+                                        </div>
+                                        <div
+                                            v-for="al in detectedAllergensPerSubMenu.sub_menu_3"
+                                            :key="al.jenis"
+                                            class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
+                                        >
+                                            <span
+                                                >⚠️
+                                                <strong
+                                                    >{{
+                                                        al.total_pm
+                                                    }}
+                                                    PM</strong
+                                                >
+                                                alergi
+                                                <strong>{{
+                                                    al.jenis
+                                                }}</strong></span
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    addPenggantiAlergiWithPreset(
+                                                        'sub_menu_3',
+                                                        al.jenis,
+                                                    )
+                                                "
+                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                title="Tambah opsi pengganti untuk alergi ini"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Opsi Menu Pengganti Alergi -->
+                                <div
+                                    class="pt-2 border-t border-slate-100 space-y-1.5"
                                 >
-                                    <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{
-                                        validationErrors.sub_menu_3
-                                    }}</span>
-                                </p>
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
+                                        >
+                                            <span>🛡️ Alergi:</span>
+                                            <span
+                                                v-if="
+                                                    subMenuAlergi.sub_menu_3 &&
+                                                    subMenuAlergi.sub_menu_3
+                                                        .length > 0
+                                                "
+                                                class="text-rose-600 font-extrabold"
+                                                >({{
+                                                    subMenuAlergi.sub_menu_3
+                                                        .length
+                                                }})</span
+                                            >
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergi('sub_menu_3')
+                                            "
+                                            class="text-[10px] font-bold text-yellow-700 hover:text-yellow-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                            <span>Pengganti</span>
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-for="(
+                                            alItem, alIdx
+                                        ) in subMenuAlergi.sub_menu_3"
+                                        :key="alIdx"
+                                        class="p-1.5 rounded-lg border space-y-1 transition-all"
+                                        :class="
+                                            validationErrors[
+                                                'alergi_sub_menu_3_' +
+                                                    alIdx +
+                                                    '_jenis'
+                                            ] ||
+                                            validationErrors[
+                                                'alergi_sub_menu_3_' +
+                                                    alIdx +
+                                                    '_menu'
+                                            ]
+                                                ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
+                                                : 'bg-rose-50/60 border-rose-200'
+                                        "
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <select
+                                                v-model="alItem.jenis_alergi"
+                                                @change="
+                                                    clearError(
+                                                        'alergi_sub_menu_3_' +
+                                                            alIdx +
+                                                            '_jenis',
+                                                    )
+                                                "
+                                                :class="[
+                                                    'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
+                                                    validationErrors[
+                                                        'alergi_sub_menu_3_' +
+                                                            alIdx +
+                                                            '_jenis'
+                                                    ]
+                                                        ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
+                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                ]"
+                                            >
+                                                <option value="" disabled>
+                                                    {{
+                                                        availableAlergiOptions.length >
+                                                        0
+                                                            ? "-- Pilih Alergi PM (Wajib) --"
+                                                            : "-- Belum ada data alergi di PM --"
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="opt in availableAlergiOptions"
+                                                    :key="opt"
+                                                    :value="opt"
+                                                >
+                                                    ⚠️ {{ opt }}
+                                                </option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    removePenggantiAlergi(
+                                                        'sub_menu_3',
+                                                        alIdx,
+                                                    )
+                                                "
+                                                class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
+                                                title="Hapus opsi ini"
+                                            >
+                                                <Trash2 class="h-2.5 w-2.5" />
+                                            </button>
+                                        </div>
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_3_' +
+                                                        alIdx +
+                                                        '_jenis'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_3_" +
+                                                        alIdx +
+                                                        "_jenis"
+                                                ]
+                                            }}</span>
+                                        </p>
+
+                                        <input
+                                            type="text"
+                                            v-model="alItem.menu_pengganti"
+                                            @input="
+                                                clearError(
+                                                    'alergi_sub_menu_3_' +
+                                                        alIdx +
+                                                        '_menu',
+                                                )
+                                            "
+                                            placeholder="Menu pengganti (wajib)..."
+                                            :class="[
+                                                'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
+                                                validationErrors[
+                                                    'alergi_sub_menu_3_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                                    ? 'border border-rose-400 focus:ring-rose-400'
+                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_3_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_3_" +
+                                                        alIdx +
+                                                        "_menu"
+                                                ]
+                                            }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Sub Menu 4 -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit"
                                 :class="
                                     validationErrors.sub_menu_4
                                         ? 'border-rose-400 bg-rose-50/20'
                                         : 'border-blue-200/90'
                                 "
                             >
-                                <label
-                                    class="text-[11px] font-black text-blue-900 flex items-center gap-1.5"
-                                >
-                                    <span
-                                        class="h-2 w-2 rounded-full bg-blue-500"
-                                    ></span>
-                                    <span
-                                        >Sub Menu 4
-                                        <strong class="text-rose-500"
-                                            >*</strong
-                                        ></span
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-[11px] font-black text-blue-900 flex items-center gap-1.5"
                                     >
-                                </label>
-                                <input
-                                    type="text"
-                                    v-model="subMenuKomponen.sub_menu_4"
-                                    @input="clearError('sub_menu_4')"
-                                    placeholder="Sayur"
-                                    :class="[
-                                        'w-full text-xs font-semibold rounded-lg border p-2',
-                                        validationErrors.sub_menu_4
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-200 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.sub_menu_4"
-                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                        <span
+                                            class="h-2 w-2 rounded-full bg-blue-500"
+                                        ></span>
+                                        <span
+                                            >Sub Menu 4
+                                            <strong class="text-rose-500"
+                                                >*</strong
+                                            ></span
+                                        >
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="subMenuKomponen.sub_menu_4"
+                                        @input="clearError('sub_menu_4')"
+                                        placeholder="Sayur"
+                                        :class="[
+                                            'w-full text-xs font-semibold rounded-lg border p-2',
+                                            validationErrors.sub_menu_4
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : 'border-slate-200 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50',
+                                        ]"
+                                    />
+                                    <p
+                                        v-if="validationErrors.sub_menu_4"
+                                        class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                    >
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{
+                                            validationErrors.sub_menu_4
+                                        }}</span>
+                                    </p>
+
+                                    <!-- Warning Realtime Alergi Sub Menu 4 -->
+                                    <div
+                                        v-if="
+                                            detectedAllergensPerSubMenu
+                                                .sub_menu_4.length > 0
+                                        "
+                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                    >
+                                        <div
+                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3 w-3 text-amber-600 shrink-0"
+                                            />
+                                            <span>Alergi PM Terdeteksi:</span>
+                                        </div>
+                                        <div
+                                            v-for="al in detectedAllergensPerSubMenu.sub_menu_4"
+                                            :key="al.jenis"
+                                            class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
+                                        >
+                                            <span
+                                                >⚠️
+                                                <strong
+                                                    >{{
+                                                        al.total_pm
+                                                    }}
+                                                    PM</strong
+                                                >
+                                                alergi
+                                                <strong>{{
+                                                    al.jenis
+                                                }}</strong></span
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    addPenggantiAlergiWithPreset(
+                                                        'sub_menu_4',
+                                                        al.jenis,
+                                                    )
+                                                "
+                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                title="Tambah opsi pengganti untuk alergi ini"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Opsi Menu Pengganti Alergi -->
+                                <div
+                                    class="pt-2 border-t border-slate-100 space-y-1.5"
                                 >
-                                    <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{
-                                        validationErrors.sub_menu_4
-                                    }}</span>
-                                </p>
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
+                                        >
+                                            <span>🛡️ Alergi:</span>
+                                            <span
+                                                v-if="
+                                                    subMenuAlergi.sub_menu_4 &&
+                                                    subMenuAlergi.sub_menu_4
+                                                        .length > 0
+                                                "
+                                                class="text-rose-600 font-extrabold"
+                                                >({{
+                                                    subMenuAlergi.sub_menu_4
+                                                        .length
+                                                }})</span
+                                            >
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergi('sub_menu_4')
+                                            "
+                                            class="text-[10px] font-bold text-blue-700 hover:text-blue-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                            <span>Pengganti</span>
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-for="(
+                                            alItem, alIdx
+                                        ) in subMenuAlergi.sub_menu_4"
+                                        :key="alIdx"
+                                        class="p-1.5 rounded-lg border space-y-1 transition-all"
+                                        :class="
+                                            validationErrors[
+                                                'alergi_sub_menu_4_' +
+                                                    alIdx +
+                                                    '_jenis'
+                                            ] ||
+                                            validationErrors[
+                                                'alergi_sub_menu_4_' +
+                                                    alIdx +
+                                                    '_menu'
+                                            ]
+                                                ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
+                                                : 'bg-rose-50/60 border-rose-200'
+                                        "
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <select
+                                                v-model="alItem.jenis_alergi"
+                                                @change="
+                                                    clearError(
+                                                        'alergi_sub_menu_4_' +
+                                                            alIdx +
+                                                            '_jenis',
+                                                    )
+                                                "
+                                                :class="[
+                                                    'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
+                                                    validationErrors[
+                                                        'alergi_sub_menu_4_' +
+                                                            alIdx +
+                                                            '_jenis'
+                                                    ]
+                                                        ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
+                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                ]"
+                                            >
+                                                <option value="" disabled>
+                                                    {{
+                                                        availableAlergiOptions.length >
+                                                        0
+                                                            ? "-- Pilih Alergi PM (Wajib) --"
+                                                            : "-- Belum ada data alergi di PM --"
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="opt in availableAlergiOptions"
+                                                    :key="opt"
+                                                    :value="opt"
+                                                >
+                                                    ⚠️ {{ opt }}
+                                                </option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    removePenggantiAlergi(
+                                                        'sub_menu_4',
+                                                        alIdx,
+                                                    )
+                                                "
+                                                class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
+                                                title="Hapus opsi ini"
+                                            >
+                                                <Trash2 class="h-2.5 w-2.5" />
+                                            </button>
+                                        </div>
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_4_' +
+                                                        alIdx +
+                                                        '_jenis'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_4_" +
+                                                        alIdx +
+                                                        "_jenis"
+                                                ]
+                                            }}</span>
+                                        </p>
+
+                                        <input
+                                            type="text"
+                                            v-model="alItem.menu_pengganti"
+                                            @input="
+                                                clearError(
+                                                    'alergi_sub_menu_4_' +
+                                                        alIdx +
+                                                        '_menu',
+                                                )
+                                            "
+                                            placeholder="Menu pengganti (wajib)..."
+                                            :class="[
+                                                'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
+                                                validationErrors[
+                                                    'alergi_sub_menu_4_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                                    ? 'border border-rose-400 focus:ring-rose-400'
+                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_4_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_4_" +
+                                                        alIdx +
+                                                        "_menu"
+                                                ]
+                                            }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Sub Menu 5 -->
                             <div
-                                class="space-y-1 bg-white p-2.5 rounded-xl border shadow-2xs"
+                                class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit"
                                 :class="
                                     validationErrors.sub_menu_5
                                         ? 'border-rose-400 bg-rose-50/20'
                                         : 'border-emerald-200/90'
                                 "
                             >
-                                <label
-                                    class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5"
-                                >
-                                    <span
-                                        class="h-2 w-2 rounded-full bg-emerald-500"
-                                    ></span>
-                                    <span
-                                        >Sub Menu 5
-                                        <strong class="text-rose-500"
-                                            >*</strong
-                                        ></span
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5"
                                     >
-                                </label>
-                                <input
-                                    type="text"
-                                    v-model="subMenuKomponen.sub_menu_5"
-                                    @input="clearError('sub_menu_5')"
-                                    placeholder="Buah"
-                                    :class="[
-                                        'w-full text-xs font-semibold rounded-lg border p-2',
-                                        validationErrors.sub_menu_5
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50/50',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.sub_menu_5"
-                                    class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                        <span
+                                            class="h-2 w-2 rounded-full bg-emerald-500"
+                                        ></span>
+                                        <span
+                                            >Sub Menu 5
+                                            <strong class="text-rose-500"
+                                                >*</strong
+                                            ></span
+                                        >
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="subMenuKomponen.sub_menu_5"
+                                        @input="clearError('sub_menu_5')"
+                                        placeholder="Buah"
+                                        :class="[
+                                            'w-full text-xs font-semibold rounded-lg border p-2',
+                                            validationErrors.sub_menu_5
+                                                ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                                                : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50/50',
+                                        ]"
+                                    />
+                                    <p
+                                        v-if="validationErrors.sub_menu_5"
+                                        class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
+                                    >
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{
+                                            validationErrors.sub_menu_5
+                                        }}</span>
+                                    </p>
+
+                                    <!-- Warning Realtime Alergi Sub Menu 5 -->
+                                    <div
+                                        v-if="
+                                            detectedAllergensPerSubMenu
+                                                .sub_menu_5.length > 0
+                                        "
+                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                    >
+                                        <div
+                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                        >
+                                            <AlertTriangle
+                                                class="h-3 w-3 text-amber-600 shrink-0"
+                                            />
+                                            <span>Alergi PM Terdeteksi:</span>
+                                        </div>
+                                        <div
+                                            v-for="al in detectedAllergensPerSubMenu.sub_menu_5"
+                                            :key="al.jenis"
+                                            class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
+                                        >
+                                            <span
+                                                >⚠️
+                                                <strong
+                                                    >{{
+                                                        al.total_pm
+                                                    }}
+                                                    PM</strong
+                                                >
+                                                alergi
+                                                <strong>{{
+                                                    al.jenis
+                                                }}</strong></span
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    addPenggantiAlergiWithPreset(
+                                                        'sub_menu_5',
+                                                        al.jenis,
+                                                    )
+                                                "
+                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                title="Tambah opsi pengganti untuk alergi ini"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Opsi Menu Pengganti Alergi -->
+                                <div
+                                    class="pt-2 border-t border-slate-100 space-y-1.5"
                                 >
-                                    <AlertCircle class="h-3 w-3 shrink-0" />
-                                    <span>{{
-                                        validationErrors.sub_menu_5
-                                    }}</span>
-                                </p>
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
+                                        >
+                                            <span>🛡️ Alergi:</span>
+                                            <span
+                                                v-if="
+                                                    subMenuAlergi.sub_menu_5 &&
+                                                    subMenuAlergi.sub_menu_5
+                                                        .length > 0
+                                                "
+                                                class="text-rose-600 font-extrabold"
+                                                >({{
+                                                    subMenuAlergi.sub_menu_5
+                                                        .length
+                                                }})</span
+                                            >
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergi('sub_menu_5')
+                                            "
+                                            class="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                            <span>Pengganti</span>
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-for="(
+                                            alItem, alIdx
+                                        ) in subMenuAlergi.sub_menu_5"
+                                        :key="alIdx"
+                                        class="p-1.5 rounded-lg border space-y-1 transition-all"
+                                        :class="
+                                            validationErrors[
+                                                'alergi_sub_menu_5_' +
+                                                    alIdx +
+                                                    '_jenis'
+                                            ] ||
+                                            validationErrors[
+                                                'alergi_sub_menu_5_' +
+                                                    alIdx +
+                                                    '_menu'
+                                            ]
+                                                ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
+                                                : 'bg-rose-50/60 border-rose-200'
+                                        "
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <select
+                                                v-model="alItem.jenis_alergi"
+                                                @change="
+                                                    clearError(
+                                                        'alergi_sub_menu_5_' +
+                                                            alIdx +
+                                                            '_jenis',
+                                                    )
+                                                "
+                                                :class="[
+                                                    'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
+                                                    validationErrors[
+                                                        'alergi_sub_menu_5_' +
+                                                            alIdx +
+                                                            '_jenis'
+                                                    ]
+                                                        ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
+                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                ]"
+                                            >
+                                                <option value="" disabled>
+                                                    {{
+                                                        availableAlergiOptions.length >
+                                                        0
+                                                            ? "-- Pilih Alergi PM (Wajib) --"
+                                                            : "-- Belum ada data alergi di PM --"
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="opt in availableAlergiOptions"
+                                                    :key="opt"
+                                                    :value="opt"
+                                                >
+                                                    ⚠️ {{ opt }}
+                                                </option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                @click="
+                                                    removePenggantiAlergi(
+                                                        'sub_menu_5',
+                                                        alIdx,
+                                                    )
+                                                "
+                                                class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
+                                                title="Hapus opsi ini"
+                                            >
+                                                <Trash2 class="h-2.5 w-2.5" />
+                                            </button>
+                                        </div>
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_5_' +
+                                                        alIdx +
+                                                        '_jenis'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_5_" +
+                                                        alIdx +
+                                                        "_jenis"
+                                                ]
+                                            }}</span>
+                                        </p>
+
+                                        <input
+                                            type="text"
+                                            v-model="alItem.menu_pengganti"
+                                            @input="
+                                                clearError(
+                                                    'alergi_sub_menu_5_' +
+                                                        alIdx +
+                                                        '_menu',
+                                                )
+                                            "
+                                            placeholder="Menu pengganti (wajib)..."
+                                            :class="[
+                                                'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
+                                                validationErrors[
+                                                    'alergi_sub_menu_5_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                                    ? 'border border-rose-400 focus:ring-rose-400'
+                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="
+                                                validationErrors[
+                                                    'alergi_sub_menu_5_' +
+                                                        alIdx +
+                                                        '_menu'
+                                                ]
+                                            "
+                                            class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle
+                                                class="h-2.5 w-2.5 shrink-0"
+                                            />
+                                            <span>{{
+                                                validationErrors[
+                                                    "alergi_sub_menu_5_" +
+                                                        alIdx +
+                                                        "_menu"
+                                                ]
+                                            }}</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4282,10 +5932,7 @@ watch(
                                     class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                                 >
                                     <Package class="h-5 w-5 text-primary" />
-                                    <span
-                                        >Langkah 2: Pemilihan Bahan Pangan &
-                                        Estimasi Belanja (Bahan Mentah)</span
-                                    >
+                                    <span>Pemilihan Bahan Pangan</span>
                                 </CardTitle>
                                 <span
                                     class="px-2.5 py-0.5 text-xs font-extrabold rounded-md bg-amber-50 text-amber-700 border border-amber-200"
