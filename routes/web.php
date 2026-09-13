@@ -6,6 +6,7 @@ use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\PeriodeController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -77,7 +78,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // PO Actions
         Route::post('/po/{id}/verifikasi', [KeuanganController::class, 'verifikasiPo'])->name('po.verifikasi');
+        Route::put('/po/{id}/supplier', [KeuanganController::class, 'updatePoSupplier'])->name('po.update-supplier');
+        Route::post('/po/{id}/supplier', [KeuanganController::class, 'updatePoSupplier'])->name('po.update-supplier-post');
     });
+
+    // Supplier Rekanan SPPG
+    Route::resource('supplier', SupplierController::class);
 
     // Label SPPG
     Route::prefix('label')->name('label.')->group(function () {

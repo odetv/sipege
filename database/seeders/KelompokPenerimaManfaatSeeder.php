@@ -154,7 +154,7 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_besar' => 0,
                 'keterangan_alergi' => [
                     ['jenis_alergi' => 'Telur', 'porsi_kecil' => 1, 'porsi_besar' => 0],
-                    ['jenis_alergi' => 'Susu Sapi / Laktosa', 'porsi_kecil' => 1, 'porsi_besar' => 0],
+                    ['jenis_alergi' => 'Susu dan produk olahannya', 'porsi_kecil' => 1, 'porsi_besar' => 0],
                 ],
             ],
 
@@ -189,9 +189,11 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 8,
                 'alergi_porsi_besar' => 6,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 4, 'porsi_besar' => 3],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 3, 'porsi_besar' => 2],
-                    ['jenis_alergi' => 'Kacang Tanah & Pohon', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 3, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Ikan', 'porsi_kecil' => 2, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Udang', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Kacang Tanah', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Nasi/Beras', 'porsi_kecil' => 1, 'porsi_besar' => 1],
                 ],
             ],
 
@@ -226,8 +228,8 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 0,
                 'alergi_porsi_besar' => 4,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 2],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 0, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Daging Ayam', 'porsi_kecil' => 0, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Gandum/Tepung Terigu', 'porsi_kecil' => 0, 'porsi_besar' => 2],
                 ],
             ],
 
@@ -262,9 +264,11 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 0,
                 'alergi_porsi_besar' => 13,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 6],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 0, 'porsi_besar' => 4],
-                    ['jenis_alergi' => 'Susu Sapi / Laktosa', 'porsi_kecil' => 0, 'porsi_besar' => 3],
+                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 4],
+                    ['jenis_alergi' => 'Ikan', 'porsi_kecil' => 0, 'porsi_besar' => 3],
+                    ['jenis_alergi' => 'Daging Sapi', 'porsi_kecil' => 0, 'porsi_besar' => 3],
+                    ['jenis_alergi' => 'Susu dan produk olahannya', 'porsi_kecil' => 0, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Nanas', 'porsi_kecil' => 0, 'porsi_besar' => 1],
                 ],
             ],
 
@@ -332,7 +336,7 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 0,
                 'alergi_porsi_besar' => 1,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Udang', 'porsi_kecil' => 0, 'porsi_besar' => 1],
                 ],
             ],
 
@@ -367,8 +371,10 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 1,
                 'alergi_porsi_besar' => 4,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 1, 'porsi_besar' => 2],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 0, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Tomat', 'porsi_kecil' => 0, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Gandum/Tepung Terigu', 'porsi_kecil' => 0, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Ikan', 'porsi_kecil' => 0, 'porsi_besar' => 1],
                 ],
             ],
 
@@ -436,7 +442,7 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 1,
                 'alergi_porsi_besar' => 0,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 1, 'porsi_besar' => 0],
+                    ['jenis_alergi' => 'Daging Ayam', 'porsi_kecil' => 1, 'porsi_besar' => 0],
                 ],
             ],
 
@@ -471,8 +477,9 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 0,
                 'alergi_porsi_besar' => 7,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 4],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 0, 'porsi_besar' => 3],
+                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 0, 'porsi_besar' => 3],
+                    ['jenis_alergi' => 'Udang', 'porsi_kecil' => 0, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Daging Sapi', 'porsi_kecil' => 0, 'porsi_besar' => 2],
                 ],
             ],
 
@@ -507,8 +514,10 @@ class KelompokPenerimaManfaatSeeder extends Seeder
                 'alergi_porsi_kecil' => 4,
                 'alergi_porsi_besar' => 4,
                 'keterangan_alergi' => [
-                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 2, 'porsi_besar' => 2],
-                    ['jenis_alergi' => 'Ikan Laut / Seafood', 'porsi_kecil' => 2, 'porsi_besar' => 2],
+                    ['jenis_alergi' => 'Telur', 'porsi_kecil' => 2, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Ikan', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Kacang Tanah', 'porsi_kecil' => 1, 'porsi_besar' => 1],
+                    ['jenis_alergi' => 'Nanas', 'porsi_kecil' => 0, 'porsi_besar' => 1],
                 ],
             ],
 

@@ -57,9 +57,15 @@ import {
     UserX,
     X,
     Info,
+    HelpCircle,
+    ExternalLink,
 } from "lucide-vue-next";
 import {
     ALERGI_OPTIONS,
+    ALLERGEN_KEYWORDS,
+    REKOMENDASI_SUBSTITUSI,
+    matchWordBoundary,
+    checkTextMatchesAllergen,
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
@@ -122,15 +128,14 @@ const normalizeStep = (step) => {
     if (
         step === "bahan_pangan" ||
         step === "bahan-pangan" ||
+        step === "formula_makanan" ||
+        step === "formula-makanan" ||
+        step === "formula_gizi" ||
+        step === "formula-gizi" ||
+        step === "formula" ||
         step === "pre_order"
     )
         return "bahan_pangan";
-    if (
-        step === "formula_gizi" ||
-        step === "formula-gizi" ||
-        step === "formula"
-    )
-        return "formula_gizi";
     if (
         step === "order" ||
         step === "review" ||
@@ -469,17 +474,12 @@ const buatMenuSubTabs = [
     },
     {
         id: "bahan_pangan",
-        label: "2. Bahan Pangan",
+        label: "2. Formula Makanan",
         icon: Package,
     },
     {
-        id: "formula_gizi",
-        label: "3. Formula Gizi",
-        icon: ClipboardList,
-    },
-    {
         id: "order",
-        label: "4. Review & Pengajuan",
+        label: "3. Review & Pengajuan",
         icon: ShieldCheck,
     },
 ];
@@ -544,98 +544,6 @@ const availableAlergiOptions = computed(() => {
     return Array.from(set);
 });
 
-// Kamus kata kunci sinonim alergen umum untuk pencocokan pintar realtime
-const allergenKeywordsMap = {
-    telur: [
-        "telur",
-        "egg",
-        "dadar",
-        "ceplok",
-        "omelet",
-        "mayones",
-        "mayonnaise",
-        "kuning telur",
-        "putih telur",
-    ],
-    ayam: ["ayam", "chicken", "unggas"],
-    bebek: ["bebek", "duck", "unggas"],
-    daging: ["daging", "sapi", "kambing", "beef", "lamb"],
-    ikan: [
-        "ikan",
-        "fish",
-        "tongkol",
-        "tuna",
-        "lele",
-        "nila",
-        "gurame",
-        "salmon",
-        "bandeng",
-        "teri",
-        "patin",
-        "cakalang",
-        "dori",
-        "kakap",
-        "tenggiri",
-        "bawal",
-        "kembung",
-        "mujair",
-        "mas",
-    ],
-    seafood: [
-        "seafood",
-        "udang",
-        "cumi",
-        "kepiting",
-        "lobster",
-        "kerang",
-        "ikan laut",
-        "cumi-cumi",
-        "gurita",
-    ],
-    udang: ["udang", "prawn", "shrimp", "ebi"],
-    cumi: ["cumi", "squid", "sotong", "gurita"],
-    kepiting: ["kepiting", "crab", "rajungan"],
-    susu: [
-        "susu",
-        "milk",
-        "keju",
-        "cheese",
-        "butter",
-        "mentega",
-        "dairy",
-        "laktosa",
-        "yogurt",
-        "krim",
-        "cream",
-    ],
-    kacang: [
-        "kacang",
-        "peanut",
-        "nut",
-        "almond",
-        "mete",
-        "kedelai",
-        "pecel",
-        "gado-gado",
-        "bumbu kacang",
-        "tofu",
-        "tahu",
-        "tempe",
-        "edamame",
-    ],
-    gandum: [
-        "gandum",
-        "gluten",
-        "terigu",
-        "roti",
-        "mie",
-        "pasta",
-        "bakmi",
-        "spaghetti",
-        "biskuit",
-    ],
-};
-
 // Rekapitulasi porsi & jumlah PM terdampak per jenis alergi
 const pmAlergiStats = computed(() => {
     const map = {};
@@ -675,39 +583,9 @@ const pmAlergiStats = computed(() => {
     return map;
 });
 
-// Cek apakah string input cocok dengan jenis alergi tertentu
+// Cek apakah string input cocok dengan jenis alergi tertentu menggunakan word-boundary ketat
 function checkTextContainsAllergen(text, allergenName) {
-    if (!text || typeof text !== "string" || !allergenName) return false;
-    const lowerText = text.toLowerCase().trim();
-    const lowerAllergen = allergenName.toLowerCase().trim();
-    if (!lowerText || !lowerAllergen) return false;
-
-    // 1. Direct match / substring
-    if (
-        lowerText.includes(lowerAllergen) ||
-        lowerAllergen.includes(lowerText)
-    ) {
-        return true;
-    }
-
-    // 2. Tokenized word match
-    const textWords = lowerText.split(/[\s,./\-_+&()]+/);
-    if (textWords.some((w) => w.length >= 3 && lowerAllergen.includes(w))) {
-        return true;
-    }
-
-    // 3. Keyword dictionary match
-    for (const [key, keywords] of Object.entries(allergenKeywordsMap)) {
-        const allergenMatchesKey =
-            lowerAllergen.includes(key) || key.includes(lowerAllergen);
-        if (allergenMatchesKey) {
-            if (keywords.some((kw) => lowerText.includes(kw))) {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    return checkTextMatchesAllergen(text, allergenName);
 }
 
 // Deteksi seluruh alergen yang cocok pada sebuah teks
@@ -972,7 +850,7 @@ function normalizeKelompokForWo(k) {
     };
 }
 
-// Daftar Kelompok Sasaran Terjadwal untuk Work Order Ini
+// Daftar Kelompok Penerima Manfaat Terjadwal untuk Work Order Ini
 const woKelompokList = ref(props.kelompokList.map(normalizeKelompokForWo));
 
 function handleResetWoKelompokList() {
@@ -1149,7 +1027,16 @@ const varianAlergiTelurBahan = computed(() => {
 });
 
 // Database Master TKPI Aktif (NutriSurvey Indo .fta / TKPI 2020 .csv)
-const tkpiItems = computed(() => props.tkpiList || []);
+const tkpiItems = computed(() => {
+    if (
+        props.tkpiDatasets &&
+        props.tkpiDatasets[props.selectedSource] &&
+        props.tkpiDatasets[props.selectedSource].length > 0
+    ) {
+        return props.tkpiDatasets[props.selectedSource];
+    }
+    return props.tkpiList || [];
+});
 
 // Fungsi Kalkulasi MBG
 function calculateGrossWeightKg(
@@ -1180,6 +1067,19 @@ function formatGrossWeight(kg) {
     }
 }
 
+function formatGram(gram) {
+    if (
+        gram === null ||
+        gram === undefined ||
+        gram === "" ||
+        isNaN(Number(gram))
+    )
+        return "0 g";
+    const num = Number(gram);
+    if (num <= 0) return "0 g";
+    return `${parseFloat(num.toFixed(1))} g`;
+}
+
 function calculateNutritionFromNetGram(itemTkpi, netGram) {
     if (!itemTkpi || !netGram) {
         return { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
@@ -1205,32 +1105,148 @@ function calculateItemFoodCostPerPortion(
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossGram = (netGram / bddFactor) * bufferFactor;
     const cost = (grossGram / 1000) * hargaPerKg;
-    return Math.round(cost);
+    return Number(cost) || 0;
 }
 
-// Combobox Selector Bahan Pangan Baku (Langkah 2)
-const isComboboxOpen = ref(false);
-const searchTkpiQuery = ref("");
-const selectedTkpiItem = ref(null);
+// ==========================================
+// 2. ARSITEKTUR BLOK SUB MENU (LANGKAH 2: PEMILIHAN BAHAN PANGAN)
+// ==========================================
+// Daftar blok Sub Menu dinamis dari Step 1 (Sub Menu 1..5 + Varian Pengganti Alergi)
+const step2SubMenuBlocks = computed(() => {
+    const blocks = [];
+    const keys = [
+        {
+            key: "sub_menu_1",
+            label: "Sub Menu 1",
+            color: "amber",
+            defaultName: "Makanan Pokok",
+            dotColor: "bg-amber-500",
+            borderCard: "border-amber-200/90",
+            bgHeader: "bg-amber-50/50",
+        },
+        {
+            key: "sub_menu_2",
+            label: "Sub Menu 2",
+            color: "rose",
+            defaultName: "Protein Hewani",
+            dotColor: "bg-rose-500",
+            borderCard: "border-rose-200/90",
+            bgHeader: "bg-rose-50/50",
+        },
+        {
+            key: "sub_menu_3",
+            label: "Sub Menu 3",
+            color: "yellow",
+            defaultName: "Protein Nabati",
+            dotColor: "bg-yellow-500",
+            borderCard: "border-yellow-200/90",
+            bgHeader: "bg-yellow-50/50",
+        },
+        {
+            key: "sub_menu_4",
+            label: "Sub Menu 4",
+            color: "blue",
+            defaultName: "Sayuran",
+            dotColor: "bg-blue-500",
+            borderCard: "border-blue-200/90",
+            bgHeader: "bg-blue-50/50",
+        },
+        {
+            key: "sub_menu_5",
+            label: "Sub Menu 5",
+            color: "emerald",
+            defaultName: "Buah",
+            dotColor: "bg-emerald-500",
+            borderCard: "border-emerald-200/90",
+            bgHeader: "bg-emerald-50/50",
+        },
+    ];
 
-const filteredTkpiList = computed(() => {
-    const list = props.tkpiList || [];
-    if (!searchTkpiQuery.value) {
-        return list.slice(0, 100);
-    }
-    const q = searchTkpiQuery.value.toLowerCase().trim();
-    const searchTerms = q.split(/\s+/).filter(Boolean);
-    return list
-        .filter((item) => {
-            const itemStr =
-                `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
-            return searchTerms.every((term) => itemStr.includes(term));
-        })
-        .slice(0, 100);
+    keys.forEach((sm, idx) => {
+        const menuName =
+            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+        // 1. Blok Utama (Normal)
+        blocks.push({
+            id: `${sm.key}_normal`,
+            subKey: sm.key,
+            subIndex: idx + 1,
+            subLabel: sm.label,
+            namaMenu: menuName,
+            isAlergi: false,
+            jenisAlergi: "",
+            alergiIndex: null,
+            themeColor: sm.color,
+            dotColor: sm.dotColor,
+            borderCard: sm.borderCard,
+            bgHeader: sm.bgHeader,
+        });
+
+        // 2. Blok Pengganti Alergi Khusus (jika ditambahkan di Step 1)
+        const alergiList = subMenuAlergi.value[sm.key];
+        if (Array.isArray(alergiList) && alergiList.length > 0) {
+            alergiList.forEach((al, alIdx) => {
+                const penggantiName =
+                    (al.menu_pengganti || "").trim() ||
+                    `Pengganti ${al.jenis_alergi || "Alergi"}`;
+                blocks.push({
+                    id: `${sm.key}_alergi_${alIdx}`,
+                    subKey: sm.key,
+                    subIndex: idx + 1,
+                    subLabel: `${sm.label} • Pengganti Alergi`,
+                    namaMenu: penggantiName,
+                    isAlergi: true,
+                    jenisAlergi: al.jenis_alergi || "",
+                    alergiIndex: alIdx,
+                    themeColor: "rose",
+                    dotColor: "bg-rose-500",
+                    borderCard: "border-rose-300 ring-1 ring-rose-200/60",
+                    bgHeader: "bg-rose-50/80",
+                });
+            });
+        }
+    });
+
+    return blocks;
 });
 
-function selectTkpiItem(master) {
-    if (!master) return;
+// State Pencarian Combobox per Blok Sub Menu
+const activeComboboxBlockId = ref(null);
+const searchTkpiQueryPerBlock = ref({});
+
+function getSearchQueryForBlock(blockId) {
+    return searchTkpiQueryPerBlock.value[blockId] || "";
+}
+
+function setSearchQueryForBlock(blockId, val) {
+    searchTkpiQueryPerBlock.value[blockId] = val;
+}
+
+function toggleComboboxForBlock(blockId) {
+    if (activeComboboxBlockId.value === blockId) {
+        activeComboboxBlockId.value = null;
+    } else {
+        activeComboboxBlockId.value = blockId;
+    }
+}
+
+function getFilteredTkpiListForBlock(blockId) {
+    const list = tkpiItems.value || [];
+    const q = (searchTkpiQueryPerBlock.value[blockId] || "")
+        .toLowerCase()
+        .trim();
+    if (!q) {
+        return list;
+    }
+    const searchTerms = q.split(/\s+/).filter(Boolean);
+    return list.filter((item) => {
+        const itemStr =
+            `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
+        return searchTerms.every((term) => itemStr.includes(term));
+    });
+}
+
+function selectTkpiItemForBlock(master, block) {
+    if (!master || !block) return;
     let bddValue = 100;
     if (master.bdd !== undefined && master.bdd !== null && master.bdd !== "") {
         const parsed = Number(master.bdd);
@@ -1243,34 +1259,236 @@ function selectTkpiItem(master) {
         id: master.id || master.code,
         code: master.code,
         tkpi_id: master.id || master.code,
+        sub_menu_block_id: block.id,
+        sub_menu_key: block.subKey,
+        nama_sub_menu: block.namaMenu,
         kategori: master.kategori || "Lainnya",
         nama: master.nama,
-        nama_po: master.nama,
-        tipe_porsi: "normal",
-        jenis_alergi: "",
+        nama_po: "",
+        tipe_porsi: block.isAlergi ? "alergi" : "normal",
+        jenis_alergi: block.isAlergi ? block.jenisAlergi || "" : "",
         gram_pk: 0,
         gram_pb: 0,
         bdd: bddValue,
         buffer: 0,
-        harga_master: master.harga || master.harga_master || 0,
-        harga_aktual: master.harga || master.harga_master || 0,
+        harga_master: null,
+        harga_aktual: null,
         alergen: master.alergen || "",
+        keterangan: "",
         tkpi: master,
     });
 
-    isComboboxOpen.value = false;
-    searchTkpiQuery.value = "";
-    selectedTkpiItem.value = null;
-}
-
-function handleAddBahan() {
-    if (selectedTkpiItem.value) {
-        selectTkpiItem(selectedTkpiItem.value);
+    activeComboboxBlockId.value = null;
+    searchTkpiQueryPerBlock.value[block.id] = "";
+    if (validationErrors.value.selectedBahan) {
+        delete validationErrors.value.selectedBahan;
     }
 }
 
+// Navigasi & Highlight Baris Bahan Pangan dari Tabel Rekapitulasi
+function scrollToSubMenuBahan(item) {
+    if (!item) return;
+
+    if (buatMenuSubTab.value !== "bahan_pangan") {
+        buatMenuSubTab.value = "bahan_pangan";
+        scrollToTopSection();
+    }
+
+    nextTick(() => {
+        const targetRowId = `row-bahan-${item.originalIndex}`;
+        const targetBlockId = item.sub_menu_block_id
+            ? `card-block-${item.sub_menu_block_id}`
+            : null;
+
+        let el = document.getElementById(targetRowId);
+        if (!el && targetBlockId) {
+            el = document.getElementById(targetBlockId);
+        }
+
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add(
+                "ring-4",
+                "ring-primary",
+                "bg-amber-100/70",
+                "transition-all",
+                "duration-500",
+            );
+            const inputPo = el.querySelector('input[type="text"]');
+            if (inputPo) {
+                inputPo.focus();
+            }
+            setTimeout(() => {
+                el.classList.remove(
+                    "ring-4",
+                    "ring-primary",
+                    "bg-amber-100/70",
+                );
+            }, 2500);
+        }
+    });
+}
+
+// Opsi Alergi yang tersedia di data Penerima Manfaat untuk dropdown Peruntukan Porsi
+const availableAlergiPmOptions = computed(() => {
+    const list =
+        rekapAlergiDetailPm.value.length > 0
+            ? rekapAlergiDetailPm.value
+            : rekapAlergiMasterPm.value;
+
+    const options = [];
+    const addedSet = new Set();
+
+    // Hanya masukkan alergi yang benar-benar ada siswanya pada data Penerima Manfaat (total > 0)
+    list.forEach((a) => {
+        const total = Number(a.total || 0);
+        if (a.jenis_alergi && total > 0 && !addedSet.has(a.jenis_alergi)) {
+            addedSet.add(a.jenis_alergi);
+            options.push({
+                jenis_alergi: a.jenis_alergi,
+                total: total,
+                pk: Number(a.porsi_kecil || 0),
+                pb: Number(a.porsi_besar || 0),
+                hasPm: true,
+            });
+        }
+    });
+
+    // Pertahankan alergi yang sudah terpilih pada bahan yang sedang diedit (agar tidak hilang)
+    selectedBahanList.value.forEach((b) => {
+        if (
+            b.tipe_porsi === "alergi" &&
+            b.jenis_alergi &&
+            !addedSet.has(b.jenis_alergi)
+        ) {
+            addedSet.add(b.jenis_alergi);
+            options.push({
+                jenis_alergi: b.jenis_alergi,
+                total: b.totalTargetCount || 0,
+                pk: b.targetPKCount || 0,
+                pb: b.targetPBCount || 0,
+                hasPm: (b.totalTargetCount || 0) > 0,
+            });
+        }
+    });
+
+    return options;
+});
+
+function getPeruntukanPorsiValue(bahan) {
+    if (!bahan) return "normal";
+    if (bahan.tipe_porsi === "alergi") {
+        return `alergi:${bahan.jenis_alergi || ""}`;
+    }
+    return "normal";
+}
+
+function handlePeruntukanPorsiChange(originalIndex, eventVal) {
+    const b = selectedBahanList.value[originalIndex];
+    if (!b) return;
+    if (eventVal === "normal") {
+        b.tipe_porsi = "normal";
+        b.jenis_alergi = "";
+    } else if (eventVal && eventVal.startsWith("alergi:")) {
+        b.tipe_porsi = "alergi";
+        b.jenis_alergi = eventVal.replace("alergi:", "");
+    }
+}
+
+// Helper filter bahan calculations untuk satu blok tertentu
+function getBahanForBlock(blockId) {
+    return bahanCalculations.value.filter((b) => {
+        if (b.sub_menu_block_id) {
+            return b.sub_menu_block_id === blockId;
+        }
+        // Fallback backward compatibility: masukkan ke blok normal pertama jika belum ada block_id
+        const firstBlock = step2SubMenuBlocks.value[0];
+        return firstBlock && firstBlock.id === blockId;
+    });
+}
+
+// Helper kalkulasi ringkasan subtotal per blok
+function getBlockSummary(blockId) {
+    const items = getBahanForBlock(blockId);
+    const totalNetKg = items.reduce((sum, it) => sum + (it.totalNetKg || 0), 0);
+    const totalGrossKg = items.reduce(
+        (sum, it) => sum + (it.totalGrossKg || 0),
+        0,
+    );
+    const totalCostMaster = items.reduce(
+        (sum, it) => sum + (it.subtotalMaster || 0),
+        0,
+    );
+    const totalCostAktual = items.reduce(
+        (sum, it) => sum + (it.subtotalAktual || 0),
+        0,
+    );
+    return {
+        count: items.length,
+        totalNetKg,
+        totalGrossKg,
+        totalCostMaster,
+        totalCostAktual,
+    };
+}
+
+// Helper untuk mendapatkan nama teks Sub Menu dari objek bahan
+function getSubMenuNameFromBahan(it) {
+    const info = getSubMenuLabelForBahan(it);
+    return info.label || "Sub Menu";
+}
+
+// Helper untuk identifikasi nama Sub Menu asal pada Rekapitulasi Bahan Pangan
+function getSubMenuLabelForBahan(it) {
+    if (it.sub_menu_block_id) {
+        const found = step2SubMenuBlocks.value.find(
+            (b) => b.id === it.sub_menu_block_id,
+        );
+        if (found) {
+            return {
+                label: found.subLabel,
+                namaMenu: found.namaMenu,
+                isAlergi: found.isAlergi,
+                jenisAlergi: found.jenisAlergi,
+                badgeClass: found.isAlergi
+                    ? "bg-rose-100 text-rose-800 border-rose-300"
+                    : "bg-slate-100 text-slate-800 border-slate-300",
+            };
+        }
+    }
+    const keyMap = {
+        sub_menu_1: "Sub Menu 1",
+        sub_menu_2: "Sub Menu 2",
+        sub_menu_3: "Sub Menu 3",
+        sub_menu_4: "Sub Menu 4",
+        sub_menu_5: "Sub Menu 5",
+    };
+    const label = keyMap[it.sub_menu_key] || "Sub Menu 1";
+    const namaMenu =
+        it.nama_sub_menu || subMenuKomponen.value[it.sub_menu_key] || "";
+    const isAlergi = it.tipe_porsi === "alergi";
+    return {
+        label: isAlergi ? `${label} • Alergi` : label,
+        namaMenu: namaMenu || "-",
+        isAlergi,
+        jenisAlergi: it.jenis_alergi || "",
+        badgeClass: isAlergi
+            ? "bg-rose-100 text-rose-800 border-rose-300"
+            : "bg-slate-100 text-slate-800 border-slate-300",
+    };
+}
+
+function scrollToRekapitulasi() {
+    nextTick(() => {
+        const el = document.getElementById("tabel-rekapitulasi-bahan-pangan");
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    });
+}
+
 function onGlobalWindowClick() {
-    isComboboxOpen.value = false;
+    activeComboboxBlockId.value = null;
     isComboboxGiziOpen.value = false;
 }
 
@@ -1289,6 +1507,37 @@ function clearError(field) {
         delete validationErrors.value[field];
     }
 }
+
+function scrollToTopSection() {
+    nextTick(() => {
+        const topEl =
+            document.getElementById("rancang-menu-top-anchor") ||
+            document.getElementById("gizi-rancang-menu-container");
+        if (topEl) {
+            topEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        const scrollableContainers =
+            document.querySelectorAll(".overflow-y-auto");
+        scrollableContainers.forEach((el) => {
+            el.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (document.documentElement) {
+            document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        if (document.body) {
+            document.body.scrollTo({ top: 0, behavior: "smooth" });
+        }
+    });
+}
+
+watch(buatMenuSubTab, (newVal, oldVal) => {
+    if (newVal !== oldVal) {
+        scrollToTopSection();
+    }
+});
 
 function scrollToFirstError() {
     nextTick(() => {
@@ -1433,10 +1682,13 @@ function validateStep2() {
 
     if (!selectedBahanList.value || selectedBahanList.value.length === 0) {
         errs.selectedBahan =
-            "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database TKPI 2020.";
+            "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database.";
     }
 
     selectedBahanList.value.forEach((b, i) => {
+        if (!b.nama_po || !b.nama_po.trim()) {
+            errs["bahan_" + i + "_nama_po"] = "Nama di PO wajib diisi.";
+        }
         if (
             b.tipe_porsi === "alergi" &&
             (!b.jenis_alergi || !b.jenis_alergi.trim())
@@ -1447,8 +1699,21 @@ function validateStep2() {
         const pbVal = Number(b.gram_pb) || 0;
         if (pkVal <= 0 && pbVal <= 0) {
             errs["bahan_" + i + "_gram"] =
-                "Wajib isi minimal salah satu (PK atau PB) > 0";
+                "Gramasi (PK atau PB) wajib diisi > 0";
+        } else if (pkVal < 0 || pbVal < 0) {
+            errs["bahan_" + i + "_gram"] = "Gramasi tidak boleh kurang dari 0";
         }
+
+        const hargaVal = Number(b.harga_master) || 0;
+        if (
+            b.harga_master === null ||
+            b.harga_master === undefined ||
+            b.harga_master === "" ||
+            hargaVal <= 0
+        ) {
+            errs["bahan_" + i + "_harga"] = "Harga per Kg wajib diisi > 0";
+        }
+
         if (
             b.bdd === null ||
             b.bdd === undefined ||
@@ -1478,49 +1743,42 @@ function validateStep2() {
 function handleSwitchSubTab(targetTab) {
     if (targetTab === "work_order") {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
 
-    // Step 1 WAJIB VALID untuk dapat berpindah ke Step 2, 3, atau 4
+    // Step 1 WAJIB VALID untuk dapat berpindah ke Step 2 atau Step 3
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
 
-    if (targetTab === "bahan_pangan" || targetTab === "pre_order") {
+    if (
+        targetTab === "bahan_pangan" ||
+        targetTab === "pre_order" ||
+        targetTab === "formula-gizi" ||
+        targetTab === "formula_gizi"
+    ) {
         buatMenuSubTab.value = "bahan_pangan";
-        return;
-    }
-
-    if (targetTab === "formula-gizi" || targetTab === "formula_gizi") {
-        if (!validateStep2()) {
-            buatMenuSubTab.value = "bahan_pangan";
-            return;
-        }
-        if (
-            !selectedGiziBahanList.value ||
-            selectedGiziBahanList.value.length === 0
-        ) {
-            syncGiziFromBahan();
-        }
-        buatMenuSubTab.value = "formula_gizi";
+        scrollToTopSection();
         return;
     }
 
     if (
         targetTab === "order" ||
+        targetTab === "review" ||
+        targetTab === "review_pengajuan" ||
         targetTab === "pembelian_bahan" ||
         targetTab === "pembelian-bahan"
     ) {
         if (!validateStep2()) {
             buatMenuSubTab.value = "bahan_pangan";
-            return;
-        }
-        if (!validateStep3()) {
-            buatMenuSubTab.value = "formula_gizi";
+            scrollToTopSection();
             return;
         }
         buatMenuSubTab.value = "order";
+        scrollToTopSection();
         return;
     }
 
@@ -1532,6 +1790,7 @@ function handleMulaiFormulasiWo() {
         return;
     }
     buatMenuSubTab.value = "bahan_pangan";
+    scrollToTopSection();
 }
 
 function handleRemoveBahan(index) {
@@ -1581,43 +1840,43 @@ function validateStep3() {
 function handleLanjutStep3() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     if (!validateStep2()) {
         return;
     }
-    // Auto-sync jika Step 3 masih kosong
-    if (
-        !selectedGiziBahanList.value ||
-        selectedGiziBahanList.value.length === 0
-    ) {
-        syncGiziFromBahan();
-    }
-    buatMenuSubTab.value = "formula_gizi";
+    buatMenuSubTab.value = "order";
+    scrollToTopSection();
 }
 
 function handleLanjutStep4() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     if (!validateStep2()) {
         buatMenuSubTab.value = "bahan_pangan";
+        scrollToTopSection();
         return;
     }
     if (!validateStep3()) {
         return;
     }
     buatMenuSubTab.value = "order";
+    scrollToTopSection();
 }
 
 function simpanDraftStep3() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     if (!validateStep2()) {
         buatMenuSubTab.value = "bahan_pangan";
+        scrollToTopSection();
         return;
     }
     if (!validateStep3()) return;
@@ -1642,6 +1901,7 @@ function simpanDraftStep3() {
 function handleAjukanDraftPo() {
     if (validateStep2()) {
         buatMenuSubTab.value = "order";
+        scrollToTopSection();
     }
 }
 
@@ -1718,114 +1978,19 @@ const totalPBAlergi = computed(() => {
     );
 });
 
-// Keyword dictionary untuk deteksi cerdas alergen dari nama menu
-const ALLERGEN_KEYWORDS = {
-    "Ikan Laut / Seafood": [
-        "ikan",
-        "fish",
-        "tuna",
-        "tongkol",
-        "lele",
-        "bandeng",
-        "gurame",
-        "nila",
-        "dori",
-        "salmon",
-        "patin",
-        "seafood",
-        "cumi",
-        "gurita",
-        "kakap",
-        "tenggiri",
-        "kembung",
-    ],
-    "Udang & Krustasea": [
-        "udang",
-        "shrimp",
-        "prawn",
-        "kepiting",
-        "crab",
-        "lobster",
-        "rajungan",
-    ],
-    Telur: [
-        "telur",
-        "egg",
-        "dadar",
-        "ceplok",
-        "balado telur",
-        "omelet",
-        "puyuh",
-        "mata sapi",
-    ],
-    "Susu Sapi / Laktosa": [
-        "susu",
-        "milk",
-        "keju",
-        "cheese",
-        "mentega",
-        "butter",
-        "yogurt",
-        "krim",
-        "cream",
-    ],
-    "Kacang Tanah & Pohon": [
-        "kacang",
-        "peanut",
-        "bumbu kacang",
-        "almond",
-        "mete",
-        "cashew",
-        "pecel",
-        "gado-gado",
-        "saus kacang",
-    ],
-    "Kedelai / Soja": [
-        "kedelai",
-        "soy",
-        "tahu",
-        "tempe",
-        "tauco",
-        "kecap",
-        "edamame",
-    ],
-    "Gandum / Gluten": [
-        "gandum",
-        "wheat",
-        "gluten",
-        "roti",
-        "mie",
-        "mi",
-        "pasta",
-        "spageti",
-        "makaroni",
-        "tepung",
-    ],
-    "Daging Ayam / Unggas": ["ayam", "chicken", "bebek", "unggas"],
-    "Daging Sapi": [
-        "sapi",
-        "beef",
-        "daging",
-        "bakso",
-        "rendang",
-        "rawon",
-        "empal",
-    ],
-    Cokelat: ["cokelat", "chocolate", "coklat", "cocoa"],
-};
-
-const REKOMENDASI_SUBSTITUSI = {
-    "Ikan Laut / Seafood": "Fillet Daging Ayam, Daging Sapi, Tahu, atau Tempe",
-    "Udang & Krustasea": "Daging Ayam, Daging Sapi, atau Telur",
-    Telur: "Tahu Sutra, Tempe, Daging Ayam, atau Ikan",
-    "Susu Sapi / Laktosa": "Susu Kedelai, Susu Almond, atau Sari Gandum Oat",
-    "Kacang Tanah & Pohon": "Saus Wijen, Saus Tomat, atau Bumbu Kecap Rempah",
-    "Kedelai / Soja": "Telur, Daging Ayam, Ikan, atau Kacang Merah",
-    "Gandum / Gluten":
-        "Nasi Putih, Jagung Pipil, Kentang, Ubi, atau Bihun Beras",
-    "Daging Ayam / Unggas": "Ikan Fillet, Telur, Daging Sapi, atau Tahu",
-    "Daging Sapi": "Daging Ayam, Ikan, Telur, atau Tempe",
-};
+// Total siswa yang BENAR-BENAR terdampak alergi di menu ini (berdasarkan jenis alergi aktif di bahan)
+const totalTerdampakAlergi = computed(() => {
+    return activeAlergiFoodCostList.value.reduce(
+        (acc, al) => acc + (Number(al.total_siswa) || 0),
+        0,
+    );
+});
+const totalTerdampakPK = computed(() =>
+    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.siswa_pk) || 0), 0)
+);
+const totalTerdampakPB = computed(() =>
+    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.siswa_pb) || 0), 0)
+);
 
 // Rekapitulasi Alergi per Jenis dari seluruh kelompok sasaran aktif
 const rekapAlergiDetailPm = computed(() => {
@@ -1875,53 +2040,19 @@ const analisaAlergiMenu = computed(() => {
         subMenuKomponen.value.sub_menu_4 || "",
         subMenuKomponen.value.sub_menu_5 || "",
     ].join(" ");
-    const menuLower = combinedText.toLowerCase();
+
     const activeAlergi = rekapAlergiDetailPm.value;
     const conflicts = [];
 
     activeAlergi.forEach((al) => {
-        let matched = false;
-        let matchedKeyword = "";
-
-        // Cari di dictionary kata kunci alergen
-        for (const [allergenName, keywords] of Object.entries(
-            ALLERGEN_KEYWORDS,
-        )) {
-            const isRelated =
-                allergenName
-                    .toLowerCase()
-                    .includes(al.jenis_alergi.toLowerCase()) ||
-                al.jenis_alergi
-                    .toLowerCase()
-                    .includes(allergenName.toLowerCase());
-
-            if (isRelated) {
-                for (const kw of keywords) {
-                    const regex = new RegExp(`\\b${kw}`, "i");
-                    if (regex.test(menuLower) || menuLower.includes(kw)) {
-                        matched = true;
-                        matchedKeyword = kw;
-                        break;
-                    }
-                }
-            }
-            if (matched) break;
-        }
-
-        // Cek nama jenis alergi langsung
-        if (!matched && menuLower.includes(al.jenis_alergi.toLowerCase())) {
-            matched = true;
-            matchedKeyword = al.jenis_alergi;
-        }
-
-        if (matched) {
+        if (checkTextMatchesAllergen(combinedText, al.jenis_alergi)) {
             const rekomendasiBahan =
                 REKOMENDASI_SUBSTITUSI[al.jenis_alergi] ||
                 "Bahan pangan sumber protein/karbohidrat alternatif non-alergen";
 
             conflicts.push({
                 ...al,
-                keyword: matchedKeyword,
+                keyword: al.jenis_alergi,
                 rekomendasi: rekomendasiBahan,
             });
         }
@@ -2027,132 +2158,13 @@ const totalMasterPmSiswaAlergi = computed(() => {
 
 // Helper Deteksi Apakah Bahan Pangan Mengandung Alergen Tertentu
 function isBahanContainsAlergen(b, jenisAlergi) {
-    if (!jenisAlergi) return false;
-    const lowerJenis = jenisAlergi.toLowerCase().trim();
-    const alergen = (
-        b.alergen ||
-        (b.tkpi && b.tkpi.alergen) ||
-        ""
-    ).toLowerCase();
-    const namaBahan = (b.nama || (b.tkpi && b.tkpi.nama) || "").toLowerCase();
-    const kategori = (
-        b.kategori ||
-        (b.tkpi && b.tkpi.kategori) ||
-        ""
-    ).toLowerCase();
+    if (!b || !jenisAlergi) return false;
+    const namaBahan = (b.nama || (b.tkpi && b.tkpi.nama) || "").trim();
+    const alergenField = (b.alergen || (b.tkpi && b.tkpi.alergen) || "").trim();
+    const kategori = (b.kategori || (b.tkpi && b.tkpi.kategori) || "").trim();
+    const combinedText = `${namaBahan} ${alergenField} ${kategori}`.trim();
 
-    // 1. Telur
-    if (
-        lowerJenis.includes("telur") &&
-        (alergen.includes("telur") ||
-            namaBahan.includes("telur") ||
-            kategori.includes("telur"))
-    )
-        return true;
-
-    // 2. Ikan / Seafood / Udang / Kepiting / Krustasea
-    if (
-        (lowerJenis.includes("seafood") ||
-            lowerJenis.includes("ikan") ||
-            lowerJenis.includes("udang") ||
-            lowerJenis.includes("kepiting") ||
-            lowerJenis.includes("krustasea")) &&
-        (alergen.includes("ikan") ||
-            alergen.includes("seafood") ||
-            alergen.includes("udang") ||
-            alergen.includes("kepiting") ||
-            namaBahan.includes("ikan") ||
-            namaBahan.includes("udang") ||
-            namaBahan.includes("seafood") ||
-            namaBahan.includes("kepiting") ||
-            namaBahan.includes("cumi") ||
-            kategori.includes("ikan"))
-    )
-        return true;
-
-    // 3. Kacang Tanah & Pohon
-    if (
-        lowerJenis.includes("kacang") &&
-        (alergen.includes("kacang") ||
-            namaBahan.includes("kacang") ||
-            kategori.includes("kacang"))
-    )
-        return true;
-
-    // 4. Susu Sapi & Laktosa
-    if (
-        lowerJenis.includes("susu") &&
-        (alergen.includes("susu") ||
-            alergen.includes("laktosa") ||
-            namaBahan.includes("susu") ||
-            namaBahan.includes("keju") ||
-            kategori.includes("susu"))
-    )
-        return true;
-
-    // 5. Gandum & Gluten
-    if (
-        (lowerJenis.includes("gandum") || lowerJenis.includes("gluten")) &&
-        (alergen.includes("gandum") ||
-            alergen.includes("gluten") ||
-            namaBahan.includes("gandum") ||
-            namaBahan.includes("mie") ||
-            namaBahan.includes("pasta") ||
-            namaBahan.includes("roti") ||
-            namaBahan.includes("terigu"))
-    )
-        return true;
-
-    // 6. Kedelai & Soja
-    if (
-        (lowerJenis.includes("kedelai") || lowerJenis.includes("soja")) &&
-        (alergen.includes("kedelai") ||
-            alergen.includes("soja") ||
-            namaBahan.includes("kedelai") ||
-            namaBahan.includes("tahu") ||
-            namaBahan.includes("tempe"))
-    )
-        return true;
-
-    // 7. Daging Ayam & Unggas
-    if (
-        lowerJenis.includes("ayam") &&
-        (alergen.includes("ayam") ||
-            namaBahan.includes("ayam") ||
-            namaBahan.includes("unggas") ||
-            kategori.includes("unggas"))
-    )
-        return true;
-
-    // 8. Daging Sapi
-    if (
-        lowerJenis.includes("sapi") &&
-        (alergen.includes("sapi") ||
-            namaBahan.includes("sapi") ||
-            namaBahan.includes("daging sapi"))
-    )
-        return true;
-
-    // 9. Cokelat
-    if (
-        lowerJenis.includes("cokelat") &&
-        (alergen.includes("cokelat") ||
-            namaBahan.includes("cokelat") ||
-            namaBahan.includes("coklat") ||
-            namaBahan.includes("cocoa"))
-    )
-        return true;
-
-    // Direct keyword check
-    const cleanNoPrefix = lowerJenis.replace(/^alergi\s+/, "").trim();
-    if (
-        cleanNoPrefix &&
-        (alergen.includes(cleanNoPrefix) || namaBahan.includes(cleanNoPrefix))
-    ) {
-        return true;
-    }
-
-    return false;
+    return checkTextMatchesAllergen(combinedText, jenisAlergi);
 }
 
 // Helper Pencocokan Detail Alergi dari Data Master Penerima Manfaat
@@ -2167,8 +2179,8 @@ function findAlergiDetail(jenisName) {
             return (
                 rClean === clean ||
                 rCleanNoPrefix === cleanNoPrefix ||
-                clean.includes(rCleanNoPrefix) ||
-                rClean.includes(cleanNoPrefix)
+                matchWordBoundary(cleanNoPrefix, rCleanNoPrefix) ||
+                matchWordBoundary(rCleanNoPrefix, cleanNoPrefix)
             );
         }) || null
     );
@@ -2196,150 +2208,198 @@ const alergiOptionsWithStats = computed(() => {
     });
 });
 
-// Kalkulasi Detail per Bahan (Gross Weight, Biaya Draft Master, Biaya Aktual Akuntan)
-const bahanCalculations = computed(() => {
-    return selectedBahanList.value.map((b) => {
-        const tkpi =
-            b.tkpi && b.tkpi.energi !== undefined
-                ? b.tkpi
-                : tkpiItems.value.find(
-                      (i) =>
-                          (b.tkpi_id &&
-                              (i.id === b.tkpi_id || i.code === b.tkpi_id)) ||
-                          (b.id && (i.id === b.id || i.code === b.id)) ||
-                          (b.code && (i.id === b.code || i.code === b.code)) ||
-                          (i.nama &&
-                              b.nama &&
-                              i.nama.toLowerCase().trim() ===
-                                  b.nama.toLowerCase().trim()),
-                  ) || {};
-        const bdd = b.bdd || 100;
-        const buffer = b.buffer || 0;
-        const isAlergi = b.tipe_porsi === "alergi";
-
-        // Kuota sasaran porsi (Normal vs Alergi Spesifik Jenis)
-        let targetPKCount = 0;
-        let targetPBCount = 0;
-        let alergiDampakList = [];
-
-        if (!isAlergi) {
-            // Bahan Porsi Normal: Awalnya seluruh sasaran siswa normal
-            targetPKCount = totalPK.value || 0;
-            targetPBCount = totalPB.value || 0;
-
-            // Jika bahan normal ini mengandung alergen yang tercatat di PM, porsinya OTOMATIS DIKURANGI
-            rekapAlergiDetailPm.value.forEach((al) => {
-                if (
-                    isBahanContainsAlergen(b, al.jenis_alergi) &&
-                    al.total > 0
-                ) {
-                    const pkMinus = Number(al.porsi_kecil) || 0;
-                    const pbMinus = Number(al.porsi_besar) || 0;
-                    targetPKCount = Math.max(0, targetPKCount - pkMinus);
-                    targetPBCount = Math.max(0, targetPBCount - pbMinus);
-                    alergiDampakList.push({
-                        jenis: al.jenis_alergi,
-                        pk: pkMinus,
-                        pb: pbMinus,
-                        total: pkMinus + pbMinus,
-                    });
-                }
-            });
-        } else {
-            // Bahan Porsi Alergi: Diberikan HANYA untuk siswa dengan alergi spesifik b.jenis_alergi
-            const detailPm = findAlergiDetail(b.jenis_alergi);
-            if (detailPm) {
-                targetPKCount = Number(detailPm.porsi_kecil) || 0;
-                targetPBCount = Number(detailPm.porsi_besar) || 0;
-            } else {
-                // Jika di master PM TIDAK ADA siswa dengan alergi ini
-                targetPKCount = 0;
-                targetPBCount = 0;
+function getSubMenuSortWeight(b) {
+    const keyMap = {
+        sub_menu_1: 1,
+        sub_menu_2: 2,
+        sub_menu_3: 3,
+        sub_menu_4: 4,
+        sub_menu_5: 5,
+    };
+    let weight = 99;
+    if (b.sub_menu_key && keyMap[b.sub_menu_key]) {
+        weight = keyMap[b.sub_menu_key];
+    } else if (b.sub_menu_block_id) {
+        for (const [k, v] of Object.entries(keyMap)) {
+            if (b.sub_menu_block_id.startsWith(k)) {
+                weight = v;
+                break;
             }
         }
+    }
+    const isAlergi =
+        b.tipe_porsi === "alergi" ||
+        (b.sub_menu_block_id && b.sub_menu_block_id.includes("_alergi_"));
+    return weight * 10 + (isAlergi ? 1 : 0);
+}
 
-        // Kebutuhan Kotor Kg untuk PK dan PB (Presisi penuh tanpa pembulatan awal)
-        const grossKgPK = calculateGrossWeightKg(
-            b.gram_pk,
-            targetPKCount,
-            bdd,
-            buffer,
-        );
-        const grossKgPB = calculateGrossWeightKg(
-            b.gram_pb,
-            targetPBCount,
-            bdd,
-            buffer,
-        );
-        const totalGrossKg = grossKgPK + grossKgPB;
+// Kalkulasi Detail per Bahan (Gross Weight, Biaya Draft Master, Biaya Aktual Akuntan)
+const bahanCalculations = computed(() => {
+    return selectedBahanList.value
+        .map((b, idx) => {
+            const tkpi =
+                b.tkpi && b.tkpi.energi !== undefined
+                    ? b.tkpi
+                    : tkpiItems.value.find(
+                          (i) =>
+                              (b.tkpi_id &&
+                                  (i.id === b.tkpi_id ||
+                                      i.code === b.tkpi_id)) ||
+                              (b.id && (i.id === b.id || i.code === b.id)) ||
+                              (b.code &&
+                                  (i.id === b.code || i.code === b.code)) ||
+                              (i.nama &&
+                                  b.nama &&
+                                  i.nama.toLowerCase().trim() ===
+                                      b.nama.toLowerCase().trim()),
+                      ) || {};
+            const bdd = b.bdd || 100;
+            const buffer = b.buffer || 0;
+            const isAlergi = b.tipe_porsi === "alergi";
 
-        const netKgPK = ((Number(b.gram_pk) || 0) * targetPKCount) / 1000;
-        const netKgPB = ((Number(b.gram_pb) || 0) * targetPBCount) / 1000;
-        const totalNetKg = netKgPK + netKgPB;
+            // Kuota sasaran porsi (Normal vs Alergi Spesifik Jenis)
+            let targetPKCount = 0;
+            let targetPBCount = 0;
+            let alergiDampakList = [];
 
-        // Biaya PO
-        let subtotalMaster = Math.round(totalGrossKg * (b.harga_master || 0));
-        if (
-            totalGrossKg > 0 &&
-            (b.harga_master || 0) > 0 &&
-            subtotalMaster === 0
-        ) {
-            subtotalMaster = Math.ceil(totalGrossKg * b.harga_master);
-        }
-        let subtotalAktual = Math.round(
-            totalGrossKg * (b.harga_aktual || b.harga_master || 0),
-        );
-        if (
-            totalGrossKg > 0 &&
-            (b.harga_aktual || b.harga_master || 0) > 0 &&
-            subtotalAktual === 0
-        ) {
-            subtotalAktual = Math.ceil(
-                totalGrossKg * (b.harga_aktual || b.harga_master),
+            if (!isAlergi) {
+                // Bahan Porsi Normal: Awalnya seluruh sasaran siswa normal
+                targetPKCount = totalPK.value || 0;
+                targetPBCount = totalPB.value || 0;
+
+                // Jika bahan normal ini mengandung alergen yang tercatat di PM, porsinya OTOMATIS DIKURANGI
+                rekapAlergiDetailPm.value.forEach((al) => {
+                    if (
+                        isBahanContainsAlergen(b, al.jenis_alergi) &&
+                        al.total > 0
+                    ) {
+                        const pkMinus = Number(al.porsi_kecil) || 0;
+                        const pbMinus = Number(al.porsi_besar) || 0;
+                        targetPKCount = Math.max(0, targetPKCount - pkMinus);
+                        targetPBCount = Math.max(0, targetPBCount - pbMinus);
+                        alergiDampakList.push({
+                            jenis: al.jenis_alergi,
+                            pk: pkMinus,
+                            pb: pbMinus,
+                            total: pkMinus + pbMinus,
+                        });
+                    }
+                });
+            } else {
+                // Bahan Porsi Alergi: Diberikan HANYA untuk siswa dengan alergi spesifik b.jenis_alergi
+                const detailPm = findAlergiDetail(b.jenis_alergi);
+                if (detailPm) {
+                    targetPKCount = Number(detailPm.porsi_kecil) || 0;
+                    targetPBCount = Number(detailPm.porsi_besar) || 0;
+                } else {
+                    // Jika di master PM TIDAK ADA siswa dengan alergi ini
+                    targetPKCount = 0;
+                    targetPBCount = 0;
+                }
+            }
+
+            // Kebutuhan Kotor Kg untuk PK dan PB (Presisi penuh tanpa pembulatan awal)
+            const grossKgPK = calculateGrossWeightKg(
+                b.gram_pk,
+                targetPKCount,
+                bdd,
+                buffer,
             );
-        }
+            const grossKgPB = calculateGrossWeightKg(
+                b.gram_pb,
+                targetPBCount,
+                bdd,
+                buffer,
+            );
+            const totalGrossKg = grossKgPK + grossKgPB;
 
-        // Food cost per porsi
-        const costPK = calculateItemFoodCostPerPortion(
-            b.gram_pk,
-            bdd,
-            buffer,
-            b.harga_aktual || b.harga_master,
-        );
-        const costPB = calculateItemFoodCostPerPortion(
-            b.gram_pb,
-            bdd,
-            buffer,
-            b.harga_aktual || b.harga_master,
-        );
+            // Berat Kotor per Porsi (Gross Gram) berdasarkan BDD
+            const bddFactor = (bdd || 100) / 100;
+            const grossGramPK =
+                bddFactor > 0 ? (Number(b.gram_pk) || 0) / bddFactor : 0;
+            const grossGramPB =
+                bddFactor > 0 ? (Number(b.gram_pb) || 0) / bddFactor : 0;
 
-        // Nutrisi per porsi
-        const nutrisiPK = calculateNutritionFromNetGram(tkpi, b.gram_pk);
-        const nutrisiPB = calculateNutritionFromNetGram(tkpi, b.gram_pb);
+            const netKgPK = ((Number(b.gram_pk) || 0) * targetPKCount) / 1000;
+            const netKgPB = ((Number(b.gram_pb) || 0) * targetPBCount) / 1000;
+            const totalNetKg = netKgPK + netKgPB;
 
-        return {
-            ...b,
-            nama_po: b.nama_po || b.nama,
-            tkpi,
-            isAlergi,
-            targetPKCount,
-            targetPBCount,
-            totalTargetCount: targetPKCount + targetPBCount,
-            alergiDampakList,
-            netKgPK,
-            netKgPB,
-            totalNetKg,
-            grossKgPK,
-            grossKgPB,
-            totalGrossKg,
-            subtotalMaster,
-            subtotalAktual,
-            costPK,
-            costPB,
-            nutrisiPK,
-            nutrisiPB,
-        };
-    });
+            // Biaya PO
+            let subtotalMaster = Math.round(
+                totalGrossKg * (b.harga_master || 0),
+            );
+            if (
+                totalGrossKg > 0 &&
+                (b.harga_master || 0) > 0 &&
+                subtotalMaster === 0
+            ) {
+                subtotalMaster = Math.ceil(totalGrossKg * b.harga_master);
+            }
+            let subtotalAktual = Math.round(
+                totalGrossKg * (b.harga_aktual || b.harga_master || 0),
+            );
+            if (
+                totalGrossKg > 0 &&
+                (b.harga_aktual || b.harga_master || 0) > 0 &&
+                subtotalAktual === 0
+            ) {
+                subtotalAktual = Math.ceil(
+                    totalGrossKg * (b.harga_aktual || b.harga_master),
+                );
+            }
+
+            // Food cost per porsi
+            const costPK = calculateItemFoodCostPerPortion(
+                b.gram_pk,
+                bdd,
+                buffer,
+                b.harga_aktual || b.harga_master,
+            );
+            const costPB = calculateItemFoodCostPerPortion(
+                b.gram_pb,
+                bdd,
+                buffer,
+                b.harga_aktual || b.harga_master,
+            );
+
+            // Nutrisi per porsi
+            const nutrisiPK = calculateNutritionFromNetGram(tkpi, b.gram_pk);
+            const nutrisiPB = calculateNutritionFromNetGram(tkpi, b.gram_pb);
+
+            return {
+                ...b,
+                originalIndex: idx,
+                nama_po: b.nama_po || "",
+                tkpi,
+                isAlergi,
+                targetPKCount,
+                targetPBCount,
+                totalTargetCount: targetPKCount + targetPBCount,
+                alergiDampakList,
+                grossGramPK,
+                grossGramPB,
+                netKgPK,
+                netKgPB,
+                totalNetKg,
+                grossKgPK,
+                grossKgPB,
+                totalGrossKg,
+                subtotalMaster,
+                subtotalAktual,
+                costPK,
+                costPB,
+                nutrisiPK,
+                nutrisiPB,
+            };
+        })
+        .sort((a, b) => {
+            const orderA = getSubMenuSortWeight(a);
+            const orderB = getSubMenuSortWeight(b);
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+            return (a.originalIndex ?? 0) - (b.originalIndex ?? 0);
+        });
 });
 
 // Grand Total Biaya PO
@@ -2365,18 +2425,17 @@ const isComboboxGiziOpen = ref(false);
 const selectedTkpiGiziItem = ref(null);
 
 const filteredGiziTkpiList = computed(() => {
+    const list = tkpiItems.value || [];
     if (!searchTkpiGiziQuery.value) {
-        return (props.tkpiList || []).slice(0, 100);
+        return list;
     }
-    const q = searchTkpiGiziQuery.value.toLowerCase();
-    return (props.tkpiList || [])
-        .filter(
-            (it) =>
-                (it.nama && it.nama.toLowerCase().includes(q)) ||
-                (it.kategori && it.kategori.toLowerCase().includes(q)) ||
-                (it.code && String(it.code).toLowerCase().includes(q)),
-        )
-        .slice(0, 100);
+    const q = searchTkpiGiziQuery.value.toLowerCase().trim();
+    const searchTerms = q.split(/\s+/).filter(Boolean);
+    return list.filter((it) => {
+        const itemStr =
+            `${it.nama || ""} ${it.kategori || ""} ${it.code || ""}`.toLowerCase();
+        return searchTerms.every((term) => itemStr.includes(term));
+    });
 });
 
 function selectTkpiGiziItem(item) {
@@ -2433,6 +2492,7 @@ function syncGiziFromBahan() {
         bdd: b.bdd || 100,
         buffer: b.buffer || 0,
         harga_master: b.harga_master || 0,
+        keterangan: b.keterangan || "",
         tkpi:
             b.tkpi ||
             (props.tkpiList || []).find(
@@ -2492,19 +2552,67 @@ const giziCalculations = computed(() => {
     });
 });
 
+// Active Bahan List for Nutrition (Supports Step 2 raw materials calculation and Step 3 cooked formula calculation)
+const activeBahanListForNutrisi = computed(() => {
+    return bahanCalculations.value;
+});
+
+// Helper Status Badge AKG Real-Time
+function getAkgStatusBadge(nutritionObj, isPB = false) {
+    if (!nutritionObj) {
+        return {
+            label: "Belum Ada Formula",
+            badgeClass:
+                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
+        };
+    }
+    const energi = Number(nutritionObj.energi) || 0;
+    if (energi === 0) {
+        return {
+            label: "Belum Ada Formula",
+            badgeClass:
+                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
+        };
+    }
+    const minTarget = isPB ? 650 : 450;
+    const maxTarget = isPB ? 800 : 550;
+
+    if (energi >= minTarget && energi <= maxTarget) {
+        return {
+            label: "✓ MEMENUHI STANDAR AKG BGN",
+            badgeClass:
+                "bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]",
+        };
+    } else if (energi < minTarget) {
+        return {
+            label: "⚠ DI BAWAH STANDAR AKG",
+            badgeClass:
+                "bg-amber-50 text-amber-800 border-amber-300 font-extrabold text-[10px]",
+        };
+    } else {
+        return {
+            label: "⚡ MELEBIHI STANDAR AKG",
+            badgeClass:
+                "bg-teal-50 text-teal-800 border-teal-300 font-extrabold text-[10px]",
+        };
+    }
+}
+
 // ==========================================
 // 3. KALKULASI HASIL AKG
 // ==========================================
 const akgResultPKNormal = computed(() => {
     const res = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-    giziCalculations.value
+    activeBahanListForNutrisi.value
         .filter((b) => b.tipe_porsi !== "alergi")
         .forEach((b) => {
-            res.energi += b.nutrisiPK.energi;
-            res.protein += b.nutrisiPK.protein;
-            res.lemak += b.nutrisiPK.lemak;
-            res.karbohidrat += b.nutrisiPK.karbohidrat;
-            res.serat += b.nutrisiPK.serat;
+            if (b.nutrisiPK) {
+                res.energi += b.nutrisiPK.energi || 0;
+                res.protein += b.nutrisiPK.protein || 0;
+                res.lemak += b.nutrisiPK.lemak || 0;
+                res.karbohidrat += b.nutrisiPK.karbohidrat || 0;
+                res.serat += b.nutrisiPK.serat || 0;
+            }
         });
     return {
         energi: Number(res.energi.toFixed(1)),
@@ -2517,14 +2625,16 @@ const akgResultPKNormal = computed(() => {
 
 const akgResultPBNormal = computed(() => {
     const res = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-    giziCalculations.value
+    activeBahanListForNutrisi.value
         .filter((b) => b.tipe_porsi !== "alergi")
         .forEach((b) => {
-            res.energi += b.nutrisiPB.energi;
-            res.protein += b.nutrisiPB.protein;
-            res.lemak += b.nutrisiPB.lemak;
-            res.karbohidrat += b.nutrisiPB.karbohidrat;
-            res.serat += b.nutrisiPB.serat;
+            if (b.nutrisiPB) {
+                res.energi += b.nutrisiPB.energi || 0;
+                res.protein += b.nutrisiPB.protein || 0;
+                res.lemak += b.nutrisiPB.lemak || 0;
+                res.karbohidrat += b.nutrisiPB.karbohidrat || 0;
+                res.serat += b.nutrisiPB.serat || 0;
+            }
         });
     return {
         energi: Number(res.energi.toFixed(1)),
@@ -2535,32 +2645,45 @@ const akgResultPBNormal = computed(() => {
     };
 });
 
-// AKG Varian Khusus Alergi (Dikelompokkan Spesifik per Jenis Alergi yang Dipilih di Resep)
+// Seluruh Jenis Alergi yang Telah Ditentukan / Aktif (dari Blok Sub Menu Pengganti Alergi atau Bahan Alergi)
+const determinedActiveAlergiTypes = computed(() => {
+    const types = new Set();
+
+    // 1. Dari Blok Sub Menu di Step 2
+    if (step2SubMenuBlocks.value && Array.isArray(step2SubMenuBlocks.value)) {
+        step2SubMenuBlocks.value.forEach((b) => {
+            if (b.isAlergi && b.jenisAlergi && b.jenisAlergi.trim()) {
+                types.add(b.jenisAlergi.trim());
+            }
+        });
+    }
+
+    // 2. Dari bahan yang sudah ber-tipe alergi
+    if (selectedBahanList.value && Array.isArray(selectedBahanList.value)) {
+        selectedBahanList.value.forEach((b) => {
+            if (
+                b.tipe_porsi === "alergi" &&
+                b.jenis_alergi &&
+                b.jenis_alergi.trim()
+            ) {
+                types.add(b.jenis_alergi.trim());
+            }
+        });
+    }
+
+    return Array.from(types);
+});
+
+// AKG Varian Khusus Alergi (Dikelompokkan Spesifik per Jenis Alergi yang Telah Ditentukan / Dipilih)
 const activeAlergiAkgList = computed(() => {
-    // 1. Ambil seluruh bahan yang diatur dengan tipe_porsi === 'alergi' dan memiliki jenis_alergi yang valid
-    const alergiBahanList = giziCalculations.value.filter(
-        (b) =>
-            b.tipe_porsi === "alergi" &&
-            b.jenis_alergi &&
-            b.jenis_alergi.trim(),
-    );
-    if (alergiBahanList.length === 0) {
+    const activeTypes = determinedActiveAlergiTypes.value;
+    if (activeTypes.length === 0) {
         return [];
     }
 
-    // 2. Kumpulkan daftar unik jenis alergi
-    const uniqueJenisMap = new Map();
-    alergiBahanList.forEach((b) => {
-        const jenis = b.jenis_alergi.trim();
-        if (!uniqueJenisMap.has(jenis)) {
-            uniqueJenisMap.set(jenis, []);
-        }
-        uniqueJenisMap.get(jenis).push(b);
-    });
-
-    // 3. Untuk setiap jenis alergi, hitung gizi PK dan PB secara real-time
+    const currentList = activeBahanListForNutrisi.value;
     const result = [];
-    uniqueJenisMap.forEach((bahans, jenis) => {
+    activeTypes.forEach((jenis) => {
         const detailPm = findAlergiDetail(jenis);
         const jmlPk = detailPm ? Number(detailPm.porsi_kecil) || 0 : 0;
         const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
@@ -2571,9 +2694,14 @@ const activeAlergiAkgList = computed(() => {
             return;
         }
 
+        // Bahan substitusi khusus alergi ini
+        const bahans = currentList.filter(
+            (b) => b.tipe_porsi === "alergi" && b.jenis_alergi === jenis,
+        );
+
         // Ambil bahan normal yang aman (tidak mengandung alergen terkait)
-        const bahanNormalSafe = giziCalculations.value.filter((b) => {
-            if (b.tipe_porsi !== "normal") return false;
+        const bahanNormalSafe = currentList.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
             return !isBahanContainsAlergen(b, jenis);
         });
 
@@ -2641,77 +2769,80 @@ const activeAlergiAkgList = computed(() => {
 // ==========================================
 // 4. KALKULASI HASIL FOOD COST
 // ==========================================
+const targetSasaranNormal = computed(() => {
+    let pk = totalPK.value || 0;
+    let pb = totalPB.value || 0;
+
+    const activeAlergiTypes = determinedActiveAlergiTypes.value;
+
+    activeAlergiTypes.forEach((jenis) => {
+        const detailPm = findAlergiDetail(jenis);
+        if (detailPm) {
+            pk = Math.max(0, pk - (Number(detailPm.porsi_kecil) || 0));
+            pb = Math.max(0, pb - (Number(detailPm.porsi_besar) || 0));
+        }
+    });
+
+    return {
+        pk,
+        pb,
+        total: pk + pb,
+    };
+});
+
 const totalFoodCostPKNormal = computed(() => {
     return bahanCalculations.value
         .filter((item) => item.tipe_porsi !== "alergi")
-        .reduce((acc, item) => acc + item.costPK, 0);
+        .reduce((acc, item) => acc + (Number(item.costPK) || 0), 0);
 });
+
 const totalFoodCostPBNormal = computed(() => {
     return bahanCalculations.value
         .filter((item) => item.tipe_porsi !== "alergi")
-        .reduce((acc, item) => acc + item.costPB, 0);
+        .reduce((acc, item) => acc + (Number(item.costPB) || 0), 0);
 });
 
-// Food Cost Varian Alergi
-const totalFoodCostPKAlergi = computed(() => {
-    return varianAlergiTelurBahan.value.reduce((acc, b) => {
-        const c = calculateItemFoodCostPerPortion(
-            b.gram_pk,
-            b.bdd,
-            b.buffer,
-            b.harga_aktual || b.harga_master,
-        );
-        return acc + c;
-    }, 0);
-});
-const totalFoodCostPBAlergi = computed(() => {
-    return varianAlergiTelurBahan.value.reduce((acc, b) => {
-        const c = calculateItemFoodCostPerPortion(
-            b.gram_pb,
-            b.bdd,
-            b.buffer,
-            b.harga_aktual || b.harga_master,
-        );
-        return acc + c;
-    }, 0);
-});
-
-// Food Cost per Porsi Khusus Varian Alergi (Disesuaikan dengan bahan aman + substitusi)
+// Food Cost per Porsi Khusus Varian Alergi (Disesuaikan dengan bahan aman + substitusi, otomatis tampil jika varian alergi ditentukan)
 const activeAlergiFoodCostList = computed(() => {
-    const alergiBahanList = giziCalculations.value.filter(
-        (b) =>
-            b.tipe_porsi === "alergi" &&
-            b.jenis_alergi &&
-            b.jenis_alergi.trim(),
-    );
-    if (alergiBahanList.length === 0) return [];
-
-    const uniqueJenisMap = new Map();
-    alergiBahanList.forEach((b) => {
-        const jenis = b.jenis_alergi.trim();
-        if (!uniqueJenisMap.has(jenis)) {
-            uniqueJenisMap.set(jenis, []);
-        }
-        uniqueJenisMap.get(jenis).push(b);
-    });
+    const activeTypes = determinedActiveAlergiTypes.value;
+    if (activeTypes.length === 0) return [];
 
     const result = [];
-    uniqueJenisMap.forEach((bahans, jenis) => {
+    activeTypes.forEach((jenis) => {
         const detailPm = findAlergiDetail(jenis);
         const jmlPk = detailPm ? Number(detailPm.porsi_kecil) || 0 : 0;
         const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
         const jmlTotal = detailPm ? Number(detailPm.total) || 0 : 0;
-        if (jmlTotal === 0) return;
+
+        // Ambil bahan substitusi khusus alergi ini jika ada
+        const substitusiBahans = bahanCalculations.value.filter(
+            (b) => b.tipe_porsi === "alergi" && b.jenis_alergi === jenis,
+        );
 
         // Ambil bahan normal yang aman (tidak mengandung alergen terkait)
-        const bahanNormalSafe = giziCalculations.value.filter((b) => {
-            if (b.tipe_porsi !== "normal") return false;
+        const bahanNormalSafe = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
             return !isBahanContainsAlergen(b, jenis);
         });
 
-        const allItems = [...bahanNormalSafe, ...bahans];
-        const costPK = allItems.reduce((acc, it) => acc + (it.costPK || 0), 0);
-        const costPB = allItems.reduce((acc, it) => acc + (it.costPB || 0), 0);
+        // Ambil bahan normal yang dieliminasi karena mengandung alergen
+        const bahanNormalDikeluarkan = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            return isBahanContainsAlergen(b, jenis);
+        });
+
+        const allItems = [...bahanNormalSafe, ...substitusiBahans];
+        const costPK = allItems.reduce(
+            (acc, it) => acc + (Number(it.costPK) || 0),
+            0,
+        );
+        const costPB = allItems.reduce(
+            (acc, it) => acc + (Number(it.costPB) || 0),
+            0,
+        );
+
+        const statusPK = getFoodCostStatusInfo(costPK, 8000);
+        const statusPB = getFoodCostStatusInfo(costPB, 10000);
 
         result.push({
             jenis_alergi: jenis,
@@ -2720,15 +2851,309 @@ const activeAlergiFoodCostList = computed(() => {
             total_siswa: jmlTotal,
             cost_pk: costPK,
             cost_pb: costPB,
+            status_pk: statusPK,
+            status_pb: statusPB,
+            total_biaya: jmlPk * costPK + jmlPb * costPB,
+            bahan_normal_aman: bahanNormalSafe,
+            bahan_substitusi: substitusiBahans,
+            bahan_dikeluarkan: bahanNormalDikeluarkan,
+            all_included_items: allItems,
         });
     });
 
     return result;
 });
 
-function formatRupiah(num) {
-    return "Rp " + (Number(num) || 0).toLocaleString("id-ID");
+// Config Sub Menu untuk Kalkulasi Breakdown Food Cost & AKG
+const subMenuKeysConfig = [
+    {
+        key: "sub_menu_1",
+        label: "Sub Menu 1",
+        defaultName: "Makanan Pokok",
+        dotColor: "bg-amber-500",
+        badgeColor: "bg-amber-50 text-amber-900 border-amber-200",
+    },
+    {
+        key: "sub_menu_2",
+        label: "Sub Menu 2",
+        defaultName: "Protein Hewani",
+        dotColor: "bg-rose-500",
+        badgeColor: "bg-rose-50 text-rose-900 border-rose-200",
+    },
+    {
+        key: "sub_menu_3",
+        label: "Sub Menu 3",
+        defaultName: "Protein Nabati",
+        dotColor: "bg-yellow-500",
+        badgeColor: "bg-yellow-50 text-yellow-900 border-yellow-200",
+    },
+    {
+        key: "sub_menu_4",
+        label: "Sub Menu 4",
+        defaultName: "Sayuran",
+        dotColor: "bg-blue-500",
+        badgeColor: "bg-blue-50 text-blue-900 border-blue-200",
+    },
+    {
+        key: "sub_menu_5",
+        label: "Sub Menu 5",
+        defaultName: "Buah",
+        dotColor: "bg-emerald-500",
+        badgeColor: "bg-emerald-50 text-emerald-900 border-emerald-200",
+    },
+];
+
+// Rincian Food Cost per Sub Menu untuk Porsi Normal
+const foodCostSubMenuNormal = computed(() => {
+    const totalPK = totalFoodCostPKNormal.value || 0;
+    const totalPB = totalFoodCostPBNormal.value || 0;
+
+    return subMenuKeysConfig.map((sm) => {
+        const menuName =
+            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+        const items = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            if (b.sub_menu_key) return b.sub_menu_key === sm.key;
+            if (b.sub_menu_block_id)
+                return b.sub_menu_block_id.startsWith(sm.key);
+            return false;
+        });
+
+        const costPK = items.reduce(
+            (sum, it) => sum + (Number(it.costPK) || 0),
+            0,
+        );
+        const costPB = items.reduce(
+            (sum, it) => sum + (Number(it.costPB) || 0),
+            0,
+        );
+
+        const percentPK = totalPK > 0 ? (costPK / totalPK) * 100 : 0;
+        const percentPB = totalPB > 0 ? (costPB / totalPB) * 100 : 0;
+
+        return {
+            key: sm.key,
+            label: sm.label,
+            nama_menu: menuName,
+            dotColor: sm.dotColor,
+            badgeColor: sm.badgeColor,
+            items_count: items.length,
+            cost_pk: costPK,
+            cost_pb: costPB,
+            percent_pk: percentPK,
+            percent_pb: percentPB,
+        };
+    });
+});
+
+// Helper untuk mendapatkan Rincian Food Cost per Sub Menu pada Varian Alergi tertentu
+function getFoodCostSubMenuForAlergi(jenisAlergi) {
+    const detail = activeAlergiFoodCostList.value.find(
+        (a) => a.jenis_alergi === jenisAlergi,
+    );
+    const totalPK = detail ? detail.cost_pk : 0;
+    const totalPB = detail ? detail.cost_pb : 0;
+
+    return subMenuKeysConfig.map((sm) => {
+        const normalMenuName =
+            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+
+        // Ambil bahan substitusi khusus jenis alergi ini di sub menu ini
+        const substitusiBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi !== "alergi" || b.jenis_alergi !== jenisAlergi)
+                return false;
+            if (b.sub_menu_key) return b.sub_menu_key === sm.key;
+            if (b.sub_menu_block_id)
+                return b.sub_menu_block_id.startsWith(sm.key);
+            return false;
+        });
+
+        // Ambil bahan normal yang aman di sub menu ini
+        const normalSafeBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            const matchKey = b.sub_menu_key
+                ? b.sub_menu_key === sm.key
+                : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
+            if (!matchKey) return false;
+            return !isBahanContainsAlergen(b, jenisAlergi);
+        });
+
+        // Ambil bahan normal yang dieliminasi karena alergi
+        const normalDikeluarkanBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            const matchKey = b.sub_menu_key
+                ? b.sub_menu_key === sm.key
+                : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
+            if (!matchKey) return false;
+            return isBahanContainsAlergen(b, jenisAlergi);
+        });
+
+        const allItems = [...normalSafeBahans, ...substitusiBahans];
+        const costPK = allItems.reduce(
+            (sum, it) => sum + (Number(it.costPK) || 0),
+            0,
+        );
+        const costPB = allItems.reduce(
+            (sum, it) => sum + (Number(it.costPB) || 0),
+            0,
+        );
+
+        const isSubstituted = substitusiBahans.length > 0;
+        const isEliminated = normalDikeluarkanBahans.length > 0;
+
+        let displayName = normalMenuName;
+        if (isSubstituted) {
+            const foundBlock = step2SubMenuBlocks.value.find(
+                (b) =>
+                    b.isAlergi &&
+                    b.jenisAlergi === jenisAlergi &&
+                    b.subKey === sm.key,
+            );
+            if (foundBlock && foundBlock.namaMenu) {
+                displayName = foundBlock.namaMenu;
+            }
+        }
+
+        const percentPK = totalPK > 0 ? (costPK / totalPK) * 100 : 0;
+        const percentPB = totalPB > 0 ? (costPB / totalPB) * 100 : 0;
+
+        return {
+            key: sm.key,
+            label: sm.label,
+            nama_menu: displayName,
+            normal_menu_name: normalMenuName,
+            is_substituted: isSubstituted,
+            is_eliminated: isEliminated,
+            dotColor: sm.dotColor,
+            badgeColor: sm.badgeColor,
+            items_count: allItems.length,
+            substitusi_count: substitusiBahans.length,
+            dikeluarkan_names: normalDikeluarkanBahans.map((b) => b.nama),
+            cost_pk: costPK,
+            cost_pb: costPB,
+            percent_pk: percentPK,
+            percent_pb: percentPB,
+        };
+    });
 }
+
+function formatRupiah(num) {
+    const val = Number(num);
+    if (!val || isNaN(val) || val <= 0) return "Rp 0";
+
+    // Jika integer / bilangan bulat
+    if (Number.isInteger(val)) {
+        return "Rp " + val.toLocaleString("id-ID");
+    }
+
+    // Jika bernilai pecahan sangat kecil (< 1)
+    if (val < 1) {
+        const decimals = val < 0.01 ? 3 : 2;
+        return (
+            "Rp " +
+            val.toLocaleString("id-ID", {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: decimals,
+            })
+        );
+    }
+
+    // Jika bernilai >= 1 dengan pecahan desimal
+    return (
+        "Rp " +
+        val.toLocaleString("id-ID", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        })
+    );
+}
+
+function formatHargaInput(val) {
+    if (val === null || val === undefined || val === "") return "";
+    const num = Number(val);
+    if (isNaN(num)) return "";
+    return "Rp " + num.toLocaleString("id-ID");
+}
+
+function handleHargaMasterInput(index, event) {
+    const rawVal = event.target.value || "";
+    const digits = rawVal.replace(/\D/g, "");
+    if (!digits) {
+        if (selectedBahanList.value[index]) {
+            selectedBahanList.value[index].harga_master = null;
+        }
+        event.target.value = "";
+        return;
+    }
+    const num = parseInt(digits, 10);
+    if (selectedBahanList.value[index]) {
+        selectedBahanList.value[index].harga_master = num;
+    }
+    event.target.value = "Rp " + num.toLocaleString("id-ID");
+}
+
+function getFoodCostStatusInfo(cost, pagu) {
+    const val = Number(cost) || 0;
+    const maxPagu = Number(pagu) || 0;
+
+    if (val === 0) {
+        return {
+            label: "Belum Ada Bahan",
+            badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
+            cardClass: "border-slate-200 bg-slate-50/20",
+            barClass: "bg-slate-200",
+            percentage: "0%",
+        };
+    }
+
+    if (val > maxPagu) {
+        return {
+            label: "⚠ Melebihi Pagu",
+            badgeClass: "bg-rose-100 text-rose-800 border-rose-300",
+            cardClass: "border-rose-200 bg-rose-50/20",
+            barClass: "bg-rose-500",
+            percentage: "100%",
+        };
+    }
+
+    if (val === maxPagu) {
+        return {
+            label: "✓ Sesuai Pagu",
+            badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300",
+            cardClass: "border-emerald-200 bg-emerald-50/20",
+            barClass: "bg-emerald-500",
+            percentage: "100%",
+        };
+    }
+
+    const thresholdMendekati = maxPagu * 0.85;
+    const pct = Math.min((val / maxPagu) * 100, 100).toFixed(1) + "%";
+
+    if (val >= thresholdMendekati) {
+        return {
+            label: "⚡ Mendekati Pagu",
+            badgeClass: "bg-teal-100 text-teal-800 border-teal-300",
+            cardClass: "border-teal-200 bg-teal-50/20",
+            barClass: "bg-teal-500",
+            percentage: pct,
+        };
+    }
+
+    return {
+        label: "ℹ Kurang dari Pagu",
+        badgeClass: "bg-amber-100 text-amber-800 border-amber-300",
+        cardClass: "border-amber-200 bg-amber-50/20",
+        barClass: "bg-amber-500",
+        percentage: pct,
+    };
+}
+
+const foodCostPKStatus = computed(() =>
+    getFoodCostStatusInfo(totalFoodCostPKNormal.value, 8000),
+);
+const foodCostPBStatus = computed(() =>
+    getFoodCostStatusInfo(totalFoodCostPBNormal.value, 10000),
+);
 
 function handlePrintPo() {
     window.print();
@@ -2775,6 +3200,9 @@ function getPayload(statusStr, stepNumber = 3) {
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
         items: (bahanCalculations.value || []).map((b) => ({
+            sub_menu_key: b.sub_menu_key || null,
+            sub_menu_block_id: b.sub_menu_block_id || null,
+            nama_sub_menu: b.nama_sub_menu || null,
             tkpi_id: b.id || b.code,
             nama: b.nama,
             nama_po: b.nama_po || b.nama,
@@ -2791,6 +3219,7 @@ function getPayload(statusStr, stepNumber = 3) {
             totalGrossKg: b.totalGrossKg || 0,
             harga_master: b.harga_master || 0,
             subtotalMaster: b.subtotalMaster || 0,
+            keterangan: b.keterangan || null,
             nutrisiPK: b.nutrisiPK || null,
             nutrisiPB: b.nutrisiPB || null,
         })),
@@ -2846,6 +3275,7 @@ function simpanDraftStep1() {
 function simpanDraftStep2() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     if (!validateStep2()) return;
@@ -2870,6 +3300,7 @@ function simpanDraftStep2() {
 function simpanSebagaiDraft() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     isSubmitting.value = true;
@@ -2891,10 +3322,12 @@ function simpanSebagaiDraft() {
 function ajukanKeKeuangan() {
     if (!validateStep1()) {
         buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
         return;
     }
     if (!validateStep2()) {
         buatMenuSubTab.value = "bahan_pangan";
+        scrollToTopSection();
         return;
     }
     isSubmitting.value = true;
@@ -2999,6 +3432,9 @@ watch(
                         id: matchedTkpi.id || it.tkpi_id || it.id,
                         code: matchedTkpi.code || it.tkpi_id || it.id,
                         tkpi_id: matchedTkpi.id || it.tkpi_id || it.id,
+                        sub_menu_key: it.sub_menu_key || null,
+                        sub_menu_block_id: it.sub_menu_block_id || null,
+                        nama_sub_menu: it.nama_sub_menu || null,
                         nama: it.nama || matchedTkpi.nama,
                         nama_po: it.nama_po || it.nama || matchedTkpi.nama,
                         kategori:
@@ -3016,14 +3452,22 @@ watch(
                                 ? Number(it.buffer)
                                 : 0,
                         harga_master:
-                            Number(it.harga_master) ||
-                            matchedTkpi.harga_master ||
-                            0,
+                            it.harga_master !== undefined &&
+                            it.harga_master !== null &&
+                            it.harga_master !== ""
+                                ? Number(it.harga_master)
+                                : null,
                         harga_aktual:
-                            Number(it.harga_aktual) ||
-                            it.harga_master ||
-                            matchedTkpi.harga_master ||
-                            0,
+                            it.harga_aktual !== undefined &&
+                            it.harga_aktual !== null &&
+                            it.harga_aktual !== ""
+                                ? Number(it.harga_aktual)
+                                : it.harga_master !== undefined &&
+                                    it.harga_master !== null &&
+                                    it.harga_master !== ""
+                                  ? Number(it.harga_master)
+                                  : null,
+                        keterangan: it.keterangan || "",
                         tkpi: matchedTkpi,
                     };
                 });
@@ -3083,7 +3527,7 @@ watch(
     <!-- ========================================================================================= -->
     <!-- 4. SUB MENU 4: RANCANG MENU (PERENCANAAN & FORMULASI GIZI) -->
     <!-- ========================================================================================= -->
-    <div class="space-y-6">
+    <div id="rancang-menu-top-anchor" class="space-y-6 scroll-mt-24">
         <!-- Global Alert Feedback Sukses Simpan Draft / Ajukan -->
         <div
             v-if="showSubmitSuccessAlert"
@@ -3228,12 +3672,28 @@ watch(
                             >{{ totalPB.toLocaleString("id-ID") }} Porsi</strong
                         ></span
                     >
-                    <span v-if="totalPKAlergi + totalPBAlergi > 0"
-                        >• Alergi:
+                    <span
+                        v-if="activeAlergiFoodCostList.length > 0"
+                        class="inline-flex items-center gap-1.5 flex-wrap"
+                        >•
                         <strong class="text-rose-300"
-                            >{{ totalPKAlergi + totalPBAlergi }} Porsi</strong
-                        ></span
-                    >
+                            >Alergi Terdampak ({{
+                                activeAlergiFoodCostList.reduce(
+                                    (s, a) => s + (a.total_siswa || 0),
+                                    0,
+                                )
+                            }}
+                            Porsi):</strong
+                        >
+                        <span
+                            v-for="al in activeAlergiFoodCostList"
+                            :key="al.jenis_alergi"
+                            class="px-2 py-0.5 rounded-md bg-rose-500/25 text-rose-200 border border-rose-400/40 text-[11px] font-bold"
+                        >
+                            {{ al.jenis_alergi }}: {{ al.total_siswa }} Porsi
+                            (PK: {{ al.siswa_pk }}, PB: {{ al.siswa_pb }})
+                        </span>
+                    </span>
                     <span
                         >• Terjadwal:
                         <strong class="text-slate-200 font-black">
@@ -5105,7 +5565,7 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Tabel Rincian Kelompok Sasaran Terjadwal (Status Menerima & Edit Detail Sub-Kategori) -->
+                    <!-- Tabel Rincian Kelompok Penerima Manfaat Terjadwal (Status Menerima & Edit Detail Sub-Kategori) -->
                     <div class="space-y-3 pt-2">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
@@ -5183,7 +5643,7 @@ watch(
                                                 Status
                                             </th>
                                             <th class="py-3.5 px-3">
-                                                Nama Kelompok Sasaran
+                                                Nama Kelompok Penerima Manfaat
                                             </th>
                                             <th class="py-3.5 px-3">
                                                 Kategori
@@ -5553,7 +6013,9 @@ watch(
                                 @click="handleMulaiFormulasiWo"
                                 className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto shrink-0 text-center"
                             >
-                                <span>Lanjut ke Formula Gizi (Langkah 2)</span>
+                                <span
+                                    >Lanjut ke Formula Makanan (Langkah 2)</span
+                                >
                                 <ArrowRight class="h-4 w-4 shrink-0" />
                             </Button>
                         </div>
@@ -5951,147 +6413,6 @@ watch(
                     </div>
                 </CardHeader>
                 <CardContent class="p-4 sm:p-6 space-y-6">
-                    <!-- Selector Tambah Bahan dari Master Database Pangan -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <label
-                                class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5"
-                            >
-                                <Search class="h-3.5 w-3.5 text-primary" />
-                                <span>Pilih & Tambah Bahan Baku Mentah:</span>
-                            </label>
-                            <span
-                                class="text-[11px] text-slate-500 font-medium"
-                            >
-                                Database:
-                                <strong class="text-slate-800">{{
-                                    selectedSource === "csv"
-                                        ? "TKPI 2020"
-                                        : "NutriSurvey FTA"
-                                }}</strong>
-                            </span>
-                        </div>
-
-                        <!-- Searchable Combobox Selector -->
-                        <div class="relative" @click.stop>
-                            <div
-                                @click="isComboboxOpen = !isComboboxOpen"
-                                class="w-full min-h-[46px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs"
-                            >
-                                <div
-                                    class="flex items-center gap-2.5 min-w-0 flex-1"
-                                >
-                                    <div
-                                        class="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"
-                                    >
-                                        <Plus class="h-4 w-4" />
-                                    </div>
-                                    <span
-                                        v-if="!selectedTkpiItem"
-                                        class="text-xs text-slate-400 font-normal truncate"
-                                    >
-                                        Ketik nama bahan atau klik untuk memilih
-                                        bahan pangan...
-                                    </span>
-                                    <div
-                                        v-else
-                                        class="flex items-center gap-2 min-w-0 truncate"
-                                    >
-                                        <span
-                                            class="text-xs font-bold text-slate-900 truncate"
-                                            >{{ selectedTkpiItem.nama }}</span
-                                        >
-                                        <span
-                                            class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium"
-                                            >{{
-                                                selectedTkpiItem.kategori
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <ChevronDown
-                                    class="h-4 w-4 text-slate-400 shrink-0 transition-transform"
-                                    :class="{ 'rotate-180': isComboboxOpen }"
-                                />
-                            </div>
-
-                            <!-- Dropdown Panel -->
-                            <div
-                                v-if="isComboboxOpen"
-                                class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                            >
-                                <div
-                                    class="p-2.5 border-b border-slate-100 bg-slate-50/70"
-                                >
-                                    <div class="relative">
-                                        <Search
-                                            class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
-                                        />
-                                        <input
-                                            type="text"
-                                            v-model="searchTkpiQuery"
-                                            placeholder="Cari nama bahan pangan mentah..."
-                                            class="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-slate-200 focus:outline-hidden focus:border-primary font-medium"
-                                            autofocus
-                                        />
-                                    </div>
-                                </div>
-                                <div
-                                    class="max-h-60 overflow-y-auto divide-y divide-slate-100"
-                                >
-                                    <div
-                                        v-for="item in filteredTkpiList"
-                                        :key="item.id || item.code"
-                                        @click="selectTkpiItem(item)"
-                                        class="p-3 hover:bg-primary/5 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
-                                    >
-                                        <div class="min-w-0">
-                                            <div
-                                                class="font-bold text-slate-800 truncate"
-                                            >
-                                                {{ item.nama }}
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5"
-                                            >
-                                                <span>{{ item.kategori }}</span>
-                                                <span>•</span>
-                                                <span
-                                                    >BDD:
-                                                    {{ item.bdd || 100 }}%</span
-                                                >
-                                                <span>•</span>
-                                                <span
-                                                    >{{
-                                                        formatRupiah(
-                                                            item.harga ||
-                                                                item.harga_master ||
-                                                                0,
-                                                        )
-                                                    }}
-                                                    / Kg</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            className="bg-primary/10 text-primary hover:bg-primary hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0"
-                                        >
-                                            + Pilih
-                                        </Button>
-                                    </div>
-                                    <div
-                                        v-if="filteredTkpiList.length === 0"
-                                        class="p-6 text-center text-xs text-slate-400"
-                                    >
-                                        Bahan tidak ditemukan.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Panduan / Rumus Kebutuhan Bahan Mentah (Toggleable) -->
                     <div
                         class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2"
@@ -6104,17 +6425,84 @@ watch(
                                 Panduan Rumus Perhitungan Kebutuhan Bahan Baku
                                 Mentah
                             </span>
-                            <button
-                                type="button"
-                                @click="showRumusBahan = !showRumusBahan"
-                                class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
-                            >
-                                {{
-                                    showRumusBahan
-                                        ? "Sembunyikan Rumus"
-                                        : "Tampilkan Rumus"
-                                }}
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium"
+                                >
+                                    <span>Database:</span>
+                                    <div
+                                        class="inline-flex rounded-lg bg-slate-200/70 p-0.5 border border-slate-300/60"
+                                        :title="
+                                            selectedBahanList.length > 0
+                                                ? 'Database terkunci karena sudah ada bahan pangan yang dipilih. Hapus/reset semua bahan terlebih dahulu jika ingin mengganti database.'
+                                                : 'Pilih Database Acuan'
+                                        "
+                                    >
+                                        <button
+                                            type="button"
+                                            @click="
+                                                selectedBahanList.length ===
+                                                    0 &&
+                                                emit('update-source', 'fta')
+                                            "
+                                            :disabled="
+                                                selectedBahanList.length > 0
+                                            "
+                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                            :class="[
+                                                selectedSource === 'fta'
+                                                    ? 'bg-white text-primary shadow-xs'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                                selectedBahanList.length > 0
+                                                    ? 'opacity-80 cursor-not-allowed'
+                                                    : 'cursor-pointer',
+                                            ]"
+                                        >
+                                            Nutri Survey
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                selectedBahanList.length ===
+                                                    0 &&
+                                                emit('update-source', 'csv')
+                                            "
+                                            :disabled="
+                                                selectedBahanList.length > 0
+                                            "
+                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                            :class="[
+                                                selectedSource === 'csv'
+                                                    ? 'bg-white text-primary shadow-xs'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                                selectedBahanList.length > 0
+                                                    ? 'opacity-80 cursor-not-allowed'
+                                                    : 'cursor-pointer',
+                                            ]"
+                                        >
+                                            TKPI 2020
+                                        </button>
+                                    </div>
+                                    <span
+                                        v-if="selectedBahanList.length > 0"
+                                        class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold inline-flex items-center gap-1"
+                                        title="Database terkunci karena sudah ada bahan dipilih"
+                                    >
+                                        🔒 Terkunci
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="showRumusBahan = !showRumusBahan"
+                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
+                                >
+                                    {{
+                                        showRumusBahan
+                                            ? "Sembunyikan Rumus"
+                                            : "Tampilkan Rumus"
+                                    }}
+                                </button>
+                            </div>
                         </div>
                         <div
                             v-if="showRumusBahan"
@@ -6150,98 +6538,1233 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Tabel Detail Bahan Baku Mentah -->
+                    <!-- Error Alert jika belum ada bahan sama sekali -->
                     <div
-                        class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                        v-if="validationErrors.selectedBahan"
+                        class="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center gap-2 font-bold"
+                    >
+                        <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
+                        <span>{{ validationErrors.selectedBahan }}</span>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- BLOK-BLOK SUB MENU & VARIAN PENGGANTI ALERGI (LANGKAH 2) -->
+                    <!-- ========================================================================= -->
+                    <div class="space-y-6">
+                        <div
+                            v-for="(block, bIdx) in step2SubMenuBlocks"
+                            :key="block.id"
+                            :id="'card-block-' + block.id"
+                            class="border rounded-2xl bg-white shadow-xs transition-all duration-200"
+                            :class="[
+                                block.borderCard,
+                                activeComboboxBlockId === block.id
+                                    ? 'relative z-30'
+                                    : 'relative z-10',
+                            ]"
+                        >
+                            <!-- Header Blok Sub Menu -->
+                            <div
+                                class="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-t-2xl"
+                                :class="block.bgHeader"
+                            >
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <div
+                                        class="h-7 w-7 rounded-xl flex items-center justify-center font-black text-xs text-white shadow-2xs shrink-0"
+                                        :class="
+                                            block.isAlergi
+                                                ? 'bg-rose-600'
+                                                : 'bg-slate-800'
+                                        "
+                                    >
+                                        {{
+                                            block.isAlergi
+                                                ? "🛡️"
+                                                : block.subIndex
+                                        }}
+                                    </div>
+                                    <div>
+                                        <div
+                                            class="flex items-center gap-2 flex-wrap"
+                                        >
+                                            <span
+                                                class="text-xs font-black uppercase tracking-wider text-slate-800"
+                                            >
+                                                {{ block.subLabel }}:
+                                            </span>
+                                            <span
+                                                class="text-sm font-extrabold"
+                                                :class="
+                                                    block.isAlergi
+                                                        ? 'text-rose-900'
+                                                        : 'text-slate-900'
+                                                "
+                                            >
+                                                "{{ block.namaMenu }}"
+                                            </span>
+                                            <span
+                                                v-if="block.isAlergi"
+                                                class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs"
+                                            >
+                                                ⚠️ Varian Alergi:
+                                                {{ block.jenisAlergi }}
+                                            </span>
+                                        </div>
+                                        <!-- Info Sasaran Porsi -->
+                                        <div
+                                            class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5 flex-wrap"
+                                        >
+                                            <span
+                                                v-if="!block.isAlergi"
+                                                class="font-medium"
+                                            >
+                                                Target Porsi Normal:
+                                                <strong class="text-slate-900"
+                                                    >{{ totalPM }} Siswa</strong
+                                                >
+                                                (PK: {{ totalPK }}, PB:
+                                                {{ totalPB }})
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="font-bold text-rose-800 flex items-center gap-1"
+                                            >
+                                                <span
+                                                    >Target Alergi
+                                                    {{
+                                                        block.jenisAlergi
+                                                    }}:</span
+                                                >
+                                                <strong class="text-rose-950"
+                                                    >{{
+                                                        findAlergiDetail(
+                                                            block.jenisAlergi,
+                                                        )?.total || 0
+                                                    }}
+                                                    Siswa</strong
+                                                >
+                                                <span
+                                                    >(PK:
+                                                    {{
+                                                        findAlergiDetail(
+                                                            block.jenisAlergi,
+                                                        )?.porsi_kecil || 0
+                                                    }}, PB:
+                                                    {{
+                                                        findAlergiDetail(
+                                                            block.jenisAlergi,
+                                                        )?.porsi_besar || 0
+                                                    }})</span
+                                                >
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Ringkasan Blok & Tombol Cek Rekap Pojok Kanan -->
+                                <div
+                                    class="flex items-center gap-2 text-xs flex-wrap self-start md:self-auto"
+                                >
+                                    <!-- Tombol Cek Rekapitulasi -->
+                                    <button
+                                        type="button"
+                                        @click="scrollToRekapitulasi"
+                                        class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900 border border-indigo-200 text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                        title="Lihat Tabel Rekapitulasi Semua Bahan Pangan"
+                                    >
+                                        <ClipboardList
+                                            class="h-3.5 w-3.5 text-indigo-600"
+                                        />
+                                        <span>Cek Rekap</span>
+                                    </button>
+                                    <span
+                                        class="px-2.5 py-1 rounded-lg bg-white/90 border border-slate-200 text-slate-700 font-bold text-[11px] shadow-2xs"
+                                    >
+                                        {{ getBlockSummary(block.id).count }}
+                                        Bahan
+                                    </span>
+                                    <span
+                                        class="px-2.5 py-1 rounded-lg bg-blue-50/90 border border-blue-200 text-blue-900 font-black text-[11px] shadow-2xs"
+                                    >
+                                        {{
+                                            formatGrossWeight(
+                                                getBlockSummary(block.id)
+                                                    .totalGrossKg,
+                                            )
+                                        }}
+                                    </span>
+                                    <span
+                                        class="px-2.5 py-1 rounded-lg bg-emerald-50/90 border border-emerald-200 text-emerald-900 font-black text-[11px] shadow-2xs"
+                                    >
+                                        {{
+                                            formatRupiah(
+                                                getBlockSummary(block.id)
+                                                    .totalCostMaster,
+                                            )
+                                        }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Selector Combobox Tambah Bahan Baku Khusus Blok Ini (Di Atas Tabel) -->
+                            <div
+                                class="p-3.5 bg-slate-50/70 border-b border-slate-200 relative z-30"
+                            >
+                                <div class="relative" @click.stop>
+                                    <div
+                                        @click="
+                                            toggleComboboxForBlock(block.id)
+                                        "
+                                        class="w-full min-h-[42px] px-3.5 py-1.5 rounded-xl border border-slate-300 bg-white hover:border-primary/70 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2.5 min-w-0 flex-1"
+                                        >
+                                            <div
+                                                class="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"
+                                            >
+                                                <Plus class="h-3.5 w-3.5" />
+                                            </div>
+                                            <span
+                                                class="text-xs text-slate-500 font-normal truncate"
+                                            >
+                                                Ketik nama bahan baku mentah
+                                                untuk ditambahkan ke
+                                                <strong
+                                                    >{{ block.subLabel }} ({{
+                                                        block.namaMenu
+                                                    }})</strong
+                                                >...
+                                            </span>
+                                        </div>
+                                        <ChevronDown
+                                            class="h-4 w-4 text-slate-400 shrink-0 transition-transform duration-150"
+                                            :class="{
+                                                'rotate-180 text-primary':
+                                                    activeComboboxBlockId ===
+                                                    block.id,
+                                            }"
+                                        />
+                                    </div>
+
+                                    <!-- Dropdown Panel Pencarian Bahan Pangan Master (Tidak Terpotong Tabel) -->
+                                    <div
+                                        v-if="
+                                            activeComboboxBlockId === block.id
+                                        "
+                                        class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                                    >
+                                        <div
+                                            class="p-2.5 border-b border-slate-100 bg-slate-50/90 space-y-2"
+                                        >
+                                            <div class="relative">
+                                                <Search
+                                                    class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    :value="
+                                                        getSearchQueryForBlock(
+                                                            block.id,
+                                                        )
+                                                    "
+                                                    @input="
+                                                        setSearchQueryForBlock(
+                                                            block.id,
+                                                            $event.target.value,
+                                                        )
+                                                    "
+                                                    :placeholder="`Cari dari seluruh database bahan pangan untuk ${block.namaMenu}...`"
+                                                    class="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-slate-200 focus:outline-hidden focus:border-primary font-medium"
+                                                    autofocus
+                                                />
+                                            </div>
+                                            <div
+                                                class="flex items-center justify-between text-[10px] text-slate-500 font-medium px-1"
+                                            >
+                                                <span>
+                                                    Sumber:
+                                                    <strong
+                                                        class="text-slate-800"
+                                                        >{{
+                                                            selectedSource ===
+                                                            "csv"
+                                                                ? "TKPI 2020 (.csv)"
+                                                                : "Nutri Survey (.fta)"
+                                                        }}</strong
+                                                    >
+                                                </span>
+                                                <span
+                                                    class="text-primary font-bold"
+                                                >
+                                                    {{
+                                                        getFilteredTkpiListForBlock(
+                                                            block.id,
+                                                        ).length
+                                                    }}
+                                                    Bahan Pangan Tersedia
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div
+                                            class="max-h-80 overflow-y-auto divide-y divide-slate-100"
+                                        >
+                                            <div
+                                                v-for="item in getFilteredTkpiListForBlock(
+                                                    block.id,
+                                                )"
+                                                :key="item.id || item.code"
+                                                @click="
+                                                    selectTkpiItemForBlock(
+                                                        item,
+                                                        block,
+                                                    )
+                                                "
+                                                class="p-3 hover:bg-primary/5 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
+                                            >
+                                                <div class="min-w-0">
+                                                    <div
+                                                        class="font-bold text-slate-800 truncate"
+                                                    >
+                                                        {{ item.nama }}
+                                                    </div>
+                                                    <div
+                                                        class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5"
+                                                    >
+                                                        <span>{{
+                                                            item.kategori
+                                                        }}</span>
+                                                        <span>•</span>
+                                                        <span
+                                                            >BDD:
+                                                            {{
+                                                                item.bdd || 100
+                                                            }}%</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    className="bg-primary/10 text-primary hover:bg-primary hover:text-white h-7 px-2.5 text-[11px] font-bold rounded-lg shrink-0"
+                                                >
+                                                    + Pilih ke
+                                                    {{ block.subLabel }}
+                                                </Button>
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    getFilteredTkpiListForBlock(
+                                                        block.id,
+                                                    ).length === 0
+                                                "
+                                                class="p-6 text-center text-xs text-slate-400"
+                                            >
+                                                Bahan baku pangan tidak
+                                                ditemukan.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabel Bahan Baku Mentah Khusus Blok Ini -->
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full min-w-[1100px] text-left text-xs border-collapse"
+                                >
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                        >
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-center w-10 border-r border-slate-200/80"
+                                            >
+                                                No
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 min-w-[170px] w-auto border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Bahan Pangan (Master)
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 min-w-[180px] border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Nama di PO
+                                                <span
+                                                    class="text-rose-500 font-black"
+                                                    >*</span
+                                                >
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 min-w-[210px] text-center border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Peruntukan Porsi
+                                            </th>
+                                            <th
+                                                colspan="2"
+                                                class="p-2 text-center bg-emerald-50/80 text-emerald-950 border-r border-slate-200/80 font-black"
+                                            >
+                                                Berat Bersih (g)
+                                            </th>
+                                            <th
+                                                colspan="2"
+                                                class="p-2 text-center bg-blue-50/80 text-blue-950 border-r border-slate-200/80 font-black"
+                                            >
+                                                Berat Kotor (g)
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-center min-w-[65px] border-r border-slate-200/80"
+                                            >
+                                                BDD (%)
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-center min-w-[70px] border-r border-slate-200/80"
+                                            >
+                                                Buffer (%)
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-right bg-blue-50/60 text-blue-950 min-w-[95px] border-r border-slate-200/80 font-black"
+                                            >
+                                                Kebutuhan (kg)
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-right min-w-[115px] border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Harga / Kg
+                                                <span
+                                                    class="text-rose-500 font-black"
+                                                    >*</span
+                                                >
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-right min-w-[95px] border-r border-slate-200/80"
+                                            >
+                                                Subtotal
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2.5 text-left min-w-[150px] border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Keterangan
+                                            </th>
+                                            <th
+                                                rowspan="2"
+                                                class="p-2 text-center w-14 min-w-[56px] max-w-[56px] shrink-0"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                        <tr
+                                            class="bg-slate-50/90 border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                        >
+                                            <th
+                                                class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[80px]"
+                                            >
+                                                PK
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/80 min-w-[80px]"
+                                            >
+                                                PB
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                            >
+                                                PK
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/80 min-w-[75px]"
+                                            >
+                                                PB
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody
+                                        class="divide-y divide-slate-100 text-slate-800"
+                                    >
+                                        <tr
+                                            v-if="
+                                                getBahanForBlock(block.id)
+                                                    .length === 0
+                                            "
+                                        >
+                                            <td
+                                                colspan="15"
+                                                class="p-6 text-center text-slate-400 font-medium bg-slate-50/30"
+                                            >
+                                                <div
+                                                    class="flex flex-col items-center justify-center gap-1"
+                                                >
+                                                    <Package
+                                                        class="h-6 w-6 text-slate-300 stroke-[1.5]"
+                                                    />
+                                                    <span
+                                                        >Belum ada bahan baku
+                                                        pangan untuk
+                                                        <strong>{{
+                                                            block.namaMenu
+                                                        }}</strong
+                                                        >.</span
+                                                    >
+                                                    <span
+                                                        class="text-[11px] text-slate-400"
+                                                        >Gunakan kolom pencarian
+                                                        di atas untuk
+                                                        menambahkan bahan baku
+                                                        mentah.</span
+                                                    >
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-for="(
+                                                it, itemIdx
+                                            ) in getBahanForBlock(block.id)"
+                                            :key="it.originalIndex"
+                                            :id="
+                                                'row-bahan-' + it.originalIndex
+                                            "
+                                            class="hover:bg-slate-50/70 transition-colors"
+                                        >
+                                            <td
+                                                class="p-3 text-center font-bold text-slate-400 align-top pt-4 border-r border-slate-100"
+                                            >
+                                                {{ itemIdx + 1 }}
+                                            </td>
+                                            <!-- 1. Bahan Pangan (Master) - Wrap & Break Words -->
+                                            <td
+                                                class="p-3 font-bold text-slate-900 align-top pt-4 border-r border-slate-100 min-w-[170px] whitespace-normal break-words leading-snug"
+                                            >
+                                                <div
+                                                    class="whitespace-normal break-words"
+                                                >
+                                                    {{ it.nama }}
+                                                </div>
+                                                <span
+                                                    v-if="it.alergen"
+                                                    class="block text-[9.5px] text-amber-700 font-normal mt-0.5 whitespace-normal break-words"
+                                                >
+                                                    Alergen: {{ it.alergen }}
+                                                </span>
+                                            </td>
+                                            <!-- 2. Nama di PO (Wajib diisi & Wrap) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100 min-w-[180px]"
+                                            >
+                                                <textarea
+                                                    rows="2"
+                                                    v-model="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].nama_po
+                                                    "
+                                                    placeholder="Nama di PO (Wajib diisi)..."
+                                                    :class="[
+                                                        'w-full px-2.5 py-1.5 text-xs border rounded-lg focus:outline-hidden font-medium transition-colors resize-y min-h-[42px] leading-snug break-words',
+                                                        validationErrors[
+                                                            'nama_po_' +
+                                                                it.originalIndex
+                                                        ] ||
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_nama_po'
+                                                        ]
+                                                            ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40 text-rose-900 placeholder:text-rose-400'
+                                                            : !selectedBahanList[
+                                                                    it
+                                                                        .originalIndex
+                                                                ].nama_po
+                                                              ? 'border-amber-300 focus:border-amber-400 bg-amber-50/20 text-slate-800 placeholder:text-amber-600/70'
+                                                              : 'border-slate-200 focus:border-primary text-slate-900',
+                                                    ]"
+                                                    @input="
+                                                        clearError(
+                                                            'nama_po_' +
+                                                                it.originalIndex,
+                                                        );
+                                                        clearError(
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_nama_po',
+                                                        );
+                                                    "
+                                                ></textarea>
+                                                <p
+                                                    v-if="
+                                                        validationErrors[
+                                                            'nama_po_' +
+                                                                it.originalIndex
+                                                        ] ||
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_nama_po'
+                                                        ]
+                                                    "
+                                                    class="text-[10px] text-rose-600 mt-1 font-bold flex items-center gap-1 whitespace-normal break-words leading-tight"
+                                                >
+                                                    <span>⚠️</span>
+                                                    <span>{{
+                                                        validationErrors[
+                                                            "nama_po_" +
+                                                                it.originalIndex
+                                                        ] ||
+                                                        validationErrors[
+                                                            "bahan_" +
+                                                                it.originalIndex +
+                                                                "_nama_po"
+                                                        ]
+                                                    }}</span>
+                                                </p>
+                                                <p
+                                                    v-else-if="
+                                                        !selectedBahanList[
+                                                            it.originalIndex
+                                                        ].nama_po
+                                                    "
+                                                    class="text-[9.5px] text-amber-700 mt-1 font-semibold flex items-center gap-1 whitespace-normal break-words leading-tight"
+                                                >
+                                                    <span>⚠️</span>
+                                                    <span
+                                                        >Wajib diisi untuk
+                                                        PO</span
+                                                    >
+                                                </p>
+                                            </td>
+                                            <!-- 3. Peruntukan Porsi (Wrap & Full Display) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100 min-w-[210px]"
+                                            >
+                                                <select
+                                                    :value="
+                                                        getPeruntukanPorsiValue(
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ],
+                                                        )
+                                                    "
+                                                    @change="
+                                                        handlePeruntukanPorsiChange(
+                                                            it.originalIndex,
+                                                            $event.target.value,
+                                                        )
+                                                    "
+                                                    class="w-full px-2 py-1.5 text-xs border rounded-lg focus:outline-hidden focus:border-primary font-bold transition-colors cursor-pointer whitespace-normal break-words"
+                                                    :class="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.tipe_porsi ===
+                                                        'alergi'
+                                                            ? 'bg-rose-50 text-rose-900 border-rose-300'
+                                                            : 'bg-white text-slate-800 border-slate-200'
+                                                    "
+                                                >
+                                                    <option value="normal">
+                                                        ✓ Porsi Normal (Standar)
+                                                    </option>
+                                                    <optgroup
+                                                        v-if="
+                                                            availableAlergiPmOptions.length >
+                                                            0
+                                                        "
+                                                        label="Porsi Varian Khusus Alergi"
+                                                    >
+                                                        <option
+                                                            v-for="opt in availableAlergiPmOptions"
+                                                            :key="
+                                                                opt.jenis_alergi
+                                                            "
+                                                            :value="`alergi:${opt.jenis_alergi}`"
+                                                        >
+                                                            ⚠️ Alergi:
+                                                            {{
+                                                                opt.jenis_alergi
+                                                            }}
+                                                            ({{ opt.total }}
+                                                            Porsi • PK:
+                                                            {{ opt.pk }}, PB:
+                                                            {{ opt.pb }})
+                                                        </option>
+                                                    </optgroup>
+                                                </select>
+                                            </td>
+                                            <!-- 4. Berat Bersih (g) - PK -->
+                                            <td
+                                                class="p-2.5 align-top pt-3 text-center bg-emerald-50/15 border-r border-slate-100"
+                                            >
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    v-model.number="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].gram_pk
+                                                    "
+                                                    placeholder="0"
+                                                    :class="[
+                                                        'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_gram'
+                                                        ]
+                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900'
+                                                            : (Number(
+                                                                    selectedBahanList[
+                                                                        it
+                                                                            .originalIndex
+                                                                    ].gram_pk,
+                                                                ) || 0) <= 0 &&
+                                                                (Number(
+                                                                    selectedBahanList[
+                                                                        it
+                                                                            .originalIndex
+                                                                    ].gram_pb,
+                                                                ) || 0) <= 0
+                                                              ? 'border-amber-300 bg-amber-50/20'
+                                                              : 'border-slate-200 focus:border-primary',
+                                                    ]"
+                                                    @input="
+                                                        clearError(
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_gram',
+                                                        )
+                                                    "
+                                                />
+                                                <div
+                                                    class="text-[9.5px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                                >
+                                                    ×
+                                                    {{ it.targetPKCount }} porsi
+                                                </div>
+                                                <p
+                                                    v-if="
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_gram'
+                                                        ]
+                                                    "
+                                                    class="text-[9px] text-rose-600 font-bold mt-1 leading-tight whitespace-normal break-words"
+                                                >
+                                                    {{
+                                                        validationErrors[
+                                                            "bahan_" +
+                                                                it.originalIndex +
+                                                                "_gram"
+                                                        ]
+                                                    }}
+                                                </p>
+                                            </td>
+                                            <!-- 5. Berat Bersih (g) - PB -->
+                                            <td
+                                                class="p-2.5 align-top pt-3 text-center bg-emerald-50/15 border-r border-slate-100"
+                                            >
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    v-model.number="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].gram_pb
+                                                    "
+                                                    placeholder="0"
+                                                    :class="[
+                                                        'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_gram'
+                                                        ]
+                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900'
+                                                            : (Number(
+                                                                    selectedBahanList[
+                                                                        it
+                                                                            .originalIndex
+                                                                    ].gram_pk,
+                                                                ) || 0) <= 0 &&
+                                                                (Number(
+                                                                    selectedBahanList[
+                                                                        it
+                                                                            .originalIndex
+                                                                    ].gram_pb,
+                                                                ) || 0) <= 0
+                                                              ? 'border-amber-300 bg-amber-50/20'
+                                                              : 'border-slate-200 focus:border-primary',
+                                                    ]"
+                                                    @input="
+                                                        clearError(
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_gram',
+                                                        )
+                                                    "
+                                                />
+                                                <div
+                                                    class="text-[9.5px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                                >
+                                                    ×
+                                                    {{ it.targetPBCount }} porsi
+                                                </div>
+                                            </td>
+                                            <!-- 6. Berat Kotor (g) - PK -->
+                                            <td
+                                                class="p-2.5 align-top pt-3.5 text-center bg-blue-50/15 border-r border-slate-100 font-bold text-blue-950"
+                                            >
+                                                <div>
+                                                    {{
+                                                        formatGram(
+                                                            it.grossGramPK,
+                                                        )
+                                                    }}
+                                                </div>
+                                                <div
+                                                    class="text-[9.5px] text-slate-400 font-normal mt-0.5"
+                                                >
+                                                    (Net ÷ {{ it.bdd || 100 }}%)
+                                                </div>
+                                            </td>
+                                            <!-- 7. Berat Kotor (g) - PB -->
+                                            <td
+                                                class="p-2.5 align-top pt-3.5 text-center bg-blue-50/15 border-r border-slate-100 font-bold text-blue-950"
+                                            >
+                                                <div>
+                                                    {{
+                                                        formatGram(
+                                                            it.grossGramPB,
+                                                        )
+                                                    }}
+                                                </div>
+                                                <div
+                                                    class="text-[9.5px] text-slate-400 font-normal mt-0.5"
+                                                >
+                                                    (Net ÷ {{ it.bdd || 100 }}%)
+                                                </div>
+                                            </td>
+                                            <!-- 8. BDD (%) -->
+                                            <td
+                                                class="p-3 text-center align-top pt-4 text-slate-700 font-medium border-r border-slate-100"
+                                            >
+                                                {{ it.bdd || 100 }}%
+                                            </td>
+                                            <!-- 9. Buffer (%) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100"
+                                            >
+                                                <input
+                                                    type="number"
+                                                    v-model.number="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].buffer
+                                                    "
+                                                    class="w-14 text-center px-1.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
+                                                />
+                                            </td>
+                                            <!-- 10. Kebutuhan (kg) -->
+                                            <td
+                                                class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-top pt-4 whitespace-nowrap border-r border-slate-100"
+                                            >
+                                                {{
+                                                    formatGrossWeight(
+                                                        it.totalGrossKg,
+                                                    )
+                                                }}
+                                            </td>
+                                            <!-- 11. Harga / Kg (Wajib diisi > 0) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100 min-w-[115px]"
+                                            >
+                                                <input
+                                                    type="text"
+                                                    inputmode="numeric"
+                                                    placeholder="Rp 0 *"
+                                                    :value="
+                                                        formatHargaInput(
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ]?.harga_master,
+                                                        )
+                                                    "
+                                                    @input="
+                                                        handleHargaMasterInput(
+                                                            it.originalIndex,
+                                                            $event,
+                                                        );
+                                                        clearError(
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_harga',
+                                                        );
+                                                    "
+                                                    :class="[
+                                                        'w-28 text-right px-2 py-1 text-xs border rounded-lg focus:outline-hidden font-medium transition-colors',
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_harga'
+                                                        ]
+                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 font-bold'
+                                                            : !selectedBahanList[
+                                                                    it
+                                                                        .originalIndex
+                                                                ]
+                                                                    ?.harga_master ||
+                                                                Number(
+                                                                    selectedBahanList[
+                                                                        it
+                                                                            .originalIndex
+                                                                    ]
+                                                                        ?.harga_master,
+                                                                ) <= 0
+                                                              ? 'border-amber-300 bg-amber-50/20 text-slate-800'
+                                                              : 'border-slate-200 focus:border-primary text-slate-800',
+                                                    ]"
+                                                />
+                                                <p
+                                                    v-if="
+                                                        validationErrors[
+                                                            'bahan_' +
+                                                                it.originalIndex +
+                                                                '_harga'
+                                                        ]
+                                                    "
+                                                    class="text-[9.5px] text-rose-600 font-bold mt-1 leading-tight whitespace-normal break-words"
+                                                >
+                                                    {{
+                                                        validationErrors[
+                                                            "bahan_" +
+                                                                it.originalIndex +
+                                                                "_harga"
+                                                        ]
+                                                    }}
+                                                </p>
+                                                <p
+                                                    v-else-if="
+                                                        !selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.harga_master ||
+                                                        Number(
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ]?.harga_master,
+                                                        ) <= 0
+                                                    "
+                                                    class="text-[9px] text-amber-700 font-semibold mt-1 leading-tight whitespace-normal break-words"
+                                                >
+                                                    ⚠️ Harga wajib diisi > 0
+                                                </p>
+                                            </td>
+                                            <!-- 12. Subtotal -->
+                                            <td
+                                                class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap border-r border-slate-100"
+                                            >
+                                                {{
+                                                    formatRupiah(
+                                                        it.subtotalMaster,
+                                                    )
+                                                }}
+                                            </td>
+                                            <!-- 13. Keterangan (Catatan Tambahan) -->
+                                            <td
+                                                class="p-2.5 align-top pt-3 border-r border-slate-100 min-w-[150px]"
+                                            >
+                                                <textarea
+                                                    rows="2"
+                                                    v-model="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].keterangan
+                                                    "
+                                                    placeholder="Catatan / spesifikasi..."
+                                                    class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary text-slate-800 placeholder:text-slate-400 font-medium resize-y min-h-[42px] leading-snug break-words"
+                                                ></textarea>
+                                            </td>
+                                            <!-- 14. Aksi -->
+                                            <td
+                                                class="p-2 text-center align-middle w-14 min-w-[56px] max-w-[56px] shrink-0"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    @click="
+                                                        handleRemoveBahan(
+                                                            it.originalIndex,
+                                                        )
+                                                    "
+                                                    class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center mx-auto"
+                                                    title="Hapus Bahan dari Sub Menu"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot
+                                        v-if="
+                                            getBahanForBlock(block.id).length >
+                                            0
+                                        "
+                                        class="bg-slate-50/90 font-bold border-t border-slate-200 text-xs"
+                                    >
+                                        <tr>
+                                            <td
+                                                colspan="10"
+                                                class="p-2.5 text-right uppercase text-[10.5px] text-slate-600 font-extrabold border-r border-slate-200/80"
+                                            >
+                                                Total Kebutuhan
+                                                {{ block.subLabel }}:
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-right font-black text-blue-950 bg-blue-100/30 whitespace-nowrap border-r border-slate-200/80"
+                                            >
+                                                {{
+                                                    formatGrossWeight(
+                                                        getBlockSummary(
+                                                            block.id,
+                                                        ).totalGrossKg,
+                                                    )
+                                                }}
+                                            </td>
+                                            <td
+                                                class="border-r border-slate-200/80"
+                                            ></td>
+                                            <td
+                                                class="p-2.5 text-right font-black text-emerald-900 whitespace-nowrap border-r border-slate-200/80"
+                                            >
+                                                {{
+                                                    formatRupiah(
+                                                        getBlockSummary(
+                                                            block.id,
+                                                        ).totalCostMaster,
+                                                    )
+                                                }}
+                                            </td>
+                                            <td
+                                                class="border-r border-slate-200/80 min-w-[150px]"
+                                            ></td>
+                                            <td
+                                                class="w-14 min-w-[56px] max-w-[56px]"
+                                            ></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- TABEL REKAPITULASI SEMUA BAHAN PANGAN DARI SELURUH SUB MENU (READ-ONLY) -->
+                    <!-- ========================================================================= -->
+                    <div
+                        id="tabel-rekapitulasi-bahan-pangan"
+                        class="border border-indigo-200 rounded-2xl overflow-hidden bg-white shadow-xs scroll-mt-20"
                     >
                         <div
-                            class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                            class="p-4 bg-gradient-to-r from-indigo-50/90 via-slate-50 to-indigo-50/60 border-b border-indigo-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                         >
-                            <span
-                                class="text-xs font-extrabold text-slate-800 uppercase tracking-wider"
-                            >
-                                Daftar Bahan Baku Mentah untuk Pengadaan &
-                                Belanja (PO)
-                            </span>
-                            <span class="text-xs font-bold text-slate-500">
-                                Total: {{ selectedBahanList.length }} Bahan Baku
-                            </span>
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="h-8 w-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0"
+                                >
+                                    <ClipboardList class="h-4.5 w-4.5" />
+                                </div>
+                                <div>
+                                    <div
+                                        class="flex items-center gap-2 flex-wrap"
+                                    >
+                                        <h4
+                                            class="text-sm font-black text-slate-900 tracking-tight"
+                                        >
+                                            Rekapitulasi Semua Bahan Pangan (PO
+                                            Belanja)
+                                        </h4>
+                                        <span
+                                            class="px-2 py-0.5 text-[10px] font-extrabold rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-2xs"
+                                        >
+                                            Mode Tinjauan (Read-Only)
+                                        </span>
+                                    </div>
+                                    <p
+                                        class="text-[11px] text-slate-500 mt-0.5"
+                                    >
+                                        Daftar gabungan seluruh bahan baku
+                                        mentah dari masing-masing Sub Menu dan
+                                        varian pengganti alergi.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span
+                                    class="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-2xs"
+                                >
+                                    Total:
+                                    <strong class="text-indigo-600">{{
+                                        bahanCalculations.length
+                                    }}</strong>
+                                    Bahan Baku Mentah
+                                </span>
+                            </div>
                         </div>
+
+                        <!-- Tabel Rekapitulasi Read-Only -->
                         <div class="overflow-x-auto">
                             <table
-                                class="w-full min-w-[1000px] text-left text-xs border-collapse"
+                                class="w-full min-w-[1200px] text-left text-xs border-collapse"
                             >
                                 <thead>
                                     <tr
                                         class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                     >
-                                        <th class="p-3 text-center w-10">No</th>
-                                        <th class="p-3 min-w-[150px]">
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 text-center w-10 border-r border-slate-200/80"
+                                        >
+                                            No
+                                        </th>
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 min-w-[160px] border-r border-slate-200/80"
+                                        >
+                                            Sub Menu
+                                        </th>
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 min-w-[160px] border-r border-slate-200/80"
+                                        >
                                             Bahan Pangan
                                         </th>
-                                        <th class="p-3 min-w-[130px]">
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 min-w-[130px] border-r border-slate-200/80"
+                                        >
                                             Nama di PO
                                         </th>
-                                        <th class="p-3 min-w-[100px]">
-                                            Peruntukan
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 min-w-[150px] text-center border-r border-slate-200/80"
+                                        >
+                                            Peruntukan Porsi
                                         </th>
-                                        <th class="p-3 min-w-[80px]">
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 min-w-[85px] border-r border-slate-200/80"
+                                        >
                                             Kategori
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[85px]"
+                                            colspan="2"
+                                            class="p-2 text-center bg-emerald-50/80 text-emerald-950 border-r border-slate-200/80 font-black"
                                         >
-                                            PK (g)
+                                            Berat Bersih (g)
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[85px]"
+                                            colspan="2"
+                                            class="p-2 text-center bg-blue-50/80 text-blue-950 border-r border-slate-200/80 font-black"
                                         >
-                                            PB (g)
+                                            Berat Kotor (g)
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[65px]"
+                                            rowspan="2"
+                                            class="p-2.5 text-center min-w-[65px] border-r border-slate-200/80"
                                         >
                                             BDD (%)
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[70px]"
+                                            rowspan="2"
+                                            class="p-2.5 text-center min-w-[70px] border-r border-slate-200/80"
                                         >
                                             Buffer (%)
                                         </th>
                                         <th
-                                            class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[85px]"
+                                            rowspan="2"
+                                            class="p-2.5 text-right bg-blue-50/60 text-blue-950 min-w-[95px] border-r border-slate-200/80 font-black"
                                         >
-                                            Kg Bersih
+                                            Kebutuhan (kg)
                                         </th>
                                         <th
-                                            class="p-3 text-right bg-blue-50/50 text-blue-950 min-w-[85px]"
-                                        >
-                                            Kg Kotor
-                                        </th>
-                                        <th
-                                            class="p-3 text-right min-w-[105px]"
+                                            rowspan="2"
+                                            class="p-2.5 text-right min-w-[105px] border-r border-slate-200/80"
                                         >
                                             Harga / Kg
                                         </th>
-                                        <th class="p-3 text-right min-w-[95px]">
-                                            Subtotal
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 text-right min-w-[100px] border-r border-slate-200/80"
+                                        >
+                                            Subtotal PO
                                         </th>
-                                        <th class="p-3 text-center w-12">
-                                            Aksi
+                                        <th
+                                            rowspan="2"
+                                            class="p-2.5 text-left min-w-[150px] whitespace-normal break-words"
+                                        >
+                                            Keterangan
+                                        </th>
+                                    </tr>
+                                    <tr
+                                        class="bg-slate-50/90 border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                    >
+                                        <th
+                                            class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[75px]"
+                                        >
+                                            PK
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/80 min-w-[75px]"
+                                        >
+                                            PB
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                        >
+                                            PK
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/80 min-w-[75px]"
+                                        >
+                                            PB
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody
                                     class="divide-y divide-slate-100 text-slate-800"
                                 >
-                                    <tr v-if="selectedBahanList.length === 0">
+                                    <tr v-if="bahanCalculations.length === 0">
                                         <td
-                                            colspan="14"
-                                            class="p-8 text-center text-slate-400 font-medium"
+                                            colspan="16"
+                                            class="p-8 text-center text-slate-400 font-medium bg-slate-50/30"
                                         >
-                                            Belum ada bahan baku yang dipilih.
-                                            Silakan pilih bahan melalui form di
-                                            atas.
+                                            <div
+                                                class="flex flex-col items-center justify-center gap-1.5"
+                                            >
+                                                <Package
+                                                    class="h-7 w-7 text-slate-300 stroke-[1.5]"
+                                                />
+                                                <span
+                                                    class="text-xs font-bold text-slate-600"
+                                                    >Belum ada bahan baku pangan
+                                                    yang dialokasikan ke Sub
+                                                    Menu manapun.</span
+                                                >
+                                                <span
+                                                    class="text-[11px] text-slate-400"
+                                                    >Pilih dan alokasikan bahan
+                                                    pangan pada blok Sub Menu di
+                                                    atas untuk melihat
+                                                    rekapitulasi.</span
+                                                >
+                                            </div>
                                         </td>
                                     </tr>
                                     <tr
@@ -6250,14 +7773,60 @@ watch(
                                         class="hover:bg-slate-50/70 transition-colors"
                                     >
                                         <td
-                                            class="p-3 text-center font-bold text-slate-400 align-top pt-4"
+                                            class="p-3 text-center font-bold text-slate-400 align-middle border-r border-slate-100"
                                         >
                                             {{ idx + 1 }}
                                         </td>
                                         <td
-                                            class="p-3 font-bold text-slate-900 align-top pt-4"
+                                            class="p-3 align-middle border-r border-slate-100"
                                         >
-                                            <div>{{ it.nama }}</div>
+                                            <div class="space-y-1">
+                                                <span
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black border shadow-2xs"
+                                                    :class="
+                                                        getSubMenuLabelForBahan(
+                                                            it,
+                                                        ).badgeClass
+                                                    "
+                                                >
+                                                    {{
+                                                        getSubMenuLabelForBahan(
+                                                            it,
+                                                        ).label
+                                                    }}
+                                                </span>
+                                                <div
+                                                    class="font-extrabold text-slate-900 text-xs truncate max-w-[200px]"
+                                                    :title="
+                                                        getSubMenuLabelForBahan(
+                                                            it,
+                                                        ).namaMenu
+                                                    "
+                                                >
+                                                    {{
+                                                        getSubMenuLabelForBahan(
+                                                            it,
+                                                        ).namaMenu
+                                                    }}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td
+                                            class="p-3 font-bold text-slate-900 align-middle border-r border-slate-100 cursor-pointer group hover:bg-primary/5 transition-colors"
+                                            @click="scrollToSubMenuBahan(it)"
+                                            title="Klik untuk menuju ke baris bahan pangan ini di tabel Sub Menu"
+                                        >
+                                            <div
+                                                class="flex items-center gap-1.5 group-hover:text-primary transition-colors"
+                                            >
+                                                <span
+                                                    class="underline decoration-slate-300 group-hover:decoration-primary underline-offset-2"
+                                                    >{{ it.nama }}</span
+                                                >
+                                                <ExternalLink
+                                                    class="h-3 w-3 text-slate-400 group-hover:text-primary transition-colors shrink-0"
+                                                />
+                                            </div>
                                             <span
                                                 v-if="it.alergen"
                                                 class="block text-[9.5px] text-amber-700 font-normal mt-0.5"
@@ -6265,194 +7834,124 @@ watch(
                                                 Alergen: {{ it.alergen }}
                                             </span>
                                         </td>
-                                        <td class="p-3 align-top pt-3">
-                                            <input
-                                                type="text"
-                                                v-model="
-                                                    selectedBahanList[idx]
-                                                        .nama_po
-                                                "
-                                                :placeholder="it.nama"
-                                                class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
-                                            />
-                                        </td>
                                         <td
-                                            class="p-3 align-top pt-3 min-w-[150px]"
+                                            class="p-3 text-slate-700 align-middle font-medium border-r border-slate-100"
                                         >
-                                            <select
-                                                v-model="
-                                                    selectedBahanList[idx]
-                                                        .tipe_porsi
+                                            <span
+                                                v-if="
+                                                    it.nama_po &&
+                                                    it.nama_po.trim()
                                                 "
-                                                class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-medium"
+                                                class="text-slate-900 font-semibold"
                                             >
-                                                <option value="normal">
-                                                    Normal (Semua Sasaran)
-                                                </option>
-                                                <option value="alergi">
-                                                    Khusus Porsi Alergi
-                                                </option>
-                                            </select>
-                                            <!-- Info PM Normal -->
+                                                {{ it.nama_po }}
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="text-slate-400 font-bold"
+                                            >
+                                                -
+                                            </span>
+                                        </td>
+                                        <!-- Peruntukan Porsi (Read-Only) -->
+                                        <td
+                                            class="p-2.5 text-center align-middle border-r border-slate-100"
+                                        >
+                                            <span
+                                                :class="[
+                                                    'px-2.5 py-1 text-[10.5px] font-bold rounded-lg border inline-block',
+                                                    it.tipe_porsi === 'alergi'
+                                                        ? 'bg-rose-50 text-rose-800 border-rose-200 shadow-2xs'
+                                                        : 'bg-slate-100 text-slate-700 border-slate-200',
+                                                ]"
+                                            >
+                                                {{
+                                                    it.tipe_porsi === "alergi"
+                                                        ? "⚠️ Alergi: " +
+                                                          (it.jenis_alergi ||
+                                                              "Khusus")
+                                                        : "✓ Porsi Normal"
+                                                }}
+                                            </span>
                                             <div
                                                 v-if="
-                                                    selectedBahanList[idx]
-                                                        .tipe_porsi !== 'alergi'
+                                                    it.tipe_porsi === 'alergi'
                                                 "
-                                                class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80"
+                                                class="text-[9.5px] text-rose-700 font-bold mt-1"
                                             >
-                                                <span>Sasaran:</span>
-                                                <span
-                                                    class="font-bold text-slate-900"
-                                                    >{{ totalPM }} Porsi (PK:
-                                                    {{ totalPK }}, PB:
-                                                    {{ totalPB }})</span
-                                                >
-                                            </div>
-                                            <!-- Select & Info PM Alergi -->
-                                            <div
-                                                v-else
-                                                class="mt-1.5 space-y-1"
-                                            >
-                                                <select
-                                                    v-model="
-                                                        selectedBahanList[idx]
-                                                            .jenis_alergi
-                                                    "
-                                                    class="w-full px-2 py-1 text-[11px] font-bold border border-rose-300 rounded-lg bg-rose-50/60 text-rose-900 focus:outline-hidden focus:border-rose-500"
-                                                >
-                                                    <option value="" disabled>
-                                                        -- Pilih Jenis Alergi --
-                                                    </option>
-                                                    <option
-                                                        v-for="alOpt in rekapAlergiDetailPm"
-                                                        :key="
-                                                            alOpt.jenis_alergi
-                                                        "
-                                                        :value="
-                                                            alOpt.jenis_alergi
-                                                        "
-                                                    >
-                                                        {{ alOpt.jenis_alergi }}
-                                                        ({{ alOpt.total }} Porsi
-                                                        • PK:
-                                                        {{ alOpt.porsi_kecil }},
-                                                        PB:
-                                                        {{ alOpt.porsi_besar }})
-                                                    </option>
-                                                    <option
-                                                        v-if="
-                                                            rekapAlergiDetailPm.length ===
-                                                            0
-                                                        "
-                                                        value="Alergi Khusus"
-                                                    >
-                                                        Alergi Khusus
-                                                    </option>
-                                                </select>
-                                                <div
-                                                    class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200"
-                                                >
-                                                    <span>Sasaran:</span>
-                                                    <span class="font-bold"
-                                                        >{{
-                                                            it.totalTargetCount
-                                                        }}
-                                                        Porsi (PK:
-                                                        {{ it.targetPKCount }},
-                                                        PB:
-                                                        {{
-                                                            it.targetPBCount
-                                                        }})</span
-                                                    >
-                                                </div>
-                                                <p
-                                                    v-if="
-                                                        validationErrors[
-                                                            'bahan_' +
-                                                                idx +
-                                                                '_alergi'
-                                                        ]
-                                                    "
-                                                    class="text-[10px] text-rose-600 font-bold mt-0.5"
-                                                >
-                                                    {{
-                                                        validationErrors[
-                                                            "bahan_" +
-                                                                idx +
-                                                                "_alergi"
-                                                        ]
-                                                    }}
-                                                </p>
+                                                {{ it.totalTargetCount }} Siswa
+                                                (PK: {{ it.targetPKCount }}, PB:
+                                                {{ it.targetPBCount }})
                                             </div>
                                         </td>
                                         <td
-                                            class="p-3 text-slate-600 align-top pt-4"
+                                            class="p-3 text-slate-600 align-middle border-r border-slate-100"
                                         >
                                             {{ it.kategori }}
                                         </td>
+                                        <!-- Berat Bersih PK (g) -->
                                         <td
-                                            class="p-3 align-top pt-3 text-center"
+                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-emerald-50/15 border-r border-slate-100"
                                         >
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                v-model.number="
-                                                    selectedBahanList[idx]
-                                                        .gram_pk
-                                                "
-                                                placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
-                                            />
+                                            {{ it.gram_pk }} g
                                             <div
-                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                                class="text-[9.5px] text-slate-400 font-normal mt-0.5"
                                             >
                                                 × {{ it.targetPKCount }} porsi
                                             </div>
                                         </td>
+                                        <!-- Berat Bersih PB (g) -->
                                         <td
-                                            class="p-3 align-top pt-3 text-center"
+                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-emerald-50/15 border-r border-slate-100"
                                         >
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                v-model.number="
-                                                    selectedBahanList[idx]
-                                                        .gram_pb
-                                                "
-                                                placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
-                                            />
+                                            {{ it.gram_pb }} g
                                             <div
-                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
+                                                class="text-[9.5px] text-slate-400 font-normal mt-0.5"
                                             >
                                                 × {{ it.targetPBCount }} porsi
                                             </div>
                                         </td>
+                                        <!-- Berat Kotor PK (g) -->
                                         <td
-                                            class="p-3 text-center align-top pt-4 text-slate-700"
+                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-blue-50/15 border-r border-slate-100"
+                                        >
+                                            <div>
+                                                {{ formatGram(it.grossGramPK) }}
+                                            </div>
+                                            <div
+                                                class="text-[9.5px] text-slate-400 font-normal mt-0.5"
+                                            >
+                                                (Net ÷ {{ it.bdd || 100 }}%)
+                                            </div>
+                                        </td>
+                                        <!-- Berat Kotor PB (g) -->
+                                        <td
+                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-blue-50/15 border-r border-slate-100"
+                                        >
+                                            <div>
+                                                {{ formatGram(it.grossGramPB) }}
+                                            </div>
+                                            <div
+                                                class="text-[9.5px] text-slate-400 font-normal mt-0.5"
+                                            >
+                                                (Net ÷ {{ it.bdd || 100 }}%)
+                                            </div>
+                                        </td>
+                                        <!-- BDD (%) -->
+                                        <td
+                                            class="p-3 text-center align-middle text-slate-700 font-medium border-r border-slate-100"
                                         >
                                             {{ it.bdd || 100 }}%
                                         </td>
-                                        <td class="p-3 align-top pt-3">
-                                            <input
-                                                type="number"
-                                                v-model.number="
-                                                    selectedBahanList[idx]
-                                                        .buffer
-                                                "
-                                                class="w-14 text-center px-1.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
-                                            />
-                                        </td>
+                                        <!-- Buffer (%) -->
                                         <td
-                                            class="p-3 text-right font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-center align-middle text-slate-700 font-medium border-r border-slate-100"
                                         >
-                                            {{
-                                                formatGrossWeight(it.totalNetKg)
-                                            }}
+                                            {{ it.buffer || 0 }}%
                                         </td>
+                                        <!-- Kebutuhan (kg) -->
                                         <td
-                                            class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-middle whitespace-nowrap border-r border-slate-100"
                                         >
                                             {{
                                                 formatGrossWeight(
@@ -6460,61 +7959,38 @@ watch(
                                                 )
                                             }}
                                         </td>
-                                        <td class="p-3 align-top pt-3">
-                                            <input
-                                                type="number"
-                                                v-model.number="
-                                                    selectedBahanList[idx]
-                                                        .harga_master
-                                                "
-                                                class="w-24 text-right px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary"
-                                            />
-                                        </td>
+                                        <!-- Harga / Kg -->
                                         <td
-                                            class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right text-slate-700 align-middle whitespace-nowrap font-medium border-r border-slate-100"
+                                        >
+                                            {{ formatRupiah(it.harga_master) }}
+                                        </td>
+                                        <!-- Subtotal PO -->
+                                        <td
+                                            class="p-3 text-right font-bold text-emerald-800 align-middle whitespace-nowrap"
                                         >
                                             {{
                                                 formatRupiah(it.subtotalMaster)
                                             }}
                                         </td>
                                         <td
-                                            class="p-3 text-center align-top pt-3.5"
+                                            class="p-3 text-slate-600 align-middle text-xs min-w-[150px] whitespace-normal break-words"
                                         >
-                                            <button
-                                                type="button"
-                                                @click="handleRemoveBahan(idx)"
-                                                class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                                title="Hapus Bahan"
-                                            >
-                                                <Trash2 class="h-4 w-4" />
-                                            </button>
+                                            {{ it.keterangan || "-" }}
                                         </td>
                                     </tr>
                                 </tbody>
                                 <tfoot
-                                    v-if="selectedBahanList.length > 0"
-                                    class="bg-slate-50/90 font-bold border-t border-slate-200"
+                                    v-if="bahanCalculations.length > 0"
+                                    class="bg-slate-50/90 font-bold border-t border-slate-200 text-xs"
                                 >
                                     <tr>
                                         <td
-                                            colspan="9"
+                                            colspan="12"
                                             class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
                                         >
-                                            Total Estimasi Belanja Bahan Baku
+                                            Total Rekapitulasi Kebutuhan Bahan
                                             (PO):
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right font-black text-amber-950 bg-amber-100/40 whitespace-nowrap"
-                                        >
-                                            {{
-                                                formatGrossWeight(
-                                                    bahanCalculations.reduce(
-                                                        (acc, it) =>
-                                                            acc + it.totalNetKg,
-                                                        0,
-                                                    ),
-                                                )
-                                            }}
                                         </td>
                                         <td
                                             class="p-3.5 text-right font-black text-blue-950 bg-blue-100/40 whitespace-nowrap"
@@ -6540,16 +8016,189 @@ watch(
                                                 )
                                             }}
                                         </td>
-                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                     </div>
 
+                    <!-- ========================================================================= -->
+                    <!-- RINGKASAN GRAND TOTAL KESELURUHAN PO BELANJA -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs p-4 sm:p-5 bg-gradient-to-br from-slate-50/80 to-white space-y-4"
+                    >
+                        <div
+                            class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-200 pb-3"
+                        >
+                            <div class="flex items-center gap-2">
+                                <Coins class="h-5 w-5 text-emerald-600" />
+                                <h4
+                                    class="text-sm font-black text-slate-900 uppercase tracking-wider"
+                                >
+                                    Rekapitulasi Grand Total Estimasi Belanja
+                                    (PO)
+                                </h4>
+                            </div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span
+                                    class="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs"
+                                >
+                                    Total:
+                                    <strong class="text-slate-900">{{
+                                        selectedBahanList.length
+                                    }}</strong>
+                                    Bahan Baku Mentah
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="showRumusBahan = !showRumusBahan"
+                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50"
+                                >
+                                    <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <span>{{
+                                        showRumusBahan
+                                            ? "Sembunyikan Rumus"
+                                            : "Penjelasan Rumus Rekapitulasi"
+                                    }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Penjelasan Rumus Rekapitulasi Grand Total PO -->
+                        <div
+                            v-if="showRumusBahan"
+                            class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs space-y-3 text-slate-700 shadow-2xs"
+                        >
+                            <div
+                                class="flex items-center gap-2 text-emerald-950 font-bold border-b border-emerald-200/80 pb-2"
+                            >
+                                <Info class="h-4 w-4 text-emerald-600 shrink-0" />
+                                <span
+                                    >Metode & Rumus Perhitungan Rekapitulasi Pengadaan Bahan Baku (PO)</span
+                                >
+                            </div>
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-3 gap-3 leading-relaxed"
+                            >
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
+                                >
+                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                                        1. Total Berat Bersih (Net Kg):
+                                    </strong>
+                                    <p
+                                        class="text-[11px] text-slate-800 font-mono bg-amber-50/80 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                    >
+                                        Net (Kg) = &sum; [ (Gram Bersih &times; Sasaran PM) &divide; 1.000 ]
+                                    </p>
+                                    <p class="text-[11px] text-slate-500 leading-snug">
+                                        Total berat porsi konsumsi bersih seluruh siswa (Porsi Kecil + Porsi Besar). Pada menu varian alergi, jumlah sasaran disesuaikan otomatis dengan data siswa alergi terdampak.
+                                    </p>
+                                </div>
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
+                                >
+                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                                        2. Berat Pengadaan Kotor (Gross Kg):
+                                    </strong>
+                                    <p
+                                        class="text-[11px] text-slate-800 font-mono bg-blue-50/80 p-2 rounded-lg border border-blue-200 text-center font-bold"
+                                    >
+                                        Gross (Kg) = [ Net &divide; (BDD% &divide; 100) ] &times; (1 + Buffer%)
+                                    </p>
+                                    <p class="text-[11px] text-slate-500 leading-snug">
+                                        Memperhitungkan faktor bagian yang dapat dimakan (<strong>BDD%</strong>) dari kulit/tulang terbuang serta persentase <strong>Buffer Margin</strong> untuk toleransi penyusutan/masak.
+                                    </p>
+                                </div>
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
+                                >
+                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                        3. Grand Total Anggaran Belanja PO:
+                                    </strong>
+                                    <p
+                                        class="text-[11px] text-slate-800 font-mono bg-emerald-50/80 p-2 rounded-lg border border-emerald-200 text-center font-bold"
+                                    >
+                                        Grand Total = &sum; [ Gross (Kg) &times; Harga Satuan per Kg ]
+                                    </p>
+                                    <p class="text-[11px] text-slate-500 leading-snug">
+                                        Akumulasi subtotal estimasi biaya seluruh item bahan mentah berdasarkan harga pasar/katalog yang diajukan ke bagian logistik pengadaan SPPG.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div
+                                class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/90 text-amber-950"
+                            >
+                                <span
+                                    class="text-[11px] font-bold text-amber-800 uppercase tracking-wider block mb-1"
+                                >
+                                    Total Berat Bersih (Net)
+                                </span>
+                                <div
+                                    class="text-base sm:text-lg font-black text-amber-950"
+                                >
+                                    {{
+                                        formatGrossWeight(
+                                            bahanCalculations.reduce(
+                                                (acc, it) =>
+                                                    acc + it.totalNetKg,
+                                                0,
+                                            ),
+                                        )
+                                    }}
+                                </div>
+                            </div>
+                            <div
+                                class="p-3 rounded-xl bg-blue-50/70 border border-blue-200/90 text-blue-950"
+                            >
+                                <span
+                                    class="text-[11px] font-bold text-blue-800 uppercase tracking-wider block mb-1"
+                                >
+                                    Total Berat Pengadaan Kotor (Gross)
+                                </span>
+                                <div
+                                    class="text-base sm:text-lg font-black text-blue-950"
+                                >
+                                    {{
+                                        formatGrossWeight(
+                                            bahanCalculations.reduce(
+                                                (acc, it) =>
+                                                    acc + it.totalGrossKg,
+                                                0,
+                                            ),
+                                        )
+                                    }}
+                                </div>
+                            </div>
+                            <div
+                                class="p-3 rounded-xl bg-emerald-50/80 border border-emerald-300 text-emerald-950 shadow-2xs"
+                            >
+                                <span
+                                    class="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider block mb-1"
+                                >
+                                    Grand Total Anggaran Belanja PO
+                                </span>
+                                <div
+                                    class="text-base sm:text-xl font-black text-emerald-900"
+                                >
+                                    {{ formatRupiah(grandTotalDraftMaster) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Analisis Food Cost & Batas Pagu Anggaran Mentah -->
                     <div class="space-y-4 pt-2">
-                        <div class="flex items-center justify-between">
+                        <div
+                            class="flex items-center justify-between flex-wrap gap-2"
+                        >
                             <h4
                                 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"
                             >
@@ -6562,232 +8211,1111 @@ watch(
                             <button
                                 type="button"
                                 @click="showRumusCost = !showRumusCost"
-                                class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
+                                class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1"
                             >
-                                {{
+                                <span>{{
                                     showRumusCost
-                                        ? "Sembunyikan Rumus Cost"
-                                        : "Tampilkan Rumus Cost"
-                                }}
+                                        ? "Sembunyikan Penjelasan Rumus"
+                                        : "Tampilkan Penjelasan Rumus & Metode"
+                                }}</span>
                             </button>
                         </div>
 
+                        <!-- Penjelasan Rumus Food Cost -->
                         <div
                             v-if="showRumusCost"
-                            class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-600"
+                            class="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 text-xs space-y-3 text-slate-700 shadow-2xs"
                         >
-                            <div>
-                                <strong>Food Cost PK:</strong>
-                                <code
-                                    >Total Biaya Porsi PK ÷ Jumlah Siswa
-                                    PK</code
-                                >
-                            </div>
-                            <div>
-                                <strong>Food Cost PB:</strong>
-                                <code
-                                    >Total Biaya Porsi PB ÷ Jumlah Siswa
-                                    PB</code
-                                >
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Card Food Cost PK -->
                             <div
-                                class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
-                                :class="
-                                    totalFoodCostPKNormal <= 8000
-                                        ? 'border-emerald-200 bg-emerald-50/20'
-                                        : 'border-rose-200 bg-rose-50/20'
-                                "
+                                class="flex items-center gap-2 text-blue-900 font-bold border-b border-blue-200 pb-2"
                             >
-                                <div class="flex items-center justify-between">
-                                    <span
-                                        class="text-xs font-bold uppercase tracking-wider text-slate-700"
-                                        >Food Cost Porsi Kecil (PK)</span
-                                    >
-                                    <span
-                                        class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
-                                        :class="
-                                            totalFoodCostPKNormal <= 8000
-                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300'
-                                        "
-                                    >
-                                        {{
-                                            totalFoodCostPKNormal <= 8000
-                                                ? "✓ Sesuai Pagu"
-                                                : "⚠ Melebihi Pagu"
-                                        }}
-                                    </span>
-                                </div>
-                                <div
-                                    class="flex items-baseline justify-between"
+                                <Info class="h-4 w-4 text-blue-600 shrink-0" />
+                                <span
+                                    >Metode Perhitungan Food Cost per Porsi
+                                    (Normal & Varian Alergi)</span
                                 >
-                                    <div
-                                        class="text-2xl font-black text-slate-900"
-                                    >
-                                        {{
-                                            formatRupiah(totalFoodCostPKNormal)
-                                        }}
-                                    </div>
-                                    <div class="text-xs text-slate-500">
-                                        Batas Pagu: <strong>Rp 8.000</strong>
-                                    </div>
-                                </div>
-                                <div
-                                    class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
-                                >
-                                    <div
-                                        class="h-full transition-all"
-                                        :class="
-                                            totalFoodCostPKNormal <= 8000
-                                                ? 'bg-emerald-500'
-                                                : 'bg-rose-500'
-                                        "
-                                        :style="{
-                                            width:
-                                                Math.min(
-                                                    (totalFoodCostPKNormal /
-                                                        8000) *
-                                                        100,
-                                                    100,
-                                                ) + '%',
-                                        }"
-                                    ></div>
-                                </div>
                             </div>
-
-                            <!-- Card Food Cost PB -->
                             <div
-                                class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
-                                :class="
-                                    totalFoodCostPBNormal <= 10000
-                                        ? 'border-emerald-200 bg-emerald-50/20'
-                                        : 'border-rose-200 bg-rose-50/20'
-                                "
+                                class="grid grid-cols-1 md:grid-cols-2 gap-3 leading-relaxed"
                             >
-                                <div class="flex items-center justify-between">
-                                    <span
-                                        class="text-xs font-bold uppercase tracking-wider text-slate-700"
-                                        >Food Cost Porsi Besar (PB)</span
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-1.5"
+                                >
+                                    <strong
+                                        class="text-blue-950 font-bold block"
+                                        >1. Rumus Food Cost per Bahan:</strong
                                     >
-                                    <span
-                                        class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
-                                        :class="
-                                            totalFoodCostPBNormal <= 10000
-                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                                : 'bg-rose-100 text-rose-800 border-rose-300'
-                                        "
+                                    <p
+                                        class="text-[11px] text-slate-600 font-mono bg-slate-50 p-1.5 rounded border border-slate-200"
                                     >
-                                        {{
-                                            totalFoodCostPBNormal <= 10000
-                                                ? "✓ Sesuai Pagu"
-                                                : "⚠ Melebihi Pagu"
-                                        }}
-                                    </span>
+                                        (Berat Bersih ÷ BDD%) × (1 + Buffer%) ×
+                                        (Harga/Kg ÷ 1000)
+                                    </p>
+                                    <p class="text-[11px] text-slate-500">
+                                        Perhitungan memperhitungkan bagian yang
+                                        dapat dimakan (BDD) serta buffer
+                                        pengadaan secara presisi tanpa
+                                        pembulatan prematur.
+                                    </p>
                                 </div>
                                 <div
-                                    class="flex items-baseline justify-between"
+                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-1.5"
                                 >
-                                    <div
-                                        class="text-2xl font-black text-slate-900"
+                                    <strong
+                                        class="text-blue-950 font-bold block"
+                                        >2. Klasifikasi Porsi Normal vs Varian
+                                        Alergi:</strong
                                     >
-                                        {{
-                                            formatRupiah(totalFoodCostPBNormal)
-                                        }}
-                                    </div>
-                                    <div class="text-xs text-slate-500">
-                                        Batas Pagu: <strong>Rp 10.000</strong>
-                                    </div>
-                                </div>
-                                <div
-                                    class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
-                                >
-                                    <div
-                                        class="h-full transition-all"
-                                        :class="
-                                            totalFoodCostPBNormal <= 10000
-                                                ? 'bg-emerald-500'
-                                                : 'bg-rose-500'
-                                        "
-                                        :style="{
-                                            width:
-                                                Math.min(
-                                                    (totalFoodCostPBNormal /
-                                                        10000) *
-                                                        100,
-                                                    100,
-                                                ) + '%',
-                                        }"
-                                    ></div>
+                                    <ul
+                                        class="text-[11px] text-slate-600 space-y-1 list-disc list-inside"
+                                    >
+                                        <li>
+                                            <strong>Porsi Normal:</strong>
+                                            Akumulasi seluruh bahan porsi normal
+                                            untuk siswa tanpa alergi terdampak.
+                                        </li>
+                                        <li>
+                                            <strong>Porsi Alergi:</strong>
+                                            (Bahan Normal Aman / Bebas Alergen)
+                                            + (Bahan Substitusi Alergi). Bahan
+                                            normal yang mengandung alergen
+                                            otomatis dikeluarkan dari varian
+                                            ini.
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Kartu Evaluasi AKG Varian Khusus Alergi (Layout & Style Sama dengan Normal) -->
+                        <!-- 1. Evaluasi Food Cost Porsi Normal -->
                         <div
-                            v-if="activeAlergiAkgList.length > 0"
-                            class="space-y-6 pt-4 border-t border-slate-200"
+                            class="space-y-2 bg-slate-50/70 p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
                         >
                             <div
-                                v-for="alRes in activeAlergiAkgList"
-                                :key="alRes.jenis_alergi"
-                                class="space-y-3 bg-rose-50/30 p-4 rounded-3xl border border-rose-200/80 shadow-2xs"
+                                class="flex items-center justify-between flex-wrap gap-2"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <Utensils
+                                        class="h-4 w-4 text-slate-700 shrink-0"
+                                    />
+                                    <span
+                                        class="text-xs font-black uppercase tracking-wider text-slate-800"
+                                    >
+                                        Menu Utama (Porsi Normal)
+                                    </span>
+                                </div>
+                                <span
+                                    class="px-2.5 py-0.5 rounded-lg bg-slate-200 text-slate-800 text-[11px] font-bold"
+                                >
+                                    Sasaran:
+                                    {{ targetSasaranNormal.total }} Porsi (PK:
+                                    {{ targetSasaranNormal.pk }}, PB:
+                                    {{ targetSasaranNormal.pb }})
+                                </span>
+                            </div>
+
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1"
+                            >
+                                <!-- Card Food Cost PK Normal -->
+                                <div
+                                    class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                    :class="foodCostPKStatus.cardClass"
+                                >
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                            >Food Cost Porsi Kecil (PK)</span
+                                        >
+                                        <span
+                                            class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                            :class="foodCostPKStatus.badgeClass"
+                                        >
+                                            {{ foodCostPKStatus.label }}
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="flex items-baseline justify-between"
+                                    >
+                                        <div
+                                            class="text-2xl font-black text-slate-900"
+                                        >
+                                            {{
+                                                formatRupiah(
+                                                    totalFoodCostPKNormal,
+                                                )
+                                            }}
+                                        </div>
+                                        <div class="text-xs text-slate-500">
+                                            Batas Pagu:
+                                            <strong>Rp 8.000</strong>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                    >
+                                        <div
+                                            class="h-full transition-all"
+                                            :class="foodCostPKStatus.barClass"
+                                            :style="{
+                                                width: foodCostPKStatus.percentage,
+                                            }"
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                <!-- Card Food Cost PB Normal -->
+                                <div
+                                    class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                    :class="foodCostPBStatus.cardClass"
+                                >
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span
+                                            class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                            >Food Cost Porsi Besar (PB)</span
+                                        >
+                                        <span
+                                            class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                            :class="foodCostPBStatus.badgeClass"
+                                        >
+                                            {{ foodCostPBStatus.label }}
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="flex items-baseline justify-between"
+                                    >
+                                        <div
+                                            class="text-2xl font-black text-slate-900"
+                                        >
+                                            {{
+                                                formatRupiah(
+                                                    totalFoodCostPBNormal,
+                                                )
+                                            }}
+                                        </div>
+                                        <div class="text-xs text-slate-500">
+                                            Batas Pagu:
+                                            <strong>Rp 10.000</strong>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                    >
+                                        <div
+                                            class="h-full transition-all"
+                                            :class="foodCostPBStatus.barClass"
+                                            :style="{
+                                                width: foodCostPBStatus.percentage,
+                                            }"
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rincian Food Cost per Sub Menu (Porsi Normal) -->
+                            <div
+                                class="mt-3 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs"
+                            >
+                                <div
+                                    class="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                                >
+                                    <span
+                                        class="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider"
+                                    >
+                                        <Layers
+                                            class="h-3.5 w-3.5 text-slate-600"
+                                        />
+                                        Rincian Food Cost per Sub Menu (Porsi
+                                        Normal)
+                                    </span>
+                                    <span
+                                        class="text-[11px] text-slate-500 font-medium"
+                                    >
+                                        Alokasi biaya bahan baku per komponen
+                                        hidangan
+                                    </span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table
+                                        class="w-full text-left text-xs border-collapse"
+                                    >
+                                        <thead
+                                            class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px] select-none"
+                                        >
+                                            <tr>
+                                                <th
+                                                    class="p-2.5 text-center w-10"
+                                                >
+                                                    No
+                                                </th>
+                                                <th class="p-2.5 min-w-[200px]">
+                                                    Sub Menu
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-center min-w-[100px]"
+                                                >
+                                                    Bahan Baku
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                >
+                                                    Food Cost PK
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                >
+                                                    Food Cost PB
+                                                </th>
+                                                <th
+                                                    class="p-2.5 min-w-[140px] text-center"
+                                                >
+                                                    Porsi Biaya (PK / PB)
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody
+                                            class="divide-y divide-slate-100 text-slate-800"
+                                        >
+                                            <tr
+                                                v-for="(
+                                                    smCost, idx
+                                                ) in foodCostSubMenuNormal"
+                                                :key="smCost.key"
+                                                class="hover:bg-slate-50/70 transition-colors"
+                                            >
+                                                <td
+                                                    class="p-2.5 text-center font-bold text-slate-400 align-middle"
+                                                >
+                                                    {{ idx + 1 }}
+                                                </td>
+                                                <td class="p-2.5 align-middle">
+                                                    <div
+                                                        class="flex items-center gap-2"
+                                                    >
+                                                        <!-- <span
+                                                            class="h-2 w-2 rounded-full shrink-0"
+                                                            :class="
+                                                                smCost.dotColor
+                                                            "
+                                                        ></span> -->
+                                                        <div>
+                                                            <span
+                                                                class="text-[10px] font-extrabold uppercase px-1.5 py-1 rounded border"
+                                                                :class="
+                                                                    smCost.badgeColor
+                                                                "
+                                                            >
+                                                                {{
+                                                                    smCost.label
+                                                                }}
+                                                            </span>
+                                                            <div
+                                                                class="font-bold text-slate-900 text-xs mt-1.5"
+                                                            >
+                                                                {{
+                                                                    smCost.nama_menu
+                                                                }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-center align-middle font-medium text-slate-600"
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            smCost.items_count >
+                                                            0
+                                                        "
+                                                        class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700"
+                                                    >
+                                                        {{ smCost.items_count }}
+                                                        Bahan
+                                                    </span>
+                                                    <span
+                                                        v-else
+                                                        class="text-slate-400 italic text-[11px]"
+                                                        >-</span
+                                                    >
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                >
+                                                    <div
+                                                        class="font-black text-slate-900 text-xs"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                smCost.cost_pk,
+                                                            )
+                                                        }}
+                                                    </div>
+                                                    <div
+                                                        class="text-[10px] text-amber-800 font-medium"
+                                                    >
+                                                        {{
+                                                            smCost.percent_pk.toFixed(
+                                                                1,
+                                                            )
+                                                        }}% dari total
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                >
+                                                    <div
+                                                        class="font-black text-slate-900 text-xs"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                smCost.cost_pb,
+                                                            )
+                                                        }}
+                                                    </div>
+                                                    <div
+                                                        class="text-[10px] text-blue-800 font-medium"
+                                                    >
+                                                        {{
+                                                            smCost.percent_pb.toFixed(
+                                                                1,
+                                                            )
+                                                        }}% dari total
+                                                    </div>
+                                                </td>
+                                                <td class="p-2.5 align-middle">
+                                                    <div
+                                                        class="space-y-1 w-28 mx-auto"
+                                                    >
+                                                        <div
+                                                            class="flex items-center gap-1.5 text-[9.5px]"
+                                                        >
+                                                            <span
+                                                                class="font-bold text-amber-800 w-5 shrink-0"
+                                                                >PK</span
+                                                            >
+                                                            <div
+                                                                class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                            >
+                                                                <div
+                                                                    class="bg-amber-500 h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            smCost.percent_pk +
+                                                                            '%',
+                                                                    }"
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="flex items-center gap-1.5 text-[9.5px]"
+                                                        >
+                                                            <span
+                                                                class="font-bold text-blue-800 w-5 shrink-0"
+                                                                >PB</span
+                                                            >
+                                                            <div
+                                                                class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                            >
+                                                                <div
+                                                                    class="bg-blue-600 h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            smCost.percent_pb +
+                                                                            '%',
+                                                                    }"
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot
+                                            class="bg-slate-50/90 font-black border-t border-slate-200 text-xs"
+                                        >
+                                            <tr>
+                                                <td
+                                                    colspan="3"
+                                                    class="p-2.5 text-right uppercase tracking-wider text-slate-700"
+                                                >
+                                                    Total Food Cost Porsi
+                                                    Normal:
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right text-emerald-900 bg-amber-100/40 text-sm"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPKNormal,
+                                                        )
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right text-emerald-900 bg-blue-100/40 text-sm"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            totalFoodCostPBNormal,
+                                                        )
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-center text-[10px] text-slate-500"
+                                                >
+                                                    100% Total
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Evaluasi Food Cost Varian Khusus Alergi -->
+                        <div
+                            v-if="activeAlergiFoodCostList.length > 0"
+                            class="space-y-4 pt-2"
+                        >
+                            <div
+                                v-for="alCost in activeAlergiFoodCostList"
+                                :key="alCost.jenis_alergi"
+                                class="space-y-3 bg-amber-50/40 p-4 rounded-3xl border border-amber-200/80 shadow-2xs"
                             >
                                 <div
                                     class="flex items-center justify-between flex-wrap gap-2"
                                 >
                                     <h5
-                                        class="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2"
+                                        class="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2"
                                     >
-                                        <AlertTriangle
-                                            class="h-4 w-4 text-rose-600 shrink-0"
+                                        <ShieldAlert
+                                            class="h-4 w-4 text-amber-600 shrink-0"
                                         />
                                         <span
-                                            >Evaluasi Standar AKG Varian Khusus
-                                            Alergi:
-                                            {{ alRes.jenis_alergi }}</span
+                                            >Food Cost Varian Khusus Alergi:
+                                            {{ alCost.jenis_alergi }}</span
                                         >
                                     </h5>
-                                    <span
-                                        class="px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold"
+                                    <div
+                                        class="flex items-center gap-2 flex-wrap"
                                     >
-                                        Sasaran: {{ alRes.total_siswa }} Porsi
-                                        (PK: {{ alRes.jml_pk }}, PB:
-                                        {{ alRes.jml_pb }})
+                                        <span
+                                            class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold"
+                                        >
+                                            Sasaran:
+                                            {{ alCost.total_siswa }} Porsi (PK:
+                                            {{ alCost.siswa_pk }}, PB:
+                                            {{ alCost.siswa_pb }})
+                                        </span>
+                                        <span
+                                            class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold"
+                                        >
+                                            Subtotal PO:
+                                            {{
+                                                formatRupiah(alCost.total_biaya)
+                                            }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                >
+                                    <!-- Card Food Cost PK Alergi -->
+                                    <div
+                                        class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                        :class="alCost.status_pk.cardClass"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <span
+                                                class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                                >Food Cost PK •
+                                                {{ alCost.jenis_alergi }}</span
+                                            >
+                                            <span
+                                                class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                                :class="
+                                                    alCost.status_pk.badgeClass
+                                                "
+                                            >
+                                                {{ alCost.status_pk.label }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="flex items-baseline justify-between"
+                                        >
+                                            <div
+                                                class="text-2xl font-black text-slate-900"
+                                            >
+                                                {{
+                                                    formatRupiah(alCost.cost_pk)
+                                                }}
+                                            </div>
+                                            <div class="text-xs text-slate-500">
+                                                Batas Pagu:
+                                                <strong>Rp 8.000</strong>
+                                            </div>
+                                        </div>
+                                        <div
+                                            class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full transition-all"
+                                                :class="
+                                                    alCost.status_pk.barClass
+                                                "
+                                                :style="{
+                                                    width: alCost.status_pk
+                                                        .percentage,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Card Food Cost PB Alergi -->
+                                    <div
+                                        class="p-4 rounded-2xl border bg-white shadow-2xs space-y-3"
+                                        :class="alCost.status_pb.cardClass"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <span
+                                                class="text-xs font-bold uppercase tracking-wider text-slate-700"
+                                                >Food Cost PB •
+                                                {{ alCost.jenis_alergi }}</span
+                                            >
+                                            <span
+                                                class="text-xs font-black px-2.5 py-0.5 rounded-lg border"
+                                                :class="
+                                                    alCost.status_pb.badgeClass
+                                                "
+                                            >
+                                                {{ alCost.status_pb.label }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="flex items-baseline justify-between"
+                                        >
+                                            <div
+                                                class="text-2xl font-black text-slate-900"
+                                            >
+                                                {{
+                                                    formatRupiah(alCost.cost_pb)
+                                                }}
+                                            </div>
+                                            <div class="text-xs text-slate-500">
+                                                Batas Pagu:
+                                                <strong>Rp 10.000</strong>
+                                            </div>
+                                        </div>
+                                        <div
+                                            class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full transition-all"
+                                                :class="
+                                                    alCost.status_pb.barClass
+                                                "
+                                                :style="{
+                                                    width: alCost.status_pb
+                                                        .percentage,
+                                                }"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Rincian Transparansi Bahan Masuk & Dikeluarkan -->
+                                <div
+                                    class="bg-white/90 p-3 rounded-xl border border-amber-200/70 text-[11px] space-y-1 text-slate-600"
+                                >
+                                    <div
+                                        class="flex items-center justify-between flex-wrap gap-1 font-semibold text-amber-900"
+                                    >
+                                        <span>Komposisi Bahan Masuk:</span>
+                                        <span class="text-slate-700">
+                                            {{
+                                                alCost.bahan_normal_aman.length
+                                            }}
+                                            Bahan Normal Bebas Alergen +
+                                            {{ alCost.bahan_substitusi.length }}
+                                            Bahan Substitusi
+                                        </span>
+                                    </div>
+                                    <div
+                                        v-if="
+                                            alCost.bahan_dikeluarkan.length > 0
+                                        "
+                                        class="text-rose-700 text-[10.5px]"
+                                    >
+                                        <span class="font-bold"
+                                            >Bahan Normal Dieliminasi:</span
+                                        >
+                                        {{
+                                            alCost.bahan_dikeluarkan
+                                                .map((b) => b.nama)
+                                                .join(", ")
+                                        }}
+                                        (mengandung {{ alCost.jenis_alergi }})
+                                    </div>
+                                </div>
+
+                                <!-- Rincian Food Cost per Sub Menu (Varian Alergi) -->
+                                <div
+                                    class="bg-white rounded-2xl border border-amber-200/90 overflow-hidden shadow-2xs mt-2"
+                                >
+                                    <div
+                                        class="p-3 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
+                                    >
+                                        <span
+                                            class="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider"
+                                        >
+                                            <Layers
+                                                class="h-3.5 w-3.5 text-amber-700"
+                                            />
+                                            Rincian Food Cost per Sub Menu
+                                            (Varian {{ alCost.jenis_alergi }})
+                                        </span>
+                                        <span
+                                            class="text-[11px] text-amber-800 font-medium"
+                                        >
+                                            Termasuk penyesuaian bahan
+                                            substitusi & eliminasi alergen
+                                        </span>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table
+                                            class="w-full text-left text-xs border-collapse"
+                                        >
+                                            <thead
+                                                class="bg-amber-50/40 text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
+                                            >
+                                                <tr>
+                                                    <th
+                                                        class="p-2.5 text-center w-10"
+                                                    >
+                                                        No
+                                                    </th>
+                                                    <th
+                                                        class="p-2.5 min-w-[220px]"
+                                                    >
+                                                        Sub Menu
+                                                    </th>
+                                                    <th
+                                                        class="p-2.5 text-center min-w-[100px]"
+                                                    >
+                                                        Bahan Baku
+                                                    </th>
+                                                    <th
+                                                        class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                    >
+                                                        Food Cost PK
+                                                    </th>
+                                                    <th
+                                                        class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                    >
+                                                        Food Cost PB
+                                                    </th>
+                                                    <th
+                                                        class="p-2.5 min-w-[140px] text-center"
+                                                    >
+                                                        Porsi Biaya (PK / PB)
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody
+                                                class="divide-y divide-amber-100/60 text-slate-800"
+                                            >
+                                                <tr
+                                                    v-for="(
+                                                        smCost, idx
+                                                    ) in getFoodCostSubMenuForAlergi(
+                                                        alCost.jenis_alergi,
+                                                    )"
+                                                    :key="smCost.key"
+                                                    class="hover:bg-amber-50/30 transition-colors"
+                                                >
+                                                    <td
+                                                        class="p-2.5 text-center font-bold text-slate-400 align-middle"
+                                                    >
+                                                        {{ idx + 1 }}
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 align-middle"
+                                                    >
+                                                        <div class="space-y-1">
+                                                            <div
+                                                                class="flex items-center gap-1.5 flex-wrap"
+                                                            >
+                                                                <span
+                                                                    class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded border"
+                                                                    :class="
+                                                                        smCost.badgeColor
+                                                                    "
+                                                                >
+                                                                    {{
+                                                                        smCost.label
+                                                                    }}
+                                                                </span>
+                                                                <span
+                                                                    v-if="
+                                                                        smCost.is_substituted
+                                                                    "
+                                                                    class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 font-black text-[9.5px]"
+                                                                >
+                                                                    ★ Substitusi
+                                                                    Khusus
+                                                                </span>
+                                                                <span
+                                                                    v-else-if="
+                                                                        smCost.is_eliminated
+                                                                    "
+                                                                    class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]"
+                                                                >
+                                                                    ⚠ Alergen
+                                                                    Dieliminasi
+                                                                </span>
+                                                            </div>
+                                                            <div
+                                                                class="font-bold text-slate-900 text-xs"
+                                                            >
+                                                                {{
+                                                                    smCost.nama_menu
+                                                                }}
+                                                            </div>
+                                                            <div
+                                                                v-if="
+                                                                    smCost.is_substituted &&
+                                                                    smCost.normal_menu_name !==
+                                                                        smCost.nama_menu
+                                                                "
+                                                                class="text-[10px] text-slate-400"
+                                                            >
+                                                                Menu Normal:
+                                                                {{
+                                                                    smCost.normal_menu_name
+                                                                }}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-center align-middle font-medium text-slate-600"
+                                                    >
+                                                        <span
+                                                            v-if="
+                                                                smCost.items_count >
+                                                                0
+                                                            "
+                                                            class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700"
+                                                        >
+                                                            {{
+                                                                smCost.items_count
+                                                            }}
+                                                            Bahan
+                                                        </span>
+                                                        <span
+                                                            v-else
+                                                            class="text-slate-400 italic text-[11px]"
+                                                            >-</span
+                                                        >
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                    >
+                                                        <div
+                                                            class="font-black text-slate-900 text-xs"
+                                                        >
+                                                            {{
+                                                                formatRupiah(
+                                                                    smCost.cost_pk,
+                                                                )
+                                                            }}
+                                                        </div>
+                                                        <div
+                                                            class="text-[10px] text-amber-800 font-medium"
+                                                        >
+                                                            {{
+                                                                smCost.percent_pk.toFixed(
+                                                                    1,
+                                                                )
+                                                            }}% dari total
+                                                        </div>
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                    >
+                                                        <div
+                                                            class="font-black text-slate-900 text-xs"
+                                                        >
+                                                            {{
+                                                                formatRupiah(
+                                                                    smCost.cost_pb,
+                                                                )
+                                                            }}
+                                                        </div>
+                                                        <div
+                                                            class="text-[10px] text-blue-800 font-medium"
+                                                        >
+                                                            {{
+                                                                smCost.percent_pb.toFixed(
+                                                                    1,
+                                                                )
+                                                            }}% dari total
+                                                        </div>
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 align-middle"
+                                                    >
+                                                        <div
+                                                            class="space-y-1 w-28 mx-auto"
+                                                        >
+                                                            <div
+                                                                class="flex items-center gap-1.5 text-[9.5px]"
+                                                            >
+                                                                <span
+                                                                    class="font-bold text-amber-800 w-5 shrink-0"
+                                                                    >PK</span
+                                                                >
+                                                                <div
+                                                                    class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                                >
+                                                                    <div
+                                                                        class="bg-amber-500 h-full rounded-full transition-all"
+                                                                        :style="{
+                                                                            width:
+                                                                                smCost.percent_pk +
+                                                                                '%',
+                                                                        }"
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                class="flex items-center gap-1.5 text-[9.5px]"
+                                                            >
+                                                                <span
+                                                                    class="font-bold text-blue-800 w-5 shrink-0"
+                                                                    >PB</span
+                                                                >
+                                                                <div
+                                                                    class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                                >
+                                                                    <div
+                                                                        class="bg-blue-600 h-full rounded-full transition-all"
+                                                                        :style="{
+                                                                            width:
+                                                                                smCost.percent_pb +
+                                                                                '%',
+                                                                        }"
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot
+                                                class="bg-amber-50/70 font-black border-t border-amber-200 text-xs"
+                                            >
+                                                <tr>
+                                                    <td
+                                                        colspan="3"
+                                                        class="p-2.5 text-right uppercase tracking-wider text-amber-950"
+                                                    >
+                                                        Total Food Cost Varian
+                                                        {{
+                                                            alCost.jenis_alergi
+                                                        }}:
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-right text-emerald-900 bg-amber-100/60 text-sm"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                alCost.cost_pk,
+                                                            )
+                                                        }}
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-right text-emerald-900 bg-blue-100/60 text-sm"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                alCost.cost_pb,
+                                                            )
+                                                        }}
+                                                    </td>
+                                                    <td
+                                                        class="p-2.5 text-center text-[10px] text-amber-800"
+                                                    >
+                                                        100% Total
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Evaluasi Standar Angka Kecukupan Gizi (AKG) BGN (Step 2) -->
+                        <div class="space-y-4 pt-4 border-t border-slate-200">
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-2"
+                            >
+                                <h4
+                                    class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"
+                                >
+                                    <Activity
+                                        class="h-4 w-4 text-emerald-600"
+                                    />
+                                    <span
+                                        >Evaluasi Standar Angka Kecukupan Gizi
+                                        (AKG) Badan Gizi Nasional (BGN)</span
+                                    >
+                                </h4>
+                                <button
+                                    type="button"
+                                    @click="showRumusAkg = !showRumusAkg"
+                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1.5 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50"
+                                >
+                                    <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <span>{{
+                                        showRumusAkg
+                                            ? "Sembunyikan Penjelasan Rumus"
+                                            : "Tampilkan Penjelasan Rumus & Standar AKG"
+                                    }}</span>
+                                </button>
+                            </div>
+
+                            <!-- Panel Penjelasan Rumus & Standar AKG BGN -->
+                            <div
+                                v-if="showRumusAkg"
+                                class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
+                            >
+                                <div
+                                    class="flex items-center gap-2 text-amber-950 font-bold border-b border-amber-200/80 pb-2"
+                                >
+                                    <Info class="h-4 w-4 text-amber-600 shrink-0" />
+                                    <span
+                                        >Metode Perhitungan Nilai Zat Gizi & Standar Acuan AKG BGN (Makan Siang MBG)</span
+                                    >
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed">
+                                    <div
+                                        class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
+                                    >
+                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                            <Calculator class="h-4 w-4 text-amber-600" />
+                                            1. Rumus Perhitungan Nilai Gizi per Porsi:
+                                        </strong>
+                                        <p
+                                            class="text-[11px] text-slate-800 font-mono bg-amber-50/70 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                        >
+                                            Zat Gizi = &sum; [ (Gram Bersih &divide; 100) &times; Nilai Gizi per 100g TKPI ]
+                                        </p>
+                                        <p class="text-[11px] text-slate-500 leading-snug">
+                                            Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) masing-masing bahan masakan terhadap basis data Tabel Komposisi Pangan Indonesia (TKPI).
+                                        </p>
+                                    </div>
+                                    <div
+                                        class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
+                                    >
+                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                            <HeartPulse class="h-4 w-4 text-rose-500" />
+                                            2. Standar Acuan AKG Makan Siap Santap BGN:
+                                        </strong>
+                                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
+                                                <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
+                                                <div class="text-slate-600 space-y-0.5 text-[10.5px]">
+                                                    <div>&bull; Energi: <strong class="text-slate-900">450 - 550 kkal</strong></div>
+                                                    <div>&bull; Protein: <strong class="text-slate-900">15 - 22 g</strong></div>
+                                                    <div>&bull; Lemak: <strong class="text-slate-900">15 - 20 g</strong></div>
+                                                    <div>&bull; Karbo: <strong class="text-slate-900">60 - 85 g</strong></div>
+                                                    <div>&bull; Serat: <strong class="text-slate-900">5 - 7 g</strong></div>
+                                                </div>
+                                            </div>
+                                            <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
+                                                <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
+                                                <div class="text-slate-600 space-y-0.5 text-[10.5px]">
+                                                    <div>&bull; Energi: <strong class="text-slate-900">650 - 800 kkal</strong></div>
+                                                    <div>&bull; Protein: <strong class="text-slate-900">20 - 30 g</strong></div>
+                                                    <div>&bull; Lemak: <strong class="text-slate-900">20 - 30 g</strong></div>
+                                                    <div>&bull; Karbo: <strong class="text-slate-900">90 - 120 g</strong></div>
+                                                    <div>&bull; Serat: <strong class="text-slate-900">7 - 10 g</strong></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 1. Evaluasi AKG Menu Utama (Porsi Normal) -->
+                            <div
+                                class="space-y-3 bg-slate-50/70 p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
+                            >
+                                <div
+                                    class="flex items-center justify-between flex-wrap gap-2"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <Utensils
+                                            class="h-4 w-4 text-slate-700 shrink-0"
+                                        />
+                                        <span
+                                            class="text-xs font-black uppercase tracking-wider text-slate-800"
+                                        >
+                                            Menu Utama (Porsi Normal)
+                                        </span>
+                                    </div>
+                                    <span
+                                        class="px-2.5 py-0.5 rounded-lg bg-slate-200 text-slate-800 text-[11px] font-bold"
+                                    >
+                                        Sasaran:
+                                        {{ targetSasaranNormal.total }} Porsi
+                                        (PK: {{ targetSasaranNormal.pk }}, PB:
+                                        {{ targetSasaranNormal.pb }})
                                     </span>
                                 </div>
 
                                 <div
                                     class="grid grid-cols-1 md:grid-cols-2 gap-4"
                                 >
-                                    <!-- Card AKG Porsi Kecil (PK) Alergi -->
+                                    <!-- Card AKG Porsi Kecil (PK) Normal -->
                                     <div
                                         class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
                                     >
                                         <div
                                             class="flex items-center justify-between"
                                         >
-                                            <h6
+                                            <h5
                                                 class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
                                             >
                                                 <Activity
                                                     class="h-4 w-4 text-amber-600"
                                                 />
-                                                <span
-                                                    >Porsi Kecil (PK) • Varian
-                                                    {{
-                                                        alRes.jenis_alergi
-                                                    }}</span
-                                                >
-                                            </h6>
+                                                <span>Porsi Kecil (PK)</span>
+                                            </h5>
                                             <Badge
                                                 variant="outline"
-                                                className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                                :class="
+                                                    getAkgStatusBadge(
+                                                        akgResultPKNormal,
+                                                        false,
+                                                    ).badgeClass
+                                                "
                                             >
-                                                ✓ MEMENUHI STANDAR AKG BGN
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        akgResultPKNormal,
+                                                        false,
+                                                    ).label
+                                                }}
                                             </Badge>
                                         </div>
                                         <div
@@ -6803,7 +9331,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pk.energi }} kkal
+                                                    {{
+                                                        akgResultPKNormal.energi
+                                                    }}
+                                                    kkal
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6820,7 +9351,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pk.protein }} g
+                                                    {{
+                                                        akgResultPKNormal.protein
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6837,7 +9371,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pk.lemak }} g
+                                                    {{
+                                                        akgResultPKNormal.lemak
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6858,7 +9395,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pk.karbohidrat }} g
+                                                    {{
+                                                        akgResultPKNormal.karbohidrat
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6875,7 +9415,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pk.serat }} g
+                                                    {{
+                                                        akgResultPKNormal.serat
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6885,31 +9428,36 @@ watch(
                                         </div>
                                     </div>
 
-                                    <!-- Card AKG Porsi Besar (PB) Alergi -->
+                                    <!-- Card AKG Porsi Besar (PB) Normal -->
                                     <div
                                         class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
                                     >
                                         <div
                                             class="flex items-center justify-between"
                                         >
-                                            <h6
+                                            <h5
                                                 class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
                                             >
                                                 <Activity
                                                     class="h-4 w-4 text-indigo-600"
                                                 />
-                                                <span
-                                                    >Porsi Besar (PB) • Varian
-                                                    {{
-                                                        alRes.jenis_alergi
-                                                    }}</span
-                                                >
-                                            </h6>
+                                                <span>Porsi Besar (PB)</span>
+                                            </h5>
                                             <Badge
                                                 variant="outline"
-                                                className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
+                                                :class="
+                                                    getAkgStatusBadge(
+                                                        akgResultPBNormal,
+                                                        true,
+                                                    ).badgeClass
+                                                "
                                             >
-                                                ✓ MEMENUHI STANDAR AKG BGN
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        akgResultPBNormal,
+                                                        true,
+                                                    ).label
+                                                }}
                                             </Badge>
                                         </div>
                                         <div
@@ -6925,7 +9473,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pb.energi }} kkal
+                                                    {{
+                                                        akgResultPBNormal.energi
+                                                    }}
+                                                    kkal
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6942,7 +9493,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pb.protein }} g
+                                                    {{
+                                                        akgResultPBNormal.protein
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6959,7 +9513,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pb.lemak }} g
+                                                    {{
+                                                        akgResultPBNormal.lemak
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6980,7 +9537,10 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pb.karbohidrat }} g
+                                                    {{
+                                                        akgResultPBNormal.karbohidrat
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
@@ -6997,12 +9557,331 @@ watch(
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
-                                                    {{ alRes.pb.serat }} g
+                                                    {{
+                                                        akgResultPBNormal.serat
+                                                    }}
+                                                    g
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
                                                     >Target: Min 6.0 g</span
                                                 >
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. Kartu Evaluasi AKG Varian Khusus Alergi -->
+                            <div
+                                v-if="activeAlergiAkgList.length > 0"
+                                class="space-y-4 pt-2"
+                            >
+                                <div
+                                    v-for="alRes in activeAlergiAkgList"
+                                    :key="alRes.jenis_alergi"
+                                    class="space-y-3 bg-rose-50/30 p-4 rounded-3xl border border-rose-200/80 shadow-2xs"
+                                >
+                                    <div
+                                        class="flex items-center justify-between flex-wrap gap-2"
+                                    >
+                                        <h5
+                                            class="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2"
+                                        >
+                                            <AlertTriangle
+                                                class="h-4 w-4 text-rose-600 shrink-0"
+                                            />
+                                            <span
+                                                >Evaluasi Standar AKG Varian
+                                                Khusus Alergi:
+                                                {{ alRes.jenis_alergi }}</span
+                                            >
+                                        </h5>
+                                        <span
+                                            class="px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold"
+                                        >
+                                            Sasaran:
+                                            {{ alRes.total_siswa }} Porsi (PK:
+                                            {{ alRes.jml_pk }}, PB:
+                                            {{ alRes.jml_pb }})
+                                        </span>
+                                    </div>
+
+                                    <div
+                                        class="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                    >
+                                        <!-- Card AKG Porsi Kecil (PK) Alergi -->
+                                        <div
+                                            class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <h6
+                                                    class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
+                                                >
+                                                    <Activity
+                                                        class="h-4 w-4 text-amber-600"
+                                                    />
+                                                    <span
+                                                        >Porsi Kecil (PK) •
+                                                        Varian
+                                                        {{
+                                                            alRes.jenis_alergi
+                                                        }}</span
+                                                    >
+                                                </h6>
+                                                <Badge
+                                                    variant="outline"
+                                                    :class="
+                                                        getAkgStatusBadge(
+                                                            alRes.pk,
+                                                            false,
+                                                        ).badgeClass
+                                                    "
+                                                >
+                                                    {{
+                                                        getAkgStatusBadge(
+                                                            alRes.pk,
+                                                            false,
+                                                        ).label
+                                                    }}
+                                                </Badge>
+                                            </div>
+                                            <div
+                                                class="grid grid-cols-3 gap-2 text-xs"
+                                            >
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Energi</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pk.energi }}
+                                                        kkal
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 450 - 550</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Protein</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pk.protein }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 15 - 22 g</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Lemak</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pk.lemak }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 12 - 18 g</span
+                                                    >
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="grid grid-cols-2 gap-2 text-xs"
+                                            >
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Karbohidrat</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{
+                                                            alRes.pk.karbohidrat
+                                                        }}
+                                                        g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 65 - 85 g</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Serat</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pk.serat }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: Min 4.0 g</span
+                                                    >
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Card AKG Porsi Besar (PB) Alergi -->
+                                        <div
+                                            class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <h6
+                                                    class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
+                                                >
+                                                    <Activity
+                                                        class="h-4 w-4 text-indigo-600"
+                                                    />
+                                                    <span
+                                                        >Porsi Besar (PB) •
+                                                        Varian
+                                                        {{
+                                                            alRes.jenis_alergi
+                                                        }}</span
+                                                    >
+                                                </h6>
+                                                <Badge
+                                                    variant="outline"
+                                                    :class="
+                                                        getAkgStatusBadge(
+                                                            alRes.pb,
+                                                            true,
+                                                        ).badgeClass
+                                                    "
+                                                >
+                                                    {{
+                                                        getAkgStatusBadge(
+                                                            alRes.pb,
+                                                            true,
+                                                        ).label
+                                                    }}
+                                                </Badge>
+                                            </div>
+                                            <div
+                                                class="grid grid-cols-3 gap-2 text-xs"
+                                            >
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Energi</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pb.energi }}
+                                                        kkal
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 650 - 800</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Protein</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pb.protein }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 24 - 35 g</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Lemak</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pb.lemak }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 18 - 26 g</span
+                                                    >
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="grid grid-cols-2 gap-2 text-xs"
+                                            >
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Karbohidrat</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{
+                                                            alRes.pb.karbohidrat
+                                                        }}
+                                                        g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: 85 - 110
+                                                        g</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                >
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
+                                                        >Serat</span
+                                                    >
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
+                                                    >
+                                                        {{ alRes.pb.serat }} g
+                                                    </div>
+                                                    <span
+                                                        class="text-[9.5px] text-slate-400"
+                                                        >Target: Min 6.0 g</span
+                                                    >
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -7027,8 +9906,9 @@ watch(
                         <span>Kebutuhan Bahan Pangan & Biaya Belanja Siap</span>
                     </h4>
                     <p class="text-xs text-slate-300 leading-relaxed mt-0.5">
-                        Lanjutkan ke Langkah 3 untuk memformulasi gizi matang
-                        dan mengevaluasi standar AKG siap santap.
+                        Lanjutkan ke Langkah 3 untuk mereview rangkuman dokumen
+                        perencanaan, evaluasi gizi & biaya, serta mengajukan
+                        Work Order.
                     </p>
                 </div>
                 <div
@@ -7036,7 +9916,7 @@ watch(
                 >
                     <Button
                         type="button"
-                        @click="buatMenuSubTab = 'work_order'"
+                        @click="handleSwitchSubTab('work_order')"
                         className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-3.5 h-10 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-none"
                     >
                         <ChevronLeft class="h-4 w-4" />
@@ -7056,1067 +9936,15 @@ watch(
                         @click="handleLanjutStep3"
                         className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
                     >
-                        <ChevronRight class="h-4 w-4 shrink-0" />
-                        <span>Lanjut ke Formula Gizi (Langkah 3)</span>
-                    </Button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================================================================= -->
-        <!-- Bagian 3: Formula Gizi Siap Santap & Evaluasi Standar AKG BGN (Step 3) -->
-        <!-- ========================================================================================= -->
-        <div v-if="buatMenuSubTab === 'formula_gizi'" class="space-y-6">
-            <!-- Header Formula Gizi Card -->
-            <Card className="bg-white border-slate-200 shadow-xs">
-                <CardHeader
-                    className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50"
-                >
-                    <div
-                        class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-                    >
-                        <div>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <CardTitle
-                                    class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
-                                >
-                                    <ClipboardList
-                                        class="h-5 w-5 text-primary"
-                                    />
-                                    <span
-                                        >Langkah 3: Formulasi Menu Matang &
-                                        Evaluasi Nilai Gizi AKG (Siap
-                                        Santap)</span
-                                    >
-                                </CardTitle>
-                                <span
-                                    class="px-2.5 py-0.5 text-xs font-extrabold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                >
-                                    Evaluasi AKG BGN
-                                </span>
-                            </div>
-                            <CardDescription
-                                class="text-xs text-slate-500 mt-1"
-                            >
-                                Formulasi komposisi hidangan matang siap santap
-                                untuk mengevaluasi pemenuhan Angka Kecukupan
-                                Gizi (AKG) standar Badan Gizi Nasional (BGN).
-                            </CardDescription>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                @click="syncGiziFromBahan"
-                                className="text-xs font-bold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                            >
-                                <RotateCcw class="h-3.5 w-3.5 text-primary" />
-                                <span
-                                    >Sinkronkan dari Bahan Pangan (Langkah
-                                    2)</span
-                                >
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent class="p-4 sm:p-6 space-y-6">
-                    <!-- Selector Tambah Bahan Menu Siap Santap -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <label
-                                class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5"
-                            >
-                                <Search class="h-3.5 w-3.5 text-primary" />
-                                <span
-                                    >Tambah Menu / Bahan Siap Santap
-                                    Tambahan:</span
-                                >
-                            </label>
-                            <span
-                                class="text-[11px] text-slate-500 font-medium"
-                            >
-                                Database:
-                                <strong class="text-slate-800">{{
-                                    selectedSource === "csv"
-                                        ? "TKPI 2020"
-                                        : "NutriSurvey FTA"
-                                }}</strong>
-                            </span>
-                        </div>
-
-                        <!-- Combobox Selector Step 3 -->
-                        <div class="relative" @click.stop>
-                            <div
-                                @click="
-                                    isComboboxGiziOpen = !isComboboxGiziOpen
-                                "
-                                class="w-full min-h-[46px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs"
-                            >
-                                <div
-                                    class="flex items-center gap-2.5 min-w-0 flex-1"
-                                >
-                                    <div
-                                        class="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center shrink-0"
-                                    >
-                                        <Plus class="h-4 w-4" />
-                                    </div>
-                                    <span
-                                        v-if="!selectedTkpiGiziItem"
-                                        class="text-xs text-slate-400 font-normal truncate"
-                                    >
-                                        Ketik nama bahan/hidangan matang untuk
-                                        ditambahkan ke formulasi gizi...
-                                    </span>
-                                    <div
-                                        v-else
-                                        class="flex items-center gap-2 min-w-0 truncate"
-                                    >
-                                        <span
-                                            class="text-xs font-bold text-slate-900 truncate"
-                                            >{{
-                                                selectedTkpiGiziItem.nama
-                                            }}</span
-                                        >
-                                        <span
-                                            class="text-[10.5px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0 font-medium"
-                                            >{{
-                                                selectedTkpiGiziItem.kategori
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <ChevronDown
-                                    class="h-4 w-4 text-slate-400 shrink-0 transition-transform"
-                                    :class="{
-                                        'rotate-180': isComboboxGiziOpen,
-                                    }"
-                                />
-                            </div>
-
-                            <!-- Dropdown Panel Step 3 -->
-                            <div
-                                v-if="isComboboxGiziOpen"
-                                class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                            >
-                                <div
-                                    class="p-2.5 border-b border-slate-100 bg-slate-50/70"
-                                >
-                                    <div class="relative">
-                                        <Search
-                                            class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
-                                        />
-                                        <input
-                                            type="text"
-                                            v-model="searchTkpiGiziQuery"
-                                            placeholder="Cari bahan / hidangan matang..."
-                                            class="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-slate-200 focus:outline-hidden focus:border-primary font-medium"
-                                            autofocus
-                                        />
-                                    </div>
-                                </div>
-                                <div
-                                    class="max-h-60 overflow-y-auto divide-y divide-slate-100"
-                                >
-                                    <div
-                                        v-for="item in filteredGiziTkpiList"
-                                        :key="item.id || item.code"
-                                        @click="selectTkpiGiziItem(item)"
-                                        class="p-3 hover:bg-emerald-50/40 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
-                                    >
-                                        <div class="min-w-0">
-                                            <div
-                                                class="font-bold text-slate-800 truncate"
-                                            >
-                                                {{ item.nama }}
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-500 flex items-center gap-2 mt-0.5"
-                                            >
-                                                <span>{{ item.kategori }}</span>
-                                                <span>•</span>
-                                                <span
-                                                    >Energi:
-                                                    {{ item.energi || 0 }}
-                                                    kkal</span
-                                                >
-                                                <span>•</span>
-                                                <span
-                                                    >Protein:
-                                                    {{
-                                                        item.protein || 0
-                                                    }}g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white h-7 px-2 text-[11px] font-bold rounded-lg shrink-0"
-                                        >
-                                            + Tambah
-                                        </Button>
-                                    </div>
-                                    <div
-                                        v-if="filteredGiziTkpiList.length === 0"
-                                        class="p-6 text-center text-xs text-slate-400"
-                                    >
-                                        Bahan matang tidak ditemukan.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Panduan Rumus AKG (Toggleable) -->
-                    <div
-                        class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2"
-                    >
-                        <div class="flex items-center justify-between">
-                            <span
-                                class="font-bold text-slate-700 flex items-center gap-1.5 text-xs"
-                            >
-                                <HelpCircle class="h-3.5 w-3.5 text-primary" />
-                                Panduan Rumus Perhitungan Nilai Gizi & Standar
-                                AKG Siap Santap
-                            </span>
-                            <button
-                                type="button"
-                                @click="showRumusAkg = !showRumusAkg"
-                                class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
-                            >
-                                {{
-                                    showRumusAkg
-                                        ? "Sembunyikan Rumus AKG"
-                                        : "Tampilkan Rumus AKG"
-                                }}
-                            </button>
-                        </div>
-                        <div
-                            v-if="showRumusAkg"
-                            class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600"
-                        >
-                            <div
-                                class="p-2 bg-white rounded-lg border border-slate-200"
-                            >
-                                <strong class="text-slate-800 block mb-0.5"
-                                    >Rumus Nilai Gizi per Porsi:</strong
-                                >
-                                <code
-                                    >(Gram Bersih Matang ÷ 100) × Nilai Gizi
-                                    Database Master per 100g</code
-                                >
-                            </div>
-                            <div
-                                class="p-2 bg-white rounded-lg border border-slate-200"
-                            >
-                                <strong class="text-slate-800 block mb-0.5"
-                                    >Rumus Total AKG Menu:</strong
-                                >
-                                <code
-                                    >Σ (Nilai Gizi per Bahan) untuk seluruh
-                                    komponen menu siap santap</code
-                                >
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tabel Formulasi Menu Siap Santap & Kandungan Gizi Lengkap -->
-                    <div
-                        class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
-                    >
-                        <div
-                            class="p-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
-                        >
-                            <span
-                                class="text-xs font-extrabold text-slate-800 uppercase tracking-wider"
-                            >
-                                Daftar Komposisi Hidangan Matang & Kandungan
-                                Gizi Siap Santap
-                            </span>
-                            <span class="text-xs font-bold text-slate-500">
-                                Total:
-                                {{ selectedGiziBahanList.length }} Komponen
-                            </span>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table
-                                class="w-full min-w-[1100px] text-left text-xs border-collapse"
-                            >
-                                <thead>
-                                    <tr
-                                        class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
-                                    >
-                                        <th class="p-3 text-center w-10">No</th>
-                                        <th class="p-3 min-w-[160px]">
-                                            Bahan / Hidangan Matang
-                                        </th>
-                                        <th class="p-3 min-w-[110px]">
-                                            Peruntukan
-                                        </th>
-                                        <th class="p-3 min-w-[90px]">
-                                            Kategori
-                                        </th>
-                                        <th
-                                            class="p-3 text-center min-w-[85px]"
-                                        >
-                                            PK (g)
-                                        </th>
-                                        <th
-                                            class="p-3 text-center min-w-[85px]"
-                                        >
-                                            PB (g)
-                                        </th>
-                                        <th
-                                            class="p-3 text-right bg-amber-50/50 text-amber-950 min-w-[90px]"
-                                        >
-                                            Kg Bersih
-                                        </th>
-                                        <th class="p-3 text-right min-w-[95px]">
-                                            Energi (Kkal)
-                                        </th>
-                                        <th class="p-3 text-right min-w-[90px]">
-                                            Protein (g)
-                                        </th>
-                                        <th class="p-3 text-right min-w-[90px]">
-                                            Lemak (g)
-                                        </th>
-                                        <th class="p-3 text-right min-w-[90px]">
-                                            Karbo (g)
-                                        </th>
-                                        <th class="p-3 text-right min-w-[90px]">
-                                            Serat (g)
-                                        </th>
-                                        <th class="p-3 text-center w-12">
-                                            Aksi
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody
-                                    class="divide-y divide-slate-100 text-slate-800"
-                                >
-                                    <tr
-                                        v-if="
-                                            selectedGiziBahanList.length === 0
-                                        "
-                                    >
-                                        <td
-                                            colspan="13"
-                                            class="p-8 text-center text-slate-400 font-medium"
-                                        >
-                                            Belum ada komposisi gizi siap
-                                            santap. Klik tombol "Sinkronkan dari
-                                            Bahan Pangan" di atas atau tambahkan
-                                            bahan baru.
-                                        </td>
-                                    </tr>
-                                    <tr
-                                        v-for="(it, idx) in giziCalculations"
-                                        :key="idx"
-                                        class="hover:bg-slate-50/70 transition-colors"
-                                    >
-                                        <td
-                                            class="p-3 text-center font-bold text-slate-400 align-top pt-4"
-                                        >
-                                            {{ idx + 1 }}
-                                        </td>
-                                        <td
-                                            class="p-3 font-bold text-slate-900 align-top pt-4"
-                                        >
-                                            <div>{{ it.nama }}</div>
-                                            <div
-                                                class="text-[10px] text-slate-400 font-medium mt-0.5"
-                                            >
-                                                Master/100g:
-                                                {{ it.tkpi?.energi || 0 }} kkal,
-                                                {{ it.tkpi?.protein || 0 }}g
-                                                Prot
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 align-top pt-3 min-w-[150px]"
-                                        >
-                                            <select
-                                                v-model="
-                                                    selectedGiziBahanList[idx]
-                                                        .tipe_porsi
-                                                "
-                                                class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-medium"
-                                            >
-                                                <option value="normal">
-                                                    Normal (Semua Sasaran)
-                                                </option>
-                                                <option value="alergi">
-                                                    Khusus Porsi Alergi
-                                                </option>
-                                            </select>
-                                            <!-- Info PM Normal -->
-                                            <div
-                                                v-if="
-                                                    selectedGiziBahanList[idx]
-                                                        .tipe_porsi !== 'alergi'
-                                                "
-                                                class="mt-1 px-2 py-1 rounded-md bg-slate-100/90 text-slate-700 text-[10px] flex items-center justify-between border border-slate-200/80"
-                                            >
-                                                <span>Sasaran:</span>
-                                                <span
-                                                    class="font-bold text-slate-900"
-                                                    >{{ totalPM }} Porsi (PK:
-                                                    {{ totalPK }}, PB:
-                                                    {{ totalPB }})</span
-                                                >
-                                            </div>
-                                            <!-- Select & Info PM Alergi -->
-                                            <div
-                                                v-else
-                                                class="mt-1.5 space-y-1"
-                                            >
-                                                <select
-                                                    v-model="
-                                                        selectedGiziBahanList[
-                                                            idx
-                                                        ].jenis_alergi
-                                                    "
-                                                    class="w-full px-2 py-1 text-[11px] font-bold border border-rose-300 rounded-lg bg-rose-50/60 text-rose-900 focus:outline-hidden focus:border-rose-500"
-                                                >
-                                                    <option value="" disabled>
-                                                        -- Pilih Jenis Alergi --
-                                                    </option>
-                                                    <option
-                                                        v-for="alOpt in rekapAlergiDetailPm"
-                                                        :key="
-                                                            alOpt.jenis_alergi
-                                                        "
-                                                        :value="
-                                                            alOpt.jenis_alergi
-                                                        "
-                                                    >
-                                                        {{ alOpt.jenis_alergi }}
-                                                        ({{ alOpt.total }} Porsi
-                                                        • PK:
-                                                        {{ alOpt.porsi_kecil }},
-                                                        PB:
-                                                        {{ alOpt.porsi_besar }})
-                                                    </option>
-                                                    <option
-                                                        v-if="
-                                                            rekapAlergiDetailPm.length ===
-                                                            0
-                                                        "
-                                                        value="Alergi Khusus"
-                                                    >
-                                                        Alergi Khusus
-                                                    </option>
-                                                </select>
-                                                <div
-                                                    class="px-2 py-1 rounded-md bg-rose-100/80 text-rose-900 text-[10px] flex items-center justify-between border border-rose-200"
-                                                >
-                                                    <span>Sasaran:</span>
-                                                    <span class="font-bold"
-                                                        >{{
-                                                            it.totalTargetCount
-                                                        }}
-                                                        Porsi (PK:
-                                                        {{ it.targetPKCount }},
-                                                        PB:
-                                                        {{
-                                                            it.targetPBCount
-                                                        }})</span
-                                                    >
-                                                </div>
-                                                <p
-                                                    v-if="
-                                                        validationErrors[
-                                                            'gizi_bahan_' +
-                                                                idx +
-                                                                '_alergi'
-                                                        ]
-                                                    "
-                                                    class="text-[10px] text-rose-600 font-bold mt-0.5"
-                                                >
-                                                    {{
-                                                        validationErrors[
-                                                            "gizi_bahan_" +
-                                                                idx +
-                                                                "_alergi"
-                                                        ]
-                                                    }}
-                                                </p>
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-slate-600 align-top pt-4"
-                                        >
-                                            {{ it.kategori }}
-                                        </td>
-                                        <td
-                                            class="p-3 align-top pt-3 text-center"
-                                        >
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                v-model.number="
-                                                    selectedGiziBahanList[idx]
-                                                        .gram_pk
-                                                "
-                                                placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
-                                            />
-                                            <div
-                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
-                                            >
-                                                × {{ it.targetPKCount }} porsi
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 align-top pt-3 text-center"
-                                        >
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                v-model.number="
-                                                    selectedGiziBahanList[idx]
-                                                        .gram_pb
-                                                "
-                                                placeholder="0"
-                                                class="w-16 text-center px-1.5 py-1 text-xs font-bold border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
-                                            />
-                                            <div
-                                                class="text-[10px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
-                                            >
-                                                × {{ it.targetPBCount }} porsi
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-right font-bold text-amber-950 bg-amber-50/30 align-top pt-4 whitespace-nowrap"
-                                        >
-                                            {{
-                                                formatGrossWeight(it.totalNetKg)
-                                            }}
-                                        </td>
-                                        <td
-                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PK:
-                                                {{ it.nutrisiPK?.energi || 0 }}
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PB:
-                                                {{ it.nutrisiPB?.energi || 0 }}
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PK:
-                                                {{
-                                                    it.nutrisiPK?.protein || 0
-                                                }}g
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PB:
-                                                {{
-                                                    it.nutrisiPB?.protein || 0
-                                                }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PK:
-                                                {{ it.nutrisiPK?.lemak || 0 }}g
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PB:
-                                                {{ it.nutrisiPB?.lemak || 0 }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PK:
-                                                {{
-                                                    it.nutrisiPK?.karbohidrat ||
-                                                    0
-                                                }}g
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PB:
-                                                {{
-                                                    it.nutrisiPB?.karbohidrat ||
-                                                    0
-                                                }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-right align-top pt-3.5 whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PK:
-                                                {{ it.nutrisiPK?.serat || 0 }}g
-                                            </div>
-                                            <div
-                                                class="text-[10.5px] text-slate-700 font-bold"
-                                            >
-                                                PB:
-                                                {{ it.nutrisiPB?.serat || 0 }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3 text-center align-top pt-3.5"
-                                        >
-                                            <button
-                                                type="button"
-                                                @click="
-                                                    handleRemoveGiziBahan(idx)
-                                                "
-                                                class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                                title="Hapus Bahan Siap Santap"
-                                            >
-                                                <Trash2 class="h-4 w-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                                <tfoot
-                                    v-if="selectedGiziBahanList.length > 0"
-                                    class="bg-slate-50/90 font-bold border-t border-slate-200"
-                                >
-                                    <tr>
-                                        <td
-                                            colspan="6"
-                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
-                                        >
-                                            Total Akumulasi Gizi Siap Santap:
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right font-black text-amber-950 bg-amber-100/40 whitespace-nowrap"
-                                        >
-                                            {{
-                                                formatGrossWeight(
-                                                    giziCalculations.reduce(
-                                                        (acc, it) =>
-                                                            acc + it.totalNetKg,
-                                                        0,
-                                                    ),
-                                                )
-                                            }}
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PK:
-                                                {{ akgResultPKNormal.energi }}
-                                            </div>
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PB:
-                                                {{ akgResultPBNormal.energi }}
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PK:
-                                                {{ akgResultPKNormal.protein }}g
-                                            </div>
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PB:
-                                                {{ akgResultPBNormal.protein }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PK:
-                                                {{ akgResultPKNormal.lemak }}g
-                                            </div>
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PB:
-                                                {{ akgResultPBNormal.lemak }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PK:
-                                                {{
-                                                    akgResultPKNormal.karbohidrat
-                                                }}g
-                                            </div>
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PB:
-                                                {{
-                                                    akgResultPBNormal.karbohidrat
-                                                }}g
-                                            </div>
-                                        </td>
-                                        <td
-                                            class="p-3.5 text-right whitespace-nowrap"
-                                        >
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PK:
-                                                {{ akgResultPKNormal.serat }}g
-                                            </div>
-                                            <div
-                                                class="font-black text-slate-900"
-                                            >
-                                                PB:
-                                                {{ akgResultPBNormal.serat }}g
-                                            </div>
-                                        </td>
-                                        <td></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Real-time Evaluasi Standar AKG BGN -->
-                    <div class="space-y-4 pt-2">
-                        <div class="flex items-center justify-between">
-                            <h4
-                                class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"
-                            >
-                                <Activity class="h-4 w-4 text-emerald-600" />
-                                <span
-                                    >Evaluasi Standar Angka Kecukupan Gizi (AKG)
-                                    Badan Gizi Nasional (BGN)</span
-                                >
-                            </h4>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Card AKG Porsi Kecil (PK) -->
-                            <div
-                                class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
-                            >
-                                <div class="flex items-center justify-between">
-                                    <h5
-                                        class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
-                                    >
-                                        <Activity
-                                            class="h-4 w-4 text-amber-600"
-                                        />
-                                        <span
-                                            >Porsi Kecil (PK) • PAUD/TK & SD
-                                            Kelas 1-3</span
-                                        >
-                                    </h5>
-                                    <Badge
-                                        variant="outline"
-                                        className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
-                                    >
-                                        ✓ MEMENUHI STANDAR AKG BGN
-                                    </Badge>
-                                </div>
-                                <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Energi</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPKNormal.energi }} kkal
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 450 - 550</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Protein</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPKNormal.protein }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 15 - 22 g</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Lemak</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPKNormal.lemak }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 12 - 18 g</span
-                                        >
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2 text-xs">
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Karbohidrat</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPKNormal.karbohidrat }}
-                                            g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 65 - 85 g</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-amber-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Serat</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPKNormal.serat }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: Min 4.0 g</span
-                                        >
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Card AKG Porsi Besar (PB) -->
-                            <div
-                                class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
-                            >
-                                <div class="flex items-center justify-between">
-                                    <h5
-                                        class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
-                                    >
-                                        <Activity
-                                            class="h-4 w-4 text-indigo-600"
-                                        />
-                                        <span
-                                            >Porsi Besar (PB) • SD 4-6, SMP,
-                                            SMA, & Bumil</span
-                                        >
-                                    </h5>
-                                    <Badge
-                                        variant="outline"
-                                        className="bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]"
-                                    >
-                                        ✓ MEMENUHI STANDAR AKG BGN
-                                    </Badge>
-                                </div>
-                                <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Energi</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPBNormal.energi }} kkal
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 650 - 800</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Protein</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPBNormal.protein }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 24 - 35 g</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Lemak</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPBNormal.lemak }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 18 - 26 g</span
-                                        >
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2 text-xs">
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Karbohidrat</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPBNormal.karbohidrat }}
-                                            g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: 85 - 110 g</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-indigo-100"
-                                    >
-                                        <span
-                                            class="text-slate-500 text-[10px] uppercase font-bold block"
-                                            >Serat</span
-                                        >
-                                        <div
-                                            class="font-black text-slate-900 text-sm mt-0.5"
-                                        >
-                                            {{ akgResultPBNormal.serat }} g
-                                        </div>
-                                        <span
-                                            class="text-[9.5px] text-slate-400"
-                                            >Target: Min 6.0 g</span
-                                        >
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <!-- Bottom Action Bar Step 3 -->
-            <div
-                class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm border border-slate-800"
-            >
-                <div>
-                    <h4
-                        class="text-sm font-black text-white flex items-center gap-2"
-                    >
-                        <CheckCircle2
-                            class="h-4 w-4 text-emerald-400 shrink-0"
-                        />
-                        <span
-                            >Formulasi Gizi Matang Siap Santap Tervalidasi</span
-                        >
-                    </h4>
-                    <p class="text-xs text-slate-300 leading-relaxed mt-0.5">
-                        Lanjutkan ke Langkah 4 untuk mereview rangkuman dokumen
-                        dan mengajukan Work Order ke Bagian Keuangan.
-                    </p>
-                </div>
-                <div
-                    class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto"
-                >
-                    <Button
-                        type="button"
-                        @click="buatMenuSubTab = 'bahan_pangan'"
-                        className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-3.5 h-10 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-none"
-                    >
-                        <ChevronLeft class="h-4 w-4" />
-                        <span>Kembali ke Langkah 2</span>
-                    </Button>
-                    <Button
-                        type="button"
-                        @click="simpanDraftStep3"
-                        :disabled="isSubmitting"
-                        className="bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold px-4 h-10 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-xs"
-                    >
-                        <FileText class="h-4 w-4 text-slate-600" />
-                        <span>Simpan Draft (Langkah 3)</span>
-                    </Button>
-                    <Button
-                        type="button"
-                        @click="handleLanjutStep4"
-                        className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
-                    >
                         <Send class="h-4 w-4 shrink-0" />
-                        <span>Lanjut ke Review & Pengajuan (Langkah 4)</span>
+                        <span>Lanjut ke Review & Pengajuan (Langkah 3)</span>
                     </Button>
                 </div>
             </div>
         </div>
 
-        <!-- Bagian 3: Order Pembelian Bahan & Verifikasi Akuntan (Step 3) -->
+        <!-- ========================================================================================= -->
+        <!-- Bagian 3: Review & Pengajuan Lengkap Work Order (Step 3) -->
         <!-- ========================================================================================= -->
         <div v-if="buatMenuSubTab === 'order'" class="space-y-6">
             <!-- Header Langkah 3: Review & Pengajuan -->
@@ -8127,20 +9955,24 @@ watch(
                     <div>
                         <div class="flex items-center gap-2">
                             <CardTitle
-                                class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
+                                class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                             >
                                 <FileSpreadsheet class="h-5 w-5 text-primary" />
                                 <span>Review Lengkap Rancangan Menu MBG</span>
                             </CardTitle>
-                            <span
+                            <!-- <span
                                 class="px-2.5 py-0.5 text-xs font-black bg-primary/10 text-primary rounded-full"
                             >
                                 Langkah 3 dari 3
-                            </span>
+                            </span> -->
                         </div>
-                        <CardDescription class="text-xs sm:text-sm mt-0.5">
-                            Tinjauan menyeluruh hasil formulasi gizi, kesesuaian
-                            standar AKG, kuota sasaran, dan estimasi biaya
+                        <CardDescription
+                            class="text-xs sm:text-sm text-slate-500 mt-1"
+                        >
+                            Tinjauan menyeluruh hasil perencanaan produksi, 5
+                            sub menu hidangan, kuota sasaran penerima manfaat,
+                            formulasi bahan makanan & PO belanja, evaluasi
+                            pemenuhan standar AKG BGN, serta kalkulasi food cost
                             sebelum disimpan atau diajukan ke Keuangan.
                         </CardDescription>
                     </div>
@@ -8165,9 +9997,12 @@ watch(
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-6">
                     <!-- Ringkasan Info Menu & Kuota Sasaran (Grid 4 Kolom) -->
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div
+                        class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4"
+                    >
+                        <!-- Card 1: No WO -->
                         <div
-                            class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80"
+                            class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 col-span-2 sm:col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider"
@@ -8184,44 +10019,87 @@ watch(
                                 {{ formatTanggalIndo(tanggalRencana) }}
                             </p>
                         </div>
+
+                        <!-- Card 2: Sasaran PK Normal -->
                         <div
-                            class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200/80"
+                            class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200/80 col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-amber-800 uppercase tracking-wider"
                             >
-                                Sasaran Porsi Kecil (PK)
+                                Sasaran PK (Normal)
                             </p>
                             <p
                                 class="text-sm sm:text-base font-black text-amber-950 mt-1"
                             >
-                                {{ totalPK.toLocaleString("id-ID") }} Porsi
+                                {{
+                                    targetSasaranNormal.pk.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                Porsi
                             </p>
                             <p class="text-[11px] text-amber-800 mt-0.5">
                                 Food Cost:
                                 {{ formatRupiah(totalFoodCostPKNormal) }}
                             </p>
                         </div>
+
+                        <!-- Card 3: Sasaran PB Normal -->
                         <div
-                            class="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80"
+                            class="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80 col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
                             >
-                                Sasaran Porsi Besar (PB)
+                                Sasaran PB (Normal)
                             </p>
                             <p
                                 class="text-sm sm:text-base font-black text-indigo-950 mt-1"
                             >
-                                {{ totalPB.toLocaleString("id-ID") }} Porsi
+                                {{
+                                    targetSasaranNormal.pb.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                Porsi
                             </p>
                             <p class="text-[11px] text-indigo-800 mt-0.5">
                                 Food Cost:
                                 {{ formatRupiah(totalFoodCostPBNormal) }}
                             </p>
                         </div>
+
+                        <!-- Card 4+: Kartu Sasaran Khusus Setiap Varian Alergi yang Ada -->
                         <div
-                            class="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80"
+                            v-for="al in activeAlergiFoodCostList"
+                            :key="'header-al-card-' + al.jenis_alergi"
+                            class="p-3.5 bg-rose-50/80 rounded-xl border border-rose-200/90 col-span-1 shadow-2xs space-y-0.5"
+                        >
+                            <p
+                                class="text-[10.5px] font-black text-rose-800 uppercase tracking-wider truncate"
+                                :title="'Sasaran Alergi: ' + al.jenis_alergi"
+                            >
+                                ⚠️ Alergi: {{ al.jenis_alergi }}
+                            </p>
+                            <p
+                                class="text-sm sm:text-base font-black text-rose-950 mt-1"
+                            >
+                                {{ al.total_siswa.toLocaleString("id-ID") }}
+                                Porsi
+                            </p>
+                            <p class="text-[10px] text-rose-700 font-bold">
+                                PK: {{ al.siswa_pk }} • PB: {{ al.siswa_pb }}
+                            </p>
+                            <p class="text-[9.5px] text-rose-600 font-medium">
+                                Cost: PK {{ formatRupiah(al.cost_pk) }} | PB
+                                {{ formatRupiah(al.cost_pb) }}
+                            </p>
+                        </div>
+
+                        <!-- Card Terakhir: Total Anggaran PO -->
+                        <div
+                            class="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 col-span-2 sm:col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider"
@@ -8234,349 +10112,2068 @@ watch(
                                 {{ formatRupiah(grandTotalDraftMaster) }}
                             </p>
                             <p class="text-[11px] text-emerald-800 mt-0.5">
-                                Total PM:
-                                {{ totalPM.toLocaleString("id-ID") }} Siswa
+                                Total Porsi:
+                                {{ totalPM.toLocaleString("id-ID") }} Porsi
                             </p>
                         </div>
                     </div>
 
-                    <!-- Card Evaluasi Standar AKG -->
+                    <!-- ========================================================================= -->
+                    <!-- 1. IDENTITAS MENU & KOMPOSISI 5 SUB MENU HIDANGAN -->
+                    <!-- ========================================================================= -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-3"
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
                     >
-                        <h4
-                            class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2"
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
                         >
-                            <Activity class="h-4 w-4 text-primary" />
-                            <span
-                                >Hasil Evaluasi Standar Kecukupan Gizi
-                                (AKG)</span
-                            >
-                        </h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Evaluasi PK -->
-                            <div
-                                class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2.5"
-                            >
-                                <div
-                                    class="flex items-center justify-between border-b border-slate-100 pb-2"
+                            <div>
+                                <h4
+                                    class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
                                 >
-                                    <span
-                                        class="text-xs font-bold text-slate-900"
-                                        >Porsi Kecil (PAUD / SD 1-3)</span
-                                    >
-                                    <span
-                                        class="px-2 py-0.5 text-[11px] font-black rounded-md bg-emerald-100 text-emerald-800"
-                                        >Memenuhi AKG</span
-                                    >
+                                    <UtensilsCrossed
+                                        class="h-4 w-4 text-primary"
+                                    />
+                                    <span>1. Menu & Komposisi 5 Sub Menu</span>
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Rincian nama masakan per Sub Menu 1 hingga
+                                    Sub Menu 5 beserta konfigurasi varian menu
+                                    pengganti alergi.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 text-primary border border-primary/20"
+                                >
+                                    {{
+                                        props.selectedSource === 'csv' ||
+                                        props.selectedSource === 'tkpi2020'
+                                            ? 'TKPI 2020'
+                                            : 'Nutri Survey'
+                                    }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Banner Nama Menu Utama -->
+                        <div
+                            class="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black shrink-0"
+                                >
+                                    <Utensils class="h-4 w-4" />
                                 </div>
-                                <div
-                                    class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs"
-                                >
-                                    <div
-                                        class="p-2 bg-amber-50 rounded-lg border border-amber-100"
+                                <div>
+                                    <span
+                                        class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"
+                                        >Nama Menu Utama MBG</span
                                     >
-                                        <p
-                                            class="text-[10px] text-amber-700 font-bold"
-                                        >
-                                            Energi
-                                        </p>
-                                        <p
-                                            class="font-black text-amber-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPKNormal.energi ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            kkal
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-rose-50 rounded-lg border border-rose-100"
+                                    <h3
+                                        class="text-sm sm:text-base font-black text-slate-900"
                                     >
-                                        <p
-                                            class="text-[10px] text-rose-700 font-bold"
-                                        >
-                                            Protein
-                                        </p>
-                                        <p
-                                            class="font-black text-rose-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPKNormal.protein ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-yellow-50 rounded-lg border border-yellow-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-yellow-700 font-bold"
-                                        >
-                                            Lemak
-                                        </p>
-                                        <p
-                                            class="font-black text-yellow-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPKNormal.lemak || 0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-blue-50 rounded-lg border border-blue-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-blue-700 font-bold"
-                                        >
-                                            Karbo
-                                        </p>
-                                        <p
-                                            class="font-black text-blue-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPKNormal.karbohidrat ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-emerald-50 rounded-lg border border-emerald-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-emerald-700 font-bold"
-                                        >
-                                            Serat
-                                        </p>
-                                        <p
-                                            class="font-black text-emerald-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPKNormal.serat || 0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
+                                        {{
+                                            namaMenuAktif ||
+                                            "Menu Belum Diberi Nama"
+                                        }}
+                                    </h3>
                                 </div>
                             </div>
-                            <!-- Evaluasi PB -->
                             <div
-                                class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2.5"
+                                class="text-xs text-slate-500 flex items-center gap-1.5 self-start sm:self-auto"
                             >
-                                <div
-                                    class="flex items-center justify-between border-b border-slate-100 pb-2"
+                                <Calendar class="h-3.5 w-3.5 text-slate-400" />
+                                <span
+                                    >Distribusi:
+                                    <strong>{{
+                                        formatTanggalIndo(tanggalRencana)
+                                    }}</strong></span
                                 >
-                                    <span
-                                        class="text-xs font-bold text-slate-900"
-                                        >Porsi Besar (SD 4-6 / SMP / SMA)</span
+                            </div>
+                        </div>
+
+                        <!-- Grid 5 Sub Menu Cards -->
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+                        >
+                            <div
+                                v-for="(sm, sIdx) in subMenuKeysConfig"
+                                :key="sm.key"
+                                class="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-2 hover:border-slate-300 transition-colors"
+                            >
+                                <div>
+                                    <div
+                                        class="flex items-center justify-between gap-1 mb-1.5"
                                     >
-                                    <span
-                                        class="px-2 py-0.5 text-[11px] font-black rounded-md bg-emerald-100 text-emerald-800"
-                                        >Memenuhi AKG</span
+                                        <span
+                                            class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
+                                        >
+                                            <span
+                                                class="w-2 h-2 rounded-full"
+                                                :class="sm.dotColor"
+                                            ></span>
+                                            {{ sm.label }}
+                                        </span>
+                                        <span
+                                            class="text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded"
+                                        >
+                                            {{ sm.defaultName }}
+                                        </span>
+                                    </div>
+                                    <p
+                                        class="text-xs font-black text-slate-900 leading-snug"
                                     >
+                                        {{
+                                            subMenuKomponen[sm.key] ||
+                                            "(Belum Diisi)"
+                                        }}
+                                    </p>
                                 </div>
-                                <div
-                                    class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs"
-                                >
+
+                                <!-- Menu Pengganti Alergi jika ada -->
+                                <div class="pt-2 border-t border-slate-100">
                                     <div
-                                        class="p-2 bg-amber-50 rounded-lg border border-amber-100"
+                                        v-if="
+                                            subMenuAlergi[sm.key] &&
+                                            subMenuAlergi[sm.key].length > 0
+                                        "
+                                        class="space-y-1"
                                     >
-                                        <p
-                                            class="text-[10px] text-amber-700 font-bold"
+                                        <span
+                                            class="text-[9.5px] font-bold text-amber-700 uppercase tracking-wider block"
                                         >
-                                            Energi
-                                        </p>
-                                        <p
-                                            class="font-black text-amber-950 mt-0.5"
+                                            Varian Alergi:
+                                        </span>
+                                        <div
+                                            v-for="(al, alIdx) in subMenuAlergi[
+                                                sm.key
+                                            ]"
+                                            :key="alIdx"
+                                            class="text-[10px] bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-1 rounded-lg"
                                         >
-                                            {{
-                                                (
-                                                    akgResultPBNormal.energi ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            kkal
-                                        </p>
+                                            <span class="font-bold"
+                                                >{{ al.jenis_alergi }}:</span
+                                            >
+                                            <span class="ml-1 text-slate-700">{{
+                                                al.menu_pengganti
+                                            }}</span>
+                                        </div>
                                     </div>
                                     <div
-                                        class="p-2 bg-rose-50 rounded-lg border border-rose-100"
+                                        v-else
+                                        class="text-[10px] text-slate-400 italic"
                                     >
-                                        <p
-                                            class="text-[10px] text-rose-700 font-bold"
-                                        >
-                                            Protein
-                                        </p>
-                                        <p
-                                            class="font-black text-rose-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPBNormal.protein ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-yellow-50 rounded-lg border border-yellow-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-yellow-700 font-bold"
-                                        >
-                                            Lemak
-                                        </p>
-                                        <p
-                                            class="font-black text-yellow-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPBNormal.lemak || 0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-blue-50 rounded-lg border border-blue-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-blue-700 font-bold"
-                                        >
-                                            Karbo
-                                        </p>
-                                        <p
-                                            class="font-black text-blue-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPBNormal.karbohidrat ||
-                                                    0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="p-2 bg-emerald-50 rounded-lg border border-emerald-100"
-                                    >
-                                        <p
-                                            class="text-[10px] text-emerald-700 font-bold"
-                                        >
-                                            Serat
-                                        </p>
-                                        <p
-                                            class="font-black text-emerald-950 mt-0.5"
-                                        >
-                                            {{
-                                                (
-                                                    akgResultPBNormal.serat || 0
-                                                ).toFixed(1)
-                                            }}
-                                            g
-                                        </p>
+                                        Tidak ada varian alergi
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Tabel Rekapitulasi Item Resep Bahan Baku -->
-                    <div class="space-y-2">
-                        <h4
-                            class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2"
-                        >
-                            <UtensilsCrossed class="h-4 w-4 text-primary" />
-                            <span>Rincian Bahan Baku & Kebutuhan Kotor</span>
-                        </h4>
+                    <!-- ========================================================================= -->
+                    <!-- 2. REKAPITULASI TARGET SASARAN PENERIMA MANFAAT -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                    >
                         <div
-                            class="border border-slate-200 rounded-xl overflow-x-auto"
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
                         >
-                            <table
-                                class="w-full min-w-[850px] text-left text-xs border-collapse"
-                            >
+                            <div>
+                                <h4
+                                    class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
+                                >
+                                    <Users class="h-4 w-4 text-indigo-600" />
+                                    <span
+                                        >2. Daftar Kelompok Penerima
+                                        Manfaat</span
+                                    >
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Status penerimaan porsi, proporsi porsi
+                                    kecil (PK), porsi besar (PB), dan catatan
+                                    alergi per kelompok sasaran.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                >
+                                    {{
+                                        woKelompokList.filter(
+                                            (k) => k.status_menerima !== false,
+                                        ).length
+                                    }}
+                                    dari {{ woKelompokList.length }} Kelompok
+                                    Menerima
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Kelompok Penerima Manfaat -->
+                        <div
+                            class="overflow-x-auto rounded-xl border border-slate-200 bg-white"
+                        >
+                            <table class="w-full text-xs text-left">
                                 <thead
-                                    class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px]"
+                                    class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
-                                        <th class="p-3 text-center w-10">No</th>
-                                        <th class="p-3">Bahan Pangan</th>
-                                        <th
-                                            class="p-3 text-center min-w-[140px]"
+                                        <th class="p-3 w-10 text-center">No</th>
+                                        <th class="p-3">
+                                            Kelompok Penerima Manfaat
+                                        </th>
+                                        <th class="p-3">Kategori</th>
+                                        <th class="p-3 text-center">Status</th>
+                                        <th class="p-3 text-center">
+                                            Porsi Kecil (PK)
+                                        </th>
+                                        <th class="p-3 text-center">
+                                            Porsi Besar (PB)
+                                        </th>
+                                        <th class="p-3 text-center">
+                                            Total Porsi
+                                        </th>
+                                        <th class="p-3">Keterangan Alergi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr
+                                        v-for="(kel, kIdx) in woKelompokList"
+                                        :key="kel.id || kIdx"
+                                        :class="
+                                            kel.status_menerima === false
+                                                ? 'bg-slate-50/50 text-slate-400'
+                                                : 'hover:bg-slate-50/60'
+                                        "
+                                    >
+                                        <td
+                                            class="p-3 text-center font-bold text-slate-500"
                                         >
-                                            Peruntukan Porsi
+                                            {{ kIdx + 1 }}
+                                        </td>
+                                        <td
+                                            class="p-3 font-black text-slate-800"
+                                        >
+                                            {{ kel.nama_kelompok }}
+                                        </td>
+                                        <td class="p-3 text-slate-600">
+                                            <span
+                                                class="px-2 py-0.5 rounded bg-slate-100 font-semibold text-[10px]"
+                                            >
+                                                {{ kel.kategori }}
+                                            </span>
+                                        </td>
+                                        <td class="p-3 text-center">
+                                            <span
+                                                :class="[
+                                                    'px-2.5 py-0.5 text-[10.5px] font-black rounded-md border inline-block',
+                                                    kel.status_menerima !==
+                                                    false
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                        : 'bg-slate-100 text-slate-500 border-slate-300',
+                                                ]"
+                                            >
+                                                {{
+                                                    kel.status_menerima !==
+                                                    false
+                                                        ? "Menerima"
+                                                        : "Tidak Menerima"
+                                                }}
+                                            </span>
+                                        </td>
+                                        <td
+                                            class="p-3 text-center font-bold"
+                                            :class="
+                                                kel.status_menerima !== false
+                                                    ? 'text-amber-800'
+                                                    : 'text-slate-400'
+                                            "
+                                        >
+                                            {{
+                                                (
+                                                    Number(
+                                                        kel.total_porsi_kecil,
+                                                    ) || 0
+                                                ).toLocaleString("id-ID")
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-center font-bold"
+                                            :class="
+                                                kel.status_menerima !== false
+                                                    ? 'text-indigo-800'
+                                                    : 'text-slate-400'
+                                            "
+                                        >
+                                            {{
+                                                (
+                                                    Number(
+                                                        kel.total_porsi_besar,
+                                                    ) || 0
+                                                ).toLocaleString("id-ID")
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-center font-black"
+                                            :class="
+                                                kel.status_menerima !== false
+                                                    ? 'text-slate-900'
+                                                    : 'text-slate-400'
+                                            "
+                                        >
+                                            {{
+                                                (
+                                                    (Number(
+                                                        kel.total_porsi_kecil,
+                                                    ) || 0) +
+                                                    (Number(
+                                                        kel.total_porsi_besar,
+                                                    ) || 0)
+                                                ).toLocaleString("id-ID")
+                                            }}
+                                        </td>
+                                        <td class="p-3">
+                                            <div
+                                                v-if="
+                                                    Array.isArray(
+                                                        kel.keterangan_alergi,
+                                                    ) &&
+                                                    kel.keterangan_alergi.some(
+                                                        (da) =>
+                                                            activeAlergiFoodCostList.some(
+                                                                (al) => al.jenis_alergi === (typeof da === 'string' ? da : da?.jenis_alergi)
+                                                            ) &&
+                                                            ((Number(da?.porsi_kecil) || 0) + (Number(da?.porsi_besar) || 0)) > 0
+                                                    )
+                                                "
+                                                class="flex flex-wrap gap-1"
+                                            >
+                                                <template
+                                                    v-for="(detAl, daIdx) in kel.keterangan_alergi"
+                                                    :key="daIdx"
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            activeAlergiFoodCostList.some(
+                                                                (al) => al.jenis_alergi === (typeof detAl === 'string' ? detAl : detAl?.jenis_alergi)
+                                                            ) &&
+                                                            ((Number(detAl?.porsi_kecil) || 0) + (Number(detAl?.porsi_besar) || 0)) > 0
+                                                        "
+                                                        class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-50 text-amber-800 border border-amber-200"
+                                                    >
+                                                        {{
+                                                            (typeof detAl === 'string' ? detAl : detAl.jenis_alergi) +
+                                                            ': ' +
+                                                            ((Number(detAl?.porsi_kecil) || 0) + (Number(detAl?.porsi_besar) || 0)) +
+                                                            ' siswa'
+                                                        }}
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <span
+                                                v-else
+                                                class="text-[10px] text-slate-400 italic"
+                                            >
+                                                Bebas Alergi
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot
+                                    class="bg-slate-50 font-bold border-t border-slate-200 text-xs"
+                                >
+                                    <tr>
+                                        <td
+                                            colspan="4"
+                                            class="p-3 text-right text-slate-700"
+                                        >
+                                            Total Porsi Aktif:
+                                        </td>
+                                        <td
+                                            class="p-3 text-center text-amber-900 font-black"
+                                        >
+                                            {{
+                                                totalPK.toLocaleString("id-ID")
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-center text-indigo-900 font-black"
+                                        >
+                                            {{
+                                                totalPB.toLocaleString("id-ID")
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-center text-slate-900 font-black"
+                                        >
+                                            {{
+                                                totalPM.toLocaleString("id-ID")
+                                            }}
+                                            Porsi
+                                        </td>
+                                        <td
+                                            class="p-3 text-slate-500 font-medium text-[11px]"
+                                        >
+                                            {{
+                                                totalTerdampakAlergi > 0
+                                                    ? totalTerdampakAlergi +
+                                                      " Siswa Alergi Terdampak"
+                                                    : "Semua Normal"
+                                            }}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- 3. EVALUASI PEMENUHAN STANDAR AKG BGN (PORSI KECIL & PORSI BESAR & VARIAN ALERGI) -->
+                    <div
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-5"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
+                        >
+                            <div>
+                                <h4
+                                    class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
+                                >
+                                    <Activity
+                                        class="h-4 w-4 text-emerald-600"
+                                    />
+                                    <span
+                                        >3. Evaluasi Standar Angka Kecukupan
+                                        Gizi (AKG Standar BGN)</span
+                                    >
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Evaluasi pemenuhan Angka Kecukupan Gizi
+                                    untuk porsi normal dan seluruh varian porsi
+                                    alergi hasil formulasi bahan makanan siap
+                                    santap.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="showRumusAkg = !showRumusAkg"
+                                class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50 self-start sm:self-auto shrink-0"
+                            >
+                                <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span>{{
+                                    showRumusAkg
+                                        ? "Sembunyikan Penjelasan Rumus"
+                                        : "Tampilkan Penjelasan Rumus & Standar AKG"
+                                }}</span>
+                            </button>
+                        </div>
+
+                        <!-- Panel Penjelasan Rumus & Standar AKG BGN (Langkah 3) -->
+                        <div
+                            v-if="showRumusAkg"
+                            class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
+                        >
+                            <div
+                                class="flex items-center gap-2 text-amber-950 font-bold border-b border-amber-200/80 pb-2"
+                            >
+                                <Info class="h-4 w-4 text-amber-600 shrink-0" />
+                                <span
+                                    >Metode Perhitungan Nilai Zat Gizi & Standar Acuan AKG BGN (Makan Siang MBG)</span
+                                >
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed">
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
+                                >
+                                    <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                        <Calculator class="h-4 w-4 text-amber-600" />
+                                        1. Rumus Perhitungan Nilai Gizi per Porsi:
+                                    </strong>
+                                    <p
+                                        class="text-[11px] text-slate-800 font-mono bg-amber-50/70 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                    >
+                                        Zat Gizi = &sum; [ (Gram Bersih &divide; 100) &times; Nilai Gizi per 100g TKPI ]
+                                    </p>
+                                    <p class="text-[11px] text-slate-500 leading-snug">
+                                        Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) masing-masing bahan masakan terhadap basis data Tabel Komposisi Pangan Indonesia (TKPI).
+                                    </p>
+                                </div>
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
+                                >
+                                    <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                        <HeartPulse class="h-4 w-4 text-rose-500" />
+                                        2. Standar Acuan AKG Makan Siap Santap BGN:
+                                    </strong>
+                                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
+                                            <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
+                                            <div class="text-slate-600 space-y-0.5 text-[10.5px]">
+                                                <div>&bull; Energi: <strong class="text-slate-900">450 - 550 kkal</strong></div>
+                                                <div>&bull; Protein: <strong class="text-slate-900">15 - 22 g</strong></div>
+                                                <div>&bull; Lemak: <strong class="text-slate-900">15 - 20 g</strong></div>
+                                                <div>&bull; Karbo: <strong class="text-slate-900">60 - 85 g</strong></div>
+                                                <div>&bull; Serat: <strong class="text-slate-900">5 - 7 g</strong></div>
+                                            </div>
+                                        </div>
+                                        <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
+                                            <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
+                                            <div class="text-slate-600 space-y-0.5 text-[10.5px]">
+                                                <div>&bull; Energi: <strong class="text-slate-900">650 - 800 kkal</strong></div>
+                                                <div>&bull; Protein: <strong class="text-slate-900">20 - 30 g</strong></div>
+                                                <div>&bull; Lemak: <strong class="text-slate-900">20 - 30 g</strong></div>
+                                                <div>&bull; Karbo: <strong class="text-slate-900">90 - 120 g</strong></div>
+                                                <div>&bull; Serat: <strong class="text-slate-900">7 - 10 g</strong></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3.A Evaluasi AKG Porsi Normal -->
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-2 h-2 rounded-full bg-emerald-500"
+                                ></span>
+                                <h5
+                                    class="text-xs font-black text-slate-800 uppercase tracking-wider"
+                                >
+                                    A. Standar AKG Porsi Normal (PK & PB)
+                                </h5>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Evaluasi PK Normal -->
+                                <div
+                                    class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3"
+                                >
+                                    <div
+                                        class="flex items-center justify-between border-b border-slate-100 pb-2.5"
+                                    >
+                                        <div>
+                                            <span
+                                                class="text-xs font-black text-slate-900 block"
+                                                >Porsi Kecil (PK) Normal</span
+                                            >
+                                            <span
+                                                class="text-[10px] text-slate-500"
+                                                >PAUD, TK, SD Kelas 1-3</span
+                                            >
+                                        </div>
+                                        <span
+                                            :class="[
+                                                'px-2.5 py-1 text-[10px] rounded-lg border',
+                                                getAkgStatusBadge(
+                                                    akgResultPKNormal,
+                                                    false,
+                                                ).badgeClass,
+                                            ]"
+                                        >
+                                            {{
+                                                getAkgStatusBadge(
+                                                    akgResultPKNormal,
+                                                    false,
+                                                ).label
+                                            }}
+                                        </span>
+                                    </div>
+                                    <!-- 5 Kotak: 3 Di Atas, 2 Di Bawah -->
+                                    <div class="grid grid-cols-6 gap-2 text-xs">
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Energi</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPKNormal.energi.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >kkal</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 450 - 550</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Protein</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPKNormal.protein.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 15 - 20g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Lemak</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPKNormal.lemak.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 13 - 18g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Karbohidrat</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPKNormal.karbohidrat.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 68 - 83g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Serat</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPKNormal.serat.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 6 - 8g</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Evaluasi PB Normal -->
+                                <div
+                                    class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3"
+                                >
+                                    <div
+                                        class="flex items-center justify-between border-b border-slate-100 pb-2.5"
+                                    >
+                                        <div>
+                                            <span
+                                                class="text-xs font-black text-slate-900 block"
+                                                >Porsi Besar (PB) Normal</span
+                                            >
+                                            <span
+                                                class="text-[10px] text-slate-500"
+                                                >SD 4-6, SMP, SMA/SMK,
+                                                Bumil/Busui</span
+                                            >
+                                        </div>
+                                        <span
+                                            :class="[
+                                                'px-2.5 py-1 text-[10px] rounded-lg border',
+                                                getAkgStatusBadge(
+                                                    akgResultPBNormal,
+                                                    true,
+                                                ).badgeClass,
+                                            ]"
+                                        >
+                                            {{
+                                                getAkgStatusBadge(
+                                                    akgResultPBNormal,
+                                                    true,
+                                                ).label
+                                            }}
+                                        </span>
+                                    </div>
+                                    <!-- 5 Kotak: 3 Di Atas, 2 Di Bawah -->
+                                    <div class="grid grid-cols-6 gap-2 text-xs">
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Energi</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPBNormal.energi.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >kkal</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 650 - 800</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Protein</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPBNormal.protein.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 22 - 30g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Lemak</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPBNormal.lemak.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 18 - 27g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Karbohidrat</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPBNormal.karbohidrat.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 98 - 120g</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                        >
+                                            <span
+                                                class="text-[10px] text-slate-500 block font-semibold"
+                                                >Serat</span
+                                            >
+                                            <span
+                                                class="font-black text-slate-900 text-sm"
+                                                >{{
+                                                    akgResultPBNormal.serat.toFixed(
+                                                        1,
+                                                    )
+                                                }}
+                                                <span
+                                                    class="text-[10px] font-normal text-slate-500"
+                                                    >g</span
+                                                ></span
+                                            >
+                                            <span
+                                                class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                >Std: 8 - 12g</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3.B Evaluasi AKG Varian Alergi (Jika Ada) -->
+                        <div
+                            v-if="activeAlergiAkgList.length > 0"
+                            class="space-y-4 pt-2 border-t border-slate-200"
+                        >
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-2"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="w-2 h-2 rounded-full bg-rose-500"
+                                    ></span>
+                                    <h5
+                                        class="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5"
+                                    >
+                                        <ShieldAlert
+                                            class="h-3.5 w-3.5 text-rose-600"
+                                        />
+                                        <span
+                                            >B. Standar AKG Varian Khusus
+                                            Alergi</span
+                                        >
+                                    </h5>
+                                </div>
+                                <span
+                                    class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg"
+                                >
+                                    {{ activeAlergiAkgList.length }} Varian
+                                    Alergi Dikonfigurasi
+                                </span>
+                            </div>
+
+                            <div
+                                v-for="alRes in activeAlergiAkgList"
+                                :key="'akg-al-' + alRes.jenis_alergi"
+                                class="p-3.5 bg-rose-50/40 rounded-xl border border-rose-200 space-y-3"
+                            >
+                                <div
+                                    class="flex items-center justify-between flex-wrap gap-2"
+                                >
+                                    <span
+                                        class="text-xs font-black text-rose-950 flex items-center gap-1.5"
+                                    >
+                                        <span
+                                            >Varian Alergi:
+                                            <strong
+                                                class="text-rose-700 underline underline-offset-2"
+                                                >{{
+                                                    alRes.jenis_alergi
+                                                }}</strong
+                                            ></span
+                                        >
+                                        <span
+                                            class="text-[10.5px] font-bold text-slate-600"
+                                            >({{ alRes.total_siswa }} Porsi •
+                                            PK: {{ alRes.siswa_pk }}, PB:
+                                            {{ alRes.siswa_pb }})</span
+                                        >
+                                    </span>
+                                    <span
+                                        class="text-[10px] font-semibold text-rose-800 bg-white px-2 py-0.5 rounded border border-rose-200"
+                                    >
+                                        {{ alRes.bahan_count }} Bahan Substitusi
+                                        Terpilih
+                                    </span>
+                                </div>
+
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                >
+                                    <!-- Evaluasi PK Alergi -->
+                                    <div
+                                        class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
+                                        >
+                                            <div>
+                                                <span
+                                                    class="text-xs font-black text-slate-900 block"
+                                                    >Porsi Kecil (PK) •
+                                                    {{
+                                                        alRes.jenis_alergi
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500"
+                                                    >PAUD, TK, SD Kelas
+                                                    1-3</span
+                                                >
+                                            </div>
+                                            <span
+                                                :class="[
+                                                    'px-2.5 py-1 text-[10px] rounded-lg border',
+                                                    getAkgStatusBadge(
+                                                        alRes.pk,
+                                                        false,
+                                                    ).badgeClass,
+                                                ]"
+                                            >
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        alRes.pk,
+                                                        false,
+                                                    ).label
+                                                }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="grid grid-cols-6 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Energi</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pk.energi.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >kkal</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 450 - 550</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Protein</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pk.protein.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 15 - 20g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Lemak</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pk.lemak.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 13 - 18g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Karbohidrat</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pk.karbohidrat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 68 - 83g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Serat</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pk.serat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 6 - 8g</span
+                                                >
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Evaluasi PB Alergi -->
+                                    <div
+                                        class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
+                                        >
+                                            <div>
+                                                <span
+                                                    class="text-xs font-black text-slate-900 block"
+                                                    >Porsi Besar (PB) •
+                                                    {{
+                                                        alRes.jenis_alergi
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500"
+                                                    >SD 4-6, SMP, SMA/SMK,
+                                                    Bumil/Busui</span
+                                                >
+                                            </div>
+                                            <span
+                                                :class="[
+                                                    'px-2.5 py-1 text-[10px] rounded-lg border',
+                                                    getAkgStatusBadge(
+                                                        alRes.pb,
+                                                        true,
+                                                    ).badgeClass,
+                                                ]"
+                                            >
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        alRes.pb,
+                                                        true,
+                                                    ).label
+                                                }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="grid grid-cols-6 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Energi</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pb.energi.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >kkal</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 650 - 800</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Protein</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pb.protein.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 22 - 30g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Lemak</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pb.lemak.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 18 - 27g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Karbohidrat</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pb.karbohidrat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 98 - 120g</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            >
+                                                <span
+                                                    class="text-[10px] text-slate-500 block font-semibold"
+                                                    >Serat</span
+                                                >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm"
+                                                    >{{
+                                                        alRes.pb.serat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
+                                                    <span
+                                                        class="text-[10px] font-normal text-slate-500"
+                                                        >g</span
+                                                    ></span
+                                                >
+                                                <span
+                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
+                                                    >Std: 8 - 12g</span
+                                                >
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. EVALUASI FOOD COST & PAGU ANGGARAN PER PORSI & PER SUB MENU -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
+                        >
+                            <div>
+                                <h4
+                                    class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
+                                >
+                                    <Coins class="h-4 w-4 text-amber-600" />
+                                    <span
+                                        >4. Evaluasi Food Cost & Pagu Anggaran
+                                        Belanja</span
+                                    >
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Perbandingan Food Cost aktual per porsi
+                                    terhadap pagu standar BGN (PK: Rp 8.000, PB:
+                                    Rp 10.000) dan rincian per Sub Menu.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Ringkasan Alergi Jika Ada -->
+                        <div
+                            v-if="activeAlergiFoodCostList.length > 0"
+                            class="p-3.5 bg-amber-50/40 rounded-xl border border-amber-200/80 space-y-2"
+                        >
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-amber-950"
+                            >
+                                <span class="flex items-center gap-1.5">
+                                    <ShieldAlert
+                                        class="h-4 w-4 text-amber-600"
+                                    />
+                                    <span
+                                        >Rincian Sasaran & Food Cost Varian
+                                        Khusus Alergi</span
+                                    >
+                                </span>
+                            </div>
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5"
+                            >
+                                <div
+                                    v-for="al in activeAlergiFoodCostList"
+                                    :key="al.jenis_alergi"
+                                    class="p-2.5 bg-white rounded-xl border border-amber-200 shadow-2xs text-xs space-y-1"
+                                >
+                                    <div
+                                        class="font-bold text-slate-800 flex items-center justify-between"
+                                    >
+                                        <span>{{ al.jenis_alergi }}</span>
+                                        <span
+                                            class="text-[10.5px] text-amber-800 font-black"
+                                        >
+                                            {{ al.total_siswa }} Porsi (PK:
+                                            {{ al.siswa_pk }}, PB:
+                                            {{ al.siswa_pb }})
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100"
+                                    >
+                                        <span
+                                            >Cost PK:
+                                            <strong>{{
+                                                formatRupiah(al.cost_pk)
+                                            }}</strong></span
+                                        >
+                                        <span
+                                            >Cost PB:
+                                            <strong>{{
+                                                formatRupiah(al.cost_pb)
+                                            }}</strong></span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TABEL RINCIAN FOOD COST PER SUB MENU (PORSI NORMAL) -->
+                        <div
+                            class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs"
+                        >
+                            <div
+                                class="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                            >
+                                <span
+                                    class="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider"
+                                >
+                                    <Layers
+                                        class="h-3.5 w-3.5 text-slate-600"
+                                    />
+                                    RINCIAN FOOD COST PER SUB MENU (PORSI
+                                    NORMAL)
+                                </span>
+                                <span
+                                    class="text-[11px] text-slate-500 font-medium"
+                                >
+                                    Alokasi biaya bahan baku per komponen
+                                    hidangan
+                                </span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full text-left text-xs border-collapse"
+                                >
+                                    <thead
+                                        class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px] select-none"
+                                    >
+                                        <tr>
+                                            <th class="p-2.5 text-center w-10">
+                                                NO
+                                            </th>
+                                            <th class="p-2.5 min-w-[200px]">
+                                                SUB MENU
+                                            </th>
+                                            <th
+                                                class="p-2.5 text-center min-w-[100px]"
+                                            >
+                                                BAHAN BAKU
+                                            </th>
+                                            <th
+                                                class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                            >
+                                                FOOD COST PK
+                                            </th>
+                                            <th
+                                                class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                            >
+                                                FOOD COST PB
+                                            </th>
+                                            <th
+                                                class="p-2.5 min-w-[140px] text-center"
+                                            >
+                                                PORSI BIAYA (PK / PB)
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody
+                                        class="divide-y divide-slate-100 text-slate-800"
+                                    >
+                                        <tr
+                                            v-for="(
+                                                smCost, idx
+                                            ) in foodCostSubMenuNormal"
+                                            :key="smCost.key"
+                                            class="hover:bg-slate-50/70 transition-colors"
+                                        >
+                                            <td
+                                                class="p-2.5 text-center font-bold text-slate-400 align-middle"
+                                            >
+                                                {{ idx + 1 }}
+                                            </td>
+                                            <td class="p-2.5 align-middle">
+                                                <div
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <!-- <span
+                                                        class="h-2 w-2 rounded-full shrink-0"
+                                                        :class="smCost.dotColor"
+                                                    ></span> -->
+                                                    <div>
+                                                        <span
+                                                            class="text-[10px] font-extrabold uppercase px-1.5 py-1 rounded border"
+                                                            :class="
+                                                                smCost.badgeColor
+                                                            "
+                                                        >
+                                                            {{ smCost.label }}
+                                                        </span>
+                                                        <div
+                                                            class="font-bold text-slate-900 text-xs mt-1.5"
+                                                        >
+                                                            {{
+                                                                smCost.nama_menu
+                                                            }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-center align-middle font-medium text-slate-600"
+                                            >
+                                                <span
+                                                    v-if="
+                                                        smCost.items_count > 0
+                                                    "
+                                                    class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700"
+                                                >
+                                                    {{ smCost.items_count }}
+                                                    Bahan
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="text-slate-400 italic text-[11px]"
+                                                    >-</span
+                                                >
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-right align-middle bg-amber-50/20"
+                                            >
+                                                <div
+                                                    class="font-black text-slate-900 text-xs"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            smCost.cost_pk,
+                                                        )
+                                                    }}
+                                                </div>
+                                                <div
+                                                    class="text-[10px] text-amber-800 font-medium"
+                                                >
+                                                    {{
+                                                        smCost.percent_pk.toFixed(
+                                                            1,
+                                                        )
+                                                    }}% dari total
+                                                </div>
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-right align-middle bg-blue-50/20"
+                                            >
+                                                <div
+                                                    class="font-black text-slate-900 text-xs"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            smCost.cost_pb,
+                                                        )
+                                                    }}
+                                                </div>
+                                                <div
+                                                    class="text-[10px] text-blue-800 font-medium"
+                                                >
+                                                    {{
+                                                        smCost.percent_pb.toFixed(
+                                                            1,
+                                                        )
+                                                    }}% dari total
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 align-middle">
+                                                <div
+                                                    class="space-y-1 w-28 mx-auto"
+                                                >
+                                                    <div
+                                                        class="flex items-center gap-1.5 text-[9.5px]"
+                                                    >
+                                                        <span
+                                                            class="font-bold text-amber-800 w-5 shrink-0"
+                                                            >PK</span
+                                                        >
+                                                        <div
+                                                            class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                        >
+                                                            <div
+                                                                class="bg-amber-500 h-full rounded-full transition-all"
+                                                                :style="{
+                                                                    width:
+                                                                        smCost.percent_pk +
+                                                                        '%',
+                                                                }"
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        class="flex items-center gap-1.5 text-[9.5px]"
+                                                    >
+                                                        <span
+                                                            class="font-bold text-blue-800 w-5 shrink-0"
+                                                            >PB</span
+                                                        >
+                                                        <div
+                                                            class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                        >
+                                                            <div
+                                                                class="bg-blue-600 h-full rounded-full transition-all"
+                                                                :style="{
+                                                                    width:
+                                                                        smCost.percent_pb +
+                                                                        '%',
+                                                                }"
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot
+                                        class="bg-slate-50/90 font-black border-t border-slate-200 text-xs"
+                                    >
+                                        <tr>
+                                            <td
+                                                colspan="3"
+                                                class="p-2.5 text-right uppercase tracking-wider text-slate-700"
+                                            >
+                                                TOTAL FOOD COST PORSI NORMAL:
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-right text-emerald-900 bg-amber-100/40 text-sm"
+                                            >
+                                                {{
+                                                    formatRupiah(
+                                                        totalFoodCostPKNormal,
+                                                    )
+                                                }}
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-right text-emerald-900 bg-blue-100/40 text-sm"
+                                            >
+                                                {{
+                                                    formatRupiah(
+                                                        totalFoodCostPBNormal,
+                                                    )
+                                                }}
+                                            </td>
+                                            <td
+                                                class="p-2.5 text-center text-[10px] text-slate-500"
+                                            >
+                                                100% Total
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- TABEL RINCIAN FOOD COST VARIAN ALERGI (JIKA ADA) -->
+                        <div
+                            v-if="activeAlergiFoodCostList.length > 0"
+                            class="space-y-4 pt-3 border-t border-slate-200"
+                        >
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-2"
+                            >
+                                <span
+                                    class="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider"
+                                >
+                                    <ShieldAlert
+                                        class="h-3.5 w-3.5 text-amber-600"
+                                    />
+                                    <span
+                                        >RINCIAN FOOD COST PER SUB MENU (VARIAN
+                                        ALERGI)</span
+                                    >
+                                </span>
+                                <span
+                                    class="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg"
+                                >
+                                    {{ activeAlergiFoodCostList.length }} Varian
+                                    Alergi Terdaftar
+                                </span>
+                            </div>
+
+                            <div
+                                v-for="alCost in activeAlergiFoodCostList"
+                                :key="'review-al-fc-' + alCost.jenis_alergi"
+                                class="bg-white rounded-2xl border border-amber-200/90 overflow-hidden shadow-2xs"
+                            >
+                                <div
+                                    class="p-3 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
+                                >
+                                    <span
+                                        class="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider"
+                                    >
+                                        <Layers
+                                            class="h-3.5 w-3.5 text-amber-700"
+                                        />
+                                        RINCIAN FOOD COST PER SUB MENU (VARIAN
+                                        {{ alCost.jenis_alergi }})
+                                    </span>
+                                    <span
+                                        class="text-[11px] text-amber-800 font-medium"
+                                    >
+                                        {{ alCost.total_siswa }} Porsi (PK:
+                                        {{ alCost.siswa_pk }}, PB:
+                                        {{ alCost.siswa_pb }}) • Termasuk
+                                        penyesuaian substitusi & eliminasi
+                                    </span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table
+                                        class="w-full text-left text-xs border-collapse"
+                                    >
+                                        <thead
+                                            class="bg-amber-50/40 text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
+                                        >
+                                            <tr>
+                                                <th
+                                                    class="p-2.5 text-center w-10"
+                                                >
+                                                    NO
+                                                </th>
+                                                <th class="p-2.5 min-w-[220px]">
+                                                    SUB MENU
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-center min-w-[100px]"
+                                                >
+                                                    BAHAN BAKU
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                >
+                                                    FOOD COST PK
+                                                </th>
+                                                <th
+                                                    class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                >
+                                                    FOOD COST PB
+                                                </th>
+                                                <th
+                                                    class="p-2.5 min-w-[140px] text-center"
+                                                >
+                                                    PORSI BIAYA (PK / PB)
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody
+                                            class="divide-y divide-amber-100/60 text-slate-800"
+                                        >
+                                            <tr
+                                                v-for="(
+                                                    smCost, idx
+                                                ) in getFoodCostSubMenuForAlergi(
+                                                    alCost.jenis_alergi,
+                                                )"
+                                                :key="smCost.key"
+                                                class="hover:bg-amber-50/30 transition-colors"
+                                            >
+                                                <td
+                                                    class="p-2.5 text-center font-bold text-slate-400 align-middle"
+                                                >
+                                                    {{ idx + 1 }}
+                                                </td>
+                                                <td class="p-2.5 align-middle">
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex items-center gap-1.5 flex-wrap"
+                                                        >
+                                                            <span
+                                                                class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded border"
+                                                                :class="
+                                                                    smCost.badgeColor
+                                                                "
+                                                            >
+                                                                {{
+                                                                    smCost.label
+                                                                }}
+                                                            </span>
+                                                            <span
+                                                                v-if="
+                                                                    smCost.is_substituted
+                                                                "
+                                                                class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 font-black text-[9.5px]"
+                                                            >
+                                                                ★ Substitusi
+                                                                Khusus
+                                                            </span>
+                                                            <span
+                                                                v-else-if="
+                                                                    smCost.is_eliminated
+                                                                "
+                                                                class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]"
+                                                            >
+                                                                ⚠ Alergen
+                                                                Dieliminasi
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-bold text-slate-900 text-xs"
+                                                        >
+                                                            {{
+                                                                smCost.nama_menu
+                                                            }}
+                                                        </div>
+                                                        <div
+                                                            v-if="
+                                                                smCost.is_substituted &&
+                                                                smCost.normal_menu_name !==
+                                                                    smCost.nama_menu
+                                                            "
+                                                            class="text-[10px] text-slate-400"
+                                                        >
+                                                            Menu Normal:
+                                                            {{
+                                                                smCost.normal_menu_name
+                                                            }}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-center align-middle font-medium text-slate-600"
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            smCost.items_count >
+                                                            0
+                                                        "
+                                                        class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700"
+                                                    >
+                                                        {{ smCost.items_count }}
+                                                        Bahan
+                                                    </span>
+                                                    <span
+                                                        v-else
+                                                        class="text-slate-400 italic text-[11px]"
+                                                        >-</span
+                                                    >
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                >
+                                                    <div
+                                                        class="font-black text-slate-900 text-xs"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                smCost.cost_pk,
+                                                            )
+                                                        }}
+                                                    </div>
+                                                    <div
+                                                        class="text-[10px] text-amber-800 font-medium"
+                                                    >
+                                                        {{
+                                                            smCost.percent_pk.toFixed(
+                                                                1,
+                                                            )
+                                                        }}% dari total
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                >
+                                                    <div
+                                                        class="font-black text-slate-900 text-xs"
+                                                    >
+                                                        {{
+                                                            formatRupiah(
+                                                                smCost.cost_pb,
+                                                            )
+                                                        }}
+                                                    </div>
+                                                    <div
+                                                        class="text-[10px] text-blue-800 font-medium"
+                                                    >
+                                                        {{
+                                                            smCost.percent_pb.toFixed(
+                                                                1,
+                                                            )
+                                                        }}% dari total
+                                                    </div>
+                                                </td>
+                                                <td class="p-2.5 align-middle">
+                                                    <div
+                                                        class="space-y-1 w-28 mx-auto"
+                                                    >
+                                                        <div
+                                                            class="flex items-center gap-1.5 text-[9.5px]"
+                                                        >
+                                                            <span
+                                                                class="font-bold text-amber-800 w-5 shrink-0"
+                                                                >PK</span
+                                                            >
+                                                            <div
+                                                                class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                            >
+                                                                <div
+                                                                    class="bg-amber-500 h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            smCost.percent_pk +
+                                                                            '%',
+                                                                    }"
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="flex items-center gap-1.5 text-[9.5px]"
+                                                        >
+                                                            <span
+                                                                class="font-bold text-blue-800 w-5 shrink-0"
+                                                                >PB</span
+                                                            >
+                                                            <div
+                                                                class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
+                                                            >
+                                                                <div
+                                                                    class="bg-blue-600 h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            smCost.percent_pb +
+                                                                            '%',
+                                                                    }"
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot
+                                            class="bg-amber-50/70 font-black border-t border-amber-200 text-xs"
+                                        >
+                                            <tr>
+                                                <td
+                                                    colspan="3"
+                                                    class="p-2.5 text-right uppercase tracking-wider text-amber-950"
+                                                >
+                                                    TOTAL FOOD COST VARIAN
+                                                    {{ alCost.jenis_alergi }}:
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right text-emerald-900 bg-amber-100/60 text-sm"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            alCost.cost_pk,
+                                                        )
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-right text-emerald-900 bg-blue-100/60 text-sm"
+                                                >
+                                                    {{
+                                                        formatRupiah(
+                                                            alCost.cost_pb,
+                                                        )
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="p-2.5 text-center text-[10px] text-slate-500"
+                                                >
+                                                    100% Total
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- 5. TABEL REKAPITULASI KEBUTUHAN BAHAN PANGAN & ESTIMASI BELANJA PO -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
+                        >
+                            <div>
+                                <h4
+                                    class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
+                                >
+                                    <Package class="h-4 w-4 text-primary" />
+                                    <span
+                                        >5. Rekapitulasi Kebutuhan Bahan Pangan
+                                        & Order Pembelian (PO)</span
+                                    >
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Daftar seluruh bahan baku pangan, standar
+                                    gramasi per porsi, faktor BDD & buffer
+                                    susut, total berat kotor (kg), dan estimasi
+                                    biaya belanja PO.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                >
+                                    {{ bahanCalculations.length }} Bahan Baku
+                                    Terdaftar
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Detail Bahan Baku PO -->
+                        <div
+                            class="overflow-x-auto rounded-xl border border-slate-200 bg-white"
+                        >
+                            <table class="w-full text-xs text-left">
+                                <thead
+                                    class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
+                                >
+                                    <tr>
+                                        <th class="p-3 w-10 text-center">No</th>
+                                        <th class="p-3">
+                                            Bahan Pangan & Nama di PO
+                                        </th>
+                                        <th class="p-3 text-center">
+                                            Peruntukan / Sub Menu
+                                        </th>
+                                        <th class="p-3 text-center">
+                                            Tipe Porsi
                                         </th>
                                         <th class="p-3">Kategori</th>
                                         <th class="p-3 text-center">
-                                            Gramasi (PK / PB)
+                                            Gram PK / PB
+                                        </th>
+                                        <th class="p-3 text-center">
+                                            BDD / Buffer
                                         </th>
                                         <th class="p-3 text-right">
-                                            Kebutuhan Kotor (Kg)
+                                            Total Gross
                                         </th>
                                         <th class="p-3 text-right">
-                                            Estimasi Biaya / Kg
+                                            Harga Master
                                         </th>
-                                        <th class="p-3 text-right">Subtotal</th>
+                                        <th class="p-3 text-right">
+                                            Subtotal Estimasi PO
+                                        </th>
+                                        <th
+                                            class="p-3 text-left min-w-[150px] whitespace-normal break-words"
+                                        >
+                                            Keterangan
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody
-                                    class="divide-y divide-slate-100 text-slate-800"
-                                >
-                                    <tr v-if="bahanCalculations.length === 0">
-                                        <td
-                                            colspan="8"
-                                            class="p-8 text-center text-slate-400 text-xs font-medium"
-                                        >
-                                            Belum ada bahan makanan yang
-                                            diformulasikan.
-                                        </td>
-                                    </tr>
+                                <tbody class="divide-y divide-slate-100">
                                     <tr
-                                        v-for="(b, idx) in bahanCalculations"
-                                        :key="idx"
-                                        class="hover:bg-slate-50/70 transition-colors"
+                                        v-for="(b, i) in bahanCalculations"
+                                        :key="b.id || i"
+                                        class="hover:bg-slate-50/60"
                                     >
                                         <td
-                                            class="p-3 text-center align-top pt-4 font-bold text-slate-500"
+                                            class="p-3 text-center font-bold text-slate-500"
                                         >
-                                            {{ idx + 1 }}
+                                            {{ i + 1 }}
                                         </td>
-                                        <td
-                                            class="p-3 font-bold text-slate-900 align-top pt-4"
-                                        >
-                                            <div>{{ b.nama_po || b.nama }}</div>
+                                        <td class="p-3">
                                             <div
-                                                class="text-[10.5px] text-slate-500 font-medium mt-0.5"
+                                                class="font-black text-slate-900 leading-tight"
                                             >
-                                                TKPI: {{ b.nama }}
+                                                {{ b.nama }}
+                                            </div>
+                                            <div
+                                                class="text-[11px] text-primary font-bold mt-0.5"
+                                            >
+                                                PO: {{ b.nama_po || b.nama }}
                                             </div>
                                             <span
                                                 v-if="b.alergen"
-                                                class="block text-[9.5px] text-amber-700 font-normal mt-0.5"
+                                                class="inline-block text-[9.5px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-semibold mt-1"
                                             >
                                                 Alergen: {{ b.alergen }}
                                             </span>
                                         </td>
-                                        <td
-                                            class="p-3 text-center align-top pt-3.5"
-                                        >
+                                        <td class="p-3 text-center">
+                                            <div
+                                                class="inline-flex flex-col items-center"
+                                            >
+                                                <span
+                                                    class="px-2 py-0.5 rounded text-[10.5px] font-black border"
+                                                    :class="
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).badgeClass
+                                                    "
+                                                >
+                                                    {{
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).label
+                                                    }}
+                                                </span>
+                                                <span
+                                                    v-if="
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).namaMenu &&
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).namaMenu !== '-'
+                                                    "
+                                                    class="text-[10px] text-slate-600 font-bold mt-0.5 max-w-[150px] truncate"
+                                                    :title="
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).namaMenu
+                                                    "
+                                                >
+                                                    {{
+                                                        getSubMenuLabelForBahan(
+                                                            b,
+                                                        ).namaMenu
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="p-3 text-center">
                                             <span
                                                 :class="[
-                                                    'px-2.5 py-1 text-[10.5px] font-bold rounded-lg border inline-block',
+                                                    'px-2.5 py-0.5 text-[10px] font-bold rounded-md border inline-block',
                                                     b.tipe_porsi === 'alergi'
                                                         ? 'bg-rose-50 text-rose-800 border-rose-200'
                                                         : 'bg-slate-50 text-slate-700 border-slate-200',
@@ -8587,23 +12184,30 @@ watch(
                                                         ? "Alergi: " +
                                                           (b.jenis_alergi ||
                                                               "Khusus")
-                                                        : "Normal (Standar)"
+                                                        : "Normal"
                                                 }}
                                             </span>
                                         </td>
                                         <td
-                                            class="p-3 text-slate-600 align-top pt-4"
+                                            class="p-3 text-slate-600 text-[11px] font-medium"
                                         >
                                             {{ b.kategori }}
                                         </td>
                                         <td
-                                            class="p-3 text-center font-bold text-slate-800 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-center font-bold text-slate-800 whitespace-nowrap"
                                         >
                                             {{ b.gram_pk || 0 }}g /
                                             {{ b.gram_pb || 0 }}g
                                         </td>
                                         <td
-                                            class="p-3 text-right font-bold text-slate-900 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-center text-[11px] text-slate-600 whitespace-nowrap"
+                                        >
+                                            {{ b.bdd || 100 }}% / +{{
+                                                b.buffer || 0
+                                            }}%
+                                        </td>
+                                        <td
+                                            class="p-3 text-right font-bold text-slate-900 whitespace-nowrap"
                                         >
                                             {{
                                                 formatGrossWeight(
@@ -8612,14 +12216,19 @@ watch(
                                             }}
                                         </td>
                                         <td
-                                            class="p-3 text-right text-slate-600 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right text-slate-600 whitespace-nowrap"
                                         >
                                             {{ formatRupiah(b.harga_master) }}
                                         </td>
                                         <td
-                                            class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap"
+                                            class="p-3 text-right font-black text-emerald-900 whitespace-nowrap"
                                         >
                                             {{ formatRupiah(b.subtotalMaster) }}
+                                        </td>
+                                        <td
+                                            class="p-3 text-slate-600 align-middle text-xs min-w-[150px] whitespace-normal break-words"
+                                        >
+                                            {{ b.keterangan || "-" }}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -8628,8 +12237,8 @@ watch(
                                 >
                                     <tr>
                                         <td
-                                            colspan="5"
-                                            class="p-3.5 text-right font-bold text-slate-700"
+                                            colspan="7"
+                                            class="p-3.5 text-right text-slate-700"
                                         >
                                             Grand Total Estimasi Biaya Belanja
                                             Bahan:
@@ -8672,29 +12281,31 @@ watch(
                     >
                         <Button
                             type="button"
-                            @click="buatMenuSubTab = 'formula_gizi'"
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 h-10 rounded-xl cursor-pointer w-full sm:w-auto"
+                            @click="handleSwitchSubTab('bahan_pangan')"
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
                         >
-                            <ChevronLeft class="h-4 w-4 mr-1.5" />
-                            Kembali ke Formula Gizi (Langkah 2)
+                            <ChevronLeft class="h-4 w-4" />
+                            <span>Kembali ke Formula Makanan (Langkah 2)</span>
                         </Button>
 
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
                             <Button
                                 type="button"
                                 @click="simpanSebagaiDraft"
-                                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-5 h-10 rounded-xl cursor-pointer w-full sm:w-auto"
+                                :disabled="isSubmitting"
+                                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-5 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
                             >
-                                <FileText class="h-4 w-4 mr-1.5" />
-                                Simpan sebagai Draft
+                                <FileText class="h-4 w-4 text-slate-600" />
+                                <span>Simpan sebagai Draft</span>
                             </Button>
                             <Button
                                 type="button"
                                 @click="ajukanKeKeuangan"
-                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-10 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto"
+                                :disabled="isSubmitting"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2"
                             >
-                                <Send class="h-4 w-4 mr-1.5" />
-                                Ajukan
+                                <Send class="h-4 w-4" />
+                                <span>Ajukan ke Keuangan</span>
                             </Button>
                         </div>
                     </div>

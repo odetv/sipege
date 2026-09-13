@@ -54,5 +54,8 @@ class DatabaseSeeder extends Seeder
 
         // 5. Seeder Periode Operasional SPPG (9 Periode)
         $this->call(PeriodeSeeder::class);
+
+        // 6. Seeder Supplier Rekanan (11 Supplier)
+        $this->call(SupplierSeeder::class);
     }
 }

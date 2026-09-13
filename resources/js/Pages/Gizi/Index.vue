@@ -159,6 +159,7 @@ function selectSubMenu(tabId) {
                 :unit-sppg="unitSppg"
                 :kelompok-list="kelompokList"
                 :tkpi-list="activeTkpiList"
+                :tkpi-datasets="tkpiDatasets"
                 :selected-source="selectedTkpiSource"
                 :stats="stats"
                 :initial-step="initialStep"

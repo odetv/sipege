@@ -30,4 +30,9 @@ class PurchaseOrderItem extends Model
     {
         return $this->belongsTo(WorkOrderItem::class, 'work_order_item_id');
     }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
 }

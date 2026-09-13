@@ -37,6 +37,8 @@ import {
     FolderKanban,
     Calendar,
     PieChart,
+    Store,
+    Truck,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -83,21 +85,36 @@ const isKeuanganActive = computed(() => {
 const isSpjActive = computed(() => {
     try {
         const tab = page.props.activeTab;
-        return route().current('keuangan.transaksi') ||
-            route().current('keuangan.bku') ||
-            route().current('keuangan.bp-bank') ||
-            route().current('keuangan.bp-petty-cash') ||
-            route().current('keuangan.bp-bahan-baku') ||
-            route().current('keuangan.bp-operasional') ||
-            route().current('keuangan.bp-fasilitas') ||
-            route().current('keuangan.lpa') ||
-            route().current('keuangan.sptj') ||
-            route().current('keuangan.bapsd') ||
-            (route().current('keuangan.*') && [
-                'transaksi', 'bku', 'bp-bank', 'bp_bank', 'bp-petty-cash', 'bp_petty_cash',
-                'bp-bahan-baku', 'bp_bahan_baku', 'bp-operasional', 'bp_operasional',
-                'bp-fasilitas', 'bp_fasilitas', 'lpa', 'sptj', 'bapsd'
-            ].includes(tab));
+        return (
+            route().current("keuangan.transaksi") ||
+            route().current("keuangan.bku") ||
+            route().current("keuangan.bp-bank") ||
+            route().current("keuangan.bp-petty-cash") ||
+            route().current("keuangan.bp-bahan-baku") ||
+            route().current("keuangan.bp-operasional") ||
+            route().current("keuangan.bp-fasilitas") ||
+            route().current("keuangan.lpa") ||
+            route().current("keuangan.sptj") ||
+            route().current("keuangan.bapsd") ||
+            (route().current("keuangan.*") &&
+                [
+                    "transaksi",
+                    "bku",
+                    "bp-bank",
+                    "bp_bank",
+                    "bp-petty-cash",
+                    "bp_petty_cash",
+                    "bp-bahan-baku",
+                    "bp_bahan_baku",
+                    "bp-operasional",
+                    "bp_operasional",
+                    "bp-fasilitas",
+                    "bp_fasilitas",
+                    "lpa",
+                    "sptj",
+                    "bapsd",
+                ].includes(tab))
+        );
     } catch {
         return false;
     }
@@ -106,11 +123,17 @@ const isSpjActive = computed(() => {
 const isLaporanActive = computed(() => {
     try {
         const tab = page.props.activeTab;
-        return route().current('keuangan.laporan-harian') ||
-            route().current('keuangan.laporan-periodik') ||
-            (route().current('keuangan.*') && [
-                'laporan-harian', 'laporan_harian', 'laporan-periodik', 'laporan_periodik'
-            ].includes(tab));
+        return (
+            route().current("keuangan.laporan-harian") ||
+            route().current("keuangan.laporan-periodik") ||
+            (route().current("keuangan.*") &&
+                [
+                    "laporan-harian",
+                    "laporan_harian",
+                    "laporan-periodik",
+                    "laporan_periodik",
+                ].includes(tab))
+        );
     } catch {
         return false;
     }
@@ -145,7 +168,7 @@ watch(
         }
         isSpjExpanded.value = isSpjActive.value;
         isLaporanExpanded.value = isLaporanActive.value;
-    }
+    },
 );
 
 function toggleSpjMenu() {
@@ -408,7 +431,13 @@ function logout() {
                             :href="route('gizi.database-pangan')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.database-pangan') || route().current('gizi.tkpi') || (route().current('gizi.index') && (page.props.activeTab === 'database-pangan' || page.props.activeTab === 'tkpi' || !page.props.activeTab))
+                                route().current('gizi.database-pangan') ||
+                                route().current('gizi.tkpi') ||
+                                (route().current('gizi.index') &&
+                                    (page.props.activeTab ===
+                                        'database-pangan' ||
+                                        page.props.activeTab === 'tkpi' ||
+                                        !page.props.activeTab))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -422,7 +451,9 @@ function logout() {
                             :href="route('gizi.analisa-pm')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.analisa-pm') || (route().current('gizi.index') && page.props.activeTab === 'analisa-pm')
+                                route().current('gizi.analisa-pm') ||
+                                (route().current('gizi.index') &&
+                                    page.props.activeTab === 'analisa-pm')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -436,7 +467,9 @@ function logout() {
                             :href="route('gizi.daftar-menu')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.daftar-menu') || (route().current('gizi.index') && page.props.activeTab === 'daftar-menu')
+                                route().current('gizi.daftar-menu') ||
+                                (route().current('gizi.index') &&
+                                    page.props.activeTab === 'daftar-menu')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -450,7 +483,11 @@ function logout() {
                             :href="route('gizi.rancang-menu')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.rancang-menu') || route().current('gizi.buat-menu') || (route().current('gizi.index') && (page.props.activeTab === 'rancang-menu' || page.props.activeTab === 'buat-menu'))
+                                route().current('gizi.rancang-menu') ||
+                                route().current('gizi.buat-menu') ||
+                                (route().current('gizi.index') &&
+                                    (page.props.activeTab === 'rancang-menu' ||
+                                        page.props.activeTab === 'buat-menu'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -464,7 +501,9 @@ function logout() {
                             :href="route('gizi.kalender-menu')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.kalender-menu') || (route().current('gizi.index') && page.props.activeTab === 'kalender-menu')
+                                route().current('gizi.kalender-menu') ||
+                                (route().current('gizi.index') &&
+                                    page.props.activeTab === 'kalender-menu')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -504,7 +543,9 @@ function logout() {
                             :class="[
                                 'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
                                 isCollapsed ? 'hidden' : 'block',
-                                isKeuanganExpanded ? 'rotate-180 text-primary' : '',
+                                isKeuanganExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
                             ]"
                         />
                     </button>
@@ -519,7 +560,10 @@ function logout() {
                             :href="route('keuangan.anggaran')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.anggaran') || (route().current('keuangan.index') && (page.props.activeTab === 'anggaran' || !page.props.activeTab))
+                                route().current('keuangan.anggaran') ||
+                                (route().current('keuangan.index') &&
+                                    (page.props.activeTab === 'anggaran' ||
+                                        !page.props.activeTab))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -533,7 +577,12 @@ function logout() {
                             :href="route('keuangan.verifikasi-po')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.verifikasi-po') || route().current('keuangan.verifikasi_po') || (route().current('keuangan.*') && (page.props.activeTab === 'verifikasi-po' || page.props.activeTab === 'verifikasi_po'))
+                                route().current('keuangan.verifikasi-po') ||
+                                route().current('keuangan.verifikasi_po') ||
+                                (route().current('keuangan.*') &&
+                                    (page.props.activeTab === 'verifikasi-po' ||
+                                        page.props.activeTab ===
+                                            'verifikasi_po'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -547,7 +596,11 @@ function logout() {
                             :href="route('keuangan.daftar-po')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.daftar-po') || route().current('keuangan.daftar_po') || (route().current('keuangan.*') && (page.props.activeTab === 'daftar-po' || page.props.activeTab === 'daftar_po'))
+                                route().current('keuangan.daftar-po') ||
+                                route().current('keuangan.daftar_po') ||
+                                (route().current('keuangan.*') &&
+                                    (page.props.activeTab === 'daftar-po' ||
+                                        page.props.activeTab === 'daftar_po'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -569,13 +622,17 @@ function logout() {
                                 ]"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <FolderKanban class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                                    <FolderKanban
+                                        class="h-3.5 w-3.5 shrink-0 text-slate-500"
+                                    />
                                     <span class="truncate">SPJ</span>
                                 </div>
                                 <ChevronDown
                                     :class="[
                                         'h-3 w-3 shrink-0 transition-transform duration-200 text-slate-400',
-                                        isSpjExpanded ? 'rotate-180 text-primary' : '',
+                                        isSpjExpanded
+                                            ? 'rotate-180 text-primary'
+                                            : '',
                                     ]"
                                 />
                             </button>
@@ -590,7 +647,10 @@ function logout() {
                                     :href="route('keuangan.transaksi')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.transaksi') || (route().current('keuangan.*') && page.props.activeTab === 'transaksi')
+                                        route().current('keuangan.transaksi') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab ===
+                                                'transaksi')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -604,7 +664,9 @@ function logout() {
                                     :href="route('keuangan.bku')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bku') || (route().current('keuangan.*') && page.props.activeTab === 'bku')
+                                        route().current('keuangan.bku') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab === 'bku')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -618,7 +680,9 @@ function logout() {
                                     :href="route('keuangan.bp-bank')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-bank') || (route().current('keuangan.*') && page.props.activeTab === 'bp-bank')
+                                        route().current('keuangan.bp-bank') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab === 'bp-bank')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -632,7 +696,12 @@ function logout() {
                                     :href="route('keuangan.bp-petty-cash')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-petty-cash') || (route().current('keuangan.*') && page.props.activeTab === 'bp-petty-cash')
+                                        route().current(
+                                            'keuangan.bp-petty-cash',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab ===
+                                                'bp-petty-cash')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -646,7 +715,12 @@ function logout() {
                                     :href="route('keuangan.bp-bahan-baku')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-bahan-baku') || (route().current('keuangan.*') && page.props.activeTab === 'bp-bahan-baku')
+                                        route().current(
+                                            'keuangan.bp-bahan-baku',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab ===
+                                                'bp-bahan-baku')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -660,7 +734,12 @@ function logout() {
                                     :href="route('keuangan.bp-operasional')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-operasional') || (route().current('keuangan.*') && page.props.activeTab === 'bp-operasional')
+                                        route().current(
+                                            'keuangan.bp-operasional',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab ===
+                                                'bp-operasional')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -674,7 +753,12 @@ function logout() {
                                     :href="route('keuangan.bp-fasilitas')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-fasilitas') || (route().current('keuangan.*') && page.props.activeTab === 'bp-fasilitas')
+                                        route().current(
+                                            'keuangan.bp-fasilitas',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab ===
+                                                'bp-fasilitas')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -688,7 +772,9 @@ function logout() {
                                     :href="route('keuangan.lpa')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.lpa') || (route().current('keuangan.*') && page.props.activeTab === 'lpa')
+                                        route().current('keuangan.lpa') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab === 'lpa')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -702,7 +788,9 @@ function logout() {
                                     :href="route('keuangan.sptj')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.sptj') || (route().current('keuangan.*') && page.props.activeTab === 'sptj')
+                                        route().current('keuangan.sptj') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab === 'sptj')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -716,7 +804,9 @@ function logout() {
                                     :href="route('keuangan.bapsd')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bapsd') || (route().current('keuangan.*') && page.props.activeTab === 'bapsd')
+                                        route().current('keuangan.bapsd') ||
+                                        (route().current('keuangan.*') &&
+                                            page.props.activeTab === 'bapsd')
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -732,7 +822,9 @@ function logout() {
                             :href="route('keuangan.stok')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.stok') || (route().current('keuangan.*') && page.props.activeTab === 'stok')
+                                route().current('keuangan.stok') ||
+                                (route().current('keuangan.*') &&
+                                    page.props.activeTab === 'stok')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -754,13 +846,17 @@ function logout() {
                                 ]"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <FileText class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                                    <FileText
+                                        class="h-3.5 w-3.5 shrink-0 text-slate-500"
+                                    />
                                     <span class="truncate">Laporan</span>
                                 </div>
                                 <ChevronDown
                                     :class="[
                                         'h-3 w-3 shrink-0 transition-transform duration-200 text-slate-400',
-                                        isLaporanExpanded ? 'rotate-180 text-primary' : '',
+                                        isLaporanExpanded
+                                            ? 'rotate-180 text-primary'
+                                            : '',
                                     ]"
                                 />
                             </button>
@@ -775,7 +871,14 @@ function logout() {
                                     :href="route('keuangan.laporan-harian')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.laporan-harian') || (route().current('keuangan.*') && (page.props.activeTab === 'laporan-harian' || page.props.activeTab === 'laporan_harian'))
+                                        route().current(
+                                            'keuangan.laporan-harian',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            (page.props.activeTab ===
+                                                'laporan-harian' ||
+                                                page.props.activeTab ===
+                                                    'laporan_harian'))
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -789,7 +892,14 @@ function logout() {
                                     :href="route('keuangan.laporan-periodik')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.laporan-periodik') || (route().current('keuangan.*') && (page.props.activeTab === 'laporan-periodik' || page.props.activeTab === 'laporan_periodik'))
+                                        route().current(
+                                            'keuangan.laporan-periodik',
+                                        ) ||
+                                        (route().current('keuangan.*') &&
+                                            (page.props.activeTab ===
+                                                'laporan-periodik' ||
+                                                page.props.activeTab ===
+                                                    'laporan_periodik'))
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
@@ -831,7 +941,9 @@ function logout() {
                             :class="[
                                 'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
                                 isCollapsed ? 'hidden' : 'block',
-                                isLabelExpanded ? 'rotate-180 text-primary' : '',
+                                isLabelExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
                             ]"
                         />
                     </button>
@@ -846,7 +958,10 @@ function logout() {
                             :href="route('label.buat')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('label.buat') || (route().current('label.index') && (page.props.activeSubMenu === 'buat' || !page.props.activeSubMenu))
+                                route().current('label.buat') ||
+                                (route().current('label.index') &&
+                                    (page.props.activeSubMenu === 'buat' ||
+                                        !page.props.activeSubMenu))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -860,7 +975,9 @@ function logout() {
                             :href="route('label.daftar')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('label.daftar') || (route().current('label.index') && page.props.activeSubMenu === 'daftar')
+                                route().current('label.daftar') ||
+                                (route().current('label.index') &&
+                                    page.props.activeSubMenu === 'daftar')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -870,6 +987,39 @@ function logout() {
                         </Link>
                     </div>
                 </div>
+
+                <!-- 5. Menu Supplier Rekanan -->
+                <Link
+                    :href="route('supplier.index')"
+                    :title="isCollapsed ? 'Supplier' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('supplier.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Store class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Supplier</span
+                    >
+                    <div
+                        v-if="route().current('supplier.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
 
                 <!-- 6. Menu Periode -->
                 <Link
@@ -965,7 +1115,9 @@ function logout() {
                     title="Halaman Utama"
                     :class="[
                         'flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 shadow-2xs cursor-pointer transition-all shrink-0',
-                        isCollapsed ? 'h-9 w-full lg:h-10 lg:w-full' : 'h-9 w-10',
+                        isCollapsed
+                            ? 'h-9 w-full lg:h-10 lg:w-full'
+                            : 'h-9 w-10',
                     ]"
                 >
                     <Home class="h-4 w-4 text-slate-600" />
@@ -985,7 +1137,9 @@ function logout() {
                     ]"
                 >
                     <LogOut class="h-4 w-4 shrink-0" />
-                    <span :class="[isCollapsed ? 'inline lg:hidden' : 'inline']">
+                    <span
+                        :class="[isCollapsed ? 'inline lg:hidden' : 'inline']"
+                    >
                         Keluar
                     </span>
                 </Button>

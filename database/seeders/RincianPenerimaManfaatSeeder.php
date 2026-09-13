@@ -53,9 +53,10 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [5, 'Kelas 2', 'Porsi Kecil', 25, 48],
             [5, 'Kelas 3', 'Porsi Kecil', 40, 28],
             [5, 'Kelas 4', 'Porsi Besar', 31, 30],
-            [5, 'Kelas 5', 'Porsi Besar', 34, 40],
-            [5, 'Kelas 6', 'Porsi Besar', 20, 31],
+            [5, 'Kelas 5', 'Porsi Besar', 23, 36],
+            [5, 'Kelas 6', 'Porsi Besar', 25, 30],
             [5, 'Pendukung (Guru)', 'Porsi Besar', 7, 16],
+            [5, 'Pendukung (Tenaga Kependidikan)', 'Porsi Besar', 6, 5],
 
             // 6. MTs Al-Khairiyah (ID KPM = 6)
             [6, 'Kelas 7', 'Porsi Besar', 24, 23],

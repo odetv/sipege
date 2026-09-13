@@ -46,6 +46,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    suppliers: {
+        type: Array,
+        default: () => [],
+    },
     summary: {
         type: Object,
         default: () => ({
@@ -441,6 +445,7 @@ function formatTanggalIndo(tgl) {
             <KeuanganDaftarPoTab
                 v-if="activeTab === 'daftar_po'"
                 :po-list="poList"
+                :suppliers="suppliers"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
             />

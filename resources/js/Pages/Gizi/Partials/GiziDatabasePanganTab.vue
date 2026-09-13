@@ -84,7 +84,7 @@ const avgBdd = computed(() => {
     if (!tkpiItems.value || tkpiItems.value.length === 0) return "0.0%";
     const totalBdd = tkpiItems.value.reduce(
         (acc, item) => acc + (Number(item.bdd) || 0),
-        0
+        0,
     );
     return (totalBdd / tkpiItems.value.length).toFixed(1) + "%";
 });
@@ -116,20 +116,22 @@ function formatRupiah(val) {
                             <Database class="h-5 w-5 text-primary" />
                             <span>Master Database Pangan</span>
                         </CardTitle>
-                        <CardDescription
-                            class="text-xs sm:text-sm mt-0.5"
-                        >
-                            Pilih sumber database acuan untuk seluruh modul perencanaan & rancang formula menu:
+                        <CardDescription class="text-xs sm:text-sm mt-0.5">
+                            Pilih sumber database acuan untuk seluruh modul
+                            perencanaan & rancang formula menu:
                             <strong class="text-slate-800">{{
-                                selectedSource === 'fta'
-                                    ? `NutriSurvey Indo (indo.fta - ${tkpiDatasets.fta?.length || (selectedSource === 'fta' ? tkpiItems.length : 1105)} Bahan)`
-                                    : `TKPI 2020 Kemenkes (tkpi2020.csv - ${tkpiDatasets.csv?.length || (selectedSource === 'csv' ? tkpiItems.length : 1066)} Bahan)`
-                            }}</strong>.
+                                selectedSource === "fta"
+                                    ? `Nutri Survey (.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
+                                    : `TKPI 2020 (.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`
+                            }}</strong
+                            >.
                         </CardDescription>
                     </div>
 
                     <!-- Source Dataset Switcher -->
-                    <div class="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto">
+                    <div
+                        class="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto"
+                    >
                         <button
                             type="button"
                             @click="emit('update-source', 'fta')"
@@ -137,20 +139,33 @@ function formatRupiah(val) {
                                 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
                                 selectedSource === 'fta'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
-                                    : 'text-slate-600 hover:text-slate-900'
+                                    : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database NutriSurvey Indo (.fta)"
+                            title="Gunakan Database Nutri Survey (.fta)"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
-                                :class="selectedSource === 'fta' ? 'bg-primary' : 'bg-slate-300'"
+                                :class="
+                                    selectedSource === 'fta'
+                                        ? 'bg-primary'
+                                        : 'bg-slate-300'
+                                "
                             ></span>
-                            <span>NutriSurvey Indo (.fta)</span>
+                            <span>Nutri Survey (.fta)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                                :class="selectedSource === 'fta' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-600'"
+                                :class="
+                                    selectedSource === 'fta'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-slate-200 text-slate-600'
+                                "
                             >
-                                {{ tkpiDatasets.fta?.length || (selectedSource === 'fta' ? tkpiItems.length : 1105) }}
+                                {{
+                                    tkpiDatasets.fta?.length ||
+                                    (selectedSource === "fta"
+                                        ? tkpiItems.length
+                                        : 1105)
+                                }}
                             </span>
                         </button>
 
@@ -161,20 +176,33 @@ function formatRupiah(val) {
                                 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
                                 selectedSource === 'csv'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
-                                    : 'text-slate-600 hover:text-slate-900'
+                                    : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database TKPI 2020 Kemenkes (.csv)"
+                            title="Gunakan Database TKPI 2020 (.csv)"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
-                                :class="selectedSource === 'csv' ? 'bg-primary' : 'bg-slate-300'"
+                                :class="
+                                    selectedSource === 'csv'
+                                        ? 'bg-primary'
+                                        : 'bg-slate-300'
+                                "
                             ></span>
                             <span>TKPI 2020 (.csv)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                                :class="selectedSource === 'csv' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-600'"
+                                :class="
+                                    selectedSource === 'csv'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-slate-200 text-slate-600'
+                                "
                             >
-                                {{ tkpiDatasets.csv?.length || (selectedSource === 'csv' ? tkpiItems.length : 1066) }}
+                                {{
+                                    tkpiDatasets.csv?.length ||
+                                    (selectedSource === "csv"
+                                        ? tkpiItems.length
+                                        : 1066)
+                                }}
                             </span>
                         </button>
                     </div>
@@ -193,12 +221,9 @@ function formatRupiah(val) {
                         >
                             TOTAL BAHAN TERDAFTAR
                         </p>
-                        <h4
-                            class="text-xl font-black text-blue-950 mt-1"
-                        >
+                        <h4 class="text-xl font-black text-blue-950 mt-1">
                             {{ tkpiItems.length }}
-                            <span
-                                class="text-xs font-medium text-slate-500"
+                            <span class="text-xs font-medium text-slate-500"
                                 >Bahan</span
                             >
                         </h4>
@@ -211,12 +236,9 @@ function formatRupiah(val) {
                         >
                             KATEGORI PANGAN
                         </p>
-                        <h4
-                            class="text-xl font-black text-emerald-950 mt-1"
-                        >
+                        <h4 class="text-xl font-black text-emerald-950 mt-1">
                             {{ tkpiCategoryList.length - 1 }}
-                            <span
-                                class="text-xs font-medium text-slate-500"
+                            <span class="text-xs font-medium text-slate-500"
                                 >Kelompok</span
                             >
                         </h4>
@@ -229,12 +251,9 @@ function formatRupiah(val) {
                         >
                             RATA-RATA BDD
                         </p>
-                        <h4
-                            class="text-xl font-black text-amber-950 mt-1"
-                        >
+                        <h4 class="text-xl font-black text-amber-950 mt-1">
                             {{ avgBdd }}
-                            <span
-                                class="text-xs font-medium text-slate-500"
+                            <span class="text-xs font-medium text-slate-500"
                                 >Dapat Dimakan</span
                             >
                         </h4>
@@ -250,9 +269,12 @@ function formatRupiah(val) {
                         <h4
                             class="text-sm sm:text-base font-black text-purple-950 mt-1"
                         >
-                            {{ selectedSource === 'fta' ? 'indo.fta (NutriSurvey)' : 'tkpi2020.csv (Kemenkes)' }}
-                            <span
-                                class="text-xs font-medium text-slate-500"
+                            {{
+                                selectedSource === "fta"
+                                    ? "Nutri Survey (.fta)"
+                                    : "TKPI 2020 (.csv)"
+                            }}
+                            <span class="text-xs font-medium text-slate-500"
                                 >({{ tkpiItems.length }} Bahan)</span
                             >
                         </h4>
@@ -276,9 +298,7 @@ function formatRupiah(val) {
                             />
                         </div>
                         <div class="text-xs text-slate-500 font-medium">
-                            Filter Kategori ({{
-                                tkpiCategoryList.length - 1
-                            }}
+                            Filter Kategori ({{ tkpiCategoryList.length - 1 }}
                             kelompok)
                         </div>
                     </div>
@@ -307,21 +327,30 @@ function formatRupiah(val) {
         </Card>
 
         <!-- Tabel Data Bahan Pangan -->
-        <div class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white">
+        <div
+            class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white"
+        >
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[900px] text-left text-xs border-collapse">
+                <table
+                    class="w-full min-w-[900px] text-left text-xs border-collapse"
+                >
                     <thead>
-                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                        <tr
+                            class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                        >
                             <th class="py-3.5 px-3">Kode</th>
                             <th class="py-3.5 px-3">Nama Bahan Pangan</th>
                             <th class="py-3.5 px-3">Kategori</th>
-                            <th class="py-3.5 px-3 text-right">Energi (Kkal)</th>
+                            <th class="py-3.5 px-3 text-right">
+                                Energi (Kkal)
+                            </th>
                             <th class="py-3.5 px-3 text-right">Protein (g)</th>
                             <th class="py-3.5 px-3 text-right">Lemak (g)</th>
-                            <th class="py-3.5 px-3 text-right">Karbohidrat (g)</th>
+                            <th class="py-3.5 px-3 text-right">
+                                Karbohidrat (g)
+                            </th>
                             <th class="py-3.5 px-3 text-right">Serat (g)</th>
                             <th class="py-3.5 px-3 text-center">BDD (%)</th>
-                            <th class="py-3.5 px-3 text-right">Harga Master</th>
                             <th class="py-3.5 px-3 text-center">Alergen</th>
                         </tr>
                     </thead>
@@ -331,7 +360,9 @@ function formatRupiah(val) {
                             :key="item.id"
                             class="hover:bg-slate-50/70 transition-colors"
                         >
-                            <td class="p-3 font-mono font-bold text-slate-500 text-[11px]">
+                            <td
+                                class="p-3 font-mono font-bold text-slate-500 text-[11px]"
+                            >
                                 {{ item.id }}
                             </td>
                             <td class="p-3 font-bold text-slate-900">
@@ -348,7 +379,9 @@ function formatRupiah(val) {
                             <td class="p-3 text-right font-bold text-amber-800">
                                 {{ item.energi }}
                             </td>
-                            <td class="p-3 text-right font-semibold text-blue-800">
+                            <td
+                                class="p-3 text-right font-semibold text-blue-800"
+                            >
                                 {{ item.protein }}
                             </td>
                             <td class="p-3 text-right text-slate-700">
@@ -360,12 +393,10 @@ function formatRupiah(val) {
                             <td class="p-3 text-right text-slate-700">
                                 {{ item.serat }}
                             </td>
-                            <td class="p-3 text-center font-bold text-emerald-800">
+                            <td
+                                class="p-3 text-center font-bold text-emerald-800"
+                            >
                                 {{ item.bdd }}%
-                            </td>
-                            <td class="p-3 text-right font-bold text-slate-900">
-                                {{ formatRupiah(item.harga_master) }}
-                                /kg
                             </td>
                             <td class="p-3 text-center">
                                 <span
@@ -379,10 +410,11 @@ function formatRupiah(val) {
                         </tr>
                         <tr v-if="filteredTkpiList.length === 0">
                             <td
-                                colspan="11"
+                                colspan="10"
                                 class="p-8 text-center text-slate-400 font-semibold"
                             >
-                                Tidak ada data bahan pangan yang sesuai dengan pencarian.
+                                Tidak ada data bahan pangan yang sesuai dengan
+                                pencarian.
                             </td>
                         </tr>
                     </tbody>
@@ -395,9 +427,16 @@ function formatRupiah(val) {
             >
                 <span>
                     Menampilkan
-                    <strong>{{ (tkpiCurrentPage - 1) * tkpiPerPage + 1 }}</strong>
+                    <strong>{{
+                        (tkpiCurrentPage - 1) * tkpiPerPage + 1
+                    }}</strong>
                     -
-                    <strong>{{ Math.min(tkpiCurrentPage * tkpiPerPage, filteredTkpiList.length) }}</strong>
+                    <strong>{{
+                        Math.min(
+                            tkpiCurrentPage * tkpiPerPage,
+                            filteredTkpiList.length,
+                        )
+                    }}</strong>
                     dari
                     <strong>{{ filteredTkpiList.length }}</strong> bahan
                 </span>

@@ -39,6 +39,11 @@ class PurchaseOrder extends Model
         return $this->belongsTo(User::class, 'diverifikasi_oleh');
     }
 
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(PurchaseOrderItem::class, 'purchase_order_id');

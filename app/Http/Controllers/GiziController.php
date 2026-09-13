@@ -171,6 +171,9 @@ class GiziController extends Controller
             $workOrder->items()->delete();
             foreach ($validated['items'] ?? [] as $item) {
                 $workOrder->items()->create([
+                    'sub_menu_key' => $item['sub_menu_key'] ?? null,
+                    'sub_menu_block_id' => $item['sub_menu_block_id'] ?? null,
+                    'nama_sub_menu' => $item['nama_sub_menu'] ?? null,
                     'tkpi_id' => $item['tkpi_id'] ?? $item['id'] ?? null,
                     'nama' => $item['nama'] ?? 'Bahan',
                     'nama_po' => $item['nama_po'] ?? $item['nama'] ?? 'Bahan',
@@ -189,6 +192,7 @@ class GiziController extends Controller
                     'subtotal_master' => $item['subtotalMaster'] ?? 0,
                     'nutrisi_pk' => $item['nutrisiPK'] ?? null,
                     'nutrisi_pb' => $item['nutrisiPB'] ?? null,
+                    'keterangan' => $item['keterangan'] ?? null,
                 ]);
             }
 
@@ -215,6 +219,7 @@ class GiziController extends Controller
             $tglStr = str_replace('-', '', $validated['tanggal_distribusi']);
             $nomorPo = 'PO-' . $tglStr . '-' . str_pad($workOrder->id, 3, '0', STR_PAD_LEFT);
             $poStatus = ($validated['status'] === 'Diajukan ke Keuangan' || $validated['status'] === 'Siap Produksi') ? 'Menunggu Verifikasi' : 'Draft PO';
+            $existingPo = PurchaseOrder::where('work_order_id', $workOrder->id)->first();
 
             $po = PurchaseOrder::updateOrCreate(
                 [
@@ -224,14 +229,16 @@ class GiziController extends Controller
                     'unit_sppg_id' => $unitSppg->id,
                     'nomor_po' => $nomorPo,
                     'tanggal' => $validated['tanggal_distribusi'],
-                    'vendor' => 'Rekanan Pangan SPPG',
+                    'supplier_id' => $existingPo ? $existingPo->supplier_id : null,
+                    'vendor' => $existingPo ? $existingPo->vendor : null,
+                    'jenis_transaksi' => $existingPo ? $existingPo->jenis_transaksi : null,
                     'items_count' => count($validated['items']),
                     'total_nominal_master' => $validated['total_anggaran_master'] ?? 0,
                     'total_nominal_aktual' => $validated['total_anggaran_master'] ?? 0,
                     'status_po' => $poStatus,
-                    'status_bayar' => 'Belum Bayar',
+                    'status_bayar' => $existingPo ? $existingPo->status_bayar : 'Belum Bayar',
                     'catatan' => 'Dibuat dari ' . $workOrder->nomor_wo . ' - ' . $workOrder->nama_menu,
-                    'riwayat_verifikasi' => $existingWoLogs ?? null,
+                    'riwayat_verifikasi' => $existingWoLogs ?? ($existingPo ? $existingPo->riwayat_verifikasi : null),
                 ]
             );
 
@@ -246,6 +253,7 @@ class GiziController extends Controller
                     'harga_master' => $woItem->harga_master,
                     'harga_aktual' => $woItem->harga_master,
                     'subtotal_aktual' => $woItem->total_gross_kg * $woItem->harga_master,
+                    'keterangan' => $woItem->keterangan,
                 ]);
             }
         });
@@ -421,6 +429,7 @@ class GiziController extends Controller
         $recordSize = 1156;
         $total = (int)(strlen($data) / $recordSize);
         $items = [];
+        $tkpiBddMap = $this->getTkpiBddLookup();
 
         for ($r = 0; $r < $total; $r++) {
             $rec = substr($data, $r * $recordSize, $recordSize);
@@ -452,7 +461,7 @@ class GiziController extends Controller
             $nameLower = ' ' . strtolower($name) . ' ';
             $kategori = $this->categorizeFtaFood($nameLower);
             $alergen = $this->detectFtaAllergen($nameLower);
-            $hargaMaster = $this->estimateFtaPrice($nameLower);
+            $bdd = $this->resolveFtaBdd($name, $tkpiBddMap);
 
             $items[] = [
                 'id' => $code,
@@ -465,10 +474,10 @@ class GiziController extends Controller
                 'lemak' => $fat,
                 'karbohidrat' => $carb,
                 'serat' => $fiber,
-                'bdd' => 100,
+                'bdd' => $bdd,
                 'fmm' => 100,
                 'buffer' => 4,
-                'harga_master' => $hargaMaster,
+                'harga_master' => null,
                 'alergen' => $alergen,
             ];
         }
@@ -514,62 +523,135 @@ class GiziController extends Controller
         return 'Makanan Campuran & Olahan';
     }
 
-    private function detectFtaAllergen(string $nl): ?string
+    private function matchAllergenKeywords(string $text, array $keywords): bool
     {
-        if (str_contains($nl, 'telur')) {
-            return 'Telur';
+        foreach ($keywords as $kw) {
+            $kw = trim($kw);
+            if ($kw === '') {
+                continue;
+            }
+            $escaped = preg_quote($kw, '/');
+            if (preg_match('/(?<![a-zA-Z0-9])' . $escaped . '(?![a-zA-Z0-9])/i', $text)) {
+                return true;
+            }
         }
-        if (str_contains($nl, 'ikan') || str_contains($nl, 'udang') || str_contains($nl, 'cumi') || str_contains($nl, 'kepiting') || str_contains($nl, 'kerang') || preg_match('/\bteri\b/', $nl)) {
-            return 'Seafood/Ikan';
-        }
-        if (str_contains($nl, 'kedelai') || str_contains($nl, 'tempe') || str_contains($nl, 'tahu')) {
-            return 'Kedelai';
-        }
-        if (str_contains($nl, 'kacang') || str_contains($nl, 'wijen')) {
-            return 'Kacang';
-        }
-        if (str_contains($nl, 'susu') || str_contains($nl, 'keju') || str_contains($nl, 'lactogen') || str_contains($nl, 'sgm')) {
-            return 'Laktosa / Susu';
-        }
-        if (str_contains($nl, 'gandum') || str_contains($nl, 'terigu') || str_contains($nl, 'roti') || str_contains($nl, 'biskuit') || str_contains($nl, 'mie') || str_contains($nl, 'havermout')) {
-            return 'Gluten';
-        }
-        return null;
+        return false;
     }
 
-    private function estimateFtaPrice(string $nl): int
+    private function detectFtaAllergen(string $nl): ?string
     {
-        if (str_contains($nl, 'daging') || str_contains($nl, 'sapi') || str_contains($nl, 'kambing')) {
-            return 120000;
+        if ($this->matchAllergenKeywords($nl, ['telur', 'egg', 'dadar', 'ceplok', 'omelet', 'mayones', 'mayonnaise', 'telur puyuh', 'telur bebek', 'telur asin', 'telor'])) {
+            return 'Telur';
         }
-        if (str_contains($nl, 'ayam') || str_contains($nl, 'unggas') || str_contains($nl, 'bebek')) {
-            return 38000;
+        if ($this->matchAllergenKeywords($nl, ['udang', 'shrimp', 'prawn', 'ebi', 'rebon'])) {
+            return 'Udang';
         }
-        if (str_contains($nl, 'ikan') || str_contains($nl, 'udang') || str_contains($nl, 'cumi') || str_contains($nl, 'kepiting')) {
-            return 45000;
+        if ($this->matchAllergenKeywords($nl, ['kepiting', 'crab', 'rajungan', 'lobster'])) {
+            return 'Kepiting';
         }
-        if (str_contains($nl, 'telur')) {
-            return 29000;
+        if ($this->matchAllergenKeywords($nl, ['cumi', 'cumi-cumi', 'squid', 'sotong', 'gurita', 'octopus'])) {
+            return 'Cumi-cumi';
         }
-        if (str_contains($nl, 'tempe') || str_contains($nl, 'tahu')) {
-            return 15000;
+        if ($this->matchAllergenKeywords($nl, ['kerang', 'clam', 'mussel', 'scallop', 'tiram', 'remis', 'kupang'])) {
+            return 'Kerang';
         }
-        if (str_contains($nl, 'beras')) {
-            return 16000;
+        if ($this->matchAllergenKeywords($nl, ['ikan', 'fish', 'tuna', 'tongkol', 'bandeng', 'teri', 'belut', 'lele', 'gurame', 'gurami', 'nila', 'kakap', 'tenggiri', 'kembung', 'pindang', 'dori', 'salmon', 'patin', 'bawal', 'cakalang', 'mujair', 'ikan mas', 'gabus'])) {
+            return 'Ikan';
         }
-        if (str_contains($nl, 'sayur') || str_contains($nl, 'bayam') || str_contains($nl, 'wortel') || str_contains($nl, 'kangkung') || str_contains($nl, 'buncis')) {
-            return 14000;
+        if ($this->matchAllergenKeywords($nl, ['susu', 'milk', 'dairy', 'laktosa', 'yogurt', 'yoghurt', 'butter', 'mentega', 'krim', 'cream', 'lactogen', 'sgm'])) {
+            return 'Susu dan produk olahannya';
         }
-        if (str_contains($nl, 'pisang') || str_contains($nl, 'buah') || str_contains($nl, 'jeruk') || str_contains($nl, 'pepaya') || str_contains($nl, 'semangka')) {
-            return 18000;
+        if ($this->matchAllergenKeywords($nl, ['keju', 'cheese', 'cheddar', 'mozzarella', 'parmesan'])) {
+            return 'Keju';
         }
-        if (str_contains($nl, 'minyak')) {
-            return 17500;
+        if ($this->matchAllergenKeywords($nl, ['kacang tanah', 'peanut', 'bumbu kacang', 'pecel', 'gado-gado', 'saus kacang'])) {
+            return 'Kacang Tanah';
         }
-        if (str_contains($nl, 'susu') || str_contains($nl, 'keju')) {
-            return 28000;
+        if ($this->matchAllergenKeywords($nl, ['kacang kedelai', 'soybean', 'biji kedelai'])) {
+            return 'Kacang Kedelai';
         }
-        return 15000;
+        if ($this->matchAllergenKeywords($nl, ['tahu', 'tofu'])) {
+            return 'Tahu';
+        }
+        if ($this->matchAllergenKeywords($nl, ['tempe', 'tempeh'])) {
+            return 'Tempe';
+        }
+        if ($this->matchAllergenKeywords($nl, ['kedelai', 'soy', 'soya', 'tauco', 'kecap', 'edamame'])) {
+            return 'Kedelai';
+        }
+        if ($this->matchAllergenKeywords($nl, ['almond', 'badam', 'kacang almond'])) {
+            return 'Kacang Almond';
+        }
+        if ($this->matchAllergenKeywords($nl, ['mete', 'mede', 'cashew', 'kacang mete', 'kacang mede'])) {
+            return 'Kacang Mete';
+        }
+        if ($this->matchAllergenKeywords($nl, ['hazelnut', 'kacang hazelnut'])) {
+            return 'Kacang Hazelnut';
+        }
+        if ($this->matchAllergenKeywords($nl, ['kenari', 'walnut', 'kacang kenari'])) {
+            return 'Kacang Kenari';
+        }
+        if ($this->matchAllergenKeywords($nl, ['kacang merah', 'kacang hijau', 'kacang polong', 'kacang tolo', 'pistachio', 'macadamia', 'kacang'])) {
+            return 'Kacang-kacangan lainnya';
+        }
+        if ($this->matchAllergenKeywords($nl, ['gandum', 'terigu', 'roti', 'biskuit', 'mie', 'bakmi', 'pasta', 'spageti', 'spaghetti', 'makaroni', 'tepung terigu'])) {
+            return 'Gandum/Tepung Terigu';
+        }
+        if ($this->matchAllergenKeywords($nl, ['gluten', 'seitan'])) {
+            return 'Gluten';
+        }
+        if ($this->matchAllergenKeywords($nl, ['wijen', 'sesame', 'tahini', 'biji wijen'])) {
+            return 'Wijen';
+        }
+        if ($this->matchAllergenKeywords($nl, ['ayam', 'chicken', 'bebek', 'unggas', 'kalkun', 'dada ayam', 'paha ayam', 'fillet ayam'])) {
+            return 'Daging Ayam';
+        }
+        if ($this->matchAllergenKeywords($nl, ['sapi', 'beef', 'kornet', 'rendang', 'rawon', 'empal', 'iga sapi', 'buntut sapi', 'daging sapi'])) {
+            return 'Daging Sapi';
+        }
+        if ($this->matchAllergenKeywords($nl, ['cokelat', 'coklat', 'kakao', 'cocoa', 'chocolate'])) {
+            return 'Cokelat/Kakao';
+        }
+        if ($this->matchAllergenKeywords($nl, ['madu', 'honey'])) {
+            return 'Madu';
+        }
+        if ($this->matchAllergenKeywords($nl, ['nanas', 'nenas', 'pineapple'])) {
+            return 'Nanas';
+        }
+        if ($this->matchAllergenKeywords($nl, ['tomat', 'tomato'])) {
+            return 'Tomat';
+        }
+        if ($this->matchAllergenKeywords($nl, ['jagung', 'corn', 'maizena'])) {
+            return 'Jagung';
+        }
+        if ($this->matchAllergenKeywords($nl, ['kentang', 'potato'])) {
+            return 'Kentang';
+        }
+        if ($this->matchAllergenKeywords($nl, ['wortel', 'carrot'])) {
+            return 'Wortel';
+        }
+        if ($this->matchAllergenKeywords($nl, ['stroberi', 'strawberry'])) {
+            return 'Stroberi';
+        }
+        if ($this->matchAllergenKeywords($nl, ['mangga', 'mango'])) {
+            return 'Mangga';
+        }
+        if ($this->matchAllergenKeywords($nl, ['melon', 'cantaloupe', 'honeydew'])) {
+            return 'Melon';
+        }
+        if ($this->matchAllergenKeywords($nl, ['pisang', 'banana'])) {
+            return 'Pisang';
+        }
+        if ($this->matchAllergenKeywords($nl, ['alpukat', 'avokad', 'avocado'])) {
+            return 'Alpukat';
+        }
+        if ($this->matchAllergenKeywords($nl, ['jeruk', 'orange', 'citrus', 'lemon', 'mandarin'])) {
+            return 'Jeruk';
+        }
+        if ($this->matchAllergenKeywords($nl, ['buah naga', 'dragon fruit'])) {
+            return 'Buah Naga';
+        }
+        return null;
     }
 
     private function parseCsvData(string $csvPath): array
@@ -596,7 +678,6 @@ class GiziController extends Controller
                 $bdd = (float) ($row[27] ?? 100);
 
                 $nameLower = ' ' . strtolower($name) . ' ';
-                $hargaMaster = $this->estimateFtaPrice($nameLower);
                 $alergen = $this->detectFtaAllergen($nameLower);
 
                 $items[] = [
@@ -613,7 +694,7 @@ class GiziController extends Controller
                     'bdd' => $bdd > 0 ? $bdd : 100,
                     'fmm' => 100,
                     'buffer' => 4,
-                    'harga_master' => $hargaMaster,
+                    'harga_master' => null,
                     'alergen' => $alergen,
                 ];
             }
@@ -621,5 +702,190 @@ class GiziController extends Controller
         }
 
         return $items;
+    }
+
+    /**
+     * Membaca tabel lookup BDD resmi dari file TKPI 2020 CSV (Kemenkes RI).
+     *
+     * @return array<string, float>
+     */
+    private function getTkpiBddLookup(): array
+    {
+        $csvPath = database_path('data/tkpi2020.csv');
+        if (!file_exists($csvPath)) {
+            return [];
+        }
+
+        $lookup = [];
+        if (($handle = fopen($csvPath, 'r')) !== false) {
+            $header = fgetcsv($handle);
+            $bddIdx = array_search('bdd_percent', $header);
+            $nameIdx = array_search('name', $header);
+
+            if ($bddIdx !== false && $nameIdx !== false) {
+                while (($row = fgetcsv($handle)) !== false) {
+                    if (count($row) <= $bddIdx) {
+                        continue;
+                    }
+                    $name = trim($row[$nameIdx] ?? '');
+                    $bdd = (float) ($row[$bddIdx] ?? 100);
+                    $clean = strtolower((string) preg_replace('/[^a-z0-9]/', '', $name));
+                    if ($clean !== '') {
+                        $lookup[$clean] = $bdd > 0 ? $bdd : 100;
+                    }
+                }
+            }
+            fclose($handle);
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * Menentukan nilai BDD (Berat Dapat Dimakan / Edible Portion %) resmi untuk bahan pangan FTA.
+     * Menggunakan matching database resmi TKPI Kemenkes dan standar DKBM Indonesia.
+     *
+     * @param string $rawName
+     * @param array<string, float> $tkpiMap
+     * @return float
+     */
+    private function resolveFtaBdd(string $rawName, array $tkpiMap): float
+    {
+        $name = strtolower(trim($rawName));
+        $clean = strtolower((string) preg_replace('/[^a-z0-9]/', '', $name));
+
+        // 1. Exact match di TKPI
+        if (isset($tkpiMap[$clean])) {
+            return $tkpiMap[$clean];
+        }
+
+        // 2. Olahan matang / bubuk / tepung / minyak / kecap / susu cair / bumbu instan / nasi = BDD 100%
+        if (preg_match('/\b(tepung|goreng|rebus|kukus|panggang|bakar|asin|kering|bubuk|saus|kecap|sirup|jus|susu|minyak|mentega|margarin|gula|nasi|bubur|kerupuk|krupuk|biskuit|kue|mie|bihun|soun|roti|dodol|selai|olahan|tim|tumis|bacem|gulai|semur|rendang|opor|sup|sop|soto|abon|dendeng|sosis|nugget|bakso|siomay|pempek|tahu|tempe|oncom)\b/i', $name)) {
+            return 100;
+        }
+
+        // 3. Substring match pada database resmi TKPI Kemenkes
+        foreach ($tkpiMap as $tName => $tBdd) {
+            if ($tBdd < 100 && (str_contains($clean, $tName) || str_contains($tName, $clean))) {
+                return $tBdd;
+            }
+        }
+
+        // 4. Standar Resmi DKBM / TKPI Kemenkes untuk Bahan Baku Mentah Segar
+        // Telur utuh berkulit cangkang
+        if (preg_match('/\btelur\b/i', $name)) {
+            if (preg_match('/(putih|kuning)/i', $name)) return 100;
+            if (preg_match('/(bebek|itik|puyuh)/i', $name)) return 90;
+            return 89; // Telur ayam ras / kampung utuh segar (89%)
+        }
+
+        // Daging Unggas (Ayam, Bebek, Burung) mentah utuh
+        if (preg_match('/\b(ayam|bebek|itik|burung dara|burung puyuh)\b/i', $name)) {
+            if (preg_match('/(fillet|dada tanpa tulang|hati|ampela|rempelo|jantung|usus|otak|darah)/i', $name)) return 100;
+            return 58; // Daging ayam mentah segar (TKPI resmi 58%)
+        }
+
+        // Daging Sapi / Kambing
+        if (preg_match('/\b(sapi|kambing|domba|kerbau)\b/i', $name)) {
+            if (preg_match('/(iga|buntut|tulang|kaki|tetelan)/i', $name)) return 70;
+            return 100;
+        }
+
+        // Ikan & Seafood mentah segar
+        if (preg_match('/\b(ikan|bandeng|tongkol|tenggiri|lele|mas|nila|gurame|kakap|kembung|mujair|patin|belut|gabus|bawal|teri segar)\b/i', $name)) {
+            if (preg_match('/(fillet|giling|asin|kering|kaleng|sarden)/i', $name)) return 100;
+            if (preg_match('/belut/i', $name)) return 84;
+            if (preg_match('/teri/i', $name)) return 100;
+            return 80; // Standar rata-rata BDD ikan segar TKPI 80%
+        }
+        if (preg_match('/\b(udang)\b/i', $name)) {
+            if (preg_match('/kering|rebon|tanpa kulit|kupas/i', $name)) return 100;
+            return 68; // Udang segar berkulit (68%)
+        }
+        if (preg_match('/\b(cumi|kepiting|rajungan|kerang)\b/i', $name)) {
+            if (preg_match('/kepiting|rajungan/i', $name)) return 45;
+            if (preg_match('/kerang/i', $name)) return 20;
+            return 80; // Cumi-cumi segar
+        }
+
+        // Buah-buahan segar
+        if (preg_match('/\b(pisang)\b/i', $name)) {
+            if (preg_match('/(ambon|raja|barangan|susu|kepok)/i', $name)) return 75;
+            if (preg_match('/mas/i', $name)) return 85;
+            return 75;
+        }
+        if (preg_match('/\b(semangka)\b/i', $name)) return 46;
+        if (preg_match('/\b(melon)\b/i', $name)) return 58;
+        if (preg_match('/\b(pepaya)\b/i', $name)) return 75;
+        if (preg_match('/\b(jeruk)\b/i', $name)) {
+            if (preg_match('/bali/i', $name)) return 62;
+            if (preg_match('/nipis|purut/i', $name)) return 76;
+            return 72;
+        }
+        if (preg_match('/\b(mangga)\b/i', $name)) return 65;
+        if (preg_match('/\b(nenas|nanas)\b/i', $name)) return 53;
+        if (preg_match('/\b(apel)\b/i', $name)) return 88;
+        if (preg_match('/\b(pir|pear)\b/i', $name)) return 88;
+        if (preg_match('/\b(jambu biji|jambu merah|jambu klutuk)\b/i', $name)) return 82;
+        if (preg_match('/\b(jambu air)\b/i', $name)) return 90;
+        if (preg_match('/\b(alpukat|avokad)\b/i', $name)) return 61;
+        if (preg_match('/\b(salak)\b/i', $name)) return 52;
+        if (preg_match('/\b(rambutan)\b/i', $name)) return 40;
+        if (preg_match('/\b(kelengkeng|lengkeng)\b/i', $name)) return 60;
+        if (preg_match('/\b(durian)\b/i', $name)) return 22;
+        if (preg_match('/\b(sirsak)\b/i', $name)) return 68;
+        if (preg_match('/\b(sawo)\b/i', $name)) return 77;
+        if (preg_match('/\b(kedondong)\b/i', $name)) return 58;
+        if (preg_match('/\b(belimbing)\b/i', $name)) return 86;
+        if (preg_match('/\b(manggis)\b/i', $name)) return 29;
+        if (preg_match('/\b(nangka masak|nangka matang)\b/i', $name)) return 28;
+        if (preg_match('/\b(kelapa tua|kelapa muda|kelapa setengah tua)\b/i', $name)) return 53;
+
+        // Sayuran segar mentah
+        if (preg_match('/\b(bayam)\b/i', $name)) return 71;
+        if (preg_match('/\b(kangkung)\b/i', $name)) return 70;
+        if (preg_match('/\b(daun singkong|daun ubi)\b/i', $name)) return 87;
+        if (preg_match('/\b(daun kelor)\b/i', $name)) return 65;
+        if (preg_match('/\b(daun katuk)\b/i', $name)) return 69;
+        if (preg_match('/\b(daun pepaya)\b/i', $name)) return 71;
+        if (preg_match('/\b(daun bawang)\b/i', $name)) return 67;
+        if (preg_match('/\b(wortel)\b/i', $name)) return 88;
+        if (preg_match('/\b(buncis)\b/i', $name)) return 90;
+        if (preg_match('/\b(kacang panjang)\b/i', $name)) return 92;
+        if (preg_match('/\b(terong|terung)\b/i', $name)) return 90;
+        if (preg_match('/\b(labu siam|jepang)\b/i', $name)) return 83;
+        if (preg_match('/\b(labu kuning|waluh)\b/i', $name)) return 77;
+        if (preg_match('/\b(labu air)\b/i', $name)) return 70;
+        if (preg_match('/\b(tomat)\b/i', $name)) return 95;
+        if (preg_match('/\b(mentimun|timun)\b/i', $name)) return 70;
+        if (preg_match('/\b(sawi|caisim|pakcoy|pokcoy)\b/i', $name)) return 87;
+        if (preg_match('/\b(kembang kol|bunga kol)\b/i', $name)) return 57;
+        if (preg_match('/\b(brokoli)\b/i', $name)) return 60;
+        if (preg_match('/\b(kubis|kol)\b/i', $name)) return 75;
+        if (preg_match('/\b(pare|paria)\b/i', $name)) return 75;
+        if (preg_match('/\b(gambas|oyong)\b/i', $name)) return 85;
+        if (preg_match('/\b(jantung pisang)\b/i', $name)) return 25;
+        if (preg_match('/\b(rebung)\b/i', $name)) return 42;
+        if (preg_match('/\b(nangka muda|gori)\b/i', $name)) return 80;
+        if (preg_match('/\b(jamur)\b/i', $name)) return 90;
+
+        // Umbi-umbian mentah
+        if (preg_match('/\b(singkong|ubi kayu)\b/i', $name)) return 75;
+        if (preg_match('/\b(kentang)\b/i', $name)) return 85;
+        if (preg_match('/\b(ubi jalar|ubi manis)\b/i', $name)) return 85;
+        if (preg_match('/\b(talas)\b/i', $name)) return 90;
+        if (preg_match('/\b(gadung|ganyong|gembili|garut)\b/i', $name)) return 80;
+
+        // Bumbu dapur mentah
+        if (preg_match('/\b(bawang merah|bawang putih|bawang bombay)\b/i', $name)) return 90;
+        if (preg_match('/\b(cabai|cabe)\b/i', $name)) return 90;
+        if (preg_match('/\b(jahe|kunyit|lengkuas|kencur|temulawak)\b/i', $name)) return 85;
+
+        // Kacang-kacangan berkulit
+        if (preg_match('/\b(petai|pete)\b/i', $name)) return 36;
+        if (preg_match('/\b(jengkol)\b/i', $name)) return 58;
+        if (preg_match('/\b(kacang tanah muda|kacang tanah kulit)\b/i', $name)) return 43;
+
+        return 100;
     }
 }

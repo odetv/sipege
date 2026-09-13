@@ -72,17 +72,22 @@ const maxWidthClass = computed(() => {
         '2xl': 'sm:max-w-2xl',
         '3xl': 'sm:max-w-3xl',
         '4xl': 'sm:max-w-4xl',
-    }[props.maxWidth] || 'sm:max-w-2xl';
+        '5xl': 'sm:max-w-5xl',
+        '6xl': 'sm:max-w-6xl',
+        '7xl': 'sm:max-w-7xl',
+        'full': 'sm:max-w-[96vw]',
+        'landscape': 'sm:max-w-[95vw] lg:max-w-[92vw] xl:max-w-[90vw]',
+    }[props.maxWidth] || (props.maxWidth?.startsWith('max-w-') ? props.maxWidth : 'sm:max-w-2xl');
 });
 </script>
 
 <template>
     <dialog
-        class="z-50 m-0 min-h-full min-w-full overflow-y-auto bg-transparent backdrop:bg-transparent"
+        class="z-50 m-0 min-h-full min-w-full overflow-y-auto bg-transparent backdrop:bg-transparent p-0 border-none"
         ref="dialog"
     >
         <div
-            class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex min-h-full items-center justify-center"
+            class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 flex min-h-full items-center justify-center"
             scroll-region
         >
             <Transition
@@ -110,7 +115,7 @@ const maxWidthClass = computed(() => {
             >
                 <div
                     v-show="show"
-                    class="transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all sm:mx-auto sm:w-full my-auto border border-slate-200/80"
+                    class="relative transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all sm:w-full border border-slate-200/80 my-auto"
                     :class="maxWidthClass"
                 >
                     <slot v-if="showSlot" />

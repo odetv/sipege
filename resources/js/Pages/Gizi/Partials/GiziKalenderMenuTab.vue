@@ -30,12 +30,28 @@ const props = defineProps({
     formatRupiah: {
         type: Function,
         default: (num) => {
-            if (!num) return "Rp 0";
-            return new Intl.NumberFormat("id-ID", {
-                style: "currency",
-                currency: "IDR",
-                maximumFractionDigits: 0,
-            }).format(num);
+            const val = Number(num);
+            if (!val || isNaN(val) || val <= 0) return "Rp 0";
+            if (Number.isInteger(val)) {
+                return "Rp " + val.toLocaleString("id-ID");
+            }
+            if (val < 1) {
+                const decimals = val < 0.01 ? 3 : 2;
+                return (
+                    "Rp " +
+                    val.toLocaleString("id-ID", {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: decimals,
+                    })
+                );
+            }
+            return (
+                "Rp " +
+                val.toLocaleString("id-ID", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                })
+            );
         },
     },
     formatTanggalIndo: {
