@@ -16,6 +16,8 @@ class PurchaseOrderItem extends Model
 
     protected $casts = [
         'gross_kg' => 'float',
+        'stok_digunakan_kg' => 'float',
+        'qty_beli_po_kg' => 'float',
         'harga_master' => 'float',
         'harga_aktual' => 'float',
         'subtotal_aktual' => 'float',

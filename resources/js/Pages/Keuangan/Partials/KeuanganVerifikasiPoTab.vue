@@ -214,6 +214,34 @@ function openVerificationModal(po, readOnly = false) {
     if (!selectedPo.value.items) {
         selectedPo.value.items = [];
     }
+    selectedPo.value.items.forEach((item) => {
+        const gross = Number(item.gross_kg) || 0;
+        if (
+            item.stok_digunakan_kg === undefined ||
+            item.stok_digunakan_kg === null
+        ) {
+            item.stok_digunakan_kg = 0;
+        } else {
+            item.stok_digunakan_kg = Number(item.stok_digunakan_kg) || 0;
+        }
+        if (item.qty_beli_po_kg === undefined || item.qty_beli_po_kg === null) {
+            item.qty_beli_po_kg = Math.max(
+                0,
+                parseFloat((gross - item.stok_digunakan_kg).toFixed(4)),
+            );
+        } else {
+            item.qty_beli_po_kg = Number(item.qty_beli_po_kg);
+        }
+        if (!item.sumber_pengadaan) {
+            if (item.stok_digunakan_kg >= gross && gross > 0) {
+                item.sumber_pengadaan = "100% Dari Stok";
+            } else if (item.stok_digunakan_kg > 0) {
+                item.sumber_pengadaan = "Parsial Stok";
+            } else {
+                item.sumber_pengadaan = "Beli PO";
+            }
+        }
+    });
     selectedPo.value.riwayat_verifikasi =
         po.riwayat_verifikasi ||
         po.raw?.riwayat_verifikasi ||
@@ -222,6 +250,76 @@ function openVerificationModal(po, readOnly = false) {
     inputCatatanBaru.value = "";
     isReadOnlyMode.value = readOnly;
     showDetailModal.value = true;
+}
+
+function onStokChange(item) {
+    const gross = Number(item.gross_kg) || 0;
+    let stok = Number(item.stok_digunakan_kg);
+    if (isNaN(stok) || stok < 0) stok = 0;
+    if (stok > gross) stok = gross;
+    item.stok_digunakan_kg = parseFloat(stok.toFixed(4));
+    item.qty_beli_po_kg = Math.max(
+        0,
+        parseFloat((gross - item.stok_digunakan_kg).toFixed(4)),
+    );
+    if (item.stok_digunakan_kg >= gross && gross > 0) {
+        item.sumber_pengadaan = "100% Dari Stok";
+    } else if (item.stok_digunakan_kg > 0) {
+        item.sumber_pengadaan = "Parsial Stok";
+    } else {
+        item.sumber_pengadaan = "Beli PO";
+    }
+}
+
+function setItemFullStok(item) {
+    const gross = Number(item.gross_kg) || 0;
+    item.stok_digunakan_kg = gross;
+    item.qty_beli_po_kg = 0;
+    item.sumber_pengadaan = "100% Dari Stok";
+}
+
+function setItemResetStok(item) {
+    const gross = Number(item.gross_kg) || 0;
+    item.stok_digunakan_kg = 0;
+    item.qty_beli_po_kg = gross;
+    item.sumber_pengadaan = "Beli PO";
+}
+
+function bulkSetAllFullBeli() {
+    if (!selectedPo.value?.items) return;
+    selectedPo.value.items.forEach((item) => {
+        setItemResetStok(item);
+    });
+}
+
+function bulkSetAllFullStok() {
+    if (!selectedPo.value?.items) return;
+    selectedPo.value.items.forEach((item) => {
+        setItemFullStok(item);
+    });
+}
+
+function getItemSubtotalAktual(item) {
+    const qtyBeli =
+        item.qty_beli_po_kg !== undefined && item.qty_beli_po_kg !== null
+            ? Number(item.qty_beli_po_kg)
+            : Math.max(
+                  0,
+                  (Number(item.gross_kg) || 0) -
+                      (Number(item.stok_digunakan_kg) || 0),
+              );
+    const harga =
+        Number(
+            item.harga_aktual !== undefined &&
+                item.harga_aktual !== null &&
+                item.harga_aktual !== ""
+                ? item.harga_aktual
+                : item.harga_master,
+        ) || 0;
+    if (qtyBeli <= 0) return 0;
+    let sub = Math.round(qtyBeli * harga);
+    if (qtyBeli > 0 && harga > 0 && sub === 0) sub = Math.ceil(qtyBeli * harga);
+    return sub;
 }
 
 const grandTotalMasterBiaya = computed(() => {
@@ -243,21 +341,33 @@ const grandTotalGrossKg = computed(() => {
     );
 });
 
+const grandTotalStokKg = computed(() => {
+    if (!selectedPo.value?.items) return 0;
+    return selectedPo.value.items.reduce(
+        (acc, item) => acc + (Number(item.stok_digunakan_kg) || 0),
+        0,
+    );
+});
+
+const grandTotalBeliPoKg = computed(() => {
+    if (!selectedPo.value?.items) return 0;
+    return selectedPo.value.items.reduce((acc, item) => {
+        const qtyBeli =
+            item.qty_beli_po_kg !== undefined && item.qty_beli_po_kg !== null
+                ? Number(item.qty_beli_po_kg)
+                : Math.max(
+                      0,
+                      (Number(item.gross_kg) || 0) -
+                          (Number(item.stok_digunakan_kg) || 0),
+                  );
+        return acc + qtyBeli;
+    }, 0);
+});
+
 const totalAktualBiaya = computed(() => {
     if (!selectedPo.value?.items) return 0;
     return selectedPo.value.items.reduce((acc, item) => {
-        const gross = Number(item.gross_kg) || 0;
-        const harga =
-            Number(
-                item.harga_aktual !== undefined &&
-                    item.harga_aktual !== null &&
-                    item.harga_aktual !== ""
-                    ? item.harga_aktual
-                    : item.harga_master,
-            ) || 0;
-        let sub = Math.round(gross * harga);
-        if (gross > 0 && harga > 0 && sub === 0) sub = Math.ceil(gross * harga);
-        return acc + sub;
+        return acc + getItemSubtotalAktual(item);
     }, 0);
 });
 
@@ -904,13 +1014,13 @@ function rejectPo() {
                         </div>
                     </div>
 
-                    <!-- Detail Info PO & Waktu Lengkap -->
+                    <!-- Detail Info PO & Waktu Lengkap (6 Ringkasan Utama) -->
                     <div
-                        class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs"
+                        class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs"
                     >
                         <div>
                             <span
-                                class="text-slate-400 text-[10.5px] uppercase font-bold block"
+                                class="text-slate-400 text-[10px] uppercase font-bold block"
                                 >Tanggal Distribusi</span
                             >
                             <span class="font-bold text-slate-800">{{
@@ -919,30 +1029,64 @@ function rejectPo() {
                         </div>
                         <div>
                             <span
-                                class="text-slate-400 text-[10.5px] uppercase font-bold block"
+                                class="text-slate-400 text-[10px] uppercase font-bold block"
                                 >Waktu Pengajuan</span
                             >
                             <span class="font-bold text-slate-800">{{
                                 formatDateTimeIndo(selectedPo.created_at)
                             }}</span>
                         </div>
-                        <div>
+                        <div
+                            class="bg-amber-50/60 p-2 rounded-lg border border-amber-200/60"
+                        >
                             <span
-                                class="text-slate-400 text-[10.5px] uppercase font-bold block"
-                                >Estimasi Master Gizi</span
+                                class="text-amber-800 text-[10px] uppercase font-bold block"
+                                >Resep Gizi (Gross)</span
                             >
-                            <span class="font-bold text-slate-800">{{
-                                formatRupiah(grandTotalMasterBiaya)
-                            }}</span>
+                            <span
+                                class="font-black text-amber-900 text-xs sm:text-sm"
+                                >{{
+                                    formatGrossWeight(grandTotalGrossKg)
+                                }}</span
+                            >
                         </div>
-                        <div>
+                        <div
+                            class="bg-blue-50/60 p-2 rounded-lg border border-blue-200/60"
+                        >
                             <span
-                                class="text-slate-400 text-[10.5px] uppercase font-bold block"
-                                >Total Aktual Verifikasi</span
+                                class="text-blue-800 text-[10px] uppercase font-bold block"
+                                >Pengalihan Stok</span
                             >
-                            <span class="font-black text-emerald-800 text-sm">{{
-                                formatRupiah(totalAktualBiaya)
-                            }}</span>
+                            <span
+                                class="font-black text-blue-900 text-xs sm:text-sm"
+                                >{{ formatGrossWeight(grandTotalStokKg) }}</span
+                            >
+                        </div>
+                        <div
+                            class="bg-emerald-50/60 p-2 rounded-lg border border-emerald-200/60"
+                        >
+                            <span
+                                class="text-emerald-800 text-[10px] uppercase font-bold block"
+                                >Total Belanja PO</span
+                            >
+                            <span
+                                class="font-black text-emerald-900 text-xs sm:text-sm"
+                                >{{
+                                    formatGrossWeight(grandTotalBeliPoKg)
+                                }}</span
+                            >
+                        </div>
+                        <div
+                            class="bg-emerald-100/70 p-2 rounded-lg border border-emerald-300"
+                        >
+                            <span
+                                class="text-emerald-900 text-[10px] uppercase font-bold block"
+                                >Total Aktual PO</span
+                            >
+                            <span
+                                class="font-black text-emerald-950 text-xs sm:text-sm"
+                                >{{ formatRupiah(totalAktualBiaya) }}</span
+                            >
                         </div>
                     </div>
 
@@ -962,19 +1106,41 @@ function rejectPo() {
                                     >
                                 </h4>
                                 <p class="text-xs text-slate-500 mt-0.5">
-                                    Daftar seluruh bahan baku pangan, standar
-                                    gramasi per porsi, faktor BDD & buffer
-                                    susut, total berat kotor (kg), serta
-                                    penyesuaian harga aktual belanja PO.
+                                    Standar gramasi per porsi dan kuantitas
+                                    kotor resep tetap terjaga utuh. Tentukan
+                                    porsi pengalihan stok gudang SPPG atau
+                                    kuantitas belanja PO aktual.
                                 </p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <span
                                     class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
                                 >
                                     {{ selectedPo.items.length }} Bahan Baku
                                     Terdaftar
                                 </span>
+                                <!-- Quick Bulk Action Buttons -->
+                                <div
+                                    v-if="!isReadOnlyMode"
+                                    class="flex items-center gap-1.5"
+                                >
+                                    <button
+                                        type="button"
+                                        @click="bulkSetAllFullBeli"
+                                        class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 cursor-pointer transition-colors shadow-2xs"
+                                        title="Reset semua baris menjadi 100% Belanja PO (0 kg stok)"
+                                    >
+                                        Semua Full Beli
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="bulkSetAllFullStok"
+                                        class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 cursor-pointer transition-colors shadow-2xs"
+                                        title="Alihkan semua baris menjadi 100% dipenuhi dari stok gudang"
+                                    >
+                                        Semua 100% Stok
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -983,56 +1149,68 @@ function rejectPo() {
                             class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs"
                         >
                             <table
-                                class="w-full text-xs text-left border-collapse"
+                                class="w-full text-xs text-left border-collapse min-w-[1250px]"
                             >
                                 <thead
                                     class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
                                         <th class="p-3 w-10 text-center">NO</th>
-                                        <th class="p-3 min-w-[170px]">
+                                        <th class="p-3 min-w-[160px]">
                                             BAHAN PANGAN & NAMA DI PO
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[140px]"
+                                            class="p-3 text-center min-w-[130px]"
                                         >
                                             PERUNTUKAN / SUB MENU
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[120px]"
+                                            class="p-3 text-center min-w-[110px]"
                                         >
                                             TIPE PORSI
                                         </th>
-                                        <th class="p-3 min-w-[130px]">
+                                        <th class="p-3 min-w-[120px]">
                                             KATEGORI
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[95px]"
+                                            class="p-3 text-center min-w-[85px]"
                                         >
                                             GRAM PK / PB
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[95px]"
+                                            class="p-3 text-center min-w-[85px]"
                                         >
                                             BDD / BUFFER
                                         </th>
-                                        <th class="p-3 text-right min-w-[95px]">
-                                            TOTAL GROSS
+                                        <th
+                                            class="p-3 text-right min-w-[100px] bg-amber-50/40"
+                                        >
+                                            KEBUTUHAN KOTOR (RESEP)
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[110px]"
+                                            class="p-3 text-center min-w-[145px] bg-blue-50/50"
+                                        >
+                                            STOK GUDANG (KG)
+                                        </th>
+                                        <th
+                                            class="p-3 text-right min-w-[125px] bg-emerald-50/40"
+                                        >
+                                            QTY BELI PO (KG)
+                                        </th>
+                                        <th
+                                            class="p-3 text-right min-w-[105px]"
                                         >
                                             HARGA MASTER
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[140px]"
+                                            class="p-3 text-right min-w-[135px]"
                                         >
-                                            HARGA AKTUAL
+                                            HARGA SATUAN (RP)
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[125px]"
+                                            class="p-3 text-right min-w-[125px] bg-emerald-50/30"
                                         >
-                                            SUBTOTAL AKTUAL
+                                            SUBTOTAL PO (RP)
                                         </th>
                                         <th
                                             class="p-3 text-left min-w-[130px] whitespace-normal break-words"
@@ -1164,21 +1342,160 @@ function rejectPo() {
                                             }}%
                                         </td>
 
-                                        <!-- 8. TOTAL GROSS -->
+                                        <!-- 8. KEBUTUHAN KOTOR (RESEP - UTUH TIDAK BERUBAH) -->
                                         <td
-                                            class="p-3 text-right font-bold text-slate-900 whitespace-nowrap"
+                                            class="p-3 text-right font-black text-slate-900 whitespace-nowrap bg-amber-50/20"
                                         >
-                                            {{ formatGrossWeight(b.gross_kg) }}
+                                            <div
+                                                class="text-xs font-black text-slate-900"
+                                            >
+                                                {{
+                                                    formatGrossWeight(
+                                                        b.gross_kg,
+                                                    )
+                                                }}
+                                            </div>
+                                            <span
+                                                class="text-[9.5px] text-slate-400 font-semibold block"
+                                            >
+                                                Standar Resep
+                                            </span>
                                         </td>
 
-                                        <!-- 9. HARGA MASTER -->
+                                        <!-- 9. PENGALIHAN DARI STOK (KG) -->
+                                        <td
+                                            class="p-2.5 text-center bg-blue-50/30"
+                                        >
+                                            <div
+                                                v-if="!isReadOnlyMode"
+                                                class="space-y-1"
+                                            >
+                                                <div
+                                                    class="relative flex items-center min-w-[100px] max-w-[125px] mx-auto"
+                                                >
+                                                    <input
+                                                        v-model.number="
+                                                            b.stok_digunakan_kg
+                                                        "
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        :max="b.gross_kg"
+                                                        @input="onStokChange(b)"
+                                                        @change="
+                                                            onStokChange(b)
+                                                        "
+                                                        class="w-full pr-7 pl-2 py-1 text-right text-xs font-black border border-blue-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-blue-900 shadow-2xs"
+                                                    />
+                                                    <span
+                                                        class="absolute right-2 text-[10.5px] text-slate-400 font-bold pointer-events-none"
+                                                        >kg</span
+                                                    >
+                                                </div>
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            setItemFullStok(b)
+                                                        "
+                                                        class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-100 hover:bg-blue-200 text-blue-800 transition-colors cursor-pointer"
+                                                        title="Alihkan seluruh kebutuhan dari stok"
+                                                    >
+                                                        100% Stok
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            setItemResetStok(b)
+                                                        "
+                                                        class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                                        title="Reset tanpa stok (0 kg)"
+                                                    >
+                                                        0 kg
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-else
+                                                class="font-bold text-slate-800"
+                                            >
+                                                {{
+                                                    formatGrossWeight(
+                                                        b.stok_digunakan_kg ||
+                                                            0,
+                                                    )
+                                                }}
+                                            </div>
+                                        </td>
+
+                                        <!-- 10. QTY BELI PO (KG) -->
+                                        <td
+                                            class="p-3 text-right whitespace-nowrap bg-emerald-50/20"
+                                        >
+                                            <div
+                                                class="font-black text-xs text-slate-900"
+                                            >
+                                                {{
+                                                    formatGrossWeight(
+                                                        b.qty_beli_po_kg !==
+                                                            undefined &&
+                                                            b.qty_beli_po_kg !==
+                                                                null
+                                                            ? b.qty_beli_po_kg
+                                                            : Math.max(
+                                                                  0,
+                                                                  (b.gross_kg ||
+                                                                      0) -
+                                                                      (b.stok_digunakan_kg ||
+                                                                          0),
+                                                              ),
+                                                    )
+                                                }}
+                                            </div>
+                                            <div class="mt-0.5">
+                                                <span
+                                                    v-if="
+                                                        b.qty_beli_po_kg ===
+                                                            0 ||
+                                                        (b.stok_digunakan_kg >=
+                                                            b.gross_kg &&
+                                                            b.gross_kg > 0)
+                                                    "
+                                                    class="inline-block text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                                >
+                                                    100% Dari Stok
+                                                </span>
+                                                <span
+                                                    v-else-if="
+                                                        b.stok_digunakan_kg > 0
+                                                    "
+                                                    class="inline-block text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 border border-blue-200"
+                                                >
+                                                    Parsial Stok (-{{
+                                                        formatGrossWeight(
+                                                            b.stok_digunakan_kg,
+                                                        )
+                                                    }})
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="text-[9.5px] text-slate-400 font-semibold"
+                                                >
+                                                    Full Beli PO
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        <!-- 11. HARGA MASTER -->
                                         <td
                                             class="p-3 text-right text-slate-600 whitespace-nowrap"
                                         >
                                             {{ formatRupiah(b.harga_master) }}
                                         </td>
 
-                                        <!-- 10. HARGA AKTUAL (INPUT / READONLY) -->
+                                        <!-- 12. HARGA SATUAN AKTUAL (INPUT / READONLY) -->
                                         <td class="p-2 text-right">
                                             <div
                                                 v-if="!isReadOnlyMode"
@@ -1210,39 +1527,41 @@ function rejectPo() {
                                             </div>
                                         </td>
 
-                                        <!-- 11. SUBTOTAL AKTUAL -->
+                                        <!-- 13. SUBTOTAL PO AKTUAL -->
                                         <td
-                                            class="p-3 text-right font-black text-emerald-900 whitespace-nowrap"
+                                            class="p-3 text-right font-black whitespace-nowrap bg-emerald-50/20"
+                                            :class="
+                                                getItemSubtotalAktual(b) === 0
+                                                    ? 'text-slate-400'
+                                                    : 'text-emerald-900'
+                                            "
                                         >
-                                            {{
-                                                formatRupiah(
-                                                    Math.round(
-                                                        b.gross_kg *
-                                                            (b.harga_aktual !==
-                                                                undefined &&
-                                                            b.harga_aktual !==
-                                                                null &&
-                                                            b.harga_aktual !==
-                                                                ""
-                                                                ? b.harga_aktual
-                                                                : b.harga_master ||
-                                                                  0),
-                                                    ) ||
-                                                        (b.gross_kg > 0
-                                                            ? Math.ceil(
-                                                                  b.gross_kg *
-                                                                      (b.harga_aktual ||
-                                                                          b.harga_master ||
-                                                                          0),
-                                                              )
-                                                            : 0),
-                                                )
-                                            }}
+                                            <div class="text-xs font-black">
+                                                {{
+                                                    formatRupiah(
+                                                        getItemSubtotalAktual(
+                                                            b,
+                                                        ),
+                                                    )
+                                                }}
+                                            </div>
+                                            <span
+                                                v-if="
+                                                    getItemSubtotalAktual(b) ===
+                                                        0 &&
+                                                    b.gross_kg > 0 &&
+                                                    b.stok_digunakan_kg >=
+                                                        b.gross_kg
+                                                "
+                                                class="text-[9.5px] font-bold text-emerald-700 block"
+                                            >
+                                                (Bebas Biaya PO)
+                                            </span>
                                         </td>
 
-                                        <!-- 12. KETERANGAN / CATATAN SPESIFIKASI BAHAN -->
+                                        <!-- 14. KETERANGAN / CATATAN SPESIFIKASI BAHAN -->
                                         <td
-                                            class="p-3 text-slate-600 align-middle text-xs min-w-[160px] whitespace-normal break-words"
+                                            class="p-3 text-slate-600 align-middle text-xs min-w-[140px] whitespace-normal break-words"
                                         >
                                             <div
                                                 v-if="
@@ -1273,15 +1592,33 @@ function rejectPo() {
                                             colspan="7"
                                             class="p-3.5 text-right text-slate-700 font-bold"
                                         >
-                                            Grand Total Estimasi Biaya Belanja
-                                            Bahan:
+                                            Grand Total Rekapitulasi Kebutuhan &
+                                            Pembelian PO:
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap bg-amber-50/50"
                                         >
                                             {{
                                                 formatGrossWeight(
                                                     grandTotalGrossKg,
+                                                )
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3.5 text-right font-black text-blue-900 whitespace-nowrap bg-blue-50/60"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    grandTotalStokKg,
+                                                )
+                                            }}
+                                        </td>
+                                        <td
+                                            class="p-3.5 text-right font-black text-emerald-900 whitespace-nowrap bg-emerald-50/60"
+                                        >
+                                            {{
+                                                formatGrossWeight(
+                                                    grandTotalBeliPoKg,
                                                 )
                                             }}
                                         </td>
@@ -1297,10 +1634,10 @@ function rejectPo() {
                                         <td
                                             class="p-3.5 text-right text-[11px] text-slate-500 font-semibold"
                                         >
-                                            Total Aktual:
+                                            Total Aktual PO:
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-emerald-950 text-sm whitespace-nowrap bg-emerald-100/70"
                                         >
                                             {{ formatRupiah(totalAktualBiaya) }}
                                         </td>

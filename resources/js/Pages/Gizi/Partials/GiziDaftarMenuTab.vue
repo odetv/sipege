@@ -837,7 +837,7 @@ function executeDeleteWo() {
                                         :key="alIdx"
                                         class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
                                     >
-                                        ⚠️ {{ al.jenis }}: {{ al.jumlah }} siswa
+                                        ⚠️ {{ al.jenis }}: {{ al.jumlah }} PM
                                     </span>
                                 </div>
                             </td>

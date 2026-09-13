@@ -208,26 +208,37 @@ function openEditPoModal(po) {
     formPoItems.vendor = po.vendor || "";
 
     // Salin items dengan mapping per baris (default kosong jika belum pernah diisi)
-    formPoItems.items = (editingPo.value.items || []).map((it) => ({
-        id: it.id,
-        nama: it.nama,
-        nama_po: it.nama_po || it.nama,
-        kategori: it.kategori,
-        sub_menu_key: it.sub_menu_key,
-        nama_sub_menu: it.nama_sub_menu,
-        tipe_porsi: it.tipe_porsi,
-        tipe: it.tipe,
-        jenis_alergi: it.jenis_alergi,
-        gross_kg: it.gross_kg,
-        harga_aktual: it.harga_aktual || it.harga_master || 0,
-        subtotal_aktual:
-            it.subtotal_aktual ||
-            Math.round(
-                (it.gross_kg || 0) * (it.harga_aktual || it.harga_master || 0),
-            ),
-        supplier_id: it.supplier_id || null,
-        jenis_transaksi: it.jenis_transaksi || "",
-    }));
+    formPoItems.items = (editingPo.value.items || []).map((it) => {
+        const gross = Number(it.gross_kg) || 0;
+        const stok = Number(it.stok_digunakan_kg || 0);
+        const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+            ? Number(it.qty_beli_po_kg)
+            : Math.max(0, gross - stok);
+        const harga = Number(it.harga_aktual || it.harga_master || 0);
+        const subtotal = it.subtotal_aktual !== undefined && it.subtotal_aktual !== null
+            ? Number(it.subtotal_aktual)
+            : Math.round(qtyBeli * harga);
+
+        return {
+            id: it.id,
+            nama: it.nama,
+            nama_po: it.nama_po || it.nama,
+            kategori: it.kategori,
+            sub_menu_key: it.sub_menu_key,
+            nama_sub_menu: it.nama_sub_menu,
+            tipe_porsi: it.tipe_porsi,
+            tipe: it.tipe,
+            jenis_alergi: it.jenis_alergi,
+            gross_kg: gross,
+            stok_digunakan_kg: stok,
+            qty_beli_po_kg: qtyBeli,
+            sumber_pengadaan: it.sumber_pengadaan || (stok > 0 ? (stok >= gross ? '100% Dari Stok' : 'Parsial Stok') : 'Beli PO'),
+            harga_aktual: harga,
+            subtotal_aktual: subtotal,
+            supplier_id: it.supplier_id || null,
+            jenis_transaksi: it.jenis_transaksi || "",
+        };
+    });
 
     bulkSupplierId.value = "";
     bulkJenisTransaksi.value = "";
@@ -1037,33 +1048,39 @@ const jenisSupplierBadgeClasses = {
                             class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs"
                         >
                             <table
-                                class="w-full text-xs text-left border-collapse min-w-[980px]"
+                                class="w-full text-xs text-left border-collapse min-w-[1080px]"
                             >
                                 <thead
                                     class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
                                         <th class="p-3 w-10 text-center">NO</th>
-                                        <th class="p-3 min-w-[170px]">
+                                        <th class="p-3 min-w-[160px]">
                                             BAHAN PANGAN & NAMA PO
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[130px]"
+                                            class="p-3 text-center min-w-[120px]"
                                         >
                                             PERUNTUKAN
                                         </th>
-                                        <th class="p-3 text-right min-w-[90px]">
-                                            GROSS (KG)
+                                        <th class="p-3 text-right min-w-[85px] bg-amber-50/40">
+                                            RESEP GROSS
+                                        </th>
+                                        <th class="p-3 text-right min-w-[85px] bg-blue-50/40">
+                                            DARI STOK
+                                        </th>
+                                        <th class="p-3 text-right min-w-[100px] bg-emerald-50/40">
+                                            QTY BELI PO
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[110px]"
+                                            class="p-3 text-right min-w-[100px]"
                                         >
                                             SUBTOTAL
                                         </th>
-                                        <th class="p-3 min-w-[170px]">
+                                        <th class="p-3 min-w-[160px]">
                                             JENIS TRANSAKSI (WAJIB)
                                         </th>
-                                        <th class="p-3 min-w-[240px]">
+                                        <th class="p-3 min-w-[220px]">
                                             SUPPLIER REKANAN (WAJIB)
                                         </th>
                                     </tr>
@@ -1144,18 +1161,57 @@ const jenisSupplierBadgeClasses = {
                                             </div>
                                         </td>
 
-                                        <!-- 4. Gross (Kg) -->
+                                        <!-- 4. Resep Gross (Kg) -->
                                         <td
-                                            class="p-3 text-right font-bold text-slate-900 whitespace-nowrap"
+                                            class="p-3 text-right font-bold text-slate-900 whitespace-nowrap bg-amber-50/20"
                                         >
                                             {{
                                                 formatGrossWeight(item.gross_kg)
                                             }}
                                         </td>
 
-                                        <!-- 5. Subtotal -->
+                                        <!-- 5. Dari Stok (Kg) -->
                                         <td
-                                            class="p-3 text-right font-black text-emerald-900 whitespace-nowrap"
+                                            class="p-3 text-right font-semibold text-blue-900 whitespace-nowrap bg-blue-50/20"
+                                        >
+                                            {{
+                                                formatGrossWeight(item.stok_digunakan_kg || 0)
+                                            }}
+                                        </td>
+
+                                        <!-- 6. Qty Beli PO (Kg) -->
+                                        <td
+                                            class="p-3 text-right font-black text-emerald-950 whitespace-nowrap bg-emerald-50/20"
+                                        >
+                                            <div>
+                                                {{
+                                                    formatGrossWeight(
+                                                        item.qty_beli_po_kg !== undefined && item.qty_beli_po_kg !== null
+                                                            ? item.qty_beli_po_kg
+                                                            : Math.max(0, (item.gross_kg || 0) - (item.stok_digunakan_kg || 0))
+                                                    )
+                                                }}
+                                            </div>
+                                            <div class="mt-0.5">
+                                                <span
+                                                    v-if="(item.qty_beli_po_kg === 0 || (item.stok_digunakan_kg >= item.gross_kg && item.gross_kg > 0))"
+                                                    class="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800"
+                                                >
+                                                    100% Stok
+                                                </span>
+                                                <span
+                                                    v-else-if="item.stok_digunakan_kg > 0"
+                                                    class="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800"
+                                                >
+                                                    Parsial
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        <!-- 7. Subtotal -->
+                                        <td
+                                            class="p-3 text-right font-black whitespace-nowrap"
+                                            :class="item.subtotal_aktual === 0 ? 'text-slate-400' : 'text-emerald-900'"
                                         >
                                             {{
                                                 formatRupiah(
@@ -1164,7 +1220,7 @@ const jenisSupplierBadgeClasses = {
                                             }}
                                         </td>
 
-                                        <!-- 6. Pilihan Jenis Transaksi Per Baris (Default Kosong, Wajib Diisi) -->
+                                        <!-- 8. Pilihan Jenis Transaksi Per Baris (Default Kosong, Wajib Diisi) -->
                                         <td class="p-3">
                                             <select
                                                 v-model="item.jenis_transaksi"

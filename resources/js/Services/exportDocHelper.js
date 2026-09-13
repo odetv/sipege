@@ -129,7 +129,7 @@ export function exportWorkOrderExcel(wo) {
                     <td style="font-weight: bold;">Total Sasaran PM</td>
                     <td>: ${Number(wo.total_porsi || 0).toLocaleString('id-ID')} Porsi (${wo.porsi_pk || 0} PK / ${wo.porsi_pb || 0} PB)</td>
                     <td style="font-weight: bold;">Database Pangan</td>
-                    <td>: ${wo.database_pangan === 'csv' ? 'TKPI 2020 (Tabel Komposisi Pangan Indonesia)' : 'Nutri Survey (Indonesian Food Table)'}</td>
+                    <td>: ${wo.database_pangan === 'csv' ? 'Kemenkes (Tabel Komposisi Pangan Indonesia)' : 'Nutri Survey (Indonesian Food Table)'}</td>
                 </tr>
             </table>
 
@@ -150,21 +150,21 @@ export function exportWorkOrderExcel(wo) {
                 <tbody>
                     <tr>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Porsi Kecil (PK - PAUD/TK & SD 1-3)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.energi_pk || 0} kkal</strong> (450-550)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.protein_pk || 0} g</strong> (15-22g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.lemak_pk || 0} g</strong> (12-18g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.karbo_pk || 0} g</strong> (65-85g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.serat_pk || 0} g</strong> (Min 4.0g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.energi_pk || 0} kkal</strong> (330-413)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.protein_pk || 0} g</strong> (8.0-10.0g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.lemak_pk || 0} g</strong> (11.0-13.8g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.karbo_pk || 0} g</strong> (50.0-62.5g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.serat_pk || 0} g</strong> (4.0-7.0g)</td>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${formatRupiahNum(wo.cost_pk)}</strong> (Pagu: Rp 8.000)</td>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #047857; font-weight: bold;">MEMENUHI</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Porsi Besar (PB - SD 4-6/SMP/SMA/Bumil)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.energi_pb || 0} kkal</strong> (650-800)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.protein_pb || 0} g</strong> (24-35g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.lemak_pb || 0} g</strong> (18-26g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.karbo_pb || 0} g</strong> (85-110g)</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.serat_pb || 0} g</strong> (Min 6.0g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">Porsi Besar (PB - SD 4-6/SMP/SMA/Tendik)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.energi_pb || 0} kkal</strong> (585-831)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.protein_pb || 0} g</strong> (15.8-24.5g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.lemak_pb || 0} g</strong> (19.5-26.3g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.karbo_pb || 0} g</strong> (87.0-122.5g)</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${wo.serat_pb || 0} g</strong> (6.0-10.0g)</td>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;"><strong>${formatRupiahNum(wo.cost_pb)}</strong> (Pagu: Rp 10.000)</td>
                         <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #047857; font-weight: bold;">MEMENUHI</td>
                     </tr>
@@ -639,25 +639,60 @@ export function exportPoExcel(po) {
     const items = po.items || [];
 
     let totalNominal = 0;
+    let totalGrossAll = 0;
+    let totalStokAll = 0;
+    let totalBeliAll = 0;
+
     let itemsRows = items.map((it, idx) => {
-        const subtotal = it.subtotal_aktual || (it.gross_kg * (it.harga_aktual || it.harga_master || 0));
-        totalNominal += Number(subtotal) || 0;
+        const gross = Number(it.gross_kg) || 0;
+        const stok = Number(it.stok_digunakan_kg || 0);
+        const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+            ? Number(it.qty_beli_po_kg)
+            : Math.max(0, gross - stok);
+        const harga = Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0));
+        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(qtyBeli * harga));
+
+        totalGrossAll += gross;
+        totalStokAll += stok;
+        totalBeliAll += qtyBeli;
+        totalNominal += subtotal;
+
         const supName = it.supplier?.nama_usaha || (it.supplier_id ? `Supplier #${it.supplier_id}` : (po.supplier?.nama_usaha || po.vendor || '-'));
         const trxType = it.jenis_transaksi || po.jenis_transaksi || 'Bahan Baku';
+
+        let statusKet = 'Beli PO';
+        if (qtyBeli === 0 || (stok >= gross && gross > 0)) {
+            statusKet = '100% Dari Stok';
+        } else if (stok > 0) {
+            statusKet = 'Parsial Stok';
+        }
+
         return `
         <tr>
             <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${idx + 1}</td>
             <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${it.nama || '-'}</td>
             <td style="border: 1px solid #cbd5e1; padding: 6px;">${it.kategori || '-'}</td>
-            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${it.tipe || 'PK/PB'}</td>
             <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 600; color: #1e40af;">${supName}</td>
             <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${trxType}</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${Number(it.gross_kg || 0).toFixed(2)} kg</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${formatRupiahNum(it.harga_aktual || it.harga_master || 0)}</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${gross.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; color: #1e40af;">${stok.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; background-color: #ecfdf5;">${qtyBeli.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${formatRupiahNum(harga)}</td>
             <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${formatRupiahNum(subtotal)}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${statusKet}</td>
         </tr>
         `;
     }).join('');
+
+    const itemSuppliers = (po.items || []).map(i => i.supplier?.nama_usaha).filter(Boolean);
+    const uniqueSuppliersList = Array.from(new Set(itemSuppliers));
+    const displayVendor = uniqueSuppliersList.length > 0
+        ? uniqueSuppliersList.join(', ')
+        : (po.supplier ? (po.supplier.nama_usaha + (po.supplier.jenis_supplier ? ' (' + po.supplier.jenis_supplier + ')' : '')) : (po.vendor && po.vendor !== 'Rekanan Pangan SPPG' ? po.vendor : '-'));
+
+    const displayJenisTrx = (po.items || []).map(i => i.jenis_transaksi).filter(Boolean);
+    const uniqueTrxList = Array.from(new Set(displayJenisTrx));
+    const displayTrx = uniqueTrxList.length > 0 ? uniqueTrxList.join(', ') : (po.jenis_transaksi || '-');
 
     const template = `
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -715,28 +750,35 @@ export function exportPoExcel(po) {
                 </tr>
             </table>
 
-            <h3 style="margin-top: 20px; color: #1e293b;">RINCIAN BAHAN BAKU & NILAI PEMBELIAN</h3>
+            <h3 style="margin-top: 20px; color: #1e293b;">RINCIAN BAHAN BAKU, PENGALIHAN STOK & NILAI PEMBELIAN PO</h3>
             <table>
                 <thead>
                     <tr>
                         <th style="width: 40px;">No</th>
                         <th>Nama Bahan Baku</th>
                         <th>Kategori</th>
-                        <th>Peruntukan</th>
                         <th>Supplier Rekanan</th>
                         <th>Jenis Transaksi</th>
-                        <th>Kuantitas Kotor (Kg)</th>
+                        <th>Resep Kotor (Kg)</th>
+                        <th>Dari Stok (Kg)</th>
+                        <th>Qty Beli PO (Kg)</th>
                         <th>Harga Satuan Aktual</th>
                         <th>Subtotal Pembelian</th>
+                        <th>Status Pengadaan</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${itemsRows || '<tr><td colspan="9" style="text-align: center; padding: 10px;">Tidak ada data bahan</td></tr>'}
+                    ${itemsRows || '<tr><td colspan="11" style="text-align: center; padding: 10px;">Tidak ada data bahan</td></tr>'}
                 </tbody>
                 <tfoot>
                     <tr style="background-color: #f8fafc; font-weight: bold;">
-                        <td colspan="8" style="text-align: right; border: 1px solid #cbd5e1; padding: 8px;">TOTAL BELANJA PO:</td>
+                        <td colspan="5" style="text-align: right; border: 1px solid #cbd5e1; padding: 8px;">TOTAL KESELURUHAN:</td>
+                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px;">${totalGrossAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; color: #1e40af;">${totalStokAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; color: #047857;">${totalBeliAll.toFixed(2)} kg</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px;"></td>
                         <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; font-weight: bold; color: #047857;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px;"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -759,10 +801,22 @@ export function exportPoWord(po) {
     if (!po) return;
 
     let totalNominal = 0;
+    let totalGrossAll = 0;
+    let totalStokAll = 0;
+    let totalBeliAll = 0;
+
     const itemsRows = (po.items || []).map((it, idx) => {
         const gross = Number(it.gross_kg) || 0;
+        const stok = Number(it.stok_digunakan_kg || 0);
+        const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+            ? Number(it.qty_beli_po_kg)
+            : Math.max(0, gross - stok);
         const harga = Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0));
-        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(gross * harga));
+        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(qtyBeli * harga));
+
+        totalGrossAll += gross;
+        totalStokAll += stok;
+        totalBeliAll += qtyBeli;
         totalNominal += subtotal;
 
         const supName = it.supplier?.nama_usaha || (it.supplier_id ? `Supplier #${it.supplier_id}` : (po.supplier?.nama_usaha || po.vendor || '-'));
@@ -770,14 +824,16 @@ export function exportPoWord(po) {
 
         return `
         <tr>
-            <td style="text-align: center; border: 1px solid #94a3b8; padding: 6px;">${idx + 1}</td>
-            <td style="border: 1px solid #94a3b8; padding: 6px; font-weight: bold;">${it.nama || '-'}</td>
-            <td style="border: 1px solid #94a3b8; padding: 6px;">${it.kategori || '-'}</td>
-            <td style="border: 1px solid #94a3b8; padding: 6px; font-weight: 600;">${supName}</td>
-            <td style="text-align: center; border: 1px solid #94a3b8; padding: 6px;">${trxType}</td>
-            <td style="text-align: right; border: 1px solid #94a3b8; padding: 6px; font-weight: bold;">${Number(it.gross_kg || 0).toFixed(2)} kg</td>
-            <td style="text-align: right; border: 1px solid #94a3b8; padding: 6px;">${formatRupiahNum(harga)}</td>
-            <td style="text-align: right; border: 1px solid #94a3b8; padding: 6px; font-weight: bold;">${formatRupiahNum(subtotal)}</td>
+            <td style="text-align: center; border: 1px solid #94a3b8; padding: 5px;">${idx + 1}</td>
+            <td style="border: 1px solid #94a3b8; padding: 5px; font-weight: bold;">${it.nama || '-'}</td>
+            <td style="border: 1px solid #94a3b8; padding: 5px;">${it.kategori || '-'}</td>
+            <td style="border: 1px solid #94a3b8; padding: 5px; font-weight: 600;">${supName}</td>
+            <td style="text-align: center; border: 1px solid #94a3b8; padding: 5px;">${trxType}</td>
+            <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${gross.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${stok.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px; font-weight: bold;">${qtyBeli.toFixed(2)} kg</td>
+            <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${formatRupiahNum(harga)}</td>
+            <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px; font-weight: bold;">${formatRupiahNum(subtotal)}</td>
         </tr>
         `;
     }).join('');
@@ -804,8 +860,8 @@ export function exportPoWord(po) {
                 .kop-sub { font-size: 11pt; font-weight: bold; margin: 3px 0; }
                 .kop-desc { font-size: 9pt; margin: 0; }
                 table.data { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; }
-                table.data th { background-color: #f1f5f9; border: 1px solid #94a3b8; padding: 6px; font-size: 10pt; text-align: center; }
-                table.data td { font-size: 10pt; }
+                table.data th { background-color: #f1f5f9; border: 1px solid #94a3b8; padding: 6px; font-size: 9.5pt; text-align: center; }
+                table.data td { font-size: 9.5pt; }
                 .info-table td { padding: 3px 0; font-size: 10.5pt; }
                 .ttd-box { margin-top: 35px; width: 100%; }
             </style>
@@ -864,23 +920,29 @@ export function exportPoWord(po) {
             <table class="data">
                 <thead>
                     <tr>
-                        <th style="width: 30px;">No</th>
+                        <th style="width: 25px;">No</th>
                         <th>Nama Bahan Baku</th>
                         <th>Kategori</th>
                         <th>Supplier Rekanan</th>
                         <th>Transaksi</th>
-                        <th>Kg Kotor</th>
+                        <th>Resep Kotor</th>
+                        <th>Dari Stok</th>
+                        <th>Qty Beli PO</th>
                         <th>Harga Satuan</th>
-                        <th>Subtotal Pembelian</th>
+                        <th>Subtotal PO</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${itemsRows || '<tr><td colspan="8" style="text-align: center; padding: 8px;">Tidak ada bahan</td></tr>'}
+                    ${itemsRows || '<tr><td colspan="10" style="text-align: center; padding: 8px;">Tidak ada bahan</td></tr>'}
                 </tbody>
                 <tfoot>
                     <tr style="font-weight: bold; background-color: #f1f5f9;">
-                        <td colspan="7" style="text-align: right; border: 1px solid #94a3b8; padding: 6px;">TOTAL PO:</td>
-                        <td style="text-align: right; border: 1px solid #94a3b8; padding: 6px;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
+                        <td colspan="5" style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">TOTAL:</td>
+                        <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${totalGrossAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${totalStokAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${totalBeliAll.toFixed(2)} kg</td>
+                        <td style="border: 1px solid #94a3b8; padding: 5px;"></td>
+                        <td style="text-align: right; border: 1px solid #94a3b8; padding: 5px;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -918,10 +980,22 @@ export function exportPoPdf(po) {
     if (!po) return;
 
     let totalNominal = 0;
+    let totalGrossAll = 0;
+    let totalStokAll = 0;
+    let totalBeliAll = 0;
+
     const itemsRows = (po.items || []).map((it, idx) => {
         const gross = Number(it.gross_kg) || 0;
+        const stok = Number(it.stok_digunakan_kg || 0);
+        const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+            ? Number(it.qty_beli_po_kg)
+            : Math.max(0, gross - stok);
         const harga = Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0));
-        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(gross * harga));
+        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(qtyBeli * harga));
+
+        totalGrossAll += gross;
+        totalStokAll += stok;
+        totalBeliAll += qtyBeli;
         totalNominal += subtotal;
 
         const supName = it.supplier?.nama_usaha || (it.supplier_id ? `Supplier #${it.supplier_id}` : (po.supplier?.nama_usaha || po.vendor || '-'));
@@ -934,7 +1008,9 @@ export function exportPoPdf(po) {
             <td>${it.kategori || '-'}</td>
             <td style="font-weight: 600; color: #1e40af;">${supName}</td>
             <td style="text-align: center;">${trxType}</td>
-            <td style="text-align: right; font-weight: bold;">${Number(it.gross_kg || 0).toFixed(2)} kg</td>
+            <td style="text-align: right;">${gross.toFixed(2)} kg</td>
+            <td style="text-align: right; color: #1e40af;">${stok.toFixed(2)} kg</td>
+            <td style="text-align: right; font-weight: bold; background-color: #ecfdf5;">${qtyBeli.toFixed(2)} kg</td>
             <td style="text-align: right;">${formatRupiahNum(harga)}</td>
             <td style="text-align: right; font-weight: bold;">${formatRupiahNum(subtotal)}</td>
         </tr>
@@ -951,7 +1027,7 @@ export function exportPoPdf(po) {
     const uniqueTrxList = Array.from(new Set(displayJenisTrx));
     const displayTrx = uniqueTrxList.length > 0 ? uniqueTrxList.join(', ') : (po.jenis_transaksi || '-');
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    const printWindow = window.open('', '_blank', 'width=950,height=750');
     if (!printWindow) {
         alert('Mohon izinkan pop-up pada browser untuk mencetak/mengunduh PDF.');
         return;
@@ -963,20 +1039,20 @@ export function exportPoPdf(po) {
         <head>
             <title>Purchase Order - ${po.id}</title>
             <style>
-                @page { size: A4 portrait; margin: 15mm; }
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #1e293b; margin: 0; }
+                @page { size: A4 landscape; margin: 12mm; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 9.5pt; color: #1e293b; margin: 0; }
                 .kop { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 16px; }
-                .kop h2 { margin: 0; font-size: 14pt; color: #0f172a; text-transform: uppercase; }
-                .kop p { margin: 2px 0 0; font-size: 9pt; color: #475569; }
-                .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px; font-size: 9.5pt; }
+                .kop h2 { margin: 0; font-size: 13pt; color: #0f172a; text-transform: uppercase; }
+                .kop p { margin: 2px 0 0; font-size: 8.5pt; color: #475569; }
+                .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 14px; font-size: 9pt; }
                 .grid-info div span:first-child { font-weight: bold; color: #64748b; display: inline-block; width: 140px; }
-                table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; }
-                th { background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 6px 8px; font-weight: bold; text-align: left; }
-                td { border: 1px solid #e2e8f0; padding: 6px 8px; }
+                table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
+                th { background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 5px 6px; font-weight: bold; text-align: left; }
+                td { border: 1px solid #e2e8f0; padding: 5px 6px; }
                 .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 8pt; background: #dcfce7; color: #15803d; }
-                .ttd { margin-top: 30px; display: flex; justify-content: space-between; page-break-inside: avoid; }
-                .ttd-box { text-align: center; width: 220px; }
-                .ttd-line { margin-top: 50px; border-bottom: 1px solid #000; }
+                .ttd { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+                .ttd-box { text-align: center; width: 220px; font-size: 9pt; }
+                .ttd-line { margin-top: 45px; border-bottom: 1px solid #000; }
             </style>
         </head>
         <body>
@@ -997,52 +1073,55 @@ export function exportPoPdf(po) {
                     <div><span>Jenis Transaksi:</span> <strong>${displayTrx}</strong></div>
                     <div><span>Sasaran PM:</span> ${Number(po.total_porsi || 0).toLocaleString('id-ID')} Porsi (${po.porsi_pk || 0} PK / ${po.porsi_pb || 0} PB)</div>
                     <div><span>Status Bayar:</span> <span class="badge">${po.status_bayar || 'Belum Bayar'}</span></div>
-                    <div><span>Total Pembelian:</span> <strong style="color: #047857; font-size: 11pt;">${formatRupiahNum(po.total_nominal || totalNominal)}</strong></div>
+                    <div><span>Total Pembelian:</span> <strong style="color: #047857; font-size: 10.5pt;">${formatRupiahNum(po.total_nominal || totalNominal)}</strong></div>
                 </div>
             </div>
 
-            <h4 style="margin: 12px 0 6px; font-size: 10pt;">Daftar Item Belanja Bahan Baku PO</h4>
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 30px; text-align: center;">No</th>
-                        <th>Bahan Pangan</th>
+                        <th style="width: 25px; text-align: center;">No</th>
+                        <th>Bahan Baku</th>
                         <th>Kategori</th>
                         <th>Supplier Rekanan</th>
                         <th style="text-align: center;">Transaksi</th>
-                        <th style="text-align: right;">Kuantitas (Kg)</th>
+                        <th style="text-align: right;">Resep Kotor</th>
+                        <th style="text-align: right;">Dari Stok</th>
+                        <th style="text-align: right;">Qty Beli PO</th>
                         <th style="text-align: right;">Harga Satuan</th>
-                        <th style="text-align: right;">Subtotal</th>
+                        <th style="text-align: right;">Subtotal Pembelian</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${itemsRows || '<tr><td colspan="8" style="text-align: center; padding: 10px;">Tidak ada data bahan</td></tr>'}
+                    ${itemsRows}
                 </tbody>
                 <tfoot>
                     <tr style="background: #f8fafc; font-weight: bold;">
-                        <td colspan="7" style="text-align: right;">TOTAL ESTIMASI PEMBELIAN PO:</td>
-                        <td style="text-align: right; color: #047857; font-size: 10pt;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
+                        <td colspan="5" style="text-align: right;">TOTAL:</td>
+                        <td style="text-align: right;">${totalGrossAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; color: #1e40af;">${totalStokAll.toFixed(2)} kg</td>
+                        <td style="text-align: right; color: #047857;">${totalBeliAll.toFixed(2)} kg</td>
+                        <td></td>
+                        <td style="text-align: right; color: #047857;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
                     </tr>
                 </tfoot>
             </table>
 
             <div class="ttd">
                 <div class="ttd-box">
-                    <p>Vendor Rekanan Pangan:<br><br></p>
+                    <p>Penyedia / Rekanan:<br><strong>${displayVendor !== '-' ? displayVendor : 'Rekanan Pangan SPPG'}</strong></p>
                     <div class="ttd-line"></div>
-                    <p style="margin-top: 4px;"><strong>( ${displayVendor !== '-' ? displayVendor : 'Supplier Rekanan'} )</strong></p>
                 </div>
                 <div class="ttd-box">
-                    <p>Petugas Pengadaan SPPG:<br><br></p>
+                    <p>Pemesan & Verifikator:<br><strong>Akuntan Keuangan SPPG</strong></p>
                     <div class="ttd-line"></div>
-                    <p style="margin-top: 4px;"><strong>( Bagian Keuangan / Logistik )</strong></p>
                 </div>
             </div>
 
             <script>
                 window.onload = function() {
                     window.print();
-                }
+                };
             </script>
         </body>
         </html>

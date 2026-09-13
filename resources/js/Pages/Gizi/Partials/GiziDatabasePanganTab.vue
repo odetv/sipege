@@ -122,7 +122,7 @@ function formatRupiah(val) {
                             <strong class="text-slate-800">{{
                                 selectedSource === "fta"
                                     ? `Nutri Survey (.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
-                                    : `TKPI 2020 (.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`
+                                    : `Kemenkes (.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`
                             }}</strong
                             >.
                         </CardDescription>
@@ -178,7 +178,7 @@ function formatRupiah(val) {
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database TKPI 2020 (.csv)"
+                            title="Gunakan Database Kemenkes (.csv)"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
@@ -188,7 +188,7 @@ function formatRupiah(val) {
                                         : 'bg-slate-300'
                                 "
                             ></span>
-                            <span>TKPI 2020 (.csv)</span>
+                            <span>Kemenkes (.csv)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="
@@ -272,7 +272,7 @@ function formatRupiah(val) {
                             {{
                                 selectedSource === "fta"
                                     ? "Nutri Survey (.fta)"
-                                    : "TKPI 2020 (.csv)"
+                                    : "Kemenkes (.csv)"
                             }}
                             <span class="text-xs font-medium text-slate-500"
                                 >({{ tkpiItems.length }} Bahan)</span

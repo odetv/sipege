@@ -137,7 +137,7 @@ const rekapAlergiMasterPm = computed(() => {
     return Object.values(summary).filter((item) => item.total > 0);
 });
 
-const totalMasterPmSiswaAlergi = computed(() => {
+const totalMasterPmAlergi = computed(() => {
     return rekapAlergiMasterPm.value.reduce((s, a) => s + a.total, 0);
 });
 </script>
@@ -250,7 +250,7 @@ const totalMasterPmSiswaAlergi = computed(() => {
             </Card>
         </div>
 
-        <!-- Card Sebaran & Pemetaan Alergi Penerima Manfaat (Hanya Tampil Jika Ada Siswa Alergi) -->
+        <!-- Card Sebaran & Pemetaan Alergi Penerima Manfaat (Hanya Tampil Jika Ada PM Alergi) -->
         <Card
             v-if="rekapAlergiMasterPm.length > 0"
             className="bg-white border-rose-200/90 shadow-xs overflow-hidden"
@@ -268,7 +268,7 @@ const totalMasterPmSiswaAlergi = computed(() => {
                             >
                                 <HeartPulse class="h-5 w-5 text-rose-600" />
                                 <span
-                                    >Sebaran & Pemetaan Siswa Alergi
+                                    >Sebaran & Pemetaan PM Alergi
                                     Terdaftar</span
                                 >
                             </CardTitle>
@@ -277,7 +277,7 @@ const totalMasterPmSiswaAlergi = computed(() => {
                                 class="bg-rose-100 text-rose-800 border-rose-300 font-extrabold text-xs"
                             >
                                 Total
-                                {{ totalMasterPmSiswaAlergi }} Siswa Alergi
+                                {{ totalMasterPmAlergi }} PM Alergi
                             </Badge>
                         </div>
                         <CardDescription
@@ -316,7 +316,7 @@ const totalMasterPmSiswaAlergi = computed(() => {
                             <Badge
                                 class="bg-rose-600 text-white font-extrabold text-[10.5px] px-2 py-0.5 shadow-2xs"
                             >
-                                {{ al.total }} Siswa
+                                {{ al.total }} PM
                             </Badge>
                         </div>
 
@@ -375,7 +375,7 @@ const totalMasterPmSiswaAlergi = computed(() => {
                                         <span
                                             class="font-black text-rose-700 text-xs"
                                         >
-                                            {{ kel.total }} Siswa
+                                            {{ kel.total }} PM
                                         </span>
                                         <span
                                             class="block text-[9.5px] text-slate-400 font-normal"

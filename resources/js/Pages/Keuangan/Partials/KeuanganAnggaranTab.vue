@@ -167,7 +167,7 @@ defineProps({
                         <div class="text-xs font-bold text-slate-700">
                             Total Sasaran:
                             <span class="text-amber-900 text-sm"
-                                >{{ summary.total_porsi_kecil }} Siswa</span
+                                >{{ summary.total_porsi_kecil }} PM</span
                             >
                         </div>
                     </div>
@@ -189,7 +189,7 @@ defineProps({
                         <div class="text-xs font-bold text-slate-700">
                             Total Sasaran:
                             <span class="text-indigo-900 text-sm"
-                                >{{ summary.total_porsi_besar }} Siswa</span
+                                >{{ summary.total_porsi_besar }} PM</span
                             >
                         </div>
                     </div>

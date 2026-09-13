@@ -179,12 +179,31 @@ class KeuanganController extends Controller
                         if ($poItem) {
                             $hargaAktual = (float) ($itemData['harga_aktual'] ?? $poItem->harga_master);
                             $gross = (float) $poItem->gross_kg;
-                            $subtotal = round($gross * $hargaAktual);
-                            if ($gross > 0 && $hargaAktual > 0 && $subtotal == 0) {
-                                $subtotal = ceil($gross * $hargaAktual);
+                            
+                            // Hitung pengalihan stok & kuantitas belanja PO aktual
+                            $stokDigunakan = isset($itemData['stok_digunakan_kg']) ? (float) $itemData['stok_digunakan_kg'] : (float) ($poItem->stok_digunakan_kg ?? 0);
+                            $stokDigunakan = max(0, min($gross, $stokDigunakan));
+                            $qtyBeli = max(0, round($gross - $stokDigunakan, 4));
+
+                            $sumberPengadaan = 'Beli PO';
+                            if ($gross > 0 && $stokDigunakan >= $gross) {
+                                $sumberPengadaan = '100% Dari Stok';
+                                $qtyBeli = 0;
+                            } elseif ($stokDigunakan > 0) {
+                                $sumberPengadaan = 'Parsial Stok';
                             }
+
+                            // Subtotal dihitung dari kuantitas belanja aktual dikali harga satuan
+                            $subtotal = round($qtyBeli * $hargaAktual);
+                            if ($qtyBeli > 0 && $hargaAktual > 0 && $subtotal == 0) {
+                                $subtotal = ceil($qtyBeli * $hargaAktual);
+                            }
+
                             $poItem->update([
                                 'harga_aktual' => $hargaAktual,
+                                'stok_digunakan_kg' => $stokDigunakan,
+                                'qty_beli_po_kg' => $qtyBeli,
+                                'sumber_pengadaan' => $sumberPengadaan,
                                 'subtotal_aktual' => $subtotal,
                             ]);
                             $totalAktual += $subtotal;
@@ -472,10 +491,13 @@ class KeuanganController extends Controller
                             'bdd' => $woItem ? (float)($woItem->bdd ?: 100) : 100,
                             'buffer' => $woItem ? (float)($woItem->buffer ?: 0) : 0,
                             'gross_kg' => (float)$it->gross_kg,
+                            'stok_digunakan_kg' => (float)($it->stok_digunakan_kg ?? 0),
+                            'qty_beli_po_kg' => $it->qty_beli_po_kg !== null ? (float)$it->qty_beli_po_kg : (float)$it->gross_kg,
+                            'sumber_pengadaan' => $it->sumber_pengadaan ?: ($it->stok_digunakan_kg > 0 ? ($it->stok_digunakan_kg >= $it->gross_kg ? '100% Dari Stok' : 'Parsial Stok') : 'Beli PO'),
                             'harga_master' => (float)$it->harga_master,
                             'harga_aktual' => (float)($it->harga_aktual ?: $it->harga_master),
                             'subtotal_master' => (float)($woItem ? ($woItem->subtotal_master ?: ($it->gross_kg * $it->harga_master)) : ($it->gross_kg * $it->harga_master)),
-                            'subtotal_aktual' => (float)($it->subtotal_aktual ?: ($it->gross_kg * ($it->harga_aktual ?: $it->harga_master))),
+                            'subtotal_aktual' => (float)($it->subtotal_aktual !== null ? $it->subtotal_aktual : (($it->qty_beli_po_kg !== null ? $it->qty_beli_po_kg : $it->gross_kg) * ($it->harga_aktual ?: $it->harga_master))),
                             'keterangan' => $woItem ? ($woItem->keterangan ?: ($it->keterangan ?? '-')) : ($it->keterangan ?? '-'),
                             'supplier_id' => $it->supplier_id,
                             'supplier' => $it->supplier ? [

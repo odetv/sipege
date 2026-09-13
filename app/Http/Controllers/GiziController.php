@@ -25,7 +25,7 @@ class GiziController extends Controller
     }
 
     /**
-     * Sub-menu 1: Database Pangan (NutriSurvey Indo .fta & TKPI 2020 .csv).
+     * Sub-menu 1: Database Pangan (NutriSurvey Indo .fta & Kemenkes .csv).
      */
     public function databasePangan(Request $request): Response
     {
@@ -250,6 +250,9 @@ class GiziController extends Controller
                     'kategori' => $woItem->kategori,
                     'tipe' => $woItem->tipe_porsi === 'alergi' ? 'Alergi' : 'Normal',
                     'gross_kg' => $woItem->total_gross_kg,
+                    'stok_digunakan_kg' => 0,
+                    'qty_beli_po_kg' => $woItem->total_gross_kg,
+                    'sumber_pengadaan' => 'Beli PO',
                     'harga_master' => $woItem->harga_master,
                     'harga_aktual' => $woItem->harga_master,
                     'subtotal_aktual' => $woItem->total_gross_kg * $woItem->harga_master,

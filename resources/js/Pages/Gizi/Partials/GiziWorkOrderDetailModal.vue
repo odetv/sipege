@@ -14,6 +14,12 @@ import {
     printWorkOrder,
 } from "@/Services/exportDocHelper";
 import {
+    getAkgStatusBadge,
+    STANDAR_AKG_PORSI_KECIL,
+    STANDAR_AKG_PORSI_BESAR,
+    RUJUKAN_AKG_MBG,
+} from "@/Services/akgConfig";
+import {
     FileSpreadsheet,
     Users,
     Activity,
@@ -428,46 +434,7 @@ const bahanCalculations = computed(() => {
     });
 });
 
-// Helper Status Badge AKG Real-Time
-function getAkgStatusBadge(nutritionObj, isPB = false) {
-    if (!nutritionObj) {
-        return {
-            label: "Belum Ada Formula",
-            badgeClass:
-                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
-        };
-    }
-    const energi = Number(nutritionObj.energi) || 0;
-    if (energi === 0) {
-        return {
-            label: "Belum Ada Formula",
-            badgeClass:
-                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
-        };
-    }
-    const minTarget = isPB ? 650 : 450;
-    const maxTarget = isPB ? 800 : 550;
-
-    if (energi >= minTarget && energi <= maxTarget) {
-        return {
-            label: "✓ MEMENUHI STANDAR AKG BGN",
-            badgeClass:
-                "bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]",
-        };
-    } else if (energi < minTarget) {
-        return {
-            label: "⚠ DI BAWAH STANDAR AKG",
-            badgeClass:
-                "bg-amber-50 text-amber-800 border-amber-300 font-extrabold text-[10px]",
-        };
-    } else {
-        return {
-            label: "⚡ MELEBIHI STANDAR AKG",
-            badgeClass:
-                "bg-teal-50 text-teal-800 border-teal-300 font-extrabold text-[10px]",
-        };
-    }
-}
+// Helper Status Badge AKG Real-Time uses imported getAkgStatusBadge from akgConfig.js
 
 // AKG Result PK & PB Normal
 const akgResultPKNormal = computed(() => {
@@ -538,21 +505,21 @@ const activeAlergiFoodCostList = computed(() => {
         const costPB = items.reduce((sum, it) => sum + (it.costPB || 0), 0);
 
         // Hitung terdampak dari detail_alergi kelompok
-        let siswaPK = 0, siswaPB = 0;
+        let pmPK = 0, pmPB = 0;
         for (const kel of woKelompokList.value) {
             if (!Array.isArray(kel.detail_alergi)) continue;
             for (const da of kel.detail_alergi) {
                 if (!da || da.jenis_alergi !== ja) continue;
-                siswaPK += Number(da.porsi_kecil) || 0;
-                siswaPB += Number(da.porsi_besar) || 0;
+                pmPK += Number(da.porsi_kecil) || 0;
+                pmPB += Number(da.porsi_besar) || 0;
             }
         }
 
         return {
             jenis_alergi: ja,
-            total_siswa: siswaPK + siswaPB,
-            siswa_pk: siswaPK,
-            siswa_pb: siswaPB,
+            total_pm: pmPK + pmPB,
+            pm_pk: pmPK,
+            pm_pb: pmPB,
             cost_pk: costPK || totalFoodCostPKNormal.value,
             cost_pb: costPB || totalFoodCostPBNormal.value,
         };
@@ -579,10 +546,10 @@ const activeAlergiJenisSet = computed(() => {
     return jenisSet;
 });
 
-// Total siswa yang benar-benar terdampak alergi di menu ini
+// Total PM yang benar-benar terdampak alergi di menu ini
 const totalTerdampakAlergi = computed(() =>
     activeAlergiFoodCostList.value.reduce(
-        (acc, al) => acc + (Number(al.total_siswa) || 0),
+        (acc, al) => acc + (Number(al.total_pm) || 0),
         0,
     )
 );
@@ -614,9 +581,9 @@ const activeAlergiAkgList = computed(() => {
         });
         return {
             jenis_alergi: ja,
-            total_siswa: items.length > 0 ? totalPKAlergi.value + totalPBAlergi.value || 1 : 0,
-            siswa_pk: totalPKAlergi.value,
-            siswa_pb: totalPBAlergi.value,
+            total_pm: items.length > 0 ? totalPKAlergi.value + totalPBAlergi.value || 1 : 0,
+            pm_pk: totalPKAlergi.value,
+            pm_pb: totalPBAlergi.value,
             bahan_count: items.length,
             pk,
             pb,
@@ -913,11 +880,11 @@ function getSubMenuLabelForBahan(it) {
                             <p
                                 class="text-sm sm:text-base font-black text-rose-950 mt-1"
                             >
-                                {{ al.total_siswa.toLocaleString("id-ID") }}
+                                {{ al.total_pm.toLocaleString("id-ID") }}
                                 Porsi
                             </p>
                             <p class="text-[10px] text-rose-700 font-bold">
-                                PK: {{ al.siswa_pk }} • PB: {{ al.siswa_pb }}
+                                PK: {{ al.pm_pk }} • PB: {{ al.pm_pb }}
                             </p>
                             <p class="text-[9.5px] text-rose-600 font-medium">
                                 Cost: PK {{ formatRupiah(al.cost_pk) }} | PB
@@ -1045,7 +1012,7 @@ function getSubMenuLabelForBahan(it) {
                                     {{
                                         databasePangan === "csv" ||
                                         databasePangan === "tkpi2020"
-                                            ? "TKPI 2020"
+                                            ? "Kemenkes"
                                             : "Nutri Survey"
                                     }}
                                 </span>
@@ -1355,7 +1322,7 @@ function getSubMenuLabelForBahan(it) {
                                                                 detAl.jenis_alergi +
                                                                 ": " +
                                                                 ((Number(detAl.porsi_kecil) || 0) + (Number(detAl.porsi_besar) || 0)) +
-                                                                " siswa"
+                                                                " PM"
                                                             }}
                                                         </span>
                                                     </template>
@@ -1408,7 +1375,7 @@ function getSubMenuLabelForBahan(it) {
                                             {{
                                                 totalTerdampakAlergi > 0
                                                     ? totalTerdampakAlergi +
-                                                      " Siswa Alergi Terdampak"
+                                                      " PM Alergi Terdampak"
                                                     : "Semua Normal"
                                             }}
                                         </td>
@@ -1515,7 +1482,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 450 - 550</span
+                                                >Std: 330 - 413 kkal</span
                                             >
                                         </div>
                                         <div
@@ -1539,7 +1506,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 15 - 20g</span
+                                                >Std: 8.0 - 10.0g</span
                                             >
                                         </div>
                                         <div
@@ -1563,7 +1530,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 13 - 18g</span
+                                                >Std: 11.0 - 13.8g</span
                                             >
                                         </div>
                                         <div
@@ -1587,7 +1554,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 68 - 83g</span
+                                                >Std: 50.0 - 62.5g</span
                                             >
                                         </div>
                                         <div
@@ -1611,7 +1578,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 6 - 8g</span
+                                                >Std: 4.0 - 7.0g</span
                                             >
                                         </div>
                                     </div>
@@ -1674,7 +1641,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 650 - 800</span
+                                                >Std: 585 - 831 kkal</span
                                             >
                                         </div>
                                         <div
@@ -1698,7 +1665,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 22 - 30g</span
+                                                >Std: 15.8 - 24.5g</span
                                             >
                                         </div>
                                         <div
@@ -1722,7 +1689,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 18 - 27g</span
+                                                >Std: 19.5 - 26.3g</span
                                             >
                                         </div>
                                         <div
@@ -1746,7 +1713,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 98 - 120g</span
+                                                >Std: 87.0 - 122.5g</span
                                             >
                                         </div>
                                         <div
@@ -1770,7 +1737,7 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 8 - 12g</span
+                                                >Std: 6.0 - 10.0g</span
                                             >
                                         </div>
                                     </div>
@@ -1832,9 +1799,9 @@ function getSubMenuLabelForBahan(it) {
                                         >
                                         <span
                                             class="text-[10.5px] font-bold text-slate-600"
-                                            >({{ alRes.total_siswa }} Porsi •
-                                            PK: {{ alRes.siswa_pk }}, PB:
-                                            {{ alRes.siswa_pb }})</span
+                                            >({{ alRes.total_pm }} Porsi • PK:
+                                            {{ alRes.pm_pk }}, PB:
+                                            {{ alRes.pm_pb }})</span
                                         >
                                     </span>
                                     <span
@@ -1910,7 +1877,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 450 - 550</span
+                                                    >Std: 330 - 413 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -1934,7 +1901,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 15 - 20g</span
+                                                    >Std: 8.0 - 10.0g</span
                                                 >
                                             </div>
                                             <div
@@ -1958,7 +1925,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 13 - 18g</span
+                                                    >Std: 11.0 - 13.8g</span
                                                 >
                                             </div>
                                             <div
@@ -1982,7 +1949,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 68 - 83g</span
+                                                    >Std: 50.0 - 62.5g</span
                                                 >
                                             </div>
                                             <div
@@ -2006,7 +1973,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 6 - 8g</span
+                                                    >Std: 4.0 - 7.0g</span
                                                 >
                                             </div>
                                         </div>
@@ -2074,7 +2041,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 650 - 800</span
+                                                    >Std: 585 - 831 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -2098,7 +2065,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 22 - 30g</span
+                                                    >Std: 15.8 - 24.5g</span
                                                 >
                                             </div>
                                             <div
@@ -2122,7 +2089,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 18 - 27g</span
+                                                    >Std: 19.5 - 26.3g</span
                                                 >
                                             </div>
                                             <div
@@ -2146,7 +2113,7 @@ function getSubMenuLabelForBahan(it) {
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 98 - 120g</span
+                                                    >Std: 87.0 - 122.5g</span
                                                 >
                                             </div>
                                             <div
@@ -2240,9 +2207,9 @@ function getSubMenuLabelForBahan(it) {
                                         <span
                                             class="text-[10.5px] text-amber-800 font-black"
                                         >
-                                            {{ al.total_siswa }} Porsi (PK:
-                                            {{ al.siswa_pk }}, PB:
-                                            {{ al.siswa_pb }})
+                                            {{ al.total_pm }} Porsi (PK:
+                                            {{ al.pm_pk }}, PB:
+                                            {{ al.pm_pb }})
                                         </span>
                                     </div>
                                     <div
@@ -2556,9 +2523,9 @@ function getSubMenuLabelForBahan(it) {
                                     <span
                                         class="text-[11px] text-amber-800 font-medium"
                                     >
-                                        {{ alCost.total_siswa }} Porsi (PK:
-                                        {{ alCost.siswa_pk }}, PB:
-                                        {{ alCost.siswa_pb }}) • Termasuk
+                                        {{ alCost.total_pm }} Porsi (PK:
+                                        {{ alCost.pm_pk }}, PB:
+                                        {{ alCost.pm_pb }}) • Termasuk
                                         penyesuaian substitusi & eliminasi
                                     </span>
                                 </div>

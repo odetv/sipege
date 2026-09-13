@@ -70,6 +70,16 @@ import {
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
 } from "@/Services/penerimaManfaatConfig";
+import {
+    RUJUKAN_AKG_MBG,
+    STANDAR_AKG_PORSI_KECIL,
+    STANDAR_AKG_PORSI_BESAR,
+    DASAR_HUKUM_AKG,
+    RUMUS_GIZI_INFO,
+    getAkgStatusBadge,
+    evaluateNutrientDetail,
+    findRujukanAkgByKelompok,
+} from "@/Services/akgConfig";
 
 const props = defineProps({
     user: {
@@ -1017,7 +1027,7 @@ function handleGunakanContoh() {
     clearError("sub_menu_5");
 }
 
-// Resep Bahan Baku Baku Terpilih dari Database Resmi TKPI 2020 (Default Kosong dari 0)
+// Resep Bahan Baku Baku Terpilih dari Database Resmi Kemenkes (Default Kosong dari 0)
 const selectedBahanList = ref([]);
 
 // Resep Bahan Pengganti / Substitusi untuk Varian Alergi (misal: Alergi Telur)
@@ -1026,7 +1036,7 @@ const varianAlergiTelurBahan = computed(() => {
     return selectedBahanList.value.filter((b) => b.alergen !== "Telur");
 });
 
-// Database Master TKPI Aktif (NutriSurvey Indo .fta / TKPI 2020 .csv)
+// Database Master TKPI Aktif (NutriSurvey Indo .fta / Kemenkes .csv)
 const tkpiItems = computed(() => {
     if (
         props.tkpiDatasets &&
@@ -1339,7 +1349,7 @@ const availableAlergiPmOptions = computed(() => {
     const options = [];
     const addedSet = new Set();
 
-    // Hanya masukkan alergi yang benar-benar ada siswanya pada data Penerima Manfaat (total > 0)
+    // Hanya masukkan alergi yang benar-benar ada PM pada data Penerima Manfaat (total > 0)
     list.forEach((a) => {
         const total = Number(a.total || 0);
         if (a.jenis_alergi && total > 0 && !addedSet.has(a.jenis_alergi)) {
@@ -1978,18 +1988,18 @@ const totalPBAlergi = computed(() => {
     );
 });
 
-// Total siswa yang BENAR-BENAR terdampak alergi di menu ini (berdasarkan jenis alergi aktif di bahan)
+// Total PM yang BENAR-BENAR terdampak alergi di menu ini (berdasarkan jenis alergi aktif di bahan)
 const totalTerdampakAlergi = computed(() => {
     return activeAlergiFoodCostList.value.reduce(
-        (acc, al) => acc + (Number(al.total_siswa) || 0),
+        (acc, al) => acc + (Number(al.total_pm) || 0),
         0,
     );
 });
 const totalTerdampakPK = computed(() =>
-    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.siswa_pk) || 0), 0)
+    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.pm_pk) || 0), 0)
 );
 const totalTerdampakPB = computed(() =>
-    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.siswa_pb) || 0), 0)
+    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.pm_pb) || 0), 0)
 );
 
 // Rekapitulasi Alergi per Jenis dari seluruh kelompok sasaran aktif
@@ -2061,7 +2071,7 @@ const analisaAlergiMenu = computed(() => {
     const totalAlergiPm = activeAlergi.reduce((s, a) => s + a.total, 0);
 
     return {
-        totalSiswaAlergi: totalAlergiPm,
+        totalPmAlergi: totalAlergiPm,
         activeAlergiList: activeAlergi,
         conflicts: conflicts,
         hasConflicts: conflicts.length > 0,
@@ -2152,7 +2162,7 @@ const rekapAlergiMasterPm = computed(() => {
     return Object.values(summary).filter((item) => item.total > 0);
 });
 
-const totalMasterPmSiswaAlergi = computed(() => {
+const totalMasterPmAlergi = computed(() => {
     return rekapAlergiMasterPm.value.reduce((s, a) => s + a.total, 0);
 });
 
@@ -2263,7 +2273,7 @@ const bahanCalculations = computed(() => {
             let alergiDampakList = [];
 
             if (!isAlergi) {
-                // Bahan Porsi Normal: Awalnya seluruh sasaran siswa normal
+                // Bahan Porsi Normal: Awalnya seluruh sasaran PM normal
                 targetPKCount = totalPK.value || 0;
                 targetPBCount = totalPB.value || 0;
 
@@ -2286,13 +2296,13 @@ const bahanCalculations = computed(() => {
                     }
                 });
             } else {
-                // Bahan Porsi Alergi: Diberikan HANYA untuk siswa dengan alergi spesifik b.jenis_alergi
+                // Bahan Porsi Alergi: Diberikan HANYA untuk PM dengan alergi spesifik b.jenis_alergi
                 const detailPm = findAlergiDetail(b.jenis_alergi);
                 if (detailPm) {
                     targetPKCount = Number(detailPm.porsi_kecil) || 0;
                     targetPBCount = Number(detailPm.porsi_besar) || 0;
                 } else {
-                    // Jika di master PM TIDAK ADA siswa dengan alergi ini
+                    // Jika di master PM TIDAK ADA PM dengan alergi ini
                     targetPKCount = 0;
                     targetPBCount = 0;
                 }
@@ -2557,46 +2567,29 @@ const activeBahanListForNutrisi = computed(() => {
     return bahanCalculations.value;
 });
 
-// Helper Status Badge AKG Real-Time
-function getAkgStatusBadge(nutritionObj, isPB = false) {
-    if (!nutritionObj) {
-        return {
-            label: "Belum Ada Formula",
-            badgeClass:
-                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
-        };
-    }
-    const energi = Number(nutritionObj.energi) || 0;
-    if (energi === 0) {
-        return {
-            label: "Belum Ada Formula",
-            badgeClass:
-                "bg-slate-100 text-slate-600 border-slate-200 font-extrabold text-[10px]",
-        };
-    }
-    const minTarget = isPB ? 650 : 450;
-    const maxTarget = isPB ? 800 : 550;
+// Modal & Filter Rujukan AKG MBG Permenkes 28/2019
+const showAkgReferenceModal = ref(false);
+const akgFilterKelompok = ref("all");
+const akgSearchQuery = ref("");
 
-    if (energi >= minTarget && energi <= maxTarget) {
-        return {
-            label: "✓ MEMENUHI STANDAR AKG BGN",
-            badgeClass:
-                "bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold text-[10px]",
-        };
-    } else if (energi < minTarget) {
-        return {
-            label: "⚠ DI BAWAH STANDAR AKG",
-            badgeClass:
-                "bg-amber-50 text-amber-800 border-amber-300 font-extrabold text-[10px]",
-        };
-    } else {
-        return {
-            label: "⚡ MELEBIHI STANDAR AKG",
-            badgeClass:
-                "bg-teal-50 text-teal-800 border-teal-300 font-extrabold text-[10px]",
-        };
+const filteredRujukanAkg = computed(() => {
+    let list = RUJUKAN_AKG_MBG;
+    if (akgFilterKelompok.value === "pk") {
+        list = list.filter((item) => item.tipePorsi === "Porsi Kecil");
+    } else if (akgFilterKelompok.value === "pb") {
+        list = list.filter((item) => item.tipePorsi === "Porsi Besar");
     }
-}
+    if (akgSearchQuery.value.trim()) {
+        const q = akgSearchQuery.value.toLowerCase();
+        list = list.filter(
+            (item) =>
+                item.kelompokSasaran.toLowerCase().includes(q) ||
+                item.pendistribusian.toLowerCase().includes(q) ||
+                item.tipePorsi.toLowerCase().includes(q)
+        );
+    }
+    return list;
+});
 
 // ==========================================
 // 3. KALKULASI HASIL AKG
@@ -2689,7 +2682,7 @@ const activeAlergiAkgList = computed(() => {
         const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
         const jmlTotal = detailPm ? Number(detailPm.total) || 0 : 0;
 
-        // Jika jenis alergi ini tidak ada siswa di PM (0 siswa), jangan tampilkan card evaluasinya
+        // Jika jenis alergi ini tidak ada PM (0 PM), jangan tampilkan card evaluasinya
         if (jmlTotal === 0) {
             return;
         }
@@ -2742,9 +2735,9 @@ const activeAlergiAkgList = computed(() => {
 
         result.push({
             jenis_alergi: jenis,
-            siswa_pk: jmlPk,
-            siswa_pb: jmlPb,
-            total_siswa: jmlTotal,
+            total_pm: jmlTotal,
+            pm_pk: jmlPk,
+            pm_pb: jmlPb,
             bahan_count: bahans.length,
             pk: {
                 energi: Number(calcPK.energi.toFixed(1)),
@@ -2846,9 +2839,9 @@ const activeAlergiFoodCostList = computed(() => {
 
         result.push({
             jenis_alergi: jenis,
-            siswa_pk: jmlPk,
-            siswa_pb: jmlPb,
-            total_siswa: jmlTotal,
+            total_pm: jmlTotal,
+            pm_pk: jmlPk,
+            pm_pb: jmlPb,
             cost_pk: costPK,
             cost_pb: costPB,
             status_pk: statusPK,
@@ -3679,7 +3672,7 @@ watch(
                         <strong class="text-rose-300"
                             >Alergi Terdampak ({{
                                 activeAlergiFoodCostList.reduce(
-                                    (s, a) => s + (a.total_siswa || 0),
+                                    (s, a) => s + (a.total_pm || 0),
                                     0,
                                 )
                             }}
@@ -3690,8 +3683,8 @@ watch(
                             :key="al.jenis_alergi"
                             class="px-2 py-0.5 rounded-md bg-rose-500/25 text-rose-200 border border-rose-400/40 text-[11px] font-bold"
                         >
-                            {{ al.jenis_alergi }}: {{ al.total_siswa }} Porsi
-                            (PK: {{ al.siswa_pk }}, PB: {{ al.siswa_pb }})
+                            {{ al.jenis_alergi }}: {{ al.total_pm }} Porsi
+                            (PK: {{ al.pm_pk }}, PB: {{ al.pm_pb }})
                         </span>
                     </span>
                     <span
@@ -3952,8 +3945,7 @@ watch(
                                     :key="al.jenis"
                                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/90 text-amber-900 border border-amber-300 text-[10.5px] font-bold shadow-2xs"
                                 >
-                                    ⚠️ {{ al.jenis }} ({{ al.total_pm }} Siswa
-                                    PM)
+                                    ⚠️ {{ al.jenis }} ({{ al.total_pm }} PM)
                                 </span>
                             </div>
                         </div>
@@ -4032,7 +4024,7 @@ watch(
                                         >Alergi {{ al.allergen }} ({{
                                             al.totalPm
                                         }}
-                                        Siswa)</span
+                                        PM)</span
                                     >
                                     <span
                                         v-if="al.hasReplacement"
@@ -4187,7 +4179,7 @@ watch(
                                                 addPenggantiAlergi('sub_menu_1')
                                             "
                                             class="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                            title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
                                             <span>Pengganti</span>
@@ -4461,7 +4453,7 @@ watch(
                                                 addPenggantiAlergi('sub_menu_2')
                                             "
                                             class="text-[10px] font-bold text-rose-700 hover:text-rose-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                            title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
                                             <span>Pengganti</span>
@@ -4735,7 +4727,7 @@ watch(
                                                 addPenggantiAlergi('sub_menu_3')
                                             "
                                             class="text-[10px] font-bold text-yellow-700 hover:text-yellow-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                            title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
                                             <span>Pengganti</span>
@@ -5009,7 +5001,7 @@ watch(
                                                 addPenggantiAlergi('sub_menu_4')
                                             "
                                             class="text-[10px] font-bold text-blue-700 hover:text-blue-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                            title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
                                             <span>Pengganti</span>
@@ -5283,7 +5275,7 @@ watch(
                                                 addPenggantiAlergi('sub_menu_5')
                                             "
                                             class="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            title="Tambah menu pengganti jika ada siswa alergi"
+                                            title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
                                             <span>Pengganti</span>
@@ -5551,7 +5543,7 @@ watch(
                                     }}
                                     <span
                                         class="text-xs font-semibold text-rose-800"
-                                        >Siswa</span
+                                        >PM</span
                                     >
                                 </h3>
                                 <p
@@ -6296,7 +6288,7 @@ watch(
                                                         alItem.porsi_besar,
                                                     ) || 0)
                                                 }}
-                                                Siswa
+                                                PM
                                             </td>
                                         </tr>
                                     </tbody>
@@ -6480,7 +6472,7 @@ watch(
                                                     : 'cursor-pointer',
                                             ]"
                                         >
-                                            TKPI 2020
+                                            Kemenkes
                                         </button>
                                     </div>
                                     <span
@@ -6620,7 +6612,7 @@ watch(
                                             >
                                                 Target Porsi Normal:
                                                 <strong class="text-slate-900"
-                                                    >{{ totalPM }} Siswa</strong
+                                                    >{{ totalPM }} PM</strong
                                                 >
                                                 (PK: {{ totalPK }}, PB:
                                                 {{ totalPB }})
@@ -6641,7 +6633,7 @@ watch(
                                                             block.jenisAlergi,
                                                         )?.total || 0
                                                     }}
-                                                    Siswa</strong
+                                                    PM</strong
                                                 >
                                                 <span
                                                     >(PK:
@@ -6789,7 +6781,7 @@ watch(
                                                         >{{
                                                             selectedSource ===
                                                             "csv"
-                                                                ? "TKPI 2020 (.csv)"
+                                                                ? "Kemenkes (.csv)"
                                                                 : "Nutri Survey (.fta)"
                                                         }}</strong
                                                     >
@@ -7879,7 +7871,7 @@ watch(
                                                 "
                                                 class="text-[9.5px] text-rose-700 font-bold mt-1"
                                             >
-                                                {{ it.totalTargetCount }} Siswa
+                                                {{ it.totalTargetCount }} PM
                                                 (PK: {{ it.targetPKCount }}, PB:
                                                 {{ it.targetPBCount }})
                                             </div>
@@ -8094,7 +8086,7 @@ watch(
                                         Net (Kg) = &sum; [ (Gram Bersih &times; Sasaran PM) &divide; 1.000 ]
                                     </p>
                                     <p class="text-[11px] text-slate-500 leading-snug">
-                                        Total berat porsi konsumsi bersih seluruh siswa (Porsi Kecil + Porsi Besar). Pada menu varian alergi, jumlah sasaran disesuaikan otomatis dengan data siswa alergi terdampak.
+                                        Total berat porsi konsumsi bersih seluruh PM (Porsi Kecil + Porsi Besar). Pada menu varian alergi, jumlah sasaran disesuaikan otomatis dengan data PM alergi terdampak.
                                     </p>
                                 </div>
                                 <div
@@ -8272,7 +8264,7 @@ watch(
                                         <li>
                                             <strong>Porsi Normal:</strong>
                                             Akumulasi seluruh bahan porsi normal
-                                            untuk siswa tanpa alergi terdampak.
+                                            untuk PM tanpa alergi terdampak.
                                         </li>
                                         <li>
                                             <strong>Porsi Alergi:</strong>
@@ -8706,9 +8698,9 @@ watch(
                                             class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold"
                                         >
                                             Sasaran:
-                                            {{ alCost.total_siswa }} Porsi (PK:
-                                            {{ alCost.siswa_pk }}, PB:
-                                            {{ alCost.siswa_pb }})
+                                            {{ alCost.total_pm }} Porsi (PK:
+                                            {{ alCost.pm_pk }}, PB:
+                                            {{ alCost.pm_pb }})
                                         </span>
                                         <span
                                             class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold"
@@ -9226,32 +9218,43 @@ watch(
                                     <div
                                         class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                     >
-                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                            <HeartPulse class="h-4 w-4 text-rose-500" />
-                                            2. Standar Acuan AKG Makan Siap Santap BGN:
-                                        </strong>
+                                        <div class="flex items-center justify-between">
+                                            <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                                <HeartPulse class="h-4 w-4 text-rose-500" />
+                                                2. Standar Acuan AKG Satu Kali MBG:
+                                            </strong>
+                                            <span class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold">Permenkes 28/2019</span>
+                                        </div>
                                         <div class="grid grid-cols-2 gap-2 text-[11px]">
                                             <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
                                                 <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
                                                 <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                    <div>&bull; Energi: <strong class="text-slate-900">450 - 550 kkal</strong></div>
-                                                    <div>&bull; Protein: <strong class="text-slate-900">15 - 22 g</strong></div>
-                                                    <div>&bull; Lemak: <strong class="text-slate-900">15 - 20 g</strong></div>
-                                                    <div>&bull; Karbo: <strong class="text-slate-900">60 - 85 g</strong></div>
-                                                    <div>&bull; Serat: <strong class="text-slate-900">5 - 7 g</strong></div>
+                                                    <div>&bull; Energi: <strong class="text-slate-900">330 - 413 kkal</strong></div>
+                                                    <div>&bull; Protein: <strong class="text-slate-900">8.0 - 10.0 g</strong></div>
+                                                    <div>&bull; Lemak: <strong class="text-slate-900">11.0 - 13.8 g</strong></div>
+                                                    <div>&bull; Karbo: <strong class="text-slate-900">50.0 - 62.5 g</strong></div>
+                                                    <div>&bull; Serat: <strong class="text-slate-900">4.0 - 7.0 g</strong></div>
                                                 </div>
                                             </div>
                                             <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
                                                 <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
                                                 <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                    <div>&bull; Energi: <strong class="text-slate-900">650 - 800 kkal</strong></div>
-                                                    <div>&bull; Protein: <strong class="text-slate-900">20 - 30 g</strong></div>
-                                                    <div>&bull; Lemak: <strong class="text-slate-900">20 - 30 g</strong></div>
-                                                    <div>&bull; Karbo: <strong class="text-slate-900">90 - 120 g</strong></div>
-                                                    <div>&bull; Serat: <strong class="text-slate-900">7 - 10 g</strong></div>
+                                                    <div>&bull; Energi: <strong class="text-slate-900">585 - 831 kkal</strong></div>
+                                                    <div>&bull; Protein: <strong class="text-slate-900">15.8 - 24.5 g</strong></div>
+                                                    <div>&bull; Lemak: <strong class="text-slate-900">19.5 - 26.3 g</strong></div>
+                                                    <div>&bull; Karbo: <strong class="text-slate-900">87.0 - 122.5 g</strong></div>
+                                                    <div>&bull; Serat: <strong class="text-slate-900">6.0 - 10.0 g</strong></div>
                                                 </div>
                                             </div>
                                         </div>
+                                        <button
+                                            type="button"
+                                            @click="showAkgReferenceModal = true"
+                                            class="w-full py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                                        >
+                                            <Table class="w-3.5 h-3.5" />
+                                            <span>Lihat Tabel 2 Rujukan AKG Lengkap (12 Kelompok) & Rumus</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -9338,7 +9341,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 450 - 550</span
+                                                    >Target: 330 - 413 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -9358,7 +9361,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 15 - 22 g</span
+                                                    >Target: 8.0 - 10.0 g</span
                                                 >
                                             </div>
                                             <div
@@ -9378,7 +9381,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 12 - 18 g</span
+                                                    >Target: 11.0 - 13.8 g</span
                                                 >
                                             </div>
                                         </div>
@@ -9402,7 +9405,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 65 - 85 g</span
+                                                    >Target: 50.0 - 62.5 g</span
                                                 >
                                             </div>
                                             <div
@@ -9422,7 +9425,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: Min 4.0 g</span
+                                                    >Target: 4.0 - 7.0 g</span
                                                 >
                                             </div>
                                         </div>
@@ -9480,7 +9483,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 650 - 800</span
+                                                    >Target: 585 - 831 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -9500,7 +9503,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 24 - 35 g</span
+                                                    >Target: 15.8 - 24.5 g</span
                                                 >
                                             </div>
                                             <div
@@ -9520,7 +9523,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 18 - 26 g</span
+                                                    >Target: 19.5 - 26.3 g</span
                                                 >
                                             </div>
                                         </div>
@@ -9544,7 +9547,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 85 - 110 g</span
+                                                    >Target: 87.0 - 122.5 g</span
                                                 >
                                             </div>
                                             <div
@@ -9564,7 +9567,7 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: Min 6.0 g</span
+                                                    >Target: 6.0 - 10.0 g</span
                                                 >
                                             </div>
                                         </div>
@@ -9601,9 +9604,9 @@ watch(
                                             class="px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold"
                                         >
                                             Sasaran:
-                                            {{ alRes.total_siswa }} Porsi (PK:
-                                            {{ alRes.jml_pk }}, PB:
-                                            {{ alRes.jml_pb }})
+                                            {{ alRes.total_pm }} Porsi (PK:
+                                            {{ alRes.pm_pk }}, PB:
+                                            {{ alRes.pm_pb }})
                                         </span>
                                     </div>
 
@@ -10085,11 +10088,11 @@ watch(
                             <p
                                 class="text-sm sm:text-base font-black text-rose-950 mt-1"
                             >
-                                {{ al.total_siswa.toLocaleString("id-ID") }}
+                                {{ al.total_pm.toLocaleString("id-ID") }}
                                 Porsi
                             </p>
                             <p class="text-[10px] text-rose-700 font-bold">
-                                PK: {{ al.siswa_pk }} • PB: {{ al.siswa_pb }}
+                                PK: {{ al.pm_pk }} • PB: {{ al.pm_pb }}
                             </p>
                             <p class="text-[9.5px] text-rose-600 font-medium">
                                 Cost: PK {{ formatRupiah(al.cost_pk) }} | PB
@@ -10149,7 +10152,7 @@ watch(
                                     {{
                                         props.selectedSource === 'csv' ||
                                         props.selectedSource === 'tkpi2020'
-                                            ? 'TKPI 2020'
+                                            ? 'Kemenkes'
                                             : 'Nutri Survey'
                                     }}
                                 </span>
@@ -10468,7 +10471,7 @@ watch(
                                                             (typeof detAl === 'string' ? detAl : detAl.jenis_alergi) +
                                                             ': ' +
                                                             ((Number(detAl?.porsi_kecil) || 0) + (Number(detAl?.porsi_besar) || 0)) +
-                                                            ' siswa'
+                                                            ' PM'
                                                         }}
                                                     </span>
                                                 </template>
@@ -10520,7 +10523,7 @@ watch(
                                             {{
                                                 totalTerdampakAlergi > 0
                                                     ? totalTerdampakAlergi +
-                                                      " Siswa Alergi Terdampak"
+                                                      " PM Alergi Terdampak"
                                                     : "Semua Normal"
                                             }}
                                         </td>
@@ -10604,32 +10607,43 @@ watch(
                                 <div
                                     class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                 >
-                                    <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                        <HeartPulse class="h-4 w-4 text-rose-500" />
-                                        2. Standar Acuan AKG Makan Siap Santap BGN:
-                                    </strong>
+                                    <div class="flex items-center justify-between">
+                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
+                                            <HeartPulse class="h-4 w-4 text-rose-500" />
+                                            2. Standar Acuan AKG Satu Kali MBG:
+                                        </strong>
+                                        <span class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold">Permenkes 28/2019</span>
+                                    </div>
                                     <div class="grid grid-cols-2 gap-2 text-[11px]">
                                         <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
                                             <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
                                             <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                <div>&bull; Energi: <strong class="text-slate-900">450 - 550 kkal</strong></div>
-                                                <div>&bull; Protein: <strong class="text-slate-900">15 - 22 g</strong></div>
-                                                <div>&bull; Lemak: <strong class="text-slate-900">15 - 20 g</strong></div>
-                                                <div>&bull; Karbo: <strong class="text-slate-900">60 - 85 g</strong></div>
-                                                <div>&bull; Serat: <strong class="text-slate-900">5 - 7 g</strong></div>
+                                                <div>&bull; Energi: <strong class="text-slate-900">330 - 413 kkal</strong></div>
+                                                <div>&bull; Protein: <strong class="text-slate-900">8.0 - 10.0 g</strong></div>
+                                                <div>&bull; Lemak: <strong class="text-slate-900">11.0 - 13.8 g</strong></div>
+                                                <div>&bull; Karbo: <strong class="text-slate-900">50.0 - 62.5 g</strong></div>
+                                                <div>&bull; Serat: <strong class="text-slate-900">4.0 - 7.0 g</strong></div>
                                             </div>
                                         </div>
                                         <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
                                             <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
                                             <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                <div>&bull; Energi: <strong class="text-slate-900">650 - 800 kkal</strong></div>
-                                                <div>&bull; Protein: <strong class="text-slate-900">20 - 30 g</strong></div>
-                                                <div>&bull; Lemak: <strong class="text-slate-900">20 - 30 g</strong></div>
-                                                <div>&bull; Karbo: <strong class="text-slate-900">90 - 120 g</strong></div>
-                                                <div>&bull; Serat: <strong class="text-slate-900">7 - 10 g</strong></div>
+                                                <div>&bull; Energi: <strong class="text-slate-900">585 - 831 kkal</strong></div>
+                                                <div>&bull; Protein: <strong class="text-slate-900">15.8 - 24.5 g</strong></div>
+                                                <div>&bull; Lemak: <strong class="text-slate-900">19.5 - 26.3 g</strong></div>
+                                                <div>&bull; Karbo: <strong class="text-slate-900">87.0 - 122.5 g</strong></div>
+                                                <div>&bull; Serat: <strong class="text-slate-900">6.0 - 10.0 g</strong></div>
                                             </div>
                                         </div>
                                     </div>
+                                    <button
+                                        type="button"
+                                        @click="showAkgReferenceModal = true"
+                                        class="w-full py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                                    >
+                                        <Table class="w-3.5 h-3.5" />
+                                        <span>Lihat Tabel 2 Rujukan AKG Lengkap (12 Kelompok) & Rumus</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -10704,7 +10718,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 450 - 550</span
+                                                >Std: 330 - 413 kkal</span
                                             >
                                         </div>
                                         <div
@@ -10728,7 +10742,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 15 - 20g</span
+                                                >Std: 8.0 - 10.0g</span
                                             >
                                         </div>
                                         <div
@@ -10752,7 +10766,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 13 - 18g</span
+                                                >Std: 11.0 - 13.8g</span
                                             >
                                         </div>
                                         <div
@@ -10776,7 +10790,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 68 - 83g</span
+                                                >Std: 50.0 - 62.5g</span
                                             >
                                         </div>
                                         <div
@@ -10800,7 +10814,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 6 - 8g</span
+                                                >Std: 4.0 - 7.0g</span
                                             >
                                         </div>
                                     </div>
@@ -10864,7 +10878,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 650 - 800</span
+                                                >Std: 585 - 831 kkal</span
                                             >
                                         </div>
                                         <div
@@ -10888,7 +10902,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 22 - 30g</span
+                                                >Std: 15.8 - 24.5g</span
                                             >
                                         </div>
                                         <div
@@ -10912,7 +10926,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 18 - 27g</span
+                                                >Std: 19.5 - 26.3g</span
                                             >
                                         </div>
                                         <div
@@ -10936,7 +10950,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 98 - 120g</span
+                                                >Std: 87.0 - 122.5g</span
                                             >
                                         </div>
                                         <div
@@ -10960,7 +10974,7 @@ watch(
                                             >
                                             <span
                                                 class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 8 - 12g</span
+                                                >Std: 6.0 - 10.0g</span
                                             >
                                         </div>
                                     </div>
@@ -11022,9 +11036,9 @@ watch(
                                         >
                                         <span
                                             class="text-[10.5px] font-bold text-slate-600"
-                                            >({{ alRes.total_siswa }} Porsi •
-                                            PK: {{ alRes.siswa_pk }}, PB:
-                                            {{ alRes.siswa_pb }})</span
+                                            >({{ alRes.total_pm }} Porsi • PK:
+                                            {{ alRes.pm_pk }}, PB:
+                                            {{ alRes.pm_pb }})</span
                                         >
                                     </span>
                                     <span
@@ -11100,7 +11114,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 450 - 550</span
+                                                    >Std: 330 - 413 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -11124,7 +11138,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 15 - 20g</span
+                                                    >Std: 8.0 - 10.0g</span
                                                 >
                                             </div>
                                             <div
@@ -11148,7 +11162,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 13 - 18g</span
+                                                    >Std: 11.0 - 13.8g</span
                                                 >
                                             </div>
                                             <div
@@ -11172,7 +11186,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 68 - 83g</span
+                                                    >Std: 50.0 - 62.5g</span
                                                 >
                                             </div>
                                             <div
@@ -11196,7 +11210,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 6 - 8g</span
+                                                    >Std: 4.0 - 7.0g</span
                                                 >
                                             </div>
                                         </div>
@@ -11264,7 +11278,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 650 - 800</span
+                                                    >Std: 585 - 831 kkal</span
                                                 >
                                             </div>
                                             <div
@@ -11288,7 +11302,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 22 - 30g</span
+                                                    >Std: 15.8 - 24.5g</span
                                                 >
                                             </div>
                                             <div
@@ -11312,7 +11326,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 18 - 27g</span
+                                                    >Std: 19.5 - 26.3g</span
                                                 >
                                             </div>
                                             <div
@@ -11336,7 +11350,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 98 - 120g</span
+                                                    >Std: 87.0 - 122.5g</span
                                                 >
                                             </div>
                                             <div
@@ -11360,7 +11374,7 @@ watch(
                                                 >
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 8 - 12g</span
+                                                    >Std: 6.0 - 10.0g</span
                                                 >
                                             </div>
                                         </div>
@@ -11429,9 +11443,9 @@ watch(
                                         <span
                                             class="text-[10.5px] text-amber-800 font-black"
                                         >
-                                            {{ al.total_siswa }} Porsi (PK:
-                                            {{ al.siswa_pk }}, PB:
-                                            {{ al.siswa_pb }})
+                                            {{ al.total_pm }} Porsi (PK:
+                                            {{ al.pm_pk }}, PB:
+                                            {{ al.pm_pb }})
                                         </span>
                                     </div>
                                     <div
@@ -11751,9 +11765,9 @@ watch(
                                     <span
                                         class="text-[11px] text-amber-800 font-medium"
                                     >
-                                        {{ alCost.total_siswa }} Porsi (PK:
-                                        {{ alCost.siswa_pk }}, PB:
-                                        {{ alCost.siswa_pb }}) • Termasuk
+                                        {{ alCost.total_pm }} Porsi (PK:
+                                        {{ alCost.pm_pk }}, PB:
+                                        {{ alCost.pm_pb }}) • Termasuk
                                         penyesuaian substitusi & eliminasi
                                     </span>
                                 </div>
@@ -12312,5 +12326,217 @@ watch(
                 </CardContent>
             </Card>
         </div>
+
+        <!-- ================================================================= -->
+        <!-- MODAL DATASET RUJUKAN ANGKA KECUKUPAN GIZI (AKG) SATU KALI MBG   -->
+        <!-- Berdasarkan Peraturan Kementerian Kesehatan Nomor 28 Tahun 2019   -->
+        <!-- ================================================================= -->
+        <Modal :show="showAkgReferenceModal" @close="showAkgReferenceModal = false" max-width="6xl">
+            <div class="p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+                <!-- Modal Header -->
+                <div class="flex items-start justify-between border-b border-slate-200 pb-4">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <div class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                                <HeartPulse class="w-5 h-5" />
+                            </div>
+                            <h3 class="text-base font-black text-slate-900">
+                                Tabel 2. Rujukan Angka Kecukupan Gizi Satu Kali MBG
+                            </h3>
+                            <Badge variant="outline" class="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold">
+                                Permenkes No. 28/2019
+                            </Badge>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            Standar acuan resmi pemenuhan zat gizi per porsi siap santap MBG berdasarkan Peraturan Kementerian Kesehatan RI No. 28 Tahun 2019.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showAkgReferenceModal = false"
+                        class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Filter & Search Toolbar -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
+                    <div class="flex items-center gap-1.5 w-full sm:w-auto">
+                        <button
+                            type="button"
+                            @click="akgFilterKelompok = 'all'"
+                            :class="[
+                                'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer',
+                                akgFilterKelompok === 'all'
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                            ]"
+                        >
+                            Semua (12)
+                        </button>
+                        <button
+                            type="button"
+                            @click="akgFilterKelompok = 'pk'"
+                            :class="[
+                                'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                                akgFilterKelompok === 'pk'
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-200'
+                            ]"
+                        >
+                            <span>Porsi Kecil / Pagi (5)</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="akgFilterKelompok = 'pb'"
+                            :class="[
+                                'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                                akgFilterKelompok === 'pb'
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200'
+                            ]"
+                        >
+                            <span>Porsi Besar / Siang (7)</span>
+                        </button>
+                    </div>
+
+                    <div class="relative w-full sm:w-64">
+                        <Search class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            v-model="akgSearchQuery"
+                            type="text"
+                            placeholder="Cari kelompok sasaran..."
+                            class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
+                        />
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead>
+                            <tr class="bg-blue-50/70 border-b border-blue-200 text-blue-950 font-black">
+                                <th class="py-3 px-3 text-center w-12 border-r border-blue-100 whitespace-nowrap">No</th>
+                                <th class="py-3 px-3.5 border-r border-blue-100 min-w-[190px]">Kelompok Sasaran</th>
+                                <th class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap">Pendistribusian</th>
+                                <th class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap">Rujukan % AKG</th>
+                                <th class="py-3 px-3 text-center bg-amber-50/60 text-amber-950 border-r border-amber-100 whitespace-nowrap">Energi (kkal)</th>
+                                <th class="py-3 px-3 text-center bg-emerald-50/60 text-emerald-950 border-r border-emerald-100 whitespace-nowrap">Protein (g)</th>
+                                <th class="py-3 px-3 text-center bg-indigo-50/60 text-indigo-950 border-r border-indigo-100 whitespace-nowrap">Lemak (g)</th>
+                                <th class="py-3 px-3 text-center bg-orange-50/60 text-orange-950 border-r border-orange-100 whitespace-nowrap">Karbohidrat (g)</th>
+                                <th class="py-3 px-4 text-center whitespace-nowrap min-w-[125px]">Tipe Porsi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr
+                                v-for="item in filteredRujukanAkg"
+                                :key="'rujukan-' + item.no"
+                                class="hover:bg-slate-50/80 transition-colors"
+                            >
+                                <td class="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100 whitespace-nowrap">
+                                    {{ item.no }}
+                                </td>
+                                <td class="py-2.5 px-3.5 font-bold text-slate-900 border-r border-slate-100">
+                                    {{ item.kelompokSasaran }}
+                                </td>
+                                <td class="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                                    <span
+                                        :class="[
+                                            'px-2.5 py-0.5 rounded-md text-[10px] font-extrabold whitespace-nowrap inline-block',
+                                            item.pendistribusian === 'Pagi'
+                                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        ]"
+                                    >
+                                        {{ item.pendistribusian }}
+                                    </span>
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-semibold text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                                    {{ item.rujukanAkgPct }}
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-black text-amber-900 bg-amber-50/30 border-r border-amber-100 whitespace-nowrap">
+                                    {{ item.energiMin }} - {{ item.energiMax }}
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-black text-emerald-900 bg-emerald-50/30 border-r border-emerald-100 whitespace-nowrap">
+                                    {{ item.proteinMin.toFixed(1).replace('.', ',') }} - {{ item.proteinMax.toFixed(1).replace('.', ',') }}
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-black text-indigo-900 bg-indigo-50/30 border-r border-indigo-100 whitespace-nowrap">
+                                    {{ item.lemakMin.toFixed(1).replace('.', ',') }} - {{ item.lemakMax.toFixed(1).replace('.', ',') }}
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-black text-orange-900 bg-orange-50/30 border-r border-orange-100 whitespace-nowrap">
+                                    {{ item.karbohidratMin.toFixed(1).replace('.', ',') }} - {{ item.karbohidratMax.toFixed(1).replace('.', ',') }}
+                                </td>
+                                <td class="py-2.5 px-4 text-center whitespace-nowrap">
+                                    <span
+                                        :class="[
+                                            'px-3 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap inline-flex items-center justify-center tracking-tight shadow-2xs',
+                                            item.tipePorsi === 'Porsi Kecil'
+                                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                                : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                        ]"
+                                    >
+                                        {{ item.tipePorsi }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Rumus & Penjelasan Perhitungan Gizi -->
+                <div class="space-y-3 bg-gradient-to-br from-amber-50/60 to-rose-50/40 p-4 rounded-2xl border border-amber-200/80">
+                    <div class="flex items-center gap-2">
+                        <Calculator class="w-4 h-4 text-amber-700" />
+                        <h4 class="text-xs font-black uppercase tracking-wider text-amber-950">
+                            Rumus & Logika Perhitungan Kandungan Gizi SPPG
+                        </h4>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
+                            <span class="font-bold text-amber-900 block text-[11px]">1. Kandungan Gizi Bahan:</span>
+                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
+                                Zat Gizi = (Berat Bersih &divide; 100) &times; Nilai TKPI
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-snug">
+                                Dihitung otomatis dari gramatur porsi bersih (edible weight) dikali nilai zat gizi per 100g pada basis data TKPI Kemenkes.
+                            </p>
+                        </div>
+                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
+                            <span class="font-bold text-amber-900 block text-[11px]">2. Total Gizi per Porsi Menu:</span>
+                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
+                                Total = &sum; [ Zat Gizi Seluruh Bahan Masakan ]
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-snug">
+                                Mengakumulasikan kontribusi energi (kkal), protein, lemak, karbohidrat, dan serat dari setiap komponen sajian menu.
+                            </p>
+                        </div>
+                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
+                            <span class="font-bold text-amber-900 block text-[11px]">3. Evaluasi Kepatuhan AKG:</span>
+                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
+                                Status = Min &le; Total Terhitung &le; Max
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-snug">
+                                PK target SD 1-3 (330-413 kkal), PB target SD 4-6 s.d. SMA/Tendik (585-831 kkal). Otomatis menandai status Memenuhi / Kurang / Lebih.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Modal -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                    <p class="text-[11px] text-slate-500 italic">
+                        Catatan: Perhitungan Standar Gizi MBG mengikuti Peraturan Kementerian Kesehatan Nomor 28 Tahun 2019.
+                    </p>
+                    <Button
+                        type="button"
+                        @click="showAkgReferenceModal = false"
+                        className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-5 h-9 rounded-xl cursor-pointer"
+                    >
+                        Tutup
+                    </Button>
+                </div>
+            </div>
+        </Modal>
     </div>
 </template>
