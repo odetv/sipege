@@ -461,6 +461,26 @@ class GiziController extends Controller
             $fiber = unpack('f', substr($rec, 230, 4))[1] ?? 0;
             $fiber = (!is_nan($fiber) && $fiber >= 0) ? round($fiber, 1) : 0;
 
+            $unpackFloat = function(int $offset) use ($rec): ?float {
+                $v = unpack('f', substr($rec, $offset, 4))[1] ?? null;
+                if ($v === null || is_nan($v) || $v < 0 || $v > 500000) {
+                    return null;
+                }
+                return round($v, 2);
+            };
+
+            $thiamin = $unpackFloat(274);
+            $riboflavin = $unpackFloat(278);
+            $niasin = $unpackFloat(282);
+            $vitaminC = $unpackFloat(306);
+            $sodium = $unpackFloat(318);
+            $potassium = $unpackFloat(322);
+            $calcium = $unpackFloat(326);
+            $phosphorus = $unpackFloat(334);
+            $iron = $unpackFloat(338);
+            $zinc = $unpackFloat(350);
+            $copper = $unpackFloat(354);
+
             $nameLower = ' ' . strtolower($name) . ' ';
             $kategori = $this->categorizeFtaFood($nameLower);
             $alergen = $this->detectFtaAllergen($nameLower);
@@ -472,11 +492,28 @@ class GiziController extends Controller
                 'nama' => ucwords(strtolower($name)),
                 'kategori' => $kategori,
                 'kategori_raw' => $kategori,
+                'sumber' => 'Nutri Survey (.fta)',
+                'air' => null,
                 'energi' => $energy,
                 'protein' => $protein,
                 'lemak' => $fat,
                 'karbohidrat' => $carb,
                 'serat' => $fiber,
+                'abu' => null,
+                'kalsium' => $calcium,
+                'fosfor' => $phosphorus,
+                'besi' => $iron,
+                'natrium' => $sodium,
+                'kalium' => $potassium,
+                'tembaga' => $copper,
+                'seng' => $zinc,
+                'retinol' => null,
+                'b_karoten' => null,
+                'karoten_total' => null,
+                'tiamin' => $thiamin,
+                'riboflavin' => $riboflavin,
+                'niasin' => $niasin,
+                'vitamin_c' => $vitaminC,
                 'bdd' => $bdd,
                 'fmm' => 100,
                 'buffer' => 4,
@@ -671,13 +708,38 @@ class GiziController extends Controller
                 $catClean = preg_replace('/^\d+\.\d+\.\s*/', '', $catRaw);
                 $catClean = ucwords(strtolower(trim($catClean)));
 
+                $parseNum = function($val): ?float {
+                    $v = trim((string) $val);
+                    if ($v === '' || $v === '-' || !is_numeric($v)) {
+                        return null;
+                    }
+                    return round((float) $v, 2);
+                };
+
                 $code = trim($row[0] ?? '');
                 $name = trim($row[1] ?? '');
+                $source = trim($row[2] ?? '');
+                $air = $parseNum($row[6] ?? null);
                 $energy = (float) ($row[7] ?? 0);
                 $protein = (float) ($row[8] ?? 0);
                 $fat = (float) ($row[9] ?? 0);
                 $carb = (float) ($row[10] ?? 0);
-                $fiber = (float) ($row[11] ?? 0);
+                $fiber = $parseNum($row[11] ?? null);
+                $ash = $parseNum($row[12] ?? null);
+                $calcium = $parseNum($row[13] ?? null);
+                $phosphorus = $parseNum($row[14] ?? null);
+                $iron = $parseNum($row[15] ?? null);
+                $sodium = $parseNum($row[16] ?? null);
+                $potassium = $parseNum($row[17] ?? null);
+                $copper = $parseNum($row[18] ?? null);
+                $zinc = $parseNum($row[19] ?? null);
+                $retinol = $parseNum($row[20] ?? null);
+                $betaCarotene = $parseNum($row[21] ?? null);
+                $caroteneTotal = $parseNum($row[22] ?? null);
+                $thiamin = $parseNum($row[23] ?? null);
+                $riboflavin = $parseNum($row[24] ?? null);
+                $niacin = $parseNum($row[25] ?? null);
+                $vitaminC = $parseNum($row[26] ?? null);
                 $bdd = (float) ($row[27] ?? 100);
 
                 $nameLower = ' ' . strtolower($name) . ' ';
@@ -689,11 +751,28 @@ class GiziController extends Controller
                     'nama' => $name,
                     'kategori' => $catClean ?: 'Lainnya',
                     'kategori_raw' => $catRaw,
+                    'sumber' => $source ?: 'Kemenkes (.csv)',
+                    'air' => $air,
                     'energi' => $energy,
                     'protein' => $protein,
                     'lemak' => $fat,
                     'karbohidrat' => $carb,
                     'serat' => $fiber,
+                    'abu' => $ash,
+                    'kalsium' => $calcium,
+                    'fosfor' => $phosphorus,
+                    'besi' => $iron,
+                    'natrium' => $sodium,
+                    'kalium' => $potassium,
+                    'tembaga' => $copper,
+                    'seng' => $zinc,
+                    'retinol' => $retinol,
+                    'b_karoten' => $betaCarotene,
+                    'karoten_total' => $caroteneTotal,
+                    'tiamin' => $thiamin,
+                    'riboflavin' => $riboflavin,
+                    'niasin' => $niacin,
+                    'vitamin_c' => $vitaminC,
                     'bdd' => $bdd > 0 ? $bdd : 100,
                     'fmm' => 100,
                     'buffer' => 4,

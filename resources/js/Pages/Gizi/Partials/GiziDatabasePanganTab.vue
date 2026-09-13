@@ -97,6 +97,17 @@ function formatRupiah(val) {
         maximumFractionDigits: 0,
     }).format(val);
 }
+
+function formatVal(val) {
+    if (val === null || val === undefined || val === "" || val === "-") return "-";
+    if (typeof val === "number") {
+        if (Number.isNaN(val)) return "-";
+        return Number.isInteger(val)
+            ? val.toString()
+            : val.toLocaleString("id-ID", { maximumFractionDigits: 2 });
+    }
+    return val;
+}
 </script>
 
 <template>
@@ -330,42 +341,67 @@ function formatRupiah(val) {
         <div
             class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white"
         >
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto max-w-full">
                 <table
-                    class="w-full min-w-[900px] text-left text-xs border-collapse"
+                    class="w-full min-w-[2400px] text-left text-xs border-collapse"
                 >
                     <thead>
                         <tr
-                            class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                            class="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none sticky top-0 z-20"
                         >
-                            <th class="py-3.5 px-3">Kode</th>
-                            <th class="py-3.5 px-3">Nama Bahan Pangan</th>
-                            <th class="py-3.5 px-3">Kategori</th>
-                            <th class="py-3.5 px-3 text-right">
+                            <th class="py-3.5 px-3 sticky left-0 bg-slate-100 z-30 min-w-[90px] border-r border-slate-200/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                Kode
+                            </th>
+                            <th class="py-3.5 px-3 sticky left-[90px] bg-slate-100 z-30 min-w-[240px] border-r border-slate-200/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                Nama Bahan Pangan
+                            </th>
+                            <th class="py-3.5 px-3 min-w-[160px]">Kategori</th>
+                            <th class="py-3.5 px-3 min-w-[120px]">Sumber</th>
+                            <th class="py-3.5 px-3 text-right min-w-[80px]">Air (g)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px] text-amber-900 bg-amber-50/50">
                                 Energi (Kkal)
                             </th>
-                            <th class="py-3.5 px-3 text-right">Protein (g)</th>
-                            <th class="py-3.5 px-3 text-right">Lemak (g)</th>
-                            <th class="py-3.5 px-3 text-right">
+                            <th class="py-3.5 px-3 text-right min-w-[85px] text-blue-900 bg-blue-50/50">
+                                Protein (g)
+                            </th>
+                            <th class="py-3.5 px-3 text-right min-w-[80px]">Lemak (g)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">
                                 Karbohidrat (g)
                             </th>
-                            <th class="py-3.5 px-3 text-right">Serat (g)</th>
-                            <th class="py-3.5 px-3 text-center">BDD (%)</th>
-                            <th class="py-3.5 px-3 text-center">Alergen</th>
+                            <th class="py-3.5 px-3 text-right min-w-[80px]">Serat (g)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[75px]">Abu (g)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">Kalsium / Ca (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">Fosfor / P (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[85px]">Besi / Fe (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">Natrium / Na (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">Kalium / K (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[90px]">Tembaga / Cu (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[85px]">Seng / Zn (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[90px]">Retinol (mcg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">β-Karoten (mcg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[110px]">Karoten Total (mcg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[90px]">Tiamin / B1 (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[95px]">Riboflavin / B2 (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[90px]">Niasin / B3 (mg)</th>
+                            <th class="py-3.5 px-3 text-right min-w-[90px]">Vitamin C (mg)</th>
+                            <th class="py-3.5 px-3 text-center min-w-[80px] text-emerald-900 bg-emerald-50/50">
+                                BDD (%)
+                            </th>
+                            <th class="py-3.5 px-3 text-center min-w-[120px]">Alergen</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="item in paginatedTkpiList"
                             :key="item.id"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="hover:bg-slate-50/80 transition-colors group"
                         >
                             <td
-                                class="p-3 font-mono font-bold text-slate-500 text-[11px]"
+                                class="p-3 font-mono font-bold text-slate-500 text-[11px] sticky left-0 bg-white group-hover:bg-slate-50/90 z-10 border-r border-slate-200/50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]"
                             >
-                                {{ item.id }}
+                                {{ item.code || item.id }}
                             </td>
-                            <td class="p-3 font-bold text-slate-900">
+                            <td class="p-3 font-bold text-slate-900 sticky left-[90px] bg-white group-hover:bg-slate-50/90 z-10 border-r border-slate-200/50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                 {{ item.nama }}
                             </td>
                             <td class="p-3">
@@ -376,32 +412,85 @@ function formatRupiah(val) {
                                     {{ item.kategori }}
                                 </Badge>
                             </td>
-                            <td class="p-3 text-right font-bold text-amber-800">
-                                {{ item.energi }}
+                            <td class="p-3">
+                                <span class="text-[10.5px] text-slate-500 font-mono">
+                                    {{ formatVal(item.sumber) }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-right text-slate-600">
+                                {{ formatVal(item.air) }}
+                            </td>
+                            <td class="p-3 text-right font-bold text-amber-800 bg-amber-50/30">
+                                {{ formatVal(item.energi) }}
                             </td>
                             <td
-                                class="p-3 text-right font-semibold text-blue-800"
+                                class="p-3 text-right font-semibold text-blue-800 bg-blue-50/30"
                             >
-                                {{ item.protein }}
+                                {{ formatVal(item.protein) }}
                             </td>
                             <td class="p-3 text-right text-slate-700">
-                                {{ item.lemak }}
+                                {{ formatVal(item.lemak) }}
                             </td>
                             <td class="p-3 text-right text-slate-700">
-                                {{ item.karbohidrat }}
+                                {{ formatVal(item.karbohidrat) }}
                             </td>
                             <td class="p-3 text-right text-slate-700">
-                                {{ item.serat }}
+                                {{ formatVal(item.serat) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-600">
+                                {{ formatVal(item.abu) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.kalsium) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.fosfor) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.besi) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.natrium) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.kalium) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.tembaga) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.seng) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-600">
+                                {{ formatVal(item.retinol) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-600">
+                                {{ formatVal(item.b_karoten) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-600">
+                                {{ formatVal(item.karoten_total) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.tiamin) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.riboflavin) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.niasin) }}
+                            </td>
+                            <td class="p-3 text-right text-slate-700">
+                                {{ formatVal(item.vitamin_c) }}
                             </td>
                             <td
-                                class="p-3 text-center font-bold text-emerald-800"
+                                class="p-3 text-center font-bold text-emerald-800 bg-emerald-50/30"
                             >
-                                {{ item.bdd }}%
+                                {{ item.bdd !== null && item.bdd !== undefined ? item.bdd + '%' : '-' }}
                             </td>
                             <td class="p-3 text-center">
                                 <span
                                     v-if="item.alergen"
-                                    class="text-[10.5px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200"
+                                    class="text-[10.5px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 whitespace-nowrap"
                                 >
                                     {{ item.alergen }}
                                 </span>
@@ -410,7 +499,7 @@ function formatRupiah(val) {
                         </tr>
                         <tr v-if="filteredTkpiList.length === 0">
                             <td
-                                colspan="10"
+                                colspan="27"
                                 class="p-8 text-center text-slate-400 font-semibold"
                             >
                                 Tidak ada data bahan pangan yang sesuai dengan
