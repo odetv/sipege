@@ -48,6 +48,12 @@ class LabelController extends Controller
                         'total_porsi' => (int)$wo->total_pm,
                         'porsi_pk' => (int)$wo->total_pk,
                         'porsi_pb' => (int)$wo->total_pb,
+                        'sub_menu_1' => $wo->sub_menu_1,
+                        'sub_menu_2' => $wo->sub_menu_2,
+                        'sub_menu_3' => $wo->sub_menu_3,
+                        'sub_menu_4' => $wo->sub_menu_4,
+                        'sub_menu_5' => $wo->sub_menu_5,
+                        'sub_menu_alergi' => $wo->sub_menu_alergi,
                         'komponen' => array_values(array_filter([
                             $wo->sub_menu_1 ?? $wo->komponen_energi,
                             $wo->sub_menu_2 ?? $wo->komponen_protein,

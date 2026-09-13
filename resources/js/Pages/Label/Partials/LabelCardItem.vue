@@ -65,7 +65,7 @@ const props = defineProps({
     },
     tinggiIsolasiCm: {
         type: [Number, String],
-        default: 2,
+        default: 1.5,
     },
     waktuMaksimal: {
         type: String,
@@ -87,19 +87,31 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    tipeLabel: {
+        type: String,
+        default: "normal", // 'normal' | 'alergi'
+    },
+    jenisAlergi: {
+        type: String,
+        default: "",
+    },
+    tagAlergi: {
+        type: String,
+        default: "",
+    },
 });
 
 const topIsolasiHeightPx = computed(() => {
     const cm = parseFloat(props.tinggiIsolasiCm);
-    const validCm = isNaN(cm) || cm < 0 ? 2 : cm;
+    const validCm = isNaN(cm) || cm < 0 ? 1.5 : cm;
     // 370px = 6cm, so 1cm = 61.667px
     return Math.round(validCm * 61.667);
 });
 
-// Scale factor based on available main label card height (Baseline 2cm = 246.67px)
+// Scale factor based on available main label card height (Baseline 1.5cm = 277.5px)
 const scaleRatio = computed(() => {
     const availableHeight = 370 - topIsolasiHeightPx.value;
-    return Math.max(0.85, Math.min(1.45, availableHeight / 246.67));
+    return Math.max(0.85, Math.min(1.45, availableHeight / 277.5));
 });
 
 const dyn = computed(() => {
@@ -261,6 +273,21 @@ const headerWaktuMaksimalDisplay = computed(() => {
     }
     return "WAKTU MAKSIMAL KONSUMSI";
 });
+
+const isAlergi = computed(() => props.tipeLabel === "alergi");
+
+const bannerBadgeText = computed(() => {
+    if (isAlergi.value) {
+        if (props.tagAlergi && props.tagAlergi.trim()) {
+            return props.tagAlergi.trim().toUpperCase();
+        }
+        if (props.jenisAlergi && props.jenisAlergi.trim()) {
+            return `⚠️ ALERGI: ${props.jenisAlergi.trim().toUpperCase()}`;
+        }
+        return "⚠️ MENU ALERGI";
+    }
+    return "MENU";
+});
 </script>
 
 <template>
@@ -290,10 +317,10 @@ const headerWaktuMaksimalDisplay = computed(() => {
                 height: topIsolasiHeightPx + 'px',
                 minHeight: '10px',
                 maxHeight: '190px',
-                border: '1.5px dashed #94a3b8',
+                border: isAlergi ? '1.5px dashed #f97316' : '1.5px dashed #94a3b8',
                 borderBottom: 'none',
                 borderRadius: '8px 8px 0 0',
-                backgroundColor: '#f8fafc',
+                backgroundColor: isAlergi ? '#fff7ed' : '#f8fafc',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -303,26 +330,25 @@ const headerWaktuMaksimalDisplay = computed(() => {
             }"
         >
             <div
-                style="
-                    font-size: 8.5px;
-                    font-weight: 800;
-                    color: #64748b;
-                    letter-spacing: 1px;
-                    text-transform: uppercase;
-                    line-height: 1;
-                    white-space: nowrap;
-                    text-align: center;
-                "
+                :style="{
+                    fontSize: '8.5px',
+                    fontWeight: '800',
+                    color: isAlergi ? '#c2410c' : '#64748b',
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    lineHeight: '1',
+                    whiteSpace: 'nowrap',
+                    textAlign: 'center',
+                }"
             >
-                - - - - - - - - - - AREA TEMPEL ISOLASI / PEREKAT KEMASAN - - -
-                - - - - - - -
+                {{ isAlergi ? '- - - - - - - - - - AREA TEMPEL ISOLASI • KEMASAN PORSI ALERGI - - - - - - - - - -' : '- - - - - - - - - - AREA TEMPEL ISOLASI / PEREKAT KEMASAN - - - - - - - - - -' }}
             </div>
         </div>
 
-        <!-- ================= KARTU UTAMA RATA BAWAH DENGAN BORDER BIRU RESMI BGN ================= -->
+        <!-- ================= KARTU UTAMA RATA BAWAH DENGAN BORDER BIRU RESMI BGN / ORANYE ALERGI ================= -->
         <div
             :style="{
-                border: '2.5px solid #164282',
+                border: isAlergi ? '2.5px solid #ea580c' : '2.5px solid #164282',
                 borderRadius: '0 0 12px 12px',
                 padding: dyn.cardPadding,
                 backgroundColor: '#ffffff',
@@ -384,7 +410,7 @@ const headerWaktuMaksimalDisplay = computed(() => {
                         :style="{
                             fontSize: dyn.sppgTitleFontSize,
                             fontWeight: '900',
-                            color: '#164282',
+                            color: isAlergi ? '#9a3412' : '#164282',
                             letterSpacing: '-0.2px',
                             textTransform: 'uppercase',
                             lineHeight: '1.1',
@@ -399,7 +425,7 @@ const headerWaktuMaksimalDisplay = computed(() => {
             <div
                 :style="{
                     height: dyn.goldLineHeight,
-                    backgroundColor: '#c29046',
+                    backgroundColor: isAlergi ? '#d97706' : '#c29046',
                     borderRadius: '2px',
                     marginBottom: dyn.goldLineMarginBottom,
                 }"
@@ -410,7 +436,7 @@ const headerWaktuMaksimalDisplay = computed(() => {
                 :style="{
                     display: 'flex',
                     alignItems: 'stretch',
-                    backgroundColor: '#4a85d9',
+                    backgroundColor: isAlergi ? '#ea580c' : '#4a85d9',
                     borderRadius: '5px',
                     color: '#ffffff',
                     marginBottom: dyn.bannerMarginBottom,
@@ -421,7 +447,7 @@ const headerWaktuMaksimalDisplay = computed(() => {
             >
                 <div
                     :style="{
-                        backgroundColor: '#3b72c2',
+                        backgroundColor: isAlergi ? '#c2410c' : '#3b72c2',
                         fontSize: dyn.menuBadgeFontSize,
                         fontWeight: '900',
                         padding: dyn.menuBadgePadding,
@@ -440,7 +466,7 @@ const headerWaktuMaksimalDisplay = computed(() => {
                             line-height: 1;
                             transform: translateY(-3px);
                         "
-                        >MENU</span
+                        >{{ bannerBadgeText }}</span
                     >
                 </div>
                 <div

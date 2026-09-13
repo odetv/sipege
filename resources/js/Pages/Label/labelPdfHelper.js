@@ -61,22 +61,38 @@ export function formatDetailedEta(totalSeconds) {
 
 /**
  * Pre-render unique target group templates once.
+ * Supports both Normal and Allergy label variations.
  * Progressively updates Phase 1 progress (0% - 75%) with real-time ETA.
  */
 async function preRenderUniqueTemplates({
+    printableItems = [],
     printableKelompokList = [],
     getRenderElement,
     startTime = Date.now(),
     isCancelled = () => false,
     onProgress = () => {},
 }) {
+    const items =
+        printableItems.length > 0
+            ? printableItems
+            : printableKelompokList.map((k) => ({
+                  kelompok: k,
+                  tipeLabel: "normal",
+                  jenisAlergi: "",
+                  tagAlergi: "",
+              }));
+
     const uniqueMap = new Map();
-    for (let i = 0; i < printableKelompokList.length; i++) {
-        const k = printableKelompokList[i];
-        const key = `${k?.id || i}_${k?.nama_kelompok || k?.nama || ""}_${k?.kategori || ""}_${k?.status_alergi ? "1" : "0"}`;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const k = item.kelompok;
+        const tipe = item.tipeLabel || "normal";
+        const alergi = item.jenisAlergi || "";
+        const key = `${k?.id || i}_${tipe}_${alergi}_${k?.nama_kelompok || k?.nama || ""}`;
         if (!uniqueMap.has(key)) {
             uniqueMap.set(key, {
                 key,
+                renderItem: item,
                 kelompok: k,
                 alias: `tpl_${uniqueMap.size}`,
             });
@@ -119,7 +135,7 @@ async function preRenderUniqueTemplates({
                     : "",
         });
 
-        const element = await getRenderElement(item.kelompok);
+        const element = await getRenderElement(item.renderItem || item.kelompok);
         if (isCancelled && isCancelled()) {
             const err = new Error("Proses dibatalkan.");
             err.name = "AbortError";
@@ -134,9 +150,13 @@ async function preRenderUniqueTemplates({
     const fallback = Array.from(renderedTemplates.values())[0];
 
     return {
-        getTemplate: (kelompok, idx) => {
-            if (!kelompok) return fallback;
-            const key = `${kelompok?.id || idx}_${kelompok?.nama_kelompok || kelompok?.nama || ""}_${kelompok?.kategori || ""}_${kelompok?.status_alergi ? "1" : "0"}`;
+        getTemplate: (itemOrKelompok, idx) => {
+            if (!itemOrKelompok) return fallback;
+            const isItem = typeof itemOrKelompok === "object" && ("tipeLabel" in itemOrKelompok || "kelompok" in itemOrKelompok);
+            const k = isItem ? itemOrKelompok.kelompok : itemOrKelompok;
+            const tipe = isItem ? (itemOrKelompok.tipeLabel || "normal") : "normal";
+            const alergi = isItem ? (itemOrKelompok.jenisAlergi || "") : "";
+            const key = `${k?.id || idx}_${tipe}_${alergi}_${k?.nama_kelompok || k?.nama || ""}`;
             return renderedTemplates.get(key) || fallback;
         },
     };
@@ -147,6 +167,7 @@ async function preRenderUniqueTemplates({
  * Supports thousands of labels with ultra-fast aliased image insertion & ETA.
  */
 export async function downloadPdfSingleMode({
+    printableItems = [],
     printableKelompokList = [],
     customCount = null,
     getRenderElement,
@@ -154,14 +175,15 @@ export async function downloadPdfSingleMode({
     isCancelled = () => false,
     onProgress = () => {},
 }) {
-    if (!printableKelompokList || printableKelompokList.length === 0) {
+    const list = printableItems.length > 0 ? printableItems : printableKelompokList;
+    if (!list || list.length === 0) {
         throw new Error("Tidak ada kelompok sasaran yang dipilih.");
     }
 
     const total =
         customCount && Number(customCount) > 0
             ? parseInt(customCount, 10)
-            : printableKelompokList.length;
+            : list.length;
 
     const pageW = 90;
     const pageH = 60;
@@ -176,6 +198,7 @@ export async function downloadPdfSingleMode({
     const startTime = Date.now();
 
     const { getTemplate } = await preRenderUniqueTemplates({
+        printableItems,
         printableKelompokList,
         getRenderElement,
         startTime,
@@ -199,9 +222,8 @@ export async function downloadPdfSingleMode({
             throw err;
         }
 
-        const kelompokIndex = i % printableKelompokList.length;
-        const kelompok = printableKelompokList[kelompokIndex];
-        const template = getTemplate(kelompok, kelompokIndex);
+        const item = list[i % list.length];
+        const template = getTemplate(item, i);
 
         if (i > 0) {
             doc.addPage([pageW, pageH], "landscape");
@@ -283,16 +305,18 @@ export async function downloadPdfSingleMode({
  * Direct Print Single Mode (Opens Print Dialog with Exact 90mm x 60mm Full Page)
  */
 export async function printPdfSingleMode({
+    printableItems = [],
     printableKelompokList = [],
     getRenderElement,
     isCancelled = () => false,
     onProgress = () => {},
 }) {
-    if (!printableKelompokList || printableKelompokList.length === 0) {
+    const list = printableItems.length > 0 ? printableItems : printableKelompokList;
+    if (!list || list.length === 0) {
         throw new Error("Tidak ada kelompok sasaran yang dipilih.");
     }
 
-    const total = printableKelompokList.length;
+    const total = list.length;
     const pageW = 90;
     const pageH = 60;
 
@@ -306,6 +330,7 @@ export async function printPdfSingleMode({
     const startTime = Date.now();
 
     const { getTemplate } = await preRenderUniqueTemplates({
+        printableItems,
         printableKelompokList,
         getRenderElement,
         startTime,
@@ -328,8 +353,8 @@ export async function printPdfSingleMode({
             throw err;
         }
 
-        const kelompok = printableKelompokList[i];
-        const template = getTemplate(kelompok, i);
+        const item = list[i % list.length];
+        const template = getTemplate(item, i);
 
         if (i > 0) {
             doc.addPage([pageW, pageH], "landscape");
@@ -414,6 +439,7 @@ export async function printPdfSingleMode({
  * Ultra-fast generation for 1000s of labels using aliased image embedding + real-time ETA.
  */
 export async function downloadPdfA4GridMode({
+    printableItems = [],
     printableKelompokList = [],
     customCount = null,
     getRenderElement,
@@ -421,14 +447,15 @@ export async function downloadPdfA4GridMode({
     isCancelled = () => false,
     onProgress = () => {},
 }) {
-    if (!printableKelompokList || printableKelompokList.length === 0) {
+    const list = printableItems.length > 0 ? printableItems : printableKelompokList;
+    if (!list || list.length === 0) {
         throw new Error("Tidak ada kelompok sasaran yang dipilih.");
     }
 
     const total =
         customCount && Number(customCount) > 0
             ? parseInt(customCount, 10)
-            : printableKelompokList.length;
+            : list.length;
 
     const doc = new jsPDF({
         orientation: "landscape",
@@ -451,6 +478,7 @@ export async function downloadPdfA4GridMode({
     const startTime = Date.now();
 
     const { getTemplate } = await preRenderUniqueTemplates({
+        printableItems,
         printableKelompokList,
         getRenderElement,
         startTime,
@@ -477,9 +505,8 @@ export async function downloadPdfA4GridMode({
             throw err;
         }
 
-        const kelompokIndex = i % printableKelompokList.length;
-        const kelompok = printableKelompokList[kelompokIndex];
-        const template = getTemplate(kelompok, kelompokIndex);
+        const item = list[i % list.length];
+        const template = getTemplate(item, i);
 
         const pageIndex = Math.floor(i / labelsPerPage);
         const slotIndex = i % labelsPerPage;
