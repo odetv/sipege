@@ -10,6 +10,7 @@ use App\Models\WorkOrderItem;
 use App\Models\WorkOrderKelompok;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -302,8 +303,8 @@ class GiziController extends Controller
      */
     private function renderGiziView(Request $request, string $activeTab, ?string $step = null): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
 
         $kelompokList = [];
         $totalPenerima = 0;
@@ -314,9 +315,7 @@ class GiziController extends Controller
         $activeWorkOrder = null;
 
         if ($unitSppg) {
-            $kelompokList = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
-                ->with('rincian')
-                ->get();
+            $kelompokList = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
 
             $totalPenerima = $kelompokList->sum('total_penerima');
             $totalPorsiKecil = $kelompokList->sum('total_porsi_kecil');
@@ -350,18 +349,25 @@ class GiziController extends Controller
                               ->orWhere('nomor_wo', $woQuery);
                         }
                     })
-                    ->with(['items', 'kelompoks.kelompok.rincian'])
+                    ->with(['items', 'kelompoks'])
                     ->first();
             } elseif ($request->query('tanggal')) {
                 $activeWorkOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
                     ->where('tanggal_distribusi', $request->query('tanggal'))
-                    ->with(['items', 'kelompoks.kelompok.rincian'])
+                    ->with(['items', 'kelompoks'])
                     ->first();
             }
         }
 
-        $ftaData = file_exists(database_path('data/indo.fta')) ? $this->parseFtaData(database_path('data/indo.fta')) : [];
-        $csvData = file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
+        $needsFullTkpi = in_array($activeTab, ['database-pangan', 'tkpi', 'rancang-menu', 'buat-menu']);
+
+        $ftaData = $needsFullTkpi ? Cache::rememberForever('tkpi_fta_data_parsed', function () {
+            return file_exists(database_path('data/indo.fta')) ? $this->parseFtaData(database_path('data/indo.fta')) : [];
+        }) : [];
+
+        $csvData = $needsFullTkpi ? Cache::rememberForever('tkpi_csv_data_parsed', function () {
+            return file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
+        }) : [];
 
         $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan)) 
             ? $activeWorkOrder->database_pangan 

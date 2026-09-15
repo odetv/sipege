@@ -83,4 +83,23 @@ class KelompokPenerimaManfaat extends Model
     {
         return $this->hasMany(RincianPenerimaManfaat::class);
     }
+
+    /**
+     * Get list of kelompok for a unit.
+     */
+    public static function getCachedListForUnit(?int $unitId)
+    {
+        if (!$unitId) {
+            return collect();
+        }
+        return static::where('unit_sppg_id', $unitId)->orderBy('nama_kelompok', 'asc')->get();
+    }
+
+    /**
+     * Invalidate cached list for a unit.
+     */
+    public static function clearUnitCache(?int $unitId): void
+    {
+        // Reserved for future caching
+    }
 }

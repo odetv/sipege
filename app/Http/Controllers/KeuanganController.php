@@ -352,8 +352,8 @@ class KeuanganController extends Controller
      */
     private function renderKeuanganView(Request $request, string $activeTab): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
 
         $totalPenerima = 0;
         $totalPorsiKecil = 0;
@@ -367,9 +367,7 @@ class KeuanganController extends Controller
                 ->orderBy('nama_usaha', 'asc')
                 ->get();
 
-            $kelompokList = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
-                ->with('rincian')
-                ->get();
+            $kelompokList = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
 
             $totalPenerima = $kelompokList->sum('total_penerima');
             $totalPorsiKecil = $kelompokList->sum('total_porsi_kecil');
@@ -377,7 +375,7 @@ class KeuanganController extends Controller
 
             // Ambil seluruh data PO dari database
             $allDbPo = PurchaseOrder::where('unit_sppg_id', $unitSppg->id)
-                ->with(['items.workOrderItem', 'items.supplier', 'workOrder.items', 'verifikator', 'supplier'])
+                ->with(['items.supplier', 'workOrder', 'verifikator', 'supplier'])
                 ->orderBy('tanggal', 'desc')
                 ->get();
 

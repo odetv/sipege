@@ -16,26 +16,26 @@ class DashboardController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
 
         $kelompokList = [];
         $workOrders = [];
         if ($unitSppg) {
-            $kelompokList = \App\Models\KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
-                ->with('rincian')
-                ->get();
+            $kelompokList = \App\Models\KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
 
             $totalUnitPk = $kelompokList->sum('total_porsi_kecil');
             $totalUnitPb = $kelompokList->sum('total_porsi_besar');
 
             $workOrders = \App\Models\WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                ->with(['items', 'kelompoks.kelompok', 'purchaseOrder'])
+                ->with(['purchaseOrder'])
+                ->withCount('items')
                 ->orderBy('tanggal_distribusi', 'desc')
+                ->take(15)
                 ->get()
                 ->map(function ($wo) use ($totalUnitPk, $totalUnitPb) {
-                    $pk = $wo->total_pk ?: ($wo->kelompoks->sum('porsi_kecil') ?: $totalUnitPk);
-                    $pb = $wo->total_pb ?: ($wo->kelompoks->sum('porsi_besar') ?: $totalUnitPb);
+                    $pk = $wo->total_pk ?: $totalUnitPk;
+                    $pb = $wo->total_pb ?: $totalUnitPb;
                     $tot = (int)$pk + (int)$pb;
 
                     return [
@@ -49,7 +49,7 @@ class DashboardController extends Controller
                         'total_porsi' => $tot,
                         'porsi_pk' => (int)$pk,
                         'porsi_pb' => (int)$pb,
-                        'items_count' => $wo->items->count(),
+                        'items_count' => (int)($wo->items_count ?? 0),
                         'created_at' => $wo->created_at ? $wo->created_at->format('Y-m-d H:i:s') : null,
                         'diajukan_pada' => $wo->diajukan_pada ? (is_string($wo->diajukan_pada) ? $wo->diajukan_pada : $wo->diajukan_pada->format('Y-m-d H:i:s')) : null,
                         'disetujui_pada' => $wo->disetujui_pada ? (is_string($wo->disetujui_pada) ? $wo->disetujui_pada : $wo->disetujui_pada->format('Y-m-d H:i:s')) : null,
@@ -181,6 +181,8 @@ class DashboardController extends Controller
 
         $unitSppg->fill($validated);
         $unitSppg->save();
+
+        \Illuminate\Support\Facades\Cache::forget("unit_sppg_user_{$user->id}");
 
         return redirect()->route('dashboard')->with('success', 'Data Unit SPPG berhasil diperbarui.');
     }

@@ -17,8 +17,8 @@ class LabelController extends Controller
      */
     private function getLabelPageData(Request $request, string $activeSubMenu = 'buat'): array
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
 
         $kelompokList = [];
         $workOrders = [];
@@ -27,13 +27,10 @@ class LabelController extends Controller
         $activeWorkOrder = null;
 
         if ($unitSppg) {
-            $kelompokList = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)
-                ->with('rincian')
-                ->orderBy('nama_kelompok', 'asc')
-                ->get();
+            $kelompokList = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
 
             $workOrders = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                ->with(['items', 'kelompoks.kelompok', 'purchaseOrder'])
+                ->with(['items', 'kelompoks', 'purchaseOrder'])
                 ->orderBy('tanggal_distribusi', 'desc')
                 ->get()
                 ->map(function ($wo) {

@@ -75,10 +75,25 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the unit SPPG associated with the user.
+     * Get the unit SPPG associated with the user (with cache support).
      */
     public function unitSppg(): HasOne
     {
         return $this->hasOne(UnitSppg::class);
+    }
+
+    /**
+     * Get cached unit SPPG to avoid multiple remote DB round trips within request.
+     */
+    public function getCachedUnitSppg(): ?UnitSppg
+    {
+        if ($this->relationLoaded('unitSppg')) {
+            return $this->getRelation('unitSppg');
+        }
+        $unit = $this->unitSppg()->first();
+        if ($unit) {
+            $this->setRelation('unitSppg', $unit);
+        }
+        return $unit;
     }
 }

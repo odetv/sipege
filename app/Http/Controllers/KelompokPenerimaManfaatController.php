@@ -17,8 +17,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return Inertia::render('PenerimaManfaat/Index', [
@@ -35,8 +35,9 @@ class KelompokPenerimaManfaatController extends Controller
             ]);
         }
 
-        $query = KelompokPenerimaManfaat::with('rincian')
-            ->where('unit_sppg_id', $unitSppg->id);
+        $hasFilter = $request->filled('search') || $request->filled('kategori') || $request->filled('jenis_kepemilikan');
+
+        $query = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->with('rincian');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -60,9 +61,9 @@ class KelompokPenerimaManfaatController extends Controller
         }
 
         $kelompokList = $query->orderBy('id', 'asc')->get();
+        $allKelompok = $hasFilter ? KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->with('rincian')->get() : $kelompokList;
 
-        // Calculate all-time summary stats for this unit SPPG
-        $allKelompok = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->get();
+
         $totalPosyandu = $allKelompok->where('kategori', 'Posyandu')->count();
         $totalSekolah = $allKelompok->where('kategori', '!=', 'Posyandu')->count();
 
@@ -251,9 +252,10 @@ class KelompokPenerimaManfaatController extends Controller
                     'total' => $l + $p,
                 ]);
             }
+            KelompokPenerimaManfaat::clearUnitCache($unitSppg->id);
         });
 
-        return redirect()->route('penerima-manfaat.index')->with('success', 'Kelompok Penerima Manfaat berhasil ditambahkan.');
+        return redirect()->route('penerima-manfaat.index')->with('success', 'Data Kelompok Penerima Manfaat berhasil disimpan.');
     }
 
     /**
@@ -537,6 +539,7 @@ class KelompokPenerimaManfaatController extends Controller
                     'total' => $l + $p,
                 ]);
             }
+            KelompokPenerimaManfaat::clearUnitCache($unitSppg->id);
         });
 
         return redirect()->route('penerima-manfaat.index')->with('success', 'Data Kelompok Penerima Manfaat berhasil diperbarui.');
@@ -555,6 +558,7 @@ class KelompokPenerimaManfaatController extends Controller
         }
 
         $penerima_manfaat->delete();
+        KelompokPenerimaManfaat::clearUnitCache($unitSppg->id);
 
         return redirect()->route('penerima-manfaat.index')->with('success', 'Kelompok Penerima Manfaat berhasil dihapus.');
     }
