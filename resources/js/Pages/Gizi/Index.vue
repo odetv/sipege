@@ -52,7 +52,7 @@ const props = defineProps({
     },
     defaultSource: {
         type: String,
-        default: "fta",
+        default: "csv",
     },
     stats: {
         type: Object,
@@ -66,10 +66,10 @@ const props = defineProps({
     },
 });
 
-// Sumber Dataset TKPI Aktif (Default: 'fta' NutriSurvey Indo FTA atau dari Work Order yang diedit)
+// Sumber Dataset TKPI Aktif (Default: 'csv' Kemenkes atau dari Work Order yang diedit)
 const initialSource = (props.activeWorkOrder && props.activeWorkOrder.database_pangan)
     ? props.activeWorkOrder.database_pangan
-    : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "fta" : "fta"));
+    : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "csv" : "csv"));
 
 const selectedTkpiSource = ref(initialSource);
 

@@ -111,18 +111,105 @@ function formatDateTimeIndo(dt) {
     }
 }
 
-function formatGrossWeight(kg) {
-    if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg)))
-        return "0 kg";
-    const num = Number(kg);
-    if (num <= 0) return "0 kg";
-    if (num < 0.001) {
-        return `${parseFloat(num.toFixed(4))} kg`;
-    } else if (num < 0.01) {
-        return `${parseFloat(num.toFixed(3))} kg`;
-    } else {
-        return `${parseFloat(num.toFixed(2))} kg`;
+function getPortionCostBarColor(percent) {
+    const p = Number(percent) || 0;
+    if (p <= 0) return "bg-slate-200";
+    if (p <= 25) return "bg-emerald-500";
+    if (p <= 50) return "bg-amber-500";
+    return "bg-rose-500";
+}
+
+function getPortionUnit(satuan = "Kg") {
+    const s = (satuan || "Kg").toLowerCase().trim();
+    if (s === "kg" || s === "gram" || s === "g") return "g";
+    if (s === "liter" || s === "l" || s === "ml") return "mL";
+    return satuan || "Kg";
+}
+
+function formatGrossQty(qty, satuan = "Kg") {
+    if (qty === null || qty === undefined || qty === "" || isNaN(Number(qty)))
+        return `0 ${satuan || "Kg"}`;
+    const num = Number(qty);
+    if (num <= 0) return `0 ${satuan || "Kg"}`;
+    const s = (satuan || "Kg").trim();
+
+    if (s === "Kg" || s === "Liter" || s === "L") {
+        if (num < 0.001) {
+            return `${parseFloat(num.toFixed(4))} ${s}`;
+        } else if (num < 0.01) {
+            return `${parseFloat(num.toFixed(3))} ${s}`;
+        } else {
+            return `${parseFloat(num.toFixed(2))} ${s}`;
+        }
     }
+    if (s === "Gram" || s === "g" || s === "mL") {
+        return `${Number(num.toFixed(1)).toLocaleString("id-ID")} ${s}`;
+    }
+    if (Number.isInteger(num)) {
+        return `${num.toLocaleString("id-ID")} ${s}`;
+    }
+    return `${Number(num.toFixed(2)).toLocaleString("id-ID")} ${s}`;
+}
+
+function formatGrossWeight(kg, satuan = "Kg") {
+    return formatGrossQty(kg, satuan);
+}
+
+// Helper pengelompokan ringkasan satuan beragam (Opsi A: Grouped Breakdown)
+function formatGroupedUnitSummary(items, delimiter = " • ") {
+    if (!items || !items.length) return "0 Kg";
+
+    let totalWeightKg = 0;
+    let totalVolumeL = 0;
+    const countUnits = {};
+    let hasWeight = false;
+    let hasVolume = false;
+
+    items.forEach((it) => {
+        const s = (it.satuan || "Kg").trim();
+        const sLower = s.toLowerCase();
+        const qty = Number(it.totalGrossKg || 0);
+        if (qty <= 0) return;
+
+        if (sLower === "kg" || sLower === "kilogram") {
+            totalWeightKg += qty;
+            hasWeight = true;
+        } else if (sLower === "gram" || sLower === "g") {
+            totalWeightKg += qty / 1000;
+            hasWeight = true;
+        } else if (sLower === "liter" || sLower === "l") {
+            totalVolumeL += qty;
+            hasVolume = true;
+        } else if (sLower === "ml") {
+            totalVolumeL += qty / 1000;
+            hasVolume = true;
+        } else {
+            const unitLabel = s || "Pcs";
+            countUnits[unitLabel] = (countUnits[unitLabel] || 0) + qty;
+        }
+    });
+
+    const parts = [];
+    if (hasWeight) {
+        parts.push(formatGrossQty(totalWeightKg, "Kg"));
+    }
+    if (hasVolume) {
+        parts.push(formatGrossQty(totalVolumeL, "Liter"));
+    }
+    for (const [unit, qty] of Object.entries(countUnits)) {
+        if (qty > 0) {
+            const formattedVal = Number.isInteger(qty)
+                ? qty.toLocaleString("id-ID")
+                : parseFloat(qty.toFixed(2)).toLocaleString("id-ID");
+            parts.push(`${formattedVal} ${unit}`);
+        }
+    }
+
+    if (!parts.length) {
+        return "0 Kg";
+    }
+
+    return parts.join(delimiter);
 }
 
 // Config 5 Sub Menu
@@ -131,36 +218,36 @@ const subMenuKeysConfig = [
         key: "sub_menu_1",
         label: "Sub Menu 1",
         defaultName: "Makanan Pokok",
-        dotColor: "bg-amber-500",
-        badgeColor: "bg-amber-50 text-amber-900 border-amber-200",
+        dotColor: "bg-slate-700",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_2",
         label: "Sub Menu 2",
         defaultName: "Protein Hewani",
         dotColor: "bg-rose-500",
-        badgeColor: "bg-rose-50 text-rose-900 border-rose-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_3",
         label: "Sub Menu 3",
         defaultName: "Protein Nabati",
         dotColor: "bg-yellow-500",
-        badgeColor: "bg-yellow-50 text-yellow-900 border-yellow-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_4",
         label: "Sub Menu 4",
         defaultName: "Sayuran",
         dotColor: "bg-blue-500",
-        badgeColor: "bg-blue-50 text-blue-900 border-blue-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_5",
         label: "Sub Menu 5",
         defaultName: "Buah",
         dotColor: "bg-emerald-500",
-        badgeColor: "bg-emerald-50 text-emerald-900 border-emerald-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
 ];
 
@@ -398,14 +485,32 @@ const bahanCalculations = computed(() => {
                   : totalGross * harga,
         );
 
-        const costPK =
+        const s = (it.satuan || "Kg").toLowerCase().trim();
+        const isKgOrL = ["kg", "liter", "l"].includes(s);
+        const grossPerPK =
             pkGram > 0
-                ? ((pkGram / (bdd / 100)) * (1 + buffer / 100) / 1000) * harga
+                ? (pkGram / (bdd / 100)) * (1 + buffer / 100)
                 : 0;
-        const costPB =
+        const grossPerPB =
             pbGram > 0
-                ? ((pbGram / (bdd / 100)) * (1 + buffer / 100) / 1000) * harga
+                ? (pbGram / (bdd / 100)) * (1 + buffer / 100)
                 : 0;
+
+        const costPK = isKgOrL
+            ? (grossPerPK / 1000) * harga
+            : grossPerPK * harga;
+        const costPB = isKgOrL
+            ? (grossPerPB / 1000) * harga
+            : grossPerPB * harga;
+
+        let totalWeightKg = 0;
+        if (s === "kg" || s === "liter" || s === "l") {
+            totalWeightKg = totalGross;
+        } else if (s === "gram" || s === "g" || s === "ml") {
+            totalWeightKg = totalGross / 1000;
+        } else {
+            totalWeightKg = totalGross;
+        }
 
         return {
             id: it.id || idx + 1,
@@ -415,6 +520,7 @@ const bahanCalculations = computed(() => {
             sub_menu_block_id: it.sub_menu_block_id,
             nama_sub_menu: it.nama_sub_menu,
             kategori: it.kategori || "Lainnya",
+            satuan: it.satuan || "Kg",
             tipe_porsi: it.tipe_porsi || "normal",
             jenis_alergi: it.jenis_alergi || "",
             alergen: it.alergen || "",
@@ -423,6 +529,7 @@ const bahanCalculations = computed(() => {
             bdd: bdd,
             buffer: buffer,
             totalGrossKg: totalGross,
+            totalWeightKg: totalWeightKg,
             harga_master: harga,
             subtotalMaster: subtotal,
             costPK: costPK,
@@ -430,6 +537,13 @@ const bahanCalculations = computed(() => {
             nutrisiPK: it.nutrisi_pk || it.nutrisiPK || null,
             nutrisiPB: it.nutrisi_pb || it.nutrisiPB || null,
             keterangan: it.keterangan || "",
+            is_custom:
+                it.is_custom ||
+                (typeof it.code === "string" &&
+                    it.code.startsWith("custom_")) ||
+                (typeof it.id === "string" &&
+                    it.id.startsWith("custom_")) ||
+                false,
         };
     });
 });
@@ -1422,7 +1536,12 @@ function getSubMenuLabelForBahan(it) {
                                 <h5
                                     class="text-xs font-black text-slate-800 uppercase tracking-wider"
                                 >
-                                    A. Standar AKG Porsi Normal (PK & PB)
+                                    {{
+                                        activeAlergiAkgList &&
+                                        activeAlergiAkgList.length > 0
+                                            ? "A. Standar AKG Porsi Normal (PK & PB)"
+                                            : "Standar AKG Porsi Normal (PK & PB)"
+                                    }}
                                 </h5>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2404,12 +2523,7 @@ function getSubMenuLabelForBahan(it) {
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                class="bg-amber-500 h-full rounded-full transition-all"
-                                                                :style="{
-                                                                    width:
-                                                                        smCost.percent_pk +
-                                                                        '%',
-                                                                }"
+                                                                :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -2424,12 +2538,7 @@ function getSubMenuLabelForBahan(it) {
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                class="bg-blue-600 h-full rounded-full transition-all"
-                                                                :style="{
-                                                                    width:
-                                                                        smCost.percent_pb +
-                                                                        '%',
-                                                                }"
+                                                                :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -2473,6 +2582,27 @@ function getSubMenuLabelForBahan(it) {
                                         </tr>
                                     </tfoot>
                                 </table>
+                            </div>
+                            <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
+                            <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                                    <span>📊</span>
+                                    <span>Keterangan Indikator Porsi Biaya (PK / PB):</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-[11px] font-medium flex-wrap">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                        <span><strong>Hijau:</strong> Rendah (&le; 25%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                                        <span><strong>Kuning:</strong> Sedang (26% - 50%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                        <span><strong>Merah:</strong> Dominan / Tinggi (&gt; 50%)</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -2709,12 +2839,7 @@ function getSubMenuLabelForBahan(it) {
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-amber-500 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pk +
-                                                                            '%',
-                                                                    }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -2729,12 +2854,7 @@ function getSubMenuLabelForBahan(it) {
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-blue-600 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pb +
-                                                                            '%',
-                                                                }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -2840,6 +2960,7 @@ function getSubMenuLabelForBahan(it) {
                                             Tipe Porsi
                                         </th>
                                         <th class="p-3">Kategori</th>
+                                        <th class="p-3 text-center">Satuan</th>
                                         <th class="p-3 text-center">
                                             Gram PK / PB
                                         </th>
@@ -2875,9 +2996,28 @@ function getSubMenuLabelForBahan(it) {
                                         </td>
                                         <td class="p-3">
                                             <div
-                                                class="font-black text-slate-900 leading-tight"
+                                                class="font-black text-slate-900 leading-tight flex items-center gap-1.5 flex-wrap"
                                             >
-                                                {{ b.nama }}
+                                                <span>{{ b.nama }}</span>
+                                                <span
+                                                    v-if="
+                                                        b.is_custom ||
+                                                        (typeof b.code ===
+                                                            'string' &&
+                                                            b.code.startsWith(
+                                                                'custom_',
+                                                            )) ||
+                                                        (typeof b.id ===
+                                                            'string' &&
+                                                            b.id.startsWith(
+                                                                'custom_',
+                                                            ))
+                                                    "
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs"
+                                                    title="Bahan Ditambahkan Secara Manual"
+                                                >
+                                                    ✍️ Manual
+                                                </span>
                                             </div>
                                             <div
                                                 class="text-[11px] text-primary font-bold mt-0.5"
@@ -2956,11 +3096,16 @@ function getSubMenuLabelForBahan(it) {
                                         >
                                             {{ b.kategori }}
                                         </td>
+                                        <td class="p-3 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-bold">
+                                                {{ b.satuan || 'Kg' }}
+                                            </span>
+                                        </td>
                                         <td
                                             class="p-3 text-center font-bold text-slate-800 whitespace-nowrap"
                                         >
-                                            {{ b.gram_pk || 0 }}g /
-                                            {{ b.gram_pb || 0 }}g
+                                            {{ b.gram_pk || 0 }} {{ getPortionUnit(b.satuan) }} /
+                                            {{ b.gram_pb || 0 }} {{ getPortionUnit(b.satuan) }}
                                         </td>
                                         <td
                                             class="p-3 text-center text-[11px] text-slate-600 whitespace-nowrap"
@@ -2973,15 +3118,16 @@ function getSubMenuLabelForBahan(it) {
                                             class="p-3 text-right font-bold text-slate-900 whitespace-nowrap"
                                         >
                                             {{
-                                                formatGrossWeight(
+                                                formatGrossQty(
                                                     b.totalGrossKg,
+                                                    b.satuan,
                                                 )
                                             }}
                                         </td>
                                         <td
                                             class="p-3 text-right text-slate-600 whitespace-nowrap"
                                         >
-                                            {{ formatRupiah(b.harga_master) }}
+                                            {{ formatRupiah(b.harga_master) }} / {{ b.satuan || 'Kg' }}
                                         </td>
                                         <td
                                             class="p-3 text-right font-black text-emerald-900 whitespace-nowrap"
@@ -3011,14 +3157,10 @@ function getSubMenuLabelForBahan(it) {
                                         >
                                             {{
                                                 grandTotalDraftMaster
-                                                    ? bahanCalculations
-                                                          .reduce(
-                                                              (s, x) =>
-                                                                  s +
-                                                                  x.totalGrossKg,
-                                                              0,
-                                                          )
-                                                          .toFixed(1) + " kg"
+                                                    ? formatGroupedUnitSummary(
+                                                          bahanCalculations,
+                                                          " • ",
+                                                      )
                                                     : "-"
                                             }}
                                         </td>

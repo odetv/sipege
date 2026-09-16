@@ -107,7 +107,7 @@ const props = defineProps({
     },
     selectedSource: {
         type: String,
-        default: "fta",
+        default: "csv",
     },
     initialStep: {
         type: String,
@@ -1048,46 +1048,131 @@ const tkpiItems = computed(() => {
     return props.tkpiList || [];
 });
 
-// Fungsi Kalkulasi MBG
+// Helper Satuan & Format Unit MBG
+function getPortionUnit(satuan = "Kg") {
+    const s = (satuan || "Kg").toLowerCase().trim();
+    if (s === "kg" || s === "gram" || s === "g") return "g";
+    if (s === "liter" || s === "l" || s === "ml") return "mL";
+    return satuan || "Kg";
+}
+
+// Fungsi Kalkulasi MBG Berdasarkan Satuan
 function calculateGrossWeightKg(
     netGram,
     totalPortions,
     bddPercent,
     bufferPercent,
+    satuan = "Kg",
 ) {
     if (!netGram || !totalPortions || !bddPercent || bddPercent <= 0) return 0;
     const bddFactor = (bddPercent || 100) / 100;
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
-    const grossGramPerPortion = (netGram / bddFactor) * bufferFactor;
-    const totalKg = (grossGramPerPortion * totalPortions) / 1000;
-    return totalKg;
-}
+    const grossPerPortion = (netGram / bddFactor) * bufferFactor;
+    const s = (satuan || "Kg").toLowerCase().trim();
 
-function formatGrossWeight(kg) {
-    if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg)))
-        return "0 kg";
-    const num = Number(kg);
-    if (num <= 0) return "0 kg";
-    if (num < 0.001) {
-        return `${parseFloat(num.toFixed(4))} kg`;
-    } else if (num < 0.01) {
-        return `${parseFloat(num.toFixed(3))} kg`;
-    } else {
-        return `${parseFloat(num.toFixed(2))} kg`;
+    if (s === "kg" || s === "liter" || s === "l") {
+        return (grossPerPortion * totalPortions) / 1000;
     }
+    return grossPerPortion * totalPortions;
 }
 
-function formatGram(gram) {
-    if (
-        gram === null ||
-        gram === undefined ||
-        gram === "" ||
-        isNaN(Number(gram))
-    )
-        return "0 g";
-    const num = Number(gram);
-    if (num <= 0) return "0 g";
-    return `${parseFloat(num.toFixed(1))} g`;
+function formatGrossQty(qty, satuan = "Kg") {
+    if (qty === null || qty === undefined || qty === "" || isNaN(Number(qty)))
+        return `0 ${satuan || "Kg"}`;
+    const num = Number(qty);
+    if (num <= 0) return `0 ${satuan || "Kg"}`;
+    const s = (satuan || "Kg").trim();
+
+    if (s === "Kg" || s === "Liter" || s === "L") {
+        if (num < 0.001) {
+            return `${parseFloat(num.toFixed(4))} ${s}`;
+        } else if (num < 0.01) {
+            return `${parseFloat(num.toFixed(3))} ${s}`;
+        } else {
+            return `${parseFloat(num.toFixed(2))} ${s}`;
+        }
+    }
+    if (s === "Gram" || s === "g" || s === "mL") {
+        return `${Number(num.toFixed(1)).toLocaleString("id-ID")} ${s}`;
+    }
+    if (Number.isInteger(num)) {
+        return `${num.toLocaleString("id-ID")} ${s}`;
+    }
+    return `${Number(num.toFixed(2)).toLocaleString("id-ID")} ${s}`;
+}
+
+function formatGrossWeight(kg, satuan = "Kg") {
+    return formatGrossQty(kg, satuan);
+}
+
+// Helper pengelompokan ringkasan satuan beragam (Opsi A: Grouped Breakdown)
+function formatGroupedUnitSummary(items, delimiter = " • ") {
+    if (!items || !items.length) return "0 Kg";
+
+    let totalWeightKg = 0;
+    let totalVolumeL = 0;
+    const countUnits = {};
+    let hasWeight = false;
+    let hasVolume = false;
+
+    items.forEach((it) => {
+        const s = (it.satuan || "Kg").trim();
+        const sLower = s.toLowerCase();
+        const qty = Number(it.totalGrossKg || 0);
+        if (qty <= 0) return;
+
+        if (sLower === "kg" || sLower === "kilogram") {
+            totalWeightKg += qty;
+            hasWeight = true;
+        } else if (sLower === "gram" || sLower === "g") {
+            totalWeightKg += qty / 1000;
+            hasWeight = true;
+        } else if (sLower === "liter" || sLower === "l") {
+            totalVolumeL += qty;
+            hasVolume = true;
+        } else if (sLower === "ml") {
+            totalVolumeL += qty / 1000;
+            hasVolume = true;
+        } else {
+            const unitLabel = s || "Pcs";
+            countUnits[unitLabel] = (countUnits[unitLabel] || 0) + qty;
+        }
+    });
+
+    const parts = [];
+    if (hasWeight) {
+        parts.push(formatGrossQty(totalWeightKg, "Kg"));
+    }
+    if (hasVolume) {
+        parts.push(formatGrossQty(totalVolumeL, "Liter"));
+    }
+    for (const [unit, qty] of Object.entries(countUnits)) {
+        if (qty > 0) {
+            const formattedVal = Number.isInteger(qty)
+                ? qty.toLocaleString("id-ID")
+                : parseFloat(qty.toFixed(2)).toLocaleString("id-ID");
+            parts.push(`${formattedVal} ${unit}`);
+        }
+    }
+
+    if (!parts.length) {
+        return "0 Kg";
+    }
+
+    return parts.join(delimiter);
+}
+
+function formatPortionValue(val, satuan = "Kg") {
+    const unit = getPortionUnit(satuan);
+    if (val === null || val === undefined || val === "" || isNaN(Number(val)))
+        return `0 ${unit}`;
+    const num = Number(val);
+    if (num <= 0) return `0 ${unit}`;
+    return `${parseFloat(num.toFixed(1))} ${unit}`;
+}
+
+function formatGram(gram, satuan = "Kg") {
+    return formatPortionValue(gram, satuan);
 }
 
 function calculateNutritionFromNetGram(itemTkpi, netGram) {
@@ -1108,13 +1193,20 @@ function calculateItemFoodCostPerPortion(
     netGram,
     bddPercent,
     bufferPercent,
-    hargaPerKg,
+    hargaPerSatuan,
+    satuan = "Kg",
 ) {
-    if (!netGram || !hargaPerKg || !bddPercent || bddPercent <= 0) return 0;
+    if (!netGram || !hargaPerSatuan || !bddPercent || bddPercent <= 0) return 0;
     const bddFactor = (bddPercent || 100) / 100;
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
-    const grossGram = (netGram / bddFactor) * bufferFactor;
-    const cost = (grossGram / 1000) * hargaPerKg;
+    const grossPerPortion = (netGram / bddFactor) * bufferFactor;
+    const s = (satuan || "Kg").toLowerCase().trim();
+
+    if (s === "kg" || s === "liter" || s === "l") {
+        const cost = (grossPerPortion / 1000) * hargaPerSatuan;
+        return Number(cost) || 0;
+    }
+    const cost = grossPerPortion * hargaPerSatuan;
     return Number(cost) || 0;
 }
 
@@ -1130,9 +1222,9 @@ const step2SubMenuBlocks = computed(() => {
             label: "Sub Menu 1",
             color: "amber",
             defaultName: "Makanan Pokok",
-            dotColor: "bg-amber-500",
-            borderCard: "border-amber-200/90",
-            bgHeader: "bg-amber-50/50",
+            dotColor: "bg-slate-700",
+            borderCard: "border-slate-200",
+            bgHeader: "bg-white",
         },
         {
             key: "sub_menu_2",
@@ -1140,8 +1232,8 @@ const step2SubMenuBlocks = computed(() => {
             color: "rose",
             defaultName: "Protein Hewani",
             dotColor: "bg-rose-500",
-            borderCard: "border-rose-200/90",
-            bgHeader: "bg-rose-50/50",
+            borderCard: "border-slate-200",
+            bgHeader: "bg-white",
         },
         {
             key: "sub_menu_3",
@@ -1149,8 +1241,8 @@ const step2SubMenuBlocks = computed(() => {
             color: "yellow",
             defaultName: "Protein Nabati",
             dotColor: "bg-yellow-500",
-            borderCard: "border-yellow-200/90",
-            bgHeader: "bg-yellow-50/50",
+            borderCard: "border-slate-200",
+            bgHeader: "bg-white",
         },
         {
             key: "sub_menu_4",
@@ -1158,8 +1250,8 @@ const step2SubMenuBlocks = computed(() => {
             color: "blue",
             defaultName: "Sayuran",
             dotColor: "bg-blue-500",
-            borderCard: "border-blue-200/90",
-            bgHeader: "bg-blue-50/50",
+            borderCard: "border-slate-200",
+            bgHeader: "bg-white",
         },
         {
             key: "sub_menu_5",
@@ -1167,8 +1259,8 @@ const step2SubMenuBlocks = computed(() => {
             color: "emerald",
             defaultName: "Buah",
             dotColor: "bg-emerald-500",
-            borderCard: "border-emerald-200/90",
-            bgHeader: "bg-emerald-50/50",
+            borderCard: "border-slate-200",
+            bgHeader: "bg-white",
         },
     ];
 
@@ -1209,8 +1301,8 @@ const step2SubMenuBlocks = computed(() => {
                     alergiIndex: alIdx,
                     themeColor: "rose",
                     dotColor: "bg-rose-500",
-                    borderCard: "border-rose-300 ring-1 ring-rose-200/60",
-                    bgHeader: "bg-rose-50/80",
+                    borderCard: "border-slate-200",
+                    bgHeader: "bg-white",
                 });
             });
         }
@@ -1273,6 +1365,7 @@ function selectTkpiItemForBlock(master, block) {
         sub_menu_key: block.subKey,
         nama_sub_menu: block.namaMenu,
         kategori: master.kategori || "Lainnya",
+        satuan: master.satuan || "Kg",
         nama: master.nama,
         nama_po: "",
         tipe_porsi: block.isAlergi ? "alergi" : "normal",
@@ -1290,6 +1383,169 @@ function selectTkpiItemForBlock(master, block) {
 
     activeComboboxBlockId.value = null;
     searchTkpiQueryPerBlock.value[block.id] = "";
+    if (validationErrors.value.selectedBahan) {
+        delete validationErrors.value.selectedBahan;
+    }
+}
+
+// ==========================================
+// STATE & HANDLER TAMBAH BAHAN MANUAL
+// ==========================================
+const showManualBahanModal = ref(false);
+const manualBahanTargetBlock = ref(null);
+const manualBahanErrors = ref({});
+const manualBahanForm = ref({
+    nama: "",
+    nama_po: "",
+    kategori: "Lainnya",
+    satuan: "Kg",
+    harga_master: null,
+    energi: null,
+    protein: null,
+    lemak: null,
+    karbohidrat: null,
+    serat: null,
+});
+
+function openManualBahanModal(block) {
+    manualBahanTargetBlock.value = block;
+    manualBahanErrors.value = {};
+    const currentQ = getSearchQueryForBlock(block?.id || "");
+    manualBahanForm.value = {
+        nama: currentQ ? currentQ.trim() : "",
+        nama_po: currentQ ? currentQ.trim() : "",
+        kategori: "Lainnya",
+        satuan: "Kg",
+        harga_master: null,
+        energi: null,
+        protein: null,
+        lemak: null,
+        karbohidrat: null,
+        serat: null,
+    };
+    showManualBahanModal.value = true;
+    activeComboboxBlockId.value = null;
+}
+
+function saveManualBahan() {
+    manualBahanErrors.value = {};
+    if (!manualBahanForm.value.nama || !manualBahanForm.value.nama.trim()) {
+        manualBahanErrors.value.nama = "Nama bahan baku wajib diisi.";
+    }
+    if (
+        !manualBahanForm.value.nama_po ||
+        !manualBahanForm.value.nama_po.trim()
+    ) {
+        manualBahanErrors.value.nama_po = "Nama di PO wajib diisi.";
+    }
+    if (!manualBahanForm.value.kategori) {
+        manualBahanErrors.value.kategori = "Kategori wajib dipilih.";
+    }
+    if (!manualBahanForm.value.satuan) {
+        manualBahanErrors.value.satuan = "Satuan wajib dipilih.";
+    }
+    if (
+        manualBahanForm.value.harga_master === null ||
+        manualBahanForm.value.harga_master === "" ||
+        manualBahanForm.value.harga_master === undefined
+    ) {
+        manualBahanErrors.value.harga_master = "Harga per satuan wajib diisi.";
+    } else if (Number(manualBahanForm.value.harga_master) < 0) {
+        manualBahanErrors.value.harga_master =
+            "Harga tidak boleh bernilai negatif.";
+    }
+
+    // Validasi Wajib Kandungan Gizi (Energi, Protein, Lemak, Karbohidrat, Serat)
+    const giziList = [
+        { key: "energi", label: "Energi" },
+        { key: "protein", label: "Protein" },
+        { key: "lemak", label: "Lemak" },
+        { key: "karbohidrat", label: "Karbohidrat" },
+        { key: "serat", label: "Serat" },
+    ];
+    giziList.forEach((g) => {
+        const val = manualBahanForm.value[g.key];
+        if (
+            val === null ||
+            val === undefined ||
+            val === "" ||
+            isNaN(Number(val))
+        ) {
+            manualBahanErrors.value[g.key] = `${g.label} wajib diisi (minimal 0).`;
+        } else if (Number(val) < 0) {
+            manualBahanErrors.value[g.key] = `${g.label} tidak boleh bernilai negatif.`;
+        }
+    });
+
+    if (Object.keys(manualBahanErrors.value).length > 0) {
+        return;
+    }
+
+    const block = manualBahanTargetBlock.value;
+    if (!block) return;
+
+    const customId =
+        "custom_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+    const energiNum = Number(manualBahanForm.value.energi) || 0;
+    const proteinNum = Number(manualBahanForm.value.protein) || 0;
+    const lemakNum = Number(manualBahanForm.value.lemak) || 0;
+    const karbohidratNum = Number(manualBahanForm.value.karbohidrat) || 0;
+    const seratNum = Number(manualBahanForm.value.serat) || 0;
+
+    const customItem = {
+        id: customId,
+        code: customId,
+        tkpi_id: customId,
+        sub_menu_block_id: block.id,
+        sub_menu_key: block.subKey,
+        nama_sub_menu: block.namaMenu,
+        kategori: manualBahanForm.value.kategori || "Lainnya",
+        satuan: manualBahanForm.value.satuan || "Kg",
+        nama: manualBahanForm.value.nama.trim(),
+        nama_po: manualBahanForm.value.nama_po
+            ? manualBahanForm.value.nama_po.trim()
+            : manualBahanForm.value.nama.trim(),
+        tipe_porsi: block.isAlergi ? "alergi" : "normal",
+        jenis_alergi: block.isAlergi ? block.jenisAlergi || "" : "",
+        gram_pk: 0,
+        gram_pb: 0,
+        bdd: 100,
+        buffer: 0,
+        harga_master:
+            manualBahanForm.value.harga_master !== null &&
+            manualBahanForm.value.harga_master !== ""
+                ? Number(manualBahanForm.value.harga_master)
+                : null,
+        harga_aktual:
+            manualBahanForm.value.harga_master !== null &&
+            manualBahanForm.value.harga_master !== ""
+                ? Number(manualBahanForm.value.harga_master)
+                : null,
+        alergen: "",
+        keterangan: "",
+        is_custom: true,
+        energi: energiNum,
+        protein: proteinNum,
+        lemak: lemakNum,
+        karbohidrat: karbohidratNum,
+        serat: seratNum,
+        tkpi: {
+            id: customId,
+            nama: manualBahanForm.value.nama.trim(),
+            kategori: manualBahanForm.value.kategori || "Lainnya",
+            satuan: manualBahanForm.value.satuan || "Kg",
+            bdd: 100,
+            energi: energiNum,
+            protein: proteinNum,
+            lemak: lemakNum,
+            karbohidrat: karbohidratNum,
+            serat: seratNum,
+        },
+    };
+
+    selectedBahanList.value.push(customItem);
+    showManualBahanModal.value = false;
+    manualBahanTargetBlock.value = null;
     if (validationErrors.value.selectedBahan) {
         delete validationErrors.value.selectedBahan;
     }
@@ -1405,6 +1661,57 @@ function handlePeruntukanPorsiChange(originalIndex, eventVal) {
     }
 }
 
+// Handler perubahan satuan bahan dalam tabel dengan konversi harga otomatis
+function handleRowSatuanChange(originalIndex, newSatuan) {
+    const item = selectedBahanList.value[originalIndex];
+    if (!item) return;
+    const oldSatuan = (item.satuan || "Kg").trim();
+    if (oldSatuan.toLowerCase() === (newSatuan || "").toLowerCase().trim()) return;
+
+    const oldS = oldSatuan.toLowerCase();
+    const newS = (newSatuan || "Kg").toLowerCase().trim();
+
+    // Konversi Harga Master & Harga Aktual
+    if (
+        item.harga_master !== null &&
+        item.harga_master !== undefined &&
+        item.harga_master !== ""
+    ) {
+        const hMaster = Number(item.harga_master) || 0;
+        const hAktual =
+            item.harga_aktual !== null &&
+            item.harga_aktual !== undefined &&
+            item.harga_aktual !== ""
+                ? Number(item.harga_aktual) || 0
+                : hMaster;
+
+        // Kg <-> Gram (1 Kg = 1000 Gram)
+        if (
+            (oldS === "kg" || oldS === "kilogram") &&
+            (newS === "gram" || newS === "g")
+        ) {
+            item.harga_master = Math.max(1, Math.round(hMaster / 1000));
+            item.harga_aktual = Math.max(1, Math.round(hAktual / 1000));
+        } else if (
+            (oldS === "gram" || oldS === "g") &&
+            (newS === "kg" || newS === "kilogram")
+        ) {
+            item.harga_master = Math.round(hMaster * 1000);
+            item.harga_aktual = Math.round(hAktual * 1000);
+        }
+        // Liter <-> mL (1 Liter = 1000 mL)
+        else if ((oldS === "liter" || oldS === "l") && newS === "ml") {
+            item.harga_master = Math.max(1, Math.round(hMaster / 1000));
+            item.harga_aktual = Math.max(1, Math.round(hAktual / 1000));
+        } else if (oldS === "ml" && (newS === "liter" || newS === "l")) {
+            item.harga_master = Math.round(hMaster * 1000);
+            item.harga_aktual = Math.round(hAktual * 1000);
+        }
+    }
+
+    item.satuan = newSatuan;
+}
+
 // Helper filter bahan calculations untuk satu blok tertentu
 function getBahanForBlock(blockId) {
     return bahanCalculations.value.filter((b) => {
@@ -1421,8 +1728,8 @@ function getBahanForBlock(blockId) {
 function getBlockSummary(blockId) {
     const items = getBahanForBlock(blockId);
     const totalNetKg = items.reduce((sum, it) => sum + (it.totalNetKg || 0), 0);
-    const totalGrossKg = items.reduce(
-        (sum, it) => sum + (it.totalGrossKg || 0),
+    const totalGrossWeightKg = items.reduce(
+        (sum, it) => sum + (it.totalWeightKg || 0),
         0,
     );
     const totalCostMaster = items.reduce(
@@ -1433,12 +1740,16 @@ function getBlockSummary(blockId) {
         (sum, it) => sum + (it.subtotalAktual || 0),
         0,
     );
+    const groupedSummary = formatGroupedUnitSummary(items, " • ");
+    const groupedSummaryComma = formatGroupedUnitSummary(items, ", ");
     return {
         count: items.length,
         totalNetKg,
-        totalGrossKg,
+        totalGrossKg: totalGrossWeightKg,
         totalCostMaster,
         totalCostAktual,
+        groupedSummary,
+        groupedSummaryComma,
     };
 }
 
@@ -1516,6 +1827,61 @@ function clearError(field) {
     if (validationErrors.value[field]) {
         delete validationErrors.value[field];
     }
+}
+
+// Helper konversi otomatis tombol koma (,) menjadi titik (.) pada input desimal
+function handleDecimalKeydown(event) {
+    if (event.key === "," || event.key === "Decimal") {
+        event.preventDefault();
+        const input = event.target;
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        const val = input.value || "";
+        if (!val.includes(".")) {
+            input.value = val.substring(0, start) + "." + val.substring(end);
+            input.setSelectionRange(start + 1, start + 1);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+    }
+}
+
+function handleGramPkInput(originalIndex) {
+    if (selectedBahanList.value[originalIndex]) {
+        if (
+            selectedBahanList.value[originalIndex].gram_pk !== null &&
+            selectedBahanList.value[originalIndex].gram_pk !== "" &&
+            Number(selectedBahanList.value[originalIndex].gram_pk) < 0
+        ) {
+            selectedBahanList.value[originalIndex].gram_pk = 0;
+        }
+    }
+    clearError("bahan_" + originalIndex + "_gram");
+}
+
+function handleGramPbInput(originalIndex) {
+    if (selectedBahanList.value[originalIndex]) {
+        if (
+            selectedBahanList.value[originalIndex].gram_pb !== null &&
+            selectedBahanList.value[originalIndex].gram_pb !== "" &&
+            Number(selectedBahanList.value[originalIndex].gram_pb) < 0
+        ) {
+            selectedBahanList.value[originalIndex].gram_pb = 0;
+        }
+    }
+    clearError("bahan_" + originalIndex + "_gram");
+}
+
+function handleBufferInput(originalIndex) {
+    if (selectedBahanList.value[originalIndex]) {
+        if (
+            selectedBahanList.value[originalIndex].buffer !== null &&
+            selectedBahanList.value[originalIndex].buffer !== "" &&
+            Number(selectedBahanList.value[originalIndex].buffer) < 0
+        ) {
+            selectedBahanList.value[originalIndex].buffer = 0;
+        }
+    }
+    clearError("bahan_" + originalIndex + "_buffer");
 }
 
 function scrollToTopSection() {
@@ -1707,11 +2073,11 @@ function validateStep2() {
         }
         const pkVal = Number(b.gram_pk) || 0;
         const pbVal = Number(b.gram_pb) || 0;
-        if (pkVal <= 0 && pbVal <= 0) {
+        if (pkVal < 0 || pbVal < 0) {
+            errs["bahan_" + i + "_gram"] = "Gramasi tidak boleh kurang dari 0.";
+        } else if (pkVal <= 0 && pbVal <= 0) {
             errs["bahan_" + i + "_gram"] =
-                "Gramasi (PK atau PB) wajib diisi > 0";
-        } else if (pkVal < 0 || pbVal < 0) {
-            errs["bahan_" + i + "_gram"] = "Gramasi tidak boleh kurang dari 0";
+                "Wajib salah satu dari PK atau PB > 0.";
         }
 
         const hargaVal = Number(b.harga_master) || 0;
@@ -1721,7 +2087,7 @@ function validateStep2() {
             b.harga_master === "" ||
             hargaVal <= 0
         ) {
-            errs["bahan_" + i + "_harga"] = "Harga per Kg wajib diisi > 0";
+            errs["bahan_" + i + "_harga"] = "Harga wajib diisi > 0";
         }
 
         if (
@@ -1996,10 +2362,16 @@ const totalTerdampakAlergi = computed(() => {
     );
 });
 const totalTerdampakPK = computed(() =>
-    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.pm_pk) || 0), 0)
+    activeAlergiFoodCostList.value.reduce(
+        (acc, al) => acc + (Number(al.pm_pk) || 0),
+        0,
+    ),
 );
 const totalTerdampakPB = computed(() =>
-    activeAlergiFoodCostList.value.reduce((acc, al) => acc + (Number(al.pm_pb) || 0), 0)
+    activeAlergiFoodCostList.value.reduce(
+        (acc, al) => acc + (Number(al.pm_pb) || 0),
+        0,
+    ),
 );
 
 // Rekapitulasi Alergi per Jenis dari seluruh kelompok sasaran aktif
@@ -2308,30 +2680,42 @@ const bahanCalculations = computed(() => {
                 }
             }
 
-            // Kebutuhan Kotor Kg untuk PK dan PB (Presisi penuh tanpa pembulatan awal)
+            // Kebutuhan Kotor untuk PK dan PB (Presisi penuh tanpa pembulatan awal)
             const grossKgPK = calculateGrossWeightKg(
                 b.gram_pk,
                 targetPKCount,
                 bdd,
                 buffer,
+                b.satuan || "Kg",
             );
             const grossKgPB = calculateGrossWeightKg(
                 b.gram_pb,
                 targetPBCount,
                 bdd,
                 buffer,
+                b.satuan || "Kg",
             );
             const totalGrossKg = grossKgPK + grossKgPB;
 
-            // Berat Kotor per Porsi (Gross Gram) berdasarkan BDD
+            // Berat/Takaran Kotor per Porsi berdasarkan BDD
             const bddFactor = (bdd || 100) / 100;
             const grossGramPK =
                 bddFactor > 0 ? (Number(b.gram_pk) || 0) / bddFactor : 0;
             const grossGramPB =
                 bddFactor > 0 ? (Number(b.gram_pb) || 0) / bddFactor : 0;
 
-            const netKgPK = ((Number(b.gram_pk) || 0) * targetPKCount) / 1000;
-            const netKgPB = ((Number(b.gram_pb) || 0) * targetPBCount) / 1000;
+            const isKgOrL = ["kg", "liter", "l"].includes(
+                (b.satuan || "Kg").toLowerCase().trim(),
+            );
+            const isGramOrMl = ["gram", "g", "ml"].includes(
+                (b.satuan || "Kg").toLowerCase().trim(),
+            );
+            const netKgPK = (isKgOrL || isGramOrMl)
+                ? ((Number(b.gram_pk) || 0) * targetPKCount) / 1000
+                : (Number(b.gram_pk) || 0) * targetPKCount;
+            const netKgPB = (isKgOrL || isGramOrMl)
+                ? ((Number(b.gram_pb) || 0) * targetPBCount) / 1000
+                : (Number(b.gram_pb) || 0) * targetPBCount;
             const totalNetKg = netKgPK + netKgPB;
 
             // Biaya PO
@@ -2364,17 +2748,35 @@ const bahanCalculations = computed(() => {
                 bdd,
                 buffer,
                 b.harga_aktual || b.harga_master,
+                b.satuan || "Kg",
             );
             const costPB = calculateItemFoodCostPerPortion(
                 b.gram_pb,
                 bdd,
                 buffer,
                 b.harga_aktual || b.harga_master,
+                b.satuan || "Kg",
             );
 
             // Nutrisi per porsi
             const nutrisiPK = calculateNutritionFromNetGram(tkpi, b.gram_pk);
             const nutrisiPB = calculateNutritionFromNetGram(tkpi, b.gram_pb);
+
+            // Berat total dalam Kg untuk agregasi ringkasan Sub Menu & Rekapitulasi
+            const s = (b.satuan || "Kg").toLowerCase().trim();
+            let totalWeightKg = 0;
+            if (s === "kg" || s === "liter" || s === "l") {
+                totalWeightKg = totalGrossKg;
+            } else if (s === "gram" || s === "g" || s === "ml") {
+                totalWeightKg = totalGrossKg / 1000;
+            } else {
+                const netG =
+                    (Number(b.gram_pk) || 0) * targetPKCount +
+                    (Number(b.gram_pb) || 0) * targetPBCount;
+                totalWeightKg =
+                    ((netG / (bddFactor || 1)) * (1 + (buffer || 0) / 100)) /
+                    1000;
+            }
 
             return {
                 ...b,
@@ -2394,6 +2796,7 @@ const bahanCalculations = computed(() => {
                 grossKgPK,
                 grossKgPB,
                 totalGrossKg,
+                totalWeightKg,
                 subtotalMaster,
                 subtotalAktual,
                 costPK,
@@ -2494,6 +2897,7 @@ function syncGiziFromBahan() {
         code: b.code,
         nama: b.nama,
         kategori: b.kategori || "Lainnya",
+        satuan: b.satuan || "Kg",
         tipe_porsi: b.tipe_porsi || "normal",
         jenis_alergi: b.jenis_alergi || "",
         alergen: b.alergen || "",
@@ -2585,7 +2989,7 @@ const filteredRujukanAkg = computed(() => {
             (item) =>
                 item.kelompokSasaran.toLowerCase().includes(q) ||
                 item.pendistribusian.toLowerCase().includes(q) ||
-                item.tipePorsi.toLowerCase().includes(q)
+                item.tipePorsi.toLowerCase().includes(q),
         );
     }
     return list;
@@ -2863,36 +3267,36 @@ const subMenuKeysConfig = [
         key: "sub_menu_1",
         label: "Sub Menu 1",
         defaultName: "Makanan Pokok",
-        dotColor: "bg-amber-500",
-        badgeColor: "bg-amber-50 text-amber-900 border-amber-200",
+        dotColor: "bg-slate-700",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_2",
         label: "Sub Menu 2",
         defaultName: "Protein Hewani",
         dotColor: "bg-rose-500",
-        badgeColor: "bg-rose-50 text-rose-900 border-rose-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_3",
         label: "Sub Menu 3",
         defaultName: "Protein Nabati",
         dotColor: "bg-yellow-500",
-        badgeColor: "bg-yellow-50 text-yellow-900 border-yellow-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_4",
         label: "Sub Menu 4",
         defaultName: "Sayuran",
         dotColor: "bg-blue-500",
-        badgeColor: "bg-blue-50 text-blue-900 border-blue-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
     {
         key: "sub_menu_5",
         label: "Sub Menu 5",
         defaultName: "Buah",
         dotColor: "bg-emerald-500",
-        badgeColor: "bg-emerald-50 text-emerald-900 border-emerald-200",
+        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
 ];
 
@@ -3085,6 +3489,14 @@ function handleHargaMasterInput(index, event) {
     event.target.value = "Rp " + num.toLocaleString("id-ID");
 }
 
+function getPortionCostBarColor(percent) {
+    const p = Number(percent) || 0;
+    if (p <= 0) return "bg-slate-200";
+    if (p <= 25) return "bg-emerald-500";
+    if (p <= 50) return "bg-amber-500";
+    return "bg-rose-500";
+}
+
 function getFoodCostStatusInfo(cost, pagu) {
     const val = Number(cost) || 0;
     const maxPagu = Number(pagu) || 0;
@@ -3113,7 +3525,7 @@ function getFoodCostStatusInfo(cost, pagu) {
         return {
             label: "✓ Sesuai Pagu",
             badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300",
-            cardClass: "border-emerald-200 bg-emerald-50/20",
+            cardClass: "border-emerald-200 bg-white",
             barClass: "bg-emerald-500",
             percentage: "100%",
         };
@@ -3134,8 +3546,8 @@ function getFoodCostStatusInfo(cost, pagu) {
 
     return {
         label: "ℹ Kurang dari Pagu",
-        badgeClass: "bg-amber-100 text-amber-800 border-amber-300",
-        cardClass: "border-amber-200 bg-amber-50/20",
+        badgeClass: "bg-amber-100 text-slate-700 border-amber-300",
+        cardClass: "border-amber-200 bg-white",
         barClass: "bg-amber-500",
         percentage: pct,
     };
@@ -3174,7 +3586,7 @@ function getPayload(statusStr, stepNumber = 3) {
         nama_menu: namaMenuAktif.value || "Menu MBG",
         siklus_ke: 1,
         status: statusStr,
-        database_pangan: props.selectedSource || "fta",
+        database_pangan: props.selectedSource || "csv",
         current_step: stepNumber,
         sub_menu_1: subMenuKomponen.value.sub_menu_1 || null,
         sub_menu_2: subMenuKomponen.value.sub_menu_2 || null,
@@ -3200,6 +3612,7 @@ function getPayload(statusStr, stepNumber = 3) {
             nama: b.nama,
             nama_po: b.nama_po || b.nama,
             kategori: b.kategori,
+            satuan: b.satuan || "Kg",
             tipe_porsi: b.tipe_porsi || "normal",
             jenis_alergi: b.jenis_alergi || null,
             alergen: b.alergen || null,
@@ -3432,6 +3845,7 @@ watch(
                         nama_po: it.nama_po || it.nama || matchedTkpi.nama,
                         kategori:
                             it.kategori || matchedTkpi.kategori || "Lainnya",
+                        satuan: it.satuan || matchedTkpi.satuan || "Kg",
                         tipe_porsi: it.tipe_porsi || "normal",
                         jenis_alergi: it.jenis_alergi || "",
                         alergen: it.alergen || matchedTkpi.alergen || "",
@@ -3683,8 +4097,8 @@ watch(
                             :key="al.jenis_alergi"
                             class="px-2 py-0.5 rounded-md bg-rose-500/25 text-rose-200 border border-rose-400/40 text-[11px] font-bold"
                         >
-                            {{ al.jenis_alergi }}: {{ al.total_pm }} Porsi
-                            (PK: {{ al.pm_pk }}, PB: {{ al.pm_pb }})
+                            {{ al.jenis_alergi }}: {{ al.total_pm }} Porsi (PK:
+                            {{ al.pm_pk }}, PB: {{ al.pm_pb }})
                         </span>
                     </span>
                     <span
@@ -3764,7 +4178,7 @@ watch(
                 className="bg-white border-slate-200 shadow-xs overflow-hidden"
             >
                 <CardHeader
-                    className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70"
+                    className="p-4 sm:p-5 border-b border-slate-100 bg-white"
                 >
                     <div
                         class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
@@ -3933,7 +4347,7 @@ watch(
                                 class="flex flex-wrap items-center gap-1.5 pt-1"
                             >
                                 <span
-                                    class="text-[10.5px] font-extrabold text-amber-800 flex items-center gap-1"
+                                    class="text-[10.5px] font-extrabold text-slate-700 flex items-center gap-1"
                                 >
                                     <AlertTriangle
                                         class="h-3.5 w-3.5 text-amber-600 shrink-0"
@@ -3943,7 +4357,7 @@ watch(
                                 <span
                                     v-for="al in detectedAllergensMenuUtama"
                                     :key="al.jenis"
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/90 text-amber-900 border border-amber-300 text-[10.5px] font-bold shadow-2xs"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/90 text-slate-800 border border-amber-300 text-[10.5px] font-bold shadow-2xs"
                                 >
                                     ⚠️ {{ al.jenis }} ({{ al.total_pm }} PM)
                                 </span>
@@ -3953,7 +4367,7 @@ watch(
 
                     <!-- Rincian Sub Menu Komponen Gizi (Sub Menu 1 s.d. Sub Menu 5) -->
                     <div
-                        class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3"
+                        class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3"
                     >
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
@@ -3979,13 +4393,13 @@ watch(
                         <!-- Banner Real-time Deteksi Alergi PM (Muncul otomatis saat ada kata kunci alergen terketik) -->
                         <div
                             v-if="realTimeAllergyAlerts.length > 0"
-                            class="p-3 rounded-xl bg-amber-50 border border-amber-300/90 text-amber-900 space-y-2 text-xs shadow-2xs transition-all duration-300"
+                            class="p-3 rounded-xl bg-white border border-slate-200 text-slate-800 space-y-2 text-xs shadow-2xs transition-all duration-300"
                         >
                             <div
                                 class="flex items-center justify-between flex-wrap gap-1"
                             >
                                 <div
-                                    class="flex items-center gap-1.5 font-black text-amber-900 text-xs"
+                                    class="flex items-center gap-1.5 font-black text-slate-800 text-xs"
                                 >
                                     <ShieldAlert
                                         class="h-4 w-4 text-amber-600 shrink-0"
@@ -3997,7 +4411,7 @@ watch(
                                     >
                                 </div>
                                 <span
-                                    class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200"
+                                    class="text-[10px] font-bold text-slate-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200"
                                 >
                                     ⚡ Realtime Deteksi Alergi
                                 </span>
@@ -4059,15 +4473,15 @@ watch(
                                 :class="
                                     validationErrors.sub_menu_1
                                         ? 'border-rose-400 bg-rose-50/20'
-                                        : 'border-amber-200/90'
+                                        : 'border-slate-200'
                                 "
                             >
                                 <div class="space-y-1">
                                     <label
-                                        class="text-[11px] font-black text-amber-900 flex items-center gap-1.5"
+                                        class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
                                     >
                                         <span
-                                            class="h-2 w-2 rounded-full bg-amber-500"
+                                            class="h-2 w-2 rounded-full bg-slate-700"
                                         ></span>
                                         <span
                                             >Sub Menu 1
@@ -4085,7 +4499,7 @@ watch(
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors.sub_menu_1
                                                 ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                : 'border-slate-200 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50',
+                                                : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
                                         ]"
                                     />
                                     <p
@@ -4104,10 +4518,10 @@ watch(
                                             detectedAllergensPerSubMenu
                                                 .sub_menu_1.length > 0
                                         "
-                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                        class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
                                     >
                                         <div
-                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                            class="flex items-center gap-1 font-extrabold text-slate-800"
                                         >
                                             <AlertTriangle
                                                 class="h-3 w-3 text-amber-600 shrink-0"
@@ -4140,7 +4554,7 @@ watch(
                                                         al.jenis,
                                                     )
                                                 "
-                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
                                                 title="Tambah opsi pengganti untuk alergi ini"
                                             >
                                                 + Tambah
@@ -4178,7 +4592,7 @@ watch(
                                             @click="
                                                 addPenggantiAlergi('sub_menu_1')
                                             "
-                                            class="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
                                             title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
@@ -4204,7 +4618,7 @@ watch(
                                                     '_menu'
                                             ]
                                                 ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                : 'bg-rose-50/60 border-rose-200'
+                                                : 'bg-white border-slate-200'
                                         "
                                     >
                                         <div class="flex items-center gap-1">
@@ -4225,7 +4639,7 @@ watch(
                                                             '_jenis'
                                                     ]
                                                         ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                        : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
                                                 ]"
                                             >
                                                 <option value="" disabled>
@@ -4299,7 +4713,7 @@ watch(
                                                         '_menu'
                                                 ]
                                                     ? 'border border-rose-400 focus:ring-rose-400'
-                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                                    : 'border border-slate-200 focus:ring-primary focus:border-primary',
                                             ]"
                                         />
                                         <p
@@ -4333,15 +4747,15 @@ watch(
                                 :class="
                                     validationErrors.sub_menu_2
                                         ? 'border-rose-400 bg-rose-50/20'
-                                        : 'border-rose-200/90'
+                                        : 'border-slate-200'
                                 "
                             >
                                 <div class="space-y-1">
                                     <label
-                                        class="text-[11px] font-black text-rose-900 flex items-center gap-1.5"
+                                        class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
                                     >
                                         <span
-                                            class="h-2 w-2 rounded-full bg-rose-500"
+                                            class="h-2 w-2 rounded-full bg-slate-700"
                                         ></span>
                                         <span
                                             >Sub Menu 2
@@ -4359,7 +4773,7 @@ watch(
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors.sub_menu_2
                                                 ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                : 'border-slate-200 focus:ring-rose-500 focus:border-rose-500 bg-slate-50/50',
+                                                : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
                                         ]"
                                     />
                                     <p
@@ -4378,10 +4792,10 @@ watch(
                                             detectedAllergensPerSubMenu
                                                 .sub_menu_2.length > 0
                                         "
-                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                        class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
                                     >
                                         <div
-                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                            class="flex items-center gap-1 font-extrabold text-slate-800"
                                         >
                                             <AlertTriangle
                                                 class="h-3 w-3 text-amber-600 shrink-0"
@@ -4414,7 +4828,7 @@ watch(
                                                         al.jenis,
                                                     )
                                                 "
-                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
                                                 title="Tambah opsi pengganti untuk alergi ini"
                                             >
                                                 + Tambah
@@ -4452,7 +4866,7 @@ watch(
                                             @click="
                                                 addPenggantiAlergi('sub_menu_2')
                                             "
-                                            class="text-[10px] font-bold text-rose-700 hover:text-rose-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
                                             title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
@@ -4478,7 +4892,7 @@ watch(
                                                     '_menu'
                                             ]
                                                 ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                : 'bg-rose-50/60 border-rose-200'
+                                                : 'bg-white border-slate-200'
                                         "
                                     >
                                         <div class="flex items-center gap-1">
@@ -4499,7 +4913,7 @@ watch(
                                                             '_jenis'
                                                     ]
                                                         ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                        : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
                                                 ]"
                                             >
                                                 <option value="" disabled>
@@ -4573,7 +4987,7 @@ watch(
                                                         '_menu'
                                                 ]
                                                     ? 'border border-rose-400 focus:ring-rose-400'
-                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                                    : 'border border-slate-200 focus:ring-primary focus:border-primary',
                                             ]"
                                         />
                                         <p
@@ -4607,15 +5021,15 @@ watch(
                                 :class="
                                     validationErrors.sub_menu_3
                                         ? 'border-rose-400 bg-rose-50/20'
-                                        : 'border-yellow-200/90'
+                                        : 'border-slate-200'
                                 "
                             >
                                 <div class="space-y-1">
                                     <label
-                                        class="text-[11px] font-black text-yellow-900 flex items-center gap-1.5"
+                                        class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
                                     >
                                         <span
-                                            class="h-2 w-2 rounded-full bg-yellow-500"
+                                            class="h-2 w-2 rounded-full bg-slate-700"
                                         ></span>
                                         <span
                                             >Sub Menu 3
@@ -4633,7 +5047,7 @@ watch(
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors.sub_menu_3
                                                 ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                : 'border-slate-200 focus:ring-yellow-500 focus:border-yellow-500 bg-slate-50/50',
+                                                : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
                                         ]"
                                     />
                                     <p
@@ -4652,10 +5066,10 @@ watch(
                                             detectedAllergensPerSubMenu
                                                 .sub_menu_3.length > 0
                                         "
-                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                        class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
                                     >
                                         <div
-                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                            class="flex items-center gap-1 font-extrabold text-slate-800"
                                         >
                                             <AlertTriangle
                                                 class="h-3 w-3 text-amber-600 shrink-0"
@@ -4688,7 +5102,7 @@ watch(
                                                         al.jenis,
                                                     )
                                                 "
-                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
                                                 title="Tambah opsi pengganti untuk alergi ini"
                                             >
                                                 + Tambah
@@ -4726,7 +5140,7 @@ watch(
                                             @click="
                                                 addPenggantiAlergi('sub_menu_3')
                                             "
-                                            class="text-[10px] font-bold text-yellow-700 hover:text-yellow-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
                                             title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
@@ -4752,7 +5166,7 @@ watch(
                                                     '_menu'
                                             ]
                                                 ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                : 'bg-rose-50/60 border-rose-200'
+                                                : 'bg-white border-slate-200'
                                         "
                                     >
                                         <div class="flex items-center gap-1">
@@ -4773,7 +5187,7 @@ watch(
                                                             '_jenis'
                                                     ]
                                                         ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                        : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
                                                 ]"
                                             >
                                                 <option value="" disabled>
@@ -4847,7 +5261,7 @@ watch(
                                                         '_menu'
                                                 ]
                                                     ? 'border border-rose-400 focus:ring-rose-400'
-                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                                    : 'border border-slate-200 focus:ring-primary focus:border-primary',
                                             ]"
                                         />
                                         <p
@@ -4881,15 +5295,15 @@ watch(
                                 :class="
                                     validationErrors.sub_menu_4
                                         ? 'border-rose-400 bg-rose-50/20'
-                                        : 'border-blue-200/90'
+                                        : 'border-slate-200'
                                 "
                             >
                                 <div class="space-y-1">
                                     <label
-                                        class="text-[11px] font-black text-blue-900 flex items-center gap-1.5"
+                                        class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
                                     >
                                         <span
-                                            class="h-2 w-2 rounded-full bg-blue-500"
+                                            class="h-2 w-2 rounded-full bg-slate-700"
                                         ></span>
                                         <span
                                             >Sub Menu 4
@@ -4907,7 +5321,7 @@ watch(
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors.sub_menu_4
                                                 ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                : 'border-slate-200 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50',
+                                                : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
                                         ]"
                                     />
                                     <p
@@ -4926,10 +5340,10 @@ watch(
                                             detectedAllergensPerSubMenu
                                                 .sub_menu_4.length > 0
                                         "
-                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                        class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
                                     >
                                         <div
-                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                            class="flex items-center gap-1 font-extrabold text-slate-800"
                                         >
                                             <AlertTriangle
                                                 class="h-3 w-3 text-amber-600 shrink-0"
@@ -4962,7 +5376,7 @@ watch(
                                                         al.jenis,
                                                     )
                                                 "
-                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
                                                 title="Tambah opsi pengganti untuk alergi ini"
                                             >
                                                 + Tambah
@@ -5000,7 +5414,7 @@ watch(
                                             @click="
                                                 addPenggantiAlergi('sub_menu_4')
                                             "
-                                            class="text-[10px] font-bold text-blue-700 hover:text-blue-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
                                             title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
@@ -5026,7 +5440,7 @@ watch(
                                                     '_menu'
                                             ]
                                                 ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                : 'bg-rose-50/60 border-rose-200'
+                                                : 'bg-white border-slate-200'
                                         "
                                     >
                                         <div class="flex items-center gap-1">
@@ -5047,7 +5461,7 @@ watch(
                                                             '_jenis'
                                                     ]
                                                         ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                        : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
                                                 ]"
                                             >
                                                 <option value="" disabled>
@@ -5121,7 +5535,7 @@ watch(
                                                         '_menu'
                                                 ]
                                                     ? 'border border-rose-400 focus:ring-rose-400'
-                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                                    : 'border border-slate-200 focus:ring-primary focus:border-primary',
                                             ]"
                                         />
                                         <p
@@ -5155,15 +5569,15 @@ watch(
                                 :class="
                                     validationErrors.sub_menu_5
                                         ? 'border-rose-400 bg-rose-50/20'
-                                        : 'border-emerald-200/90'
+                                        : 'border-slate-200'
                                 "
                             >
                                 <div class="space-y-1">
                                     <label
-                                        class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5"
+                                        class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
                                     >
                                         <span
-                                            class="h-2 w-2 rounded-full bg-emerald-500"
+                                            class="h-2 w-2 rounded-full bg-slate-700"
                                         ></span>
                                         <span
                                             >Sub Menu 5
@@ -5181,7 +5595,7 @@ watch(
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors.sub_menu_5
                                                 ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50/50',
+                                                : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
                                         ]"
                                     />
                                     <p
@@ -5200,10 +5614,10 @@ watch(
                                             detectedAllergensPerSubMenu
                                                 .sub_menu_5.length > 0
                                         "
-                                        class="p-1.5 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-900 space-y-1 text-[10px]"
+                                        class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
                                     >
                                         <div
-                                            class="flex items-center gap-1 font-extrabold text-amber-900"
+                                            class="flex items-center gap-1 font-extrabold text-slate-800"
                                         >
                                             <AlertTriangle
                                                 class="h-3 w-3 text-amber-600 shrink-0"
@@ -5236,7 +5650,7 @@ watch(
                                                         al.jenis,
                                                     )
                                                 "
-                                                class="text-amber-800 font-bold hover:underline cursor-pointer shrink-0"
+                                                class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
                                                 title="Tambah opsi pengganti untuk alergi ini"
                                             >
                                                 + Tambah
@@ -5274,7 +5688,7 @@ watch(
                                             @click="
                                                 addPenggantiAlergi('sub_menu_5')
                                             "
-                                            class="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
                                             title="Tambah menu pengganti jika ada PM alergi"
                                         >
                                             <Plus class="h-3 w-3" />
@@ -5300,7 +5714,7 @@ watch(
                                                     '_menu'
                                             ]
                                                 ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                : 'bg-rose-50/60 border-rose-200'
+                                                : 'bg-white border-slate-200'
                                         "
                                     >
                                         <div class="flex items-center gap-1">
@@ -5321,7 +5735,7 @@ watch(
                                                             '_jenis'
                                                     ]
                                                         ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                        : 'border border-rose-200 text-rose-900 focus:ring-rose-400 focus:border-rose-400',
+                                                        : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
                                                 ]"
                                             >
                                                 <option value="" disabled>
@@ -5395,7 +5809,7 @@ watch(
                                                         '_menu'
                                                 ]
                                                     ? 'border border-rose-400 focus:ring-rose-400'
-                                                    : 'border border-rose-200 focus:ring-rose-400 focus:border-rose-400',
+                                                    : 'border border-slate-200 focus:ring-primary focus:border-primary',
                                             ]"
                                         />
                                         <p
@@ -5484,14 +5898,14 @@ watch(
                                 class="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100/60 border border-amber-200/80 space-y-1 shadow-2xs"
                             >
                                 <p
-                                    class="text-[11px] font-bold text-amber-800 uppercase tracking-wider"
+                                    class="text-[11px] font-bold text-slate-700 uppercase tracking-wider"
                                 >
                                     Porsi Kecil (PK)
                                 </p>
                                 <h3 class="text-2xl font-black text-amber-950">
                                     {{ totalPK.toLocaleString("id-ID") }}
                                     <span
-                                        class="text-xs font-semibold text-amber-800"
+                                        class="text-xs font-semibold text-slate-700"
                                         >Porsi</span
                                     >
                                 </h3>
@@ -5624,7 +6038,7 @@ watch(
                                 >
                                     <thead>
                                         <tr
-                                            class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                            class="bg-white border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                         >
                                             <th
                                                 class="py-3.5 px-3 text-center w-10"
@@ -5668,8 +6082,8 @@ watch(
                                             :class="[
                                                 'transition-colors',
                                                 k.status_menerima === false
-                                                    ? 'bg-slate-50/90 text-slate-400 opacity-60 select-none'
-                                                    : 'hover:bg-slate-50/60',
+                                                    ? 'bg-white text-slate-400 opacity-60 select-none'
+                                                    : 'hover:bg-white',
                                             ]"
                                         >
                                             <!-- Kolom Nomor -->
@@ -5751,7 +6165,7 @@ watch(
                                                 :class="
                                                     k.status_menerima === false
                                                         ? 'text-slate-300 line-through font-normal'
-                                                        : 'text-amber-900 bg-amber-50/20'
+                                                        : 'text-slate-800 bg-white'
                                                 "
                                             >
                                                 {{ k.total_porsi_kecil }}
@@ -6112,7 +6526,7 @@ watch(
                                     <tr
                                         v-for="(r, rIdx) in editFormRincian"
                                         :key="r.sub_kategori || rIdx"
-                                        class="hover:bg-slate-50/60"
+                                        class="hover:bg-white"
                                     >
                                         <td
                                             class="p-3 font-bold text-slate-900"
@@ -6126,7 +6540,7 @@ watch(
                                                     'font-extrabold text-[10px]',
                                                     r.jenis_porsi ===
                                                     'Porsi Kecil'
-                                                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                                        ? 'bg-amber-50 text-slate-700 border-amber-300'
                                                         : 'bg-indigo-50 text-indigo-800 border-indigo-300',
                                                 ]"
                                             >
@@ -6232,7 +6646,7 @@ watch(
                                                 alItem, alIdx
                                             ) in editFormKeteranganAlergi"
                                             :key="alIdx"
-                                            class="hover:bg-rose-50/40"
+                                            class="hover:bg-white"
                                         >
                                             <td
                                                 class="p-3 font-bold text-slate-900 align-middle"
@@ -6261,7 +6675,7 @@ watch(
                                                     v-model.number="
                                                         alItem.porsi_kecil
                                                     "
-                                                    class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-rose-50/30 p-1.5 focus:ring-rose-400 focus:border-rose-400"
+                                                    class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-white p-1.5 focus:ring-rose-400 focus:border-rose-400"
                                                 />
                                             </td>
                                             <td
@@ -6274,7 +6688,7 @@ watch(
                                                     v-model.number="
                                                         alItem.porsi_besar
                                                     "
-                                                    class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-rose-50/30 p-1.5 focus:ring-rose-400 focus:border-rose-400"
+                                                    class="w-20 text-center text-xs font-bold rounded-lg border-rose-300 bg-white p-1.5 focus:ring-rose-400 focus:border-rose-400"
                                                 />
                                             </td>
                                             <td
@@ -6375,7 +6789,7 @@ watch(
             <!-- Header Bahan Pangan Card -->
             <Card className="bg-white border-slate-200 shadow-xs">
                 <CardHeader
-                    className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50"
+                    className="p-4 sm:p-5 border-b border-slate-100 bg-white"
                 >
                     <div
                         class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
@@ -6407,7 +6821,7 @@ watch(
                 <CardContent class="p-4 sm:p-6 space-y-6">
                     <!-- Panduan / Rumus Kebutuhan Bahan Mentah (Toggleable) -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-xs space-y-2"
+                        class="rounded-xl border border-slate-200 bg-white p-3.5 text-xs space-y-2"
                     >
                         <div class="flex items-center justify-between">
                             <span
@@ -6676,17 +7090,15 @@ watch(
                                         Bahan
                                     </span>
                                     <span
-                                        class="px-2.5 py-1 rounded-lg bg-blue-50/90 border border-blue-200 text-blue-900 font-black text-[11px] shadow-2xs"
+                                        class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
                                     >
                                         {{
-                                            formatGrossWeight(
-                                                getBlockSummary(block.id)
-                                                    .totalGrossKg,
-                                            )
+                                            getBlockSummary(block.id)
+                                                .groupedSummary
                                         }}
                                     </span>
                                     <span
-                                        class="px-2.5 py-1 rounded-lg bg-emerald-50/90 border border-emerald-200 text-emerald-900 font-black text-[11px] shadow-2xs"
+                                        class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
                                     >
                                         {{
                                             formatRupiah(
@@ -6700,7 +7112,7 @@ watch(
 
                             <!-- Selector Combobox Tambah Bahan Baku Khusus Blok Ini (Di Atas Tabel) -->
                             <div
-                                class="p-3.5 bg-slate-50/70 border-b border-slate-200 relative z-30"
+                                class="p-3.5 bg-white border-b border-slate-200 relative z-30"
                             >
                                 <div class="relative" @click.stop>
                                     <div
@@ -6747,7 +7159,7 @@ watch(
                                         class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                                     >
                                         <div
-                                            class="p-2.5 border-b border-slate-100 bg-slate-50/90 space-y-2"
+                                            class="p-2.5 border-b border-slate-100 bg-slate-50/95 space-y-2.5"
                                         >
                                             <div class="relative">
                                                 <Search
@@ -6772,30 +7184,37 @@ watch(
                                                 />
                                             </div>
                                             <div
-                                                class="flex items-center justify-between text-[10px] text-slate-500 font-medium px-1"
+                                                class="flex items-center justify-between gap-2 text-[10px] text-slate-500 font-medium px-1 flex-wrap"
                                             >
-                                                <span>
-                                                    Sumber:
-                                                    <strong
-                                                        class="text-slate-800"
-                                                        >{{
-                                                            selectedSource ===
-                                                            "csv"
-                                                                ? "Kemenkes (.csv)"
-                                                                : "Nutri Survey (.fta)"
-                                                        }}</strong
-                                                    >
-                                                </span>
-                                                <span
-                                                    class="text-primary font-bold"
+                                                <div
+                                                    class="flex items-center gap-1.5 text-xs text-slate-500 font-semibold"
                                                 >
-                                                    {{
-                                                        getFilteredTkpiListForBlock(
-                                                            block.id,
-                                                        ).length
-                                                    }}
-                                                    Bahan Pangan Tersedia
-                                                </span>
+                                                    <span
+                                                        class="text-primary font-bold"
+                                                    >
+                                                        {{
+                                                            getFilteredTkpiListForBlock(
+                                                                block.id,
+                                                            ).length
+                                                        }}
+                                                        Bahan Tersedia
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    @click="
+                                                        openManualBahanModal(
+                                                            block,
+                                                        )
+                                                    "
+                                                    class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs transition-colors cursor-pointer"
+                                                    title="Tambah Bahan Baku Manual"
+                                                >
+                                                    <Plus
+                                                        class="h-4 w-4 stroke-[2.5]"
+                                                    />
+                                                </button>
                                             </div>
                                         </div>
                                         <div
@@ -6840,7 +7259,7 @@ watch(
                                                     size="sm"
                                                     className="bg-primary/10 text-primary hover:bg-primary hover:text-white h-7 px-2.5 text-[11px] font-bold rounded-lg shrink-0"
                                                 >
-                                                    + Pilih ke
+                                                    Pilih ke
                                                     {{ block.subLabel }}
                                                 </Button>
                                             </div>
@@ -6850,10 +7269,45 @@ watch(
                                                         block.id,
                                                     ).length === 0
                                                 "
-                                                class="p-6 text-center text-xs text-slate-400"
+                                                class="p-6 text-center text-xs text-slate-500 space-y-2.5 bg-white"
                                             >
-                                                Bahan baku pangan tidak
-                                                ditemukan.
+                                                <p
+                                                    class="font-medium text-slate-600"
+                                                >
+                                                    Bahan pangan "<span
+                                                        class="font-bold text-slate-800"
+                                                        >{{
+                                                            getSearchQueryForBlock(
+                                                                block.id,
+                                                            )
+                                                        }}</span
+                                                    >" tidak ditemukan di
+                                                    database.
+                                                </p>
+                                                <div>
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            openManualBahanModal(
+                                                                block,
+                                                            )
+                                                        "
+                                                        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all cursor-pointer"
+                                                    >
+                                                        <Plus
+                                                            class="h-3.5 w-3.5 stroke-[2.5]"
+                                                        />
+                                                        <span
+                                                            >Tambah "{{
+                                                                getSearchQueryForBlock(
+                                                                    block.id,
+                                                                ) ||
+                                                                "Bahan Baru"
+                                                            }}" Secara
+                                                            Manual</span
+                                                        >
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -6867,7 +7321,7 @@ watch(
                                 >
                                     <thead>
                                         <tr
-                                            class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                            class="bg-white border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                         >
                                             <th
                                                 rowspan="2"
@@ -6893,19 +7347,25 @@ watch(
                                             </th>
                                             <th
                                                 rowspan="2"
+                                                class="p-2.5 min-w-[95px] text-center border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Satuan
+                                            </th>
+                                            <th
+                                                rowspan="2"
                                                 class="p-2.5 min-w-[210px] text-center border-r border-slate-200/80 whitespace-normal break-words leading-tight"
                                             >
                                                 Peruntukan Porsi
                                             </th>
                                             <th
                                                 colspan="2"
-                                                class="p-2 text-center bg-emerald-50/80 text-emerald-950 border-r border-slate-200/80 font-black"
+                                                class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                             >
                                                 Berat Bersih (g)
                                             </th>
                                             <th
                                                 colspan="2"
-                                                class="p-2 text-center bg-blue-50/80 text-blue-950 border-r border-slate-200/80 font-black"
+                                                class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                             >
                                                 Berat Kotor (g)
                                             </th>
@@ -6923,15 +7383,15 @@ watch(
                                             </th>
                                             <th
                                                 rowspan="2"
-                                                class="p-2.5 text-right bg-blue-50/60 text-blue-950 min-w-[95px] border-r border-slate-200/80 font-black"
+                                                class="p-2.5 text-right bg-white text-slate-800 min-w-[95px] border-r border-slate-200/80 font-black"
                                             >
-                                                Kebutuhan (kg)
+                                                Kebutuhan (PO)
                                             </th>
                                             <th
                                                 rowspan="2"
                                                 class="p-2.5 text-right min-w-[115px] border-r border-slate-200/80 whitespace-normal break-words leading-tight"
                                             >
-                                                Harga / Kg
+                                                Harga / Satuan
                                                 <span
                                                     class="text-rose-500 font-black"
                                                     >*</span
@@ -6957,25 +7417,25 @@ watch(
                                             </th>
                                         </tr>
                                         <tr
-                                            class="bg-slate-50/90 border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                            class="bg-white border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                         >
                                             <th
-                                                class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[80px]"
+                                                class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/60 min-w-[80px]"
                                             >
                                                 PK
                                             </th>
                                             <th
-                                                class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/80 min-w-[80px]"
+                                                class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/80 min-w-[80px]"
                                             >
                                                 PB
                                             </th>
                                             <th
-                                                class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                                class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/60 min-w-[75px]"
                                             >
                                                 PK
                                             </th>
                                             <th
-                                                class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/80 min-w-[75px]"
+                                                class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/80 min-w-[75px]"
                                             >
                                                 PB
                                             </th>
@@ -7026,7 +7486,7 @@ watch(
                                             :id="
                                                 'row-bahan-' + it.originalIndex
                                             "
-                                            class="hover:bg-slate-50/70 transition-colors"
+                                            class="hover:bg-white transition-colors"
                                         >
                                             <td
                                                 class="p-3 text-center font-bold text-slate-400 align-top pt-4 border-r border-slate-100"
@@ -7038,9 +7498,28 @@ watch(
                                                 class="p-3 font-bold text-slate-900 align-top pt-4 border-r border-slate-100 min-w-[170px] whitespace-normal break-words leading-snug"
                                             >
                                                 <div
-                                                    class="whitespace-normal break-words"
+                                                    class="whitespace-normal break-words flex items-center gap-1.5 flex-wrap"
                                                 >
-                                                    {{ it.nama }}
+                                                    <span>{{ it.nama }}</span>
+                                                    <span
+                                                        v-if="
+                                                            it.is_custom ||
+                                                            (typeof it.code ===
+                                                                'string' &&
+                                                                it.code.startsWith(
+                                                                    'custom_',
+                                                                )) ||
+                                                            (typeof it.id ===
+                                                                'string' &&
+                                                                it.id.startsWith(
+                                                                    'custom_',
+                                                                ))
+                                                        "
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-slate-700 border border-amber-300 shadow-2xs"
+                                                        title="Bahan Ditambahkan Secara Manual"
+                                                    >
+                                                        ✍️ Manual
+                                                    </span>
                                                 </div>
                                                 <span
                                                     v-if="it.alergen"
@@ -7072,12 +7551,12 @@ watch(
                                                                 it.originalIndex +
                                                                 '_nama_po'
                                                         ]
-                                                            ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40 text-rose-900 placeholder:text-rose-400'
+                                                            ? 'border-rose-400 focus:border-rose-500 bg-white text-rose-900 placeholder:text-rose-400'
                                                             : !selectedBahanList[
                                                                     it
                                                                         .originalIndex
                                                                 ].nama_po
-                                                              ? 'border-amber-300 focus:border-amber-400 bg-amber-50/20 text-slate-800 placeholder:text-amber-600/70'
+                                                              ? 'border-amber-300 focus:border-amber-400 bg-white text-slate-800 placeholder:text-amber-600/70'
                                                               : 'border-slate-200 focus:border-primary text-slate-900',
                                                     ]"
                                                     @input="
@@ -7133,6 +7612,38 @@ watch(
                                                         PO</span
                                                     >
                                                 </p>
+                                            </td>
+                                            <!-- 2.B Satuan Pangan (Kg, Liter, Pcs, Bks, dll) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100 min-w-[95px] text-center"
+                                            >
+                                                <select
+                                                    :value="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.satuan || 'Kg'
+                                                    "
+                                                    @change="
+                                                        handleRowSatuanChange(
+                                                            it.originalIndex,
+                                                            $event.target.value,
+                                                        )
+                                                    "
+                                                    class="w-full px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-bold text-slate-800 text-center cursor-pointer shadow-2xs hover:border-slate-300"
+                                                >
+                                                    <option value="Kg">
+                                                        Kg
+                                                    </option>
+                                                    <option value="g">
+                                                        g
+                                                    </option>
+                                                    <option value="L">
+                                                        L
+                                                    </option>
+                                                    <option value="ml">
+                                                        ml
+                                                    </option>
+                                                </select>
                                             </td>
                                             <!-- 3. Peruntukan Porsi (Wrap & Full Display) -->
                                             <td
@@ -7191,50 +7702,74 @@ watch(
                                                     </optgroup>
                                                 </select>
                                             </td>
-                                            <!-- 4. Berat Bersih (g) - PK -->
+                                            <!-- 4. Berat/Takaran Bersih - PK -->
                                             <td
-                                                class="p-2.5 align-top pt-3 text-center bg-emerald-50/15 border-r border-slate-100"
+                                                class="p-2.5 align-top pt-3 text-center bg-white border-r border-slate-100"
                                             >
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    v-model.number="
-                                                        selectedBahanList[
-                                                            it.originalIndex
-                                                        ].gram_pk
-                                                    "
-                                                    placeholder="0"
-                                                    :class="[
-                                                        'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
-                                                        validationErrors[
-                                                            'bahan_' +
-                                                                it.originalIndex +
-                                                                '_gram'
-                                                        ]
-                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900'
-                                                            : (Number(
-                                                                    selectedBahanList[
-                                                                        it
-                                                                            .originalIndex
-                                                                    ].gram_pk,
-                                                                ) || 0) <= 0 &&
-                                                                (Number(
-                                                                    selectedBahanList[
-                                                                        it
-                                                                            .originalIndex
-                                                                    ].gram_pb,
-                                                                ) || 0) <= 0
-                                                              ? 'border-amber-300 bg-amber-50/20'
-                                                              : 'border-slate-200 focus:border-primary',
-                                                    ]"
-                                                    @input="
-                                                        clearError(
-                                                            'bahan_' +
-                                                                it.originalIndex +
-                                                                '_gram',
-                                                        )
-                                                    "
-                                                />
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        v-model.number="
+                                                            selectedBahanList[
+                                                                 it.originalIndex
+                                                            ].gram_pk
+                                                        "
+                                                        @keydown="handleDecimalKeydown"
+                                                        placeholder="0"
+                                                        :class="[
+                                                            'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
+                                                            validationErrors[
+                                                                'bahan_' +
+                                                                    it.originalIndex +
+                                                                    '_gram'
+                                                            ]
+                                                                ? 'border-rose-400 bg-white text-rose-900'
+                                                                : (Number(
+                                                                        selectedBahanList[
+                                                                            it
+                                                                                .originalIndex
+                                                                        ]
+                                                                            .gram_pk,
+                                                                    ) || 0) <=
+                                                                        0 &&
+                                                                    (Number(
+                                                                        selectedBahanList[
+                                                                            it
+                                                                                .originalIndex
+                                                                        ]
+                                                                            .gram_pb,
+                                                                    ) || 0) <= 0
+                                                                  ? 'border-amber-300 bg-white'
+                                                                  : 'border-slate-200 focus:border-primary',
+                                                        ]"
+                                                        @input="
+                                                            handleGramPkInput(
+                                                                it.originalIndex,
+                                                            )
+                                                        "
+                                                        @change="
+                                                            handleGramPkInput(
+                                                                it.originalIndex,
+                                                            )
+                                                        "
+                                                    />
+                                                    <span
+                                                        class="text-[10px] font-bold text-slate-500 shrink-0"
+                                                    >
+                                                        {{
+                                                            getPortionUnit(
+                                                                selectedBahanList[
+                                                                    it
+                                                                        .originalIndex
+                                                                ].satuan,
+                                                            )
+                                                        }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="text-[9.5px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
                                                 >
@@ -7260,50 +7795,74 @@ watch(
                                                     }}
                                                 </p>
                                             </td>
-                                            <!-- 5. Berat Bersih (g) - PB -->
+                                            <!-- 5. Berat/Takaran Bersih - PB -->
                                             <td
-                                                class="p-2.5 align-top pt-3 text-center bg-emerald-50/15 border-r border-slate-100"
+                                                class="p-2.5 align-top pt-3 text-center bg-white border-r border-slate-100"
                                             >
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    v-model.number="
-                                                        selectedBahanList[
-                                                            it.originalIndex
-                                                        ].gram_pb
-                                                    "
-                                                    placeholder="0"
-                                                    :class="[
-                                                        'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
-                                                        validationErrors[
-                                                            'bahan_' +
-                                                                it.originalIndex +
-                                                                '_gram'
-                                                        ]
-                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900'
-                                                            : (Number(
-                                                                    selectedBahanList[
-                                                                        it
-                                                                            .originalIndex
-                                                                    ].gram_pk,
-                                                                ) || 0) <= 0 &&
-                                                                (Number(
-                                                                    selectedBahanList[
-                                                                        it
-                                                                            .originalIndex
-                                                                    ].gram_pb,
-                                                                ) || 0) <= 0
-                                                              ? 'border-amber-300 bg-amber-50/20'
-                                                              : 'border-slate-200 focus:border-primary',
-                                                    ]"
-                                                    @input="
-                                                        clearError(
-                                                            'bahan_' +
-                                                                it.originalIndex +
-                                                                '_gram',
-                                                        )
-                                                    "
-                                                />
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        v-model.number="
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ].gram_pb
+                                                        "
+                                                        @keydown="handleDecimalKeydown"
+                                                        placeholder="0"
+                                                        :class="[
+                                                            'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
+                                                            validationErrors[
+                                                                'bahan_' +
+                                                                    it.originalIndex +
+                                                                    '_gram'
+                                                            ]
+                                                                ? 'border-rose-400 bg-white text-rose-900'
+                                                                : (Number(
+                                                                        selectedBahanList[
+                                                                            it
+                                                                                .originalIndex
+                                                                        ]
+                                                                            .gram_pk,
+                                                                    ) || 0) <=
+                                                                        0 &&
+                                                                    (Number(
+                                                                        selectedBahanList[
+                                                                            it
+                                                                                .originalIndex
+                                                                        ]
+                                                                            .gram_pb,
+                                                                    ) || 0) <= 0
+                                                                  ? 'border-amber-300 bg-white'
+                                                                  : 'border-slate-200 focus:border-primary',
+                                                        ]"
+                                                        @input="
+                                                            handleGramPbInput(
+                                                                it.originalIndex,
+                                                            )
+                                                        "
+                                                        @change="
+                                                            handleGramPbInput(
+                                                                it.originalIndex,
+                                                            )
+                                                        "
+                                                    />
+                                                    <span
+                                                        class="text-[10px] font-bold text-slate-500 shrink-0"
+                                                    >
+                                                        {{
+                                                            getPortionUnit(
+                                                                selectedBahanList[
+                                                                    it
+                                                                        .originalIndex
+                                                                ].satuan,
+                                                            )
+                                                        }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="text-[9.5px] text-slate-500 font-medium mt-1 whitespace-nowrap bg-slate-50 py-0.5 rounded border border-slate-100"
                                                 >
@@ -7311,14 +7870,17 @@ watch(
                                                     {{ it.targetPBCount }} porsi
                                                 </div>
                                             </td>
-                                            <!-- 6. Berat Kotor (g) - PK -->
+                                            <!-- 6. Berat/Takaran Kotor - PK -->
                                             <td
-                                                class="p-2.5 align-top pt-3.5 text-center bg-blue-50/15 border-r border-slate-100 font-bold text-blue-950"
+                                                class="p-2.5 align-top pt-3.5 text-center bg-white border-r border-slate-100 font-bold text-slate-900"
                                             >
                                                 <div>
                                                     {{
-                                                        formatGram(
+                                                        formatPortionValue(
                                                             it.grossGramPK,
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ].satuan,
                                                         )
                                                     }}
                                                 </div>
@@ -7328,14 +7890,17 @@ watch(
                                                     (Net ÷ {{ it.bdd || 100 }}%)
                                                 </div>
                                             </td>
-                                            <!-- 7. Berat Kotor (g) - PB -->
+                                            <!-- 7. Berat/Takaran Kotor - PB -->
                                             <td
-                                                class="p-2.5 align-top pt-3.5 text-center bg-blue-50/15 border-r border-slate-100 font-bold text-blue-950"
+                                                class="p-2.5 align-top pt-3.5 text-center bg-white border-r border-slate-100 font-bold text-slate-900"
                                             >
                                                 <div>
                                                     {{
-                                                        formatGram(
+                                                        formatPortionValue(
                                                             it.grossGramPB,
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ].satuan,
                                                         )
                                                     }}
                                                 </div>
@@ -7357,32 +7922,48 @@ watch(
                                             >
                                                 <input
                                                     type="number"
+                                                    min="0"
+                                                    step="0.1"
                                                     v-model.number="
                                                         selectedBahanList[
                                                             it.originalIndex
                                                         ].buffer
                                                     "
+                                                    @keydown="handleDecimalKeydown"
+                                                    @input="
+                                                        handleBufferInput(
+                                                            it.originalIndex,
+                                                        )
+                                                    "
+                                                    @change="
+                                                        handleBufferInput(
+                                                            it.originalIndex,
+                                                        )
+                                                    "
                                                     class="w-14 text-center px-1.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary mx-auto"
                                                 />
                                             </td>
-                                            <!-- 10. Kebutuhan (kg) -->
+                                            <!-- 10. Kebutuhan (Sesuai Satuan) -->
                                             <td
-                                                class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-top pt-4 whitespace-nowrap border-r border-slate-100"
+                                                class="p-3 text-right font-bold text-slate-900 bg-white align-top pt-4 whitespace-nowrap border-r border-slate-100"
                                             >
                                                 {{
-                                                    formatGrossWeight(
+                                                    formatGrossQty(
                                                         it.totalGrossKg,
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].satuan,
                                                     )
                                                 }}
                                             </td>
-                                            <!-- 11. Harga / Kg (Wajib diisi > 0) -->
+                                            <!-- 11. Harga / Satuan (Wajib diisi > 0) -->
                                             <td
                                                 class="p-3 align-top pt-3 border-r border-slate-100 min-w-[115px]"
                                             >
                                                 <input
                                                     type="text"
                                                     inputmode="numeric"
-                                                    placeholder="Rp 0 *"
+                                                    :placeholder="`Rp 0 / ${selectedBahanList[it.originalIndex]?.satuan || 'Kg'} *`"
                                                     :value="
                                                         formatHargaInput(
                                                             selectedBahanList[
@@ -7408,7 +7989,7 @@ watch(
                                                                 it.originalIndex +
                                                                 '_harga'
                                                         ]
-                                                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 font-bold'
+                                                            ? 'border-rose-400 bg-white text-rose-900 font-bold'
                                                             : !selectedBahanList[
                                                                     it
                                                                         .originalIndex
@@ -7421,10 +8002,20 @@ watch(
                                                                     ]
                                                                         ?.harga_master,
                                                                 ) <= 0
-                                                              ? 'border-amber-300 bg-amber-50/20 text-slate-800'
+                                                              ? 'border-amber-300 bg-white text-slate-800'
                                                               : 'border-slate-200 focus:border-primary text-slate-800',
                                                     ]"
                                                 />
+                                                <div
+                                                    class="text-[9.5px] text-slate-500 font-medium mt-0.5 text-right"
+                                                >
+                                                    per
+                                                    {{
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.satuan || "Kg"
+                                                    }}
+                                                </div>
                                                 <p
                                                     v-if="
                                                         validationErrors[
@@ -7461,7 +8052,7 @@ watch(
                                             </td>
                                             <!-- 12. Subtotal -->
                                             <td
-                                                class="p-3 text-right font-bold text-emerald-800 align-top pt-4 whitespace-nowrap border-r border-slate-100"
+                                                class="p-3 text-right font-bold text-slate-900 align-top pt-4 whitespace-nowrap border-r border-slate-100"
                                             >
                                                 {{
                                                     formatRupiah(
@@ -7508,11 +8099,11 @@ watch(
                                             getBahanForBlock(block.id).length >
                                             0
                                         "
-                                        class="bg-slate-50/90 font-bold border-t border-slate-200 text-xs"
+                                        class="bg-white font-bold border-t border-slate-200 text-xs"
                                     >
                                         <tr>
                                             <td
-                                                colspan="10"
+                                                colspan="11"
                                                 class="p-2.5 text-right uppercase text-[10.5px] text-slate-600 font-extrabold border-r border-slate-200/80"
                                             >
                                                 Total Kebutuhan
@@ -7522,11 +8113,9 @@ watch(
                                                 class="p-2.5 text-right font-black text-blue-950 bg-blue-100/30 whitespace-nowrap border-r border-slate-200/80"
                                             >
                                                 {{
-                                                    formatGrossWeight(
-                                                        getBlockSummary(
-                                                            block.id,
-                                                        ).totalGrossKg,
-                                                    )
+                                                    getBlockSummary(
+                                                        block.id,
+                                                    ).groupedSummary
                                                 }}
                                             </td>
                                             <td
@@ -7617,7 +8206,7 @@ watch(
                             >
                                 <thead>
                                     <tr
-                                        class="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                        class="bg-white border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                     >
                                         <th
                                             rowspan="2"
@@ -7645,6 +8234,12 @@ watch(
                                         </th>
                                         <th
                                             rowspan="2"
+                                            class="p-2.5 min-w-[70px] text-center border-r border-slate-200/80"
+                                        >
+                                            Satuan
+                                        </th>
+                                        <th
+                                            rowspan="2"
                                             class="p-2.5 min-w-[150px] text-center border-r border-slate-200/80"
                                         >
                                             Peruntukan Porsi
@@ -7657,13 +8252,13 @@ watch(
                                         </th>
                                         <th
                                             colspan="2"
-                                            class="p-2 text-center bg-emerald-50/80 text-emerald-950 border-r border-slate-200/80 font-black"
+                                            class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                         >
                                             Berat Bersih (g)
                                         </th>
                                         <th
                                             colspan="2"
-                                            class="p-2 text-center bg-blue-50/80 text-blue-950 border-r border-slate-200/80 font-black"
+                                            class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                         >
                                             Berat Kotor (g)
                                         </th>
@@ -7681,15 +8276,15 @@ watch(
                                         </th>
                                         <th
                                             rowspan="2"
-                                            class="p-2.5 text-right bg-blue-50/60 text-blue-950 min-w-[95px] border-r border-slate-200/80 font-black"
+                                            class="p-2.5 text-right bg-white text-slate-800 min-w-[95px] border-r border-slate-200/80 font-black"
                                         >
-                                            Kebutuhan (kg)
+                                            Kebutuhan (PO)
                                         </th>
                                         <th
                                             rowspan="2"
                                             class="p-2.5 text-right min-w-[105px] border-r border-slate-200/80"
                                         >
-                                            Harga / Kg
+                                            Harga / Satuan
                                         </th>
                                         <th
                                             rowspan="2"
@@ -7705,25 +8300,25 @@ watch(
                                         </th>
                                     </tr>
                                     <tr
-                                        class="bg-slate-50/90 border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
+                                        class="bg-white border-b border-slate-200 text-[10px] font-bold text-slate-700 uppercase tracking-wider select-none"
                                     >
                                         <th
-                                            class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[75px]"
+                                            class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/60 min-w-[75px]"
                                         >
                                             PK
                                         </th>
                                         <th
-                                            class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/80 min-w-[75px]"
+                                            class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/80 min-w-[75px]"
                                         >
                                             PB
                                         </th>
                                         <th
-                                            class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                            class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/60 min-w-[75px]"
                                         >
                                             PK
                                         </th>
                                         <th
-                                            class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/80 min-w-[75px]"
+                                            class="p-1.5 text-center bg-white text-slate-800 border-r border-slate-200/80 min-w-[75px]"
                                         >
                                             PB
                                         </th>
@@ -7762,7 +8357,7 @@ watch(
                                     <tr
                                         v-for="(it, idx) in bahanCalculations"
                                         :key="idx"
-                                        class="hover:bg-slate-50/70 transition-colors"
+                                        class="hover:bg-white transition-colors"
                                     >
                                         <td
                                             class="p-3 text-center font-bold text-slate-400 align-middle border-r border-slate-100"
@@ -7809,12 +8404,31 @@ watch(
                                             title="Klik untuk menuju ke baris bahan pangan ini di tabel Sub Menu"
                                         >
                                             <div
-                                                class="flex items-center gap-1.5 group-hover:text-primary transition-colors"
+                                                class="flex items-center gap-1.5 group-hover:text-primary transition-colors flex-wrap"
                                             >
                                                 <span
                                                     class="underline decoration-slate-300 group-hover:decoration-primary underline-offset-2"
                                                     >{{ it.nama }}</span
                                                 >
+                                                <span
+                                                    v-if="
+                                                        it.is_custom ||
+                                                        (typeof it.code ===
+                                                            'string' &&
+                                                            it.code.startsWith(
+                                                                'custom_',
+                                                            )) ||
+                                                        (typeof it.id ===
+                                                            'string' &&
+                                                            it.id.startsWith(
+                                                                'custom_',
+                                                            ))
+                                                    "
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-slate-700 border border-amber-300 shadow-2xs no-underline"
+                                                    title="Bahan Ditambahkan Secara Manual"
+                                                >
+                                                    ✍️ Manual
+                                                </span>
                                                 <ExternalLink
                                                     class="h-3 w-3 text-slate-400 group-hover:text-primary transition-colors shrink-0"
                                                 />
@@ -7843,6 +8457,16 @@ watch(
                                                 class="text-slate-400 font-bold"
                                             >
                                                 -
+                                            </span>
+                                        </td>
+                                        <!-- Satuan -->
+                                        <td
+                                            class="p-2.5 text-center align-middle border-r border-slate-100"
+                                        >
+                                            <span
+                                                class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-bold"
+                                            >
+                                                {{ it.satuan || "Kg" }}
                                             </span>
                                         </td>
                                         <!-- Peruntukan Porsi (Read-Only) -->
@@ -7881,34 +8505,41 @@ watch(
                                         >
                                             {{ it.kategori }}
                                         </td>
-                                        <!-- Berat Bersih PK (g) -->
+                                        <!-- Berat/Takaran Bersih PK -->
                                         <td
-                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-emerald-50/15 border-r border-slate-100"
+                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-white border-r border-slate-100"
                                         >
-                                            {{ it.gram_pk }} g
+                                            {{ it.gram_pk }}
+                                            {{ getPortionUnit(it.satuan) }}
                                             <div
                                                 class="text-[9.5px] text-slate-400 font-normal mt-0.5"
                                             >
                                                 × {{ it.targetPKCount }} porsi
                                             </div>
                                         </td>
-                                        <!-- Berat Bersih PB (g) -->
+                                        <!-- Berat/Takaran Bersih PB -->
                                         <td
-                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-emerald-50/15 border-r border-slate-100"
+                                            class="p-2.5 text-center align-middle font-bold text-slate-800 bg-white border-r border-slate-100"
                                         >
-                                            {{ it.gram_pb }} g
+                                            {{ it.gram_pb }}
+                                            {{ getPortionUnit(it.satuan) }}
                                             <div
                                                 class="text-[9.5px] text-slate-400 font-normal mt-0.5"
                                             >
                                                 × {{ it.targetPBCount }} porsi
                                             </div>
                                         </td>
-                                        <!-- Berat Kotor PK (g) -->
+                                        <!-- Berat/Takaran Kotor PK -->
                                         <td
-                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-blue-50/15 border-r border-slate-100"
+                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-white border-r border-slate-100"
                                         >
                                             <div>
-                                                {{ formatGram(it.grossGramPK) }}
+                                                {{
+                                                    formatPortionValue(
+                                                        it.grossGramPK,
+                                                        it.satuan,
+                                                    )
+                                                }}
                                             </div>
                                             <div
                                                 class="text-[9.5px] text-slate-400 font-normal mt-0.5"
@@ -7916,12 +8547,17 @@ watch(
                                                 (Net ÷ {{ it.bdd || 100 }}%)
                                             </div>
                                         </td>
-                                        <!-- Berat Kotor PB (g) -->
+                                        <!-- Berat/Takaran Kotor PB -->
                                         <td
-                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-blue-50/15 border-r border-slate-100"
+                                            class="p-2.5 text-center align-middle font-bold text-blue-950 bg-white border-r border-slate-100"
                                         >
                                             <div>
-                                                {{ formatGram(it.grossGramPB) }}
+                                                {{
+                                                    formatPortionValue(
+                                                        it.grossGramPB,
+                                                        it.satuan,
+                                                    )
+                                                }}
                                             </div>
                                             <div
                                                 class="text-[9.5px] text-slate-400 font-normal mt-0.5"
@@ -7941,21 +8577,25 @@ watch(
                                         >
                                             {{ it.buffer || 0 }}%
                                         </td>
-                                        <!-- Kebutuhan (kg) -->
+                                        <!-- Kebutuhan (Sesuai Satuan) -->
                                         <td
-                                            class="p-3 text-right font-bold text-blue-950 bg-blue-50/30 align-middle whitespace-nowrap border-r border-slate-100"
+                                            class="p-3 text-right font-bold text-blue-950 bg-white align-middle whitespace-nowrap border-r border-slate-100"
                                         >
                                             {{
-                                                formatGrossWeight(
+                                                formatGrossQty(
                                                     it.totalGrossKg,
+                                                    it.satuan,
                                                 )
                                             }}
                                         </td>
-                                        <!-- Harga / Kg -->
+                                        <!-- Harga / Satuan -->
                                         <td
                                             class="p-3 text-right text-slate-700 align-middle whitespace-nowrap font-medium border-r border-slate-100"
                                         >
-                                            {{ formatRupiah(it.harga_master) }}
+                                            {{
+                                                formatRupiah(it.harga_master)
+                                            }}
+                                            / {{ it.satuan || "Kg" }}
                                         </td>
                                         <!-- Subtotal PO -->
                                         <td
@@ -7974,27 +8614,23 @@ watch(
                                 </tbody>
                                 <tfoot
                                     v-if="bahanCalculations.length > 0"
-                                    class="bg-slate-50/90 font-bold border-t border-slate-200 text-xs"
+                                    class="bg-white font-bold border-t border-slate-200 text-xs"
                                 >
                                     <tr>
                                         <td
-                                            colspan="12"
+                                            colspan="13"
                                             class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
                                         >
                                             Total Rekapitulasi Kebutuhan Bahan
                                             (PO):
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-black text-blue-950 bg-blue-100/40 whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-blue-950 bg-white whitespace-nowrap"
                                         >
                                             {{
-                                                formatGrossWeight(
-                                                    bahanCalculations.reduce(
-                                                        (acc, it) =>
-                                                            acc +
-                                                            it.totalGrossKg,
-                                                        0,
-                                                    ),
+                                                formatGroupedUnitSummary(
+                                                    bahanCalculations,
+                                                    " • ",
                                                 )
                                             }}
                                         </td>
@@ -8008,6 +8644,7 @@ watch(
                                                 )
                                             }}
                                         </td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -8047,7 +8684,9 @@ watch(
                                     @click="showRumusBahan = !showRumusBahan"
                                     class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50"
                                 >
-                                    <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <Info
+                                        class="h-3.5 w-3.5 text-primary shrink-0"
+                                    />
                                     <span>{{
                                         showRumusBahan
                                             ? "Sembunyikan Rumus"
@@ -8065,9 +8704,12 @@ watch(
                             <div
                                 class="flex items-center gap-2 text-emerald-950 font-bold border-b border-emerald-200/80 pb-2"
                             >
-                                <Info class="h-4 w-4 text-emerald-600 shrink-0" />
+                                <Info
+                                    class="h-4 w-4 text-emerald-600 shrink-0"
+                                />
                                 <span
-                                    >Metode & Rumus Perhitungan Rekapitulasi Pengadaan Bahan Baku (PO)</span
+                                    >Metode & Rumus Perhitungan Rekapitulasi
+                                    Pengadaan Bahan Baku (PO)</span
                                 >
                             </div>
                             <div
@@ -8076,49 +8718,81 @@ watch(
                                 <div
                                     class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
                                 >
-                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                                    <strong
+                                        class="text-emerald-950 font-bold block flex items-center gap-1.5"
+                                    >
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-amber-500 inline-block"
+                                        ></span>
                                         1. Total Berat Bersih (Net Kg):
                                     </strong>
                                     <p
-                                        class="text-[11px] text-slate-800 font-mono bg-amber-50/80 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                        class="text-[11px] text-slate-800 font-mono bg-white p-2 rounded-lg border border-amber-200 text-center font-bold"
                                     >
-                                        Net (Kg) = &sum; [ (Gram Bersih &times; Sasaran PM) &divide; 1.000 ]
+                                        Net (Kg) = &sum; [ (Gram Bersih &times;
+                                        Sasaran PM) &divide; 1.000 ]
                                     </p>
-                                    <p class="text-[11px] text-slate-500 leading-snug">
-                                        Total berat porsi konsumsi bersih seluruh PM (Porsi Kecil + Porsi Besar). Pada menu varian alergi, jumlah sasaran disesuaikan otomatis dengan data PM alergi terdampak.
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        Total berat porsi konsumsi bersih
+                                        seluruh PM (Porsi Kecil + Porsi Besar).
+                                        Pada menu varian alergi, jumlah sasaran
+                                        disesuaikan otomatis dengan data PM
+                                        alergi terdampak.
                                     </p>
                                 </div>
                                 <div
                                     class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
                                 >
-                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                                    <strong
+                                        class="text-emerald-950 font-bold block flex items-center gap-1.5"
+                                    >
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-blue-500 inline-block"
+                                        ></span>
                                         2. Berat Pengadaan Kotor (Gross Kg):
                                     </strong>
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-blue-50/80 p-2 rounded-lg border border-blue-200 text-center font-bold"
                                     >
-                                        Gross (Kg) = [ Net &divide; (BDD% &divide; 100) ] &times; (1 + Buffer%)
+                                        Gross (Kg) = [ Net &divide; (BDD%
+                                        &divide; 100) ] &times; (1 + Buffer%)
                                     </p>
-                                    <p class="text-[11px] text-slate-500 leading-snug">
-                                        Memperhitungkan faktor bagian yang dapat dimakan (<strong>BDD%</strong>) dari kulit/tulang terbuang serta persentase <strong>Buffer Margin</strong> untuk toleransi penyusutan/masak.
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        Memperhitungkan faktor bagian yang dapat
+                                        dimakan (<strong>BDD%</strong>) dari
+                                        kulit/tulang terbuang serta persentase
+                                        <strong>Buffer Margin</strong> untuk
+                                        toleransi penyusutan/masak.
                                     </p>
                                 </div>
                                 <div
                                     class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
                                 >
-                                    <strong class="text-emerald-950 font-bold block flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                    <strong
+                                        class="text-emerald-950 font-bold block flex items-center gap-1.5"
+                                    >
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-emerald-500 inline-block"
+                                        ></span>
                                         3. Grand Total Anggaran Belanja PO:
                                     </strong>
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-emerald-50/80 p-2 rounded-lg border border-emerald-200 text-center font-bold"
                                     >
-                                        Grand Total = &sum; [ Gross (Kg) &times; Harga Satuan per Kg ]
+                                        Grand Total = &sum; [ Gross (Kg) &times;
+                                        Harga Satuan per Kg ]
                                     </p>
-                                    <p class="text-[11px] text-slate-500 leading-snug">
-                                        Akumulasi subtotal estimasi biaya seluruh item bahan mentah berdasarkan harga pasar/katalog yang diajukan ke bagian logistik pengadaan SPPG.
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        Akumulasi subtotal estimasi biaya
+                                        seluruh item bahan mentah berdasarkan
+                                        harga pasar/katalog yang diajukan ke
+                                        bagian logistik pengadaan SPPG.
                                     </p>
                                 </div>
                             </div>
@@ -8126,10 +8800,10 @@ watch(
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div
-                                class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/90 text-amber-950"
+                                class="p-3 rounded-xl bg-white border border-amber-200/90 text-amber-950"
                             >
                                 <span
-                                    class="text-[11px] font-bold text-amber-800 uppercase tracking-wider block mb-1"
+                                    class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1"
                                 >
                                     Total Berat Bersih (Net)
                                 </span>
@@ -8153,18 +8827,15 @@ watch(
                                 <span
                                     class="text-[11px] font-bold text-blue-800 uppercase tracking-wider block mb-1"
                                 >
-                                    Total Berat Pengadaan Kotor (Gross)
+                                    Total Kebutuhan Pengadaan (Gross)
                                 </span>
                                 <div
                                     class="text-base sm:text-lg font-black text-blue-950"
                                 >
                                     {{
-                                        formatGrossWeight(
-                                            bahanCalculations.reduce(
-                                                (acc, it) =>
-                                                    acc + it.totalGrossKg,
-                                                0,
-                                            ),
+                                        formatGroupedUnitSummary(
+                                            bahanCalculations,
+                                            " • ",
                                         )
                                     }}
                                 </div>
@@ -8216,7 +8887,7 @@ watch(
                         <!-- Penjelasan Rumus Food Cost -->
                         <div
                             v-if="showRumusCost"
-                            class="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 text-xs space-y-3 text-slate-700 shadow-2xs"
+                            class="rounded-2xl border border-slate-200 bg-white p-4 text-xs space-y-3 text-slate-700 shadow-2xs"
                         >
                             <div
                                 class="flex items-center gap-2 text-blue-900 font-bold border-b border-blue-200 pb-2"
@@ -8281,7 +8952,7 @@ watch(
 
                         <!-- 1. Evaluasi Food Cost Porsi Normal -->
                         <div
-                            class="space-y-2 bg-slate-50/70 p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
+                            class="space-y-2 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
                         >
                             <div
                                 class="flex items-center justify-between flex-wrap gap-2"
@@ -8293,7 +8964,7 @@ watch(
                                     <span
                                         class="text-xs font-black uppercase tracking-wider text-slate-800"
                                     >
-                                        Menu Utama (Porsi Normal)
+                                        {{ (activeAlergiList && activeAlergiList.length > 0) ? 'A. Menu Utama (Porsi Normal)' : 'Menu Utama (Porsi Normal)' }}
                                     </span>
                                 </div>
                                 <span
@@ -8413,7 +9084,7 @@ watch(
                                 class="mt-3 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs"
                             >
                                 <div
-                                    class="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                                    class="p-3 bg-white border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
                                 >
                                     <span
                                         class="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider"
@@ -8453,12 +9124,12 @@ watch(
                                                     Bahan Baku
                                                 </th>
                                                 <th
-                                                    class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                    class="p-2.5 text-right min-w-[150px] bg-white text-amber-950 font-black"
                                                 >
                                                     Food Cost PK
                                                 </th>
                                                 <th
-                                                    class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                    class="p-2.5 text-right min-w-[150px] bg-white text-slate-800 font-black"
                                                 >
                                                     Food Cost PB
                                                 </th>
@@ -8477,7 +9148,7 @@ watch(
                                                     smCost, idx
                                                 ) in foodCostSubMenuNormal"
                                                 :key="smCost.key"
-                                                class="hover:bg-slate-50/70 transition-colors"
+                                                class="hover:bg-white transition-colors"
                                             >
                                                 <td
                                                     class="p-2.5 text-center font-bold text-slate-400 align-middle"
@@ -8535,7 +9206,7 @@ watch(
                                                     >
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                    class="p-2.5 text-right align-middle bg-white"
                                                 >
                                                     <div
                                                         class="font-black text-slate-900 text-xs"
@@ -8547,7 +9218,7 @@ watch(
                                                         }}
                                                     </div>
                                                     <div
-                                                        class="text-[10px] text-amber-800 font-medium"
+                                                        class="text-[10px] text-slate-700 font-medium"
                                                     >
                                                         {{
                                                             smCost.percent_pk.toFixed(
@@ -8557,7 +9228,7 @@ watch(
                                                     </div>
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                    class="p-2.5 text-right align-middle bg-white"
                                                 >
                                                     <div
                                                         class="font-black text-slate-900 text-xs"
@@ -8586,19 +9257,14 @@ watch(
                                                             class="flex items-center gap-1.5 text-[9.5px]"
                                                         >
                                                             <span
-                                                                class="font-bold text-amber-800 w-5 shrink-0"
+                                                                class="font-bold text-slate-700 w-5 shrink-0"
                                                                 >PK</span
                                                             >
                                                             <div
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-amber-500 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pk +
-                                                                            '%',
-                                                                    }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -8613,12 +9279,7 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-blue-600 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pb +
-                                                                            '%',
-                                                                    }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -8627,7 +9288,7 @@ watch(
                                             </tr>
                                         </tbody>
                                         <tfoot
-                                            class="bg-slate-50/90 font-black border-t border-slate-200 text-xs"
+                                            class="bg-white font-black border-t border-slate-200 text-xs"
                                         >
                                             <tr>
                                                 <td
@@ -8638,7 +9299,7 @@ watch(
                                                     Normal:
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right text-emerald-900 bg-amber-100/40 text-sm"
+                                                    class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                 >
                                                     {{
                                                         formatRupiah(
@@ -8647,7 +9308,7 @@ watch(
                                                     }}
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right text-emerald-900 bg-blue-100/40 text-sm"
+                                                    class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                 >
                                                     {{
                                                         formatRupiah(
@@ -8664,6 +9325,27 @@ watch(
                                         </tfoot>
                                     </table>
                                 </div>
+                            <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
+                            <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                                    <span>📊</span>
+                                    <span>Keterangan Indikator Porsi Biaya (PK / PB):</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-[11px] font-medium flex-wrap">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                        <span><strong>Hijau:</strong> Rendah (&le; 25%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                                        <span><strong>Kuning:</strong> Sedang (26% - 50%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                        <span><strong>Merah:</strong> Dominan / Tinggi (&gt; 50%)</span>
+                                    </div>
+                                </div>
+                            </div>
                             </div>
                         </div>
 
@@ -8675,7 +9357,7 @@ watch(
                             <div
                                 v-for="alCost in activeAlergiFoodCostList"
                                 :key="alCost.jenis_alergi"
-                                class="space-y-3 bg-amber-50/40 p-4 rounded-3xl border border-amber-200/80 shadow-2xs"
+                                class="space-y-3 bg-white p-4 rounded-3xl border border-amber-200/80 shadow-2xs"
                             >
                                 <div
                                     class="flex items-center justify-between flex-wrap gap-2"
@@ -8695,7 +9377,7 @@ watch(
                                         class="flex items-center gap-2 flex-wrap"
                                     >
                                         <span
-                                            class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold"
+                                            class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-slate-700 border border-amber-300 text-[11px] font-bold"
                                         >
                                             Sasaran:
                                             {{ alCost.total_pm }} Porsi (PK:
@@ -8828,7 +9510,7 @@ watch(
                                     class="bg-white/90 p-3 rounded-xl border border-amber-200/70 text-[11px] space-y-1 text-slate-600"
                                 >
                                     <div
-                                        class="flex items-center justify-between flex-wrap gap-1 font-semibold text-amber-900"
+                                        class="flex items-center justify-between flex-wrap gap-1 font-semibold text-slate-800"
                                     >
                                         <span>Komposisi Bahan Masuk:</span>
                                         <span class="text-slate-700">
@@ -8863,7 +9545,7 @@ watch(
                                     class="bg-white rounded-2xl border border-amber-200/90 overflow-hidden shadow-2xs mt-2"
                                 >
                                     <div
-                                        class="p-3 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
+                                        class="p-3 bg-white border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
                                     >
                                         <span
                                             class="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider"
@@ -8875,7 +9557,7 @@ watch(
                                             (Varian {{ alCost.jenis_alergi }})
                                         </span>
                                         <span
-                                            class="text-[11px] text-amber-800 font-medium"
+                                            class="text-[11px] text-slate-700 font-medium"
                                         >
                                             Termasuk penyesuaian bahan
                                             substitusi & eliminasi alergen
@@ -8886,7 +9568,7 @@ watch(
                                             class="w-full text-left text-xs border-collapse"
                                         >
                                             <thead
-                                                class="bg-amber-50/40 text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
+                                                class="bg-white text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
                                             >
                                                 <tr>
                                                     <th
@@ -8905,12 +9587,12 @@ watch(
                                                         Bahan Baku
                                                     </th>
                                                     <th
-                                                        class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                        class="p-2.5 text-right min-w-[150px] bg-white text-amber-950 font-black"
                                                     >
                                                         Food Cost PK
                                                     </th>
                                                     <th
-                                                        class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                        class="p-2.5 text-right min-w-[150px] bg-white text-slate-800 font-black"
                                                     >
                                                         Food Cost PB
                                                     </th>
@@ -8931,7 +9613,7 @@ watch(
                                                         alCost.jenis_alergi,
                                                     )"
                                                     :key="smCost.key"
-                                                    class="hover:bg-amber-50/30 transition-colors"
+                                                    class="hover:bg-white transition-colors"
                                                 >
                                                     <td
                                                         class="p-2.5 text-center font-bold text-slate-400 align-middle"
@@ -8968,7 +9650,7 @@ watch(
                                                                     v-else-if="
                                                                         smCost.is_eliminated
                                                                     "
-                                                                    class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]"
+                                                                    class="px-1.5 py-0.5 rounded bg-amber-100 text-slate-700 border border-amber-300 font-black text-[9.5px]"
                                                                 >
                                                                     ⚠ Alergen
                                                                     Dieliminasi
@@ -9018,7 +9700,7 @@ watch(
                                                         >
                                                     </td>
                                                     <td
-                                                        class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                        class="p-2.5 text-right align-middle bg-white"
                                                     >
                                                         <div
                                                             class="font-black text-slate-900 text-xs"
@@ -9030,7 +9712,7 @@ watch(
                                                             }}
                                                         </div>
                                                         <div
-                                                            class="text-[10px] text-amber-800 font-medium"
+                                                            class="text-[10px] text-slate-700 font-medium"
                                                         >
                                                             {{
                                                                 smCost.percent_pk.toFixed(
@@ -9040,7 +9722,7 @@ watch(
                                                         </div>
                                                     </td>
                                                     <td
-                                                        class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                        class="p-2.5 text-right align-middle bg-white"
                                                     >
                                                         <div
                                                             class="font-black text-slate-900 text-xs"
@@ -9071,17 +9753,18 @@ watch(
                                                                 class="flex items-center gap-1.5 text-[9.5px]"
                                                             >
                                                                 <span
-                                                                    class="font-bold text-amber-800 w-5 shrink-0"
+                                                                    class="font-bold text-slate-700 w-5 shrink-0"
                                                                     >PK</span
                                                                 >
                                                                 <div
                                                                     class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                                 >
                                                                     <div
-                                                                        class="bg-amber-500 h-full rounded-full transition-all"
+                                                                        class="h-full rounded-full transition-all"
+                                                                        :class="getPortionCostBarColor(smCost.percent_pk)"
                                                                         :style="{
                                                                             width:
-                                                                                smCost.percent_pk +
+                                                                                Math.min(smCost.percent_pk || 0, 100) +
                                                                                 '%',
                                                                         }"
                                                                     ></div>
@@ -9098,10 +9781,11 @@ watch(
                                                                     class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                                 >
                                                                     <div
-                                                                        class="bg-blue-600 h-full rounded-full transition-all"
+                                                                        class="h-full rounded-full transition-all"
+                                                                        :class="getPortionCostBarColor(smCost.percent_pb)"
                                                                         :style="{
                                                                             width:
-                                                                                smCost.percent_pb +
+                                                                                Math.min(smCost.percent_pb || 0, 100) +
                                                                                 '%',
                                                                         }"
                                                                     ></div>
@@ -9112,7 +9796,7 @@ watch(
                                                 </tr>
                                             </tbody>
                                             <tfoot
-                                                class="bg-amber-50/70 font-black border-t border-amber-200 text-xs"
+                                                class="bg-white font-black border-t border-amber-200 text-xs"
                                             >
                                                 <tr>
                                                     <td
@@ -9125,7 +9809,7 @@ watch(
                                                         }}:
                                                     </td>
                                                     <td
-                                                        class="p-2.5 text-right text-emerald-900 bg-amber-100/60 text-sm"
+                                                        class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                     >
                                                         {{
                                                             formatRupiah(
@@ -9134,7 +9818,7 @@ watch(
                                                         }}
                                                     </td>
                                                     <td
-                                                        class="p-2.5 text-right text-emerald-900 bg-blue-100/60 text-sm"
+                                                        class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                     >
                                                         {{
                                                             formatRupiah(
@@ -9143,7 +9827,7 @@ watch(
                                                         }}
                                                     </td>
                                                     <td
-                                                        class="p-2.5 text-center text-[10px] text-amber-800"
+                                                        class="p-2.5 text-center text-[10px] text-slate-700"
                                                     >
                                                         100% Total
                                                     </td>
@@ -9176,7 +9860,9 @@ watch(
                                     @click="showRumusAkg = !showRumusAkg"
                                     class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1.5 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50"
                                 >
-                                    <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <Info
+                                        class="h-3.5 w-3.5 text-primary shrink-0"
+                                    />
                                     <span>{{
                                         showRumusAkg
                                             ? "Sembunyikan Penjelasan Rumus"
@@ -9188,72 +9874,194 @@ watch(
                             <!-- Panel Penjelasan Rumus & Standar AKG BGN -->
                             <div
                                 v-if="showRumusAkg"
-                                class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
+                                class="rounded-2xl border border-amber-200 bg-white p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
                             >
                                 <div
                                     class="flex items-center gap-2 text-amber-950 font-bold border-b border-amber-200/80 pb-2"
                                 >
-                                    <Info class="h-4 w-4 text-amber-600 shrink-0" />
+                                    <Info
+                                        class="h-4 w-4 text-amber-600 shrink-0"
+                                    />
                                     <span
-                                        >Metode Perhitungan Nilai Zat Gizi & Standar Acuan AKG BGN (Makan Siang MBG)</span
+                                        >Metode Perhitungan Nilai Zat Gizi &
+                                        Standar Acuan AKG BGN (Makan Siang
+                                        MBG)</span
                                     >
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed">
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed"
+                                >
                                     <div
                                         class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                     >
-                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                            <Calculator class="h-4 w-4 text-amber-600" />
-                                            1. Rumus Perhitungan Nilai Gizi per Porsi:
+                                        <strong
+                                            class="text-amber-950 font-bold block flex items-center gap-1.5"
+                                        >
+                                            <Calculator
+                                                class="h-4 w-4 text-amber-600"
+                                            />
+                                            1. Rumus Perhitungan Nilai Gizi per
+                                            Porsi:
                                         </strong>
                                         <p
-                                            class="text-[11px] text-slate-800 font-mono bg-amber-50/70 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                            class="text-[11px] text-slate-800 font-mono bg-white p-2 rounded-lg border border-amber-200 text-center font-bold"
                                         >
-                                            Zat Gizi = &sum; [ (Gram Bersih &divide; 100) &times; Nilai Gizi per 100g TKPI ]
+                                            Zat Gizi = &sum; [ (Gram Bersih
+                                            &divide; 100) &times; Nilai Gizi per
+                                            100g TKPI ]
                                         </p>
-                                        <p class="text-[11px] text-slate-500 leading-snug">
-                                            Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) masing-masing bahan masakan terhadap basis data Tabel Komposisi Pangan Indonesia (TKPI).
+                                        <p
+                                            class="text-[11px] text-slate-500 leading-snug"
+                                        >
+                                            Kandungan zat gizi (Energi, Protein,
+                                            Lemak, Karbohidrat, Serat) dihitung
+                                            otomatis berdasarkan porsi berat
+                                            bersih (<em>edible weight</em>)
+                                            masing-masing bahan masakan terhadap
+                                            basis data Tabel Komposisi Pangan
+                                            Indonesia (TKPI).
                                         </p>
                                     </div>
                                     <div
                                         class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                     >
-                                        <div class="flex items-center justify-between">
-                                            <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                                <HeartPulse class="h-4 w-4 text-rose-500" />
-                                                2. Standar Acuan AKG Satu Kali MBG:
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <strong
+                                                class="text-amber-950 font-bold block flex items-center gap-1.5"
+                                            >
+                                                <HeartPulse
+                                                    class="h-4 w-4 text-rose-500"
+                                                />
+                                                2. Standar Acuan AKG Satu Kali
+                                                MBG:
                                             </strong>
-                                            <span class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold">Permenkes 28/2019</span>
+                                            <span
+                                                class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold"
+                                                >Permenkes 28/2019</span
+                                            >
                                         </div>
-                                        <div class="grid grid-cols-2 gap-2 text-[11px]">
-                                            <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
-                                                <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
-                                                <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                    <div>&bull; Energi: <strong class="text-slate-900">330 - 413 kkal</strong></div>
-                                                    <div>&bull; Protein: <strong class="text-slate-900">8.0 - 10.0 g</strong></div>
-                                                    <div>&bull; Lemak: <strong class="text-slate-900">11.0 - 13.8 g</strong></div>
-                                                    <div>&bull; Karbo: <strong class="text-slate-900">50.0 - 62.5 g</strong></div>
-                                                    <div>&bull; Serat: <strong class="text-slate-900">4.0 - 7.0 g</strong></div>
+                                        <div
+                                            class="grid grid-cols-2 gap-2 text-[11px]"
+                                        >
+                                            <div
+                                                class="p-2.5 rounded-lg bg-white border border-amber-200/70 space-y-1"
+                                            >
+                                                <span
+                                                    class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]"
+                                                    >Porsi Kecil (PK):</span
+                                                >
+                                                <div
+                                                    class="text-slate-600 space-y-0.5 text-[10.5px]"
+                                                >
+                                                    <div>
+                                                        &bull; Energi:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >330 - 413
+                                                            kkal</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Protein:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >8.0 - 10.0
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Lemak:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >11.0 - 13.8
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Karbo:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >50.0 - 62.5
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Serat:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >4.0 - 7.0 g</strong
+                                                        >
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
-                                                <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
-                                                <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                    <div>&bull; Energi: <strong class="text-slate-900">585 - 831 kkal</strong></div>
-                                                    <div>&bull; Protein: <strong class="text-slate-900">15.8 - 24.5 g</strong></div>
-                                                    <div>&bull; Lemak: <strong class="text-slate-900">19.5 - 26.3 g</strong></div>
-                                                    <div>&bull; Karbo: <strong class="text-slate-900">87.0 - 122.5 g</strong></div>
-                                                    <div>&bull; Serat: <strong class="text-slate-900">6.0 - 10.0 g</strong></div>
+                                            <div
+                                                class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1"
+                                            >
+                                                <span
+                                                    class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]"
+                                                    >Porsi Besar (PB):</span
+                                                >
+                                                <div
+                                                    class="text-slate-600 space-y-0.5 text-[10.5px]"
+                                                >
+                                                    <div>
+                                                        &bull; Energi:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >585 - 831
+                                                            kkal</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Protein:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >15.8 - 24.5
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Lemak:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >19.5 - 26.3
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Karbo:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >87.0 - 122.5
+                                                            g</strong
+                                                        >
+                                                    </div>
+                                                    <div>
+                                                        &bull; Serat:
+                                                        <strong
+                                                            class="text-slate-900"
+                                                            >6.0 - 10.0
+                                                            g</strong
+                                                        >
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <button
                                             type="button"
-                                            @click="showAkgReferenceModal = true"
+                                            @click="
+                                                showAkgReferenceModal = true
+                                            "
                                             class="w-full py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
                                         >
                                             <Table class="w-3.5 h-3.5" />
-                                            <span>Lihat Tabel 2 Rujukan AKG Lengkap (12 Kelompok) & Rumus</span>
+                                            <span
+                                                >Lihat Tabel 2 Rujukan AKG
+                                                Lengkap (12 Kelompok) &
+                                                Rumus</span
+                                            >
                                         </button>
                                     </div>
                                 </div>
@@ -9261,7 +10069,7 @@ watch(
 
                             <!-- 1. Evaluasi AKG Menu Utama (Porsi Normal) -->
                             <div
-                                class="space-y-3 bg-slate-50/70 p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
+                                class="space-y-3 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs"
                             >
                                 <div
                                     class="flex items-center justify-between flex-wrap gap-2"
@@ -9273,7 +10081,7 @@ watch(
                                         <span
                                             class="text-xs font-black uppercase tracking-wider text-slate-800"
                                         >
-                                            Menu Utama (Porsi Normal)
+                                            {{ (activeAlergiAkgList && activeAlergiAkgList.length > 0) ? 'A. Menu Utama (Porsi Normal)' : 'Menu Utama (Porsi Normal)' }}
                                         </span>
                                     </div>
                                     <span
@@ -9291,16 +10099,16 @@ watch(
                                 >
                                     <!-- Card AKG Porsi Kecil (PK) Normal -->
                                     <div
-                                        class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
+                                        class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                     >
                                         <div
                                             class="flex items-center justify-between"
                                         >
                                             <h5
-                                                class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
+                                                class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                             >
                                                 <Activity
-                                                    class="h-4 w-4 text-amber-600"
+                                                    class="h-4 w-4 text-slate-600"
                                                 />
                                                 <span>Porsi Kecil (PK)</span>
                                             </h5>
@@ -9325,7 +10133,7 @@ watch(
                                             class="grid grid-cols-3 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9341,11 +10149,12 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 330 - 413 kkal</span
+                                                    >Target: 330 - 413
+                                                    kkal</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9365,7 +10174,7 @@ watch(
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9389,7 +10198,7 @@ watch(
                                             class="grid grid-cols-2 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9409,7 +10218,7 @@ watch(
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9433,16 +10242,16 @@ watch(
 
                                     <!-- Card AKG Porsi Besar (PB) Normal -->
                                     <div
-                                        class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
+                                        class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                     >
                                         <div
                                             class="flex items-center justify-between"
                                         >
                                             <h5
-                                                class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
+                                                class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                             >
                                                 <Activity
-                                                    class="h-4 w-4 text-indigo-600"
+                                                    class="h-4 w-4 text-slate-600"
                                                 />
                                                 <span>Porsi Besar (PB)</span>
                                             </h5>
@@ -9467,7 +10276,7 @@ watch(
                                             class="grid grid-cols-3 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9483,11 +10292,12 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 585 - 831 kkal</span
+                                                    >Target: 585 - 831
+                                                    kkal</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9507,7 +10317,7 @@ watch(
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9531,7 +10341,7 @@ watch(
                                             class="grid grid-cols-2 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9547,11 +10357,12 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400"
-                                                    >Target: 87.0 - 122.5 g</span
+                                                    >Target: 87.0 - 122.5
+                                                    g</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                             >
                                                 <span
                                                     class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9583,7 +10394,7 @@ watch(
                                 <div
                                     v-for="alRes in activeAlergiAkgList"
                                     :key="alRes.jenis_alergi"
-                                    class="space-y-3 bg-rose-50/30 p-4 rounded-3xl border border-rose-200/80 shadow-2xs"
+                                    class="space-y-3 bg-white p-4 rounded-3xl border border-rose-200/80 shadow-2xs"
                                 >
                                     <div
                                         class="flex items-center justify-between flex-wrap gap-2"
@@ -9615,16 +10426,16 @@ watch(
                                     >
                                         <!-- Card AKG Porsi Kecil (PK) Alergi -->
                                         <div
-                                            class="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-3 shadow-2xs"
+                                            class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                         >
                                             <div
                                                 class="flex items-center justify-between"
                                             >
                                                 <h6
-                                                    class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5"
+                                                    class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                                 >
                                                     <Activity
-                                                        class="h-4 w-4 text-amber-600"
+                                                        class="h-4 w-4 text-slate-600"
                                                     />
                                                     <span
                                                         >Porsi Kecil (PK) •
@@ -9655,7 +10466,7 @@ watch(
                                                 class="grid grid-cols-3 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9673,7 +10484,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9690,7 +10501,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9711,7 +10522,7 @@ watch(
                                                 class="grid grid-cols-2 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9731,7 +10542,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-amber-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9752,16 +10563,16 @@ watch(
 
                                         <!-- Card AKG Porsi Besar (PB) Alergi -->
                                         <div
-                                            class="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-3 shadow-2xs"
+                                            class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                         >
                                             <div
                                                 class="flex items-center justify-between"
                                             >
                                                 <h6
-                                                    class="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5"
+                                                    class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                                 >
                                                     <Activity
-                                                        class="h-4 w-4 text-indigo-600"
+                                                        class="h-4 w-4 text-slate-600"
                                                     />
                                                     <span
                                                         >Porsi Besar (PB) •
@@ -9792,7 +10603,7 @@ watch(
                                                 class="grid grid-cols-3 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9810,7 +10621,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9827,7 +10638,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9848,7 +10659,7 @@ watch(
                                                 class="grid grid-cols-2 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9869,7 +10680,7 @@ watch(
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-indigo-100"
+                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
                                                 >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold block"
@@ -9953,7 +10764,7 @@ watch(
             <!-- Header Langkah 3: Review & Pengajuan -->
             <Card className="bg-white border-slate-200 shadow-xs">
                 <CardHeader
-                    className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    className="p-4 sm:p-5 border-b border-slate-100 bg-white flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                 >
                     <div>
                         <div class="flex items-center gap-2">
@@ -10025,10 +10836,10 @@ watch(
 
                         <!-- Card 2: Sasaran PK Normal -->
                         <div
-                            class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200/80 col-span-1"
+                            class="p-3.5 bg-white rounded-xl border border-amber-200/80 col-span-1"
                         >
                             <p
-                                class="text-[10.5px] font-bold text-amber-800 uppercase tracking-wider"
+                                class="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider"
                             >
                                 Sasaran PK (Normal)
                             </p>
@@ -10042,7 +10853,7 @@ watch(
                                 }}
                                 Porsi
                             </p>
-                            <p class="text-[11px] text-amber-800 mt-0.5">
+                            <p class="text-[11px] text-slate-700 mt-0.5">
                                 Food Cost:
                                 {{ formatRupiah(totalFoodCostPKNormal) }}
                             </p>
@@ -10050,7 +10861,7 @@ watch(
 
                         <!-- Card 3: Sasaran PB Normal -->
                         <div
-                            class="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80 col-span-1"
+                            class="p-3.5 bg-white rounded-xl border border-indigo-200/80 col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
@@ -10077,7 +10888,7 @@ watch(
                         <div
                             v-for="al in activeAlergiFoodCostList"
                             :key="'header-al-card-' + al.jenis_alergi"
-                            class="p-3.5 bg-rose-50/80 rounded-xl border border-rose-200/90 col-span-1 shadow-2xs space-y-0.5"
+                            class="p-3.5 bg-white rounded-xl border border-rose-200/90 col-span-1 shadow-2xs space-y-0.5"
                         >
                             <p
                                 class="text-[10.5px] font-black text-rose-800 uppercase tracking-wider truncate"
@@ -10102,7 +10913,7 @@ watch(
 
                         <!-- Card Terakhir: Total Anggaran PO -->
                         <div
-                            class="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 col-span-2 sm:col-span-1"
+                            class="p-3.5 bg-white rounded-xl border border-emerald-200/80 col-span-2 sm:col-span-1"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider"
@@ -10125,7 +10936,7 @@ watch(
                     <!-- 1. IDENTITAS MENU & KOMPOSISI 5 SUB MENU HIDANGAN -->
                     <!-- ========================================================================= -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
@@ -10150,10 +10961,10 @@ watch(
                                     class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 text-primary border border-primary/20"
                                 >
                                     {{
-                                        props.selectedSource === 'csv' ||
-                                        props.selectedSource === 'tkpi2020'
-                                            ? 'Kemenkes'
-                                            : 'Nutri Survey'
+                                        props.selectedSource === "csv" ||
+                                        props.selectedSource === "tkpi2020"
+                                            ? "Kemenkes"
+                                            : "Nutri Survey"
                                     }}
                                 </span>
                             </div>
@@ -10254,7 +11065,7 @@ watch(
                                                 sm.key
                                             ]"
                                             :key="alIdx"
-                                            class="text-[10px] bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-1 rounded-lg"
+                                            class="text-[10px] bg-amber-50 text-slate-800 border border-amber-200/80 px-2 py-1 rounded-lg"
                                         >
                                             <span class="font-bold"
                                                 >{{ al.jenis_alergi }}:</span
@@ -10279,7 +11090,7 @@ watch(
                     <!-- 2. REKAPITULASI TARGET SASARAN PENERIMA MANFAAT -->
                     <!-- ========================================================================= -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
@@ -10321,7 +11132,7 @@ watch(
                         >
                             <table class="w-full text-xs text-left">
                                 <thead
-                                    class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
+                                    class="bg-white text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
                                         <th class="p-3 w-10 text-center">No</th>
@@ -10348,8 +11159,8 @@ watch(
                                         :key="kel.id || kIdx"
                                         :class="
                                             kel.status_menerima === false
-                                                ? 'bg-slate-50/50 text-slate-400'
-                                                : 'hover:bg-slate-50/60'
+                                                ? 'bg-white text-slate-400'
+                                                : 'hover:bg-white'
                                         "
                                     >
                                         <td
@@ -10391,7 +11202,7 @@ watch(
                                             class="p-3 text-center font-bold"
                                             :class="
                                                 kel.status_menerima !== false
-                                                    ? 'text-amber-800'
+                                                    ? 'text-slate-700'
                                                     : 'text-slate-400'
                                             "
                                         >
@@ -10447,31 +11258,63 @@ watch(
                                                     kel.keterangan_alergi.some(
                                                         (da) =>
                                                             activeAlergiFoodCostList.some(
-                                                                (al) => al.jenis_alergi === (typeof da === 'string' ? da : da?.jenis_alergi)
+                                                                (al) =>
+                                                                    al.jenis_alergi ===
+                                                                    (typeof da ===
+                                                                    'string'
+                                                                        ? da
+                                                                        : da?.jenis_alergi),
                                                             ) &&
-                                                            ((Number(da?.porsi_kecil) || 0) + (Number(da?.porsi_besar) || 0)) > 0
+                                                            (Number(
+                                                                da?.porsi_kecil,
+                                                            ) || 0) +
+                                                                (Number(
+                                                                    da?.porsi_besar,
+                                                                ) || 0) >
+                                                                0,
                                                     )
                                                 "
                                                 class="flex flex-wrap gap-1"
                                             >
                                                 <template
-                                                    v-for="(detAl, daIdx) in kel.keterangan_alergi"
+                                                    v-for="(
+                                                        detAl, daIdx
+                                                    ) in kel.keterangan_alergi"
                                                     :key="daIdx"
                                                 >
                                                     <span
                                                         v-if="
                                                             activeAlergiFoodCostList.some(
-                                                                (al) => al.jenis_alergi === (typeof detAl === 'string' ? detAl : detAl?.jenis_alergi)
+                                                                (al) =>
+                                                                    al.jenis_alergi ===
+                                                                    (typeof detAl ===
+                                                                    'string'
+                                                                        ? detAl
+                                                                        : detAl?.jenis_alergi),
                                                             ) &&
-                                                            ((Number(detAl?.porsi_kecil) || 0) + (Number(detAl?.porsi_besar) || 0)) > 0
+                                                            (Number(
+                                                                detAl?.porsi_kecil,
+                                                            ) || 0) +
+                                                                (Number(
+                                                                    detAl?.porsi_besar,
+                                                                ) || 0) >
+                                                                0
                                                         "
-                                                        class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-50 text-amber-800 border border-amber-200"
+                                                        class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-50 text-slate-700 border border-amber-200"
                                                     >
                                                         {{
-                                                            (typeof detAl === 'string' ? detAl : detAl.jenis_alergi) +
-                                                            ': ' +
-                                                            ((Number(detAl?.porsi_kecil) || 0) + (Number(detAl?.porsi_besar) || 0)) +
-                                                            ' PM'
+                                                            (typeof detAl ===
+                                                            "string"
+                                                                ? detAl
+                                                                : detAl.jenis_alergi) +
+                                                            ": " +
+                                                            ((Number(
+                                                                detAl?.porsi_kecil,
+                                                            ) || 0) +
+                                                                (Number(
+                                                                    detAl?.porsi_besar,
+                                                                ) || 0)) +
+                                                            " PM"
                                                         }}
                                                     </span>
                                                 </template>
@@ -10496,7 +11339,7 @@ watch(
                                             Total Porsi Aktif:
                                         </td>
                                         <td
-                                            class="p-3 text-center text-amber-900 font-black"
+                                            class="p-3 text-center text-slate-800 font-black"
                                         >
                                             {{
                                                 totalPK.toLocaleString("id-ID")
@@ -10536,7 +11379,7 @@ watch(
                     <!-- ========================================================================= -->
                     <!-- 3. EVALUASI PEMENUHAN STANDAR AKG BGN (PORSI KECIL & PORSI BESAR & VARIAN ALERGI) -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-5"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-5"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
@@ -10565,7 +11408,9 @@ watch(
                                 @click="showRumusAkg = !showRumusAkg"
                                 class="text-[11px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs transition-colors hover:bg-slate-50 self-start sm:self-auto shrink-0"
                             >
-                                <Info class="h-3.5 w-3.5 text-primary shrink-0" />
+                                <Info
+                                    class="h-3.5 w-3.5 text-primary shrink-0"
+                                />
                                 <span>{{
                                     showRumusAkg
                                         ? "Sembunyikan Penjelasan Rumus"
@@ -10577,62 +11422,163 @@ watch(
                         <!-- Panel Penjelasan Rumus & Standar AKG BGN (Langkah 3) -->
                         <div
                             v-if="showRumusAkg"
-                            class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
+                            class="rounded-2xl border border-amber-200 bg-white p-4 text-xs space-y-4 text-slate-700 shadow-2xs"
                         >
                             <div
                                 class="flex items-center gap-2 text-amber-950 font-bold border-b border-amber-200/80 pb-2"
                             >
                                 <Info class="h-4 w-4 text-amber-600 shrink-0" />
                                 <span
-                                    >Metode Perhitungan Nilai Zat Gizi & Standar Acuan AKG BGN (Makan Siang MBG)</span
+                                    >Metode Perhitungan Nilai Zat Gizi & Standar
+                                    Acuan AKG BGN (Makan Siang MBG)</span
                                 >
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed">
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 gap-4 leading-relaxed"
+                            >
                                 <div
                                     class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                 >
-                                    <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                        <Calculator class="h-4 w-4 text-amber-600" />
-                                        1. Rumus Perhitungan Nilai Gizi per Porsi:
+                                    <strong
+                                        class="text-amber-950 font-bold block flex items-center gap-1.5"
+                                    >
+                                        <Calculator
+                                            class="h-4 w-4 text-amber-600"
+                                        />
+                                        1. Rumus Perhitungan Nilai Gizi per
+                                        Porsi:
                                     </strong>
                                     <p
-                                        class="text-[11px] text-slate-800 font-mono bg-amber-50/70 p-2 rounded-lg border border-amber-200 text-center font-bold"
+                                        class="text-[11px] text-slate-800 font-mono bg-white p-2 rounded-lg border border-amber-200 text-center font-bold"
                                     >
-                                        Zat Gizi = &sum; [ (Gram Bersih &divide; 100) &times; Nilai Gizi per 100g TKPI ]
+                                        Zat Gizi = &sum; [ (Gram Bersih &divide;
+                                        100) &times; Nilai Gizi per 100g TKPI ]
                                     </p>
-                                    <p class="text-[11px] text-slate-500 leading-snug">
-                                        Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) masing-masing bahan masakan terhadap basis data Tabel Komposisi Pangan Indonesia (TKPI).
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        Kandungan zat gizi (Energi, Protein,
+                                        Lemak, Karbohidrat, Serat) dihitung
+                                        otomatis berdasarkan porsi berat bersih
+                                        (<em>edible weight</em>) masing-masing
+                                        bahan masakan terhadap basis data Tabel
+                                        Komposisi Pangan Indonesia (TKPI).
                                     </p>
                                 </div>
                                 <div
                                     class="p-3 bg-white rounded-xl border border-amber-100 space-y-2 shadow-2xs"
                                 >
-                                    <div class="flex items-center justify-between">
-                                        <strong class="text-amber-950 font-bold block flex items-center gap-1.5">
-                                            <HeartPulse class="h-4 w-4 text-rose-500" />
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <strong
+                                            class="text-amber-950 font-bold block flex items-center gap-1.5"
+                                        >
+                                            <HeartPulse
+                                                class="h-4 w-4 text-rose-500"
+                                            />
                                             2. Standar Acuan AKG Satu Kali MBG:
                                         </strong>
-                                        <span class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold">Permenkes 28/2019</span>
+                                        <span
+                                            class="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-bold"
+                                            >Permenkes 28/2019</span
+                                        >
                                     </div>
-                                    <div class="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div class="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 space-y-1">
-                                            <span class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]">Porsi Kecil (PK):</span>
-                                            <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                <div>&bull; Energi: <strong class="text-slate-900">330 - 413 kkal</strong></div>
-                                                <div>&bull; Protein: <strong class="text-slate-900">8.0 - 10.0 g</strong></div>
-                                                <div>&bull; Lemak: <strong class="text-slate-900">11.0 - 13.8 g</strong></div>
-                                                <div>&bull; Karbo: <strong class="text-slate-900">50.0 - 62.5 g</strong></div>
-                                                <div>&bull; Serat: <strong class="text-slate-900">4.0 - 7.0 g</strong></div>
+                                    <div
+                                        class="grid grid-cols-2 gap-2 text-[11px]"
+                                    >
+                                        <div
+                                            class="p-2.5 rounded-lg bg-white border border-amber-200/70 space-y-1"
+                                        >
+                                            <span
+                                                class="font-extrabold text-amber-950 block border-b border-amber-200 pb-0.5 text-[11px]"
+                                                >Porsi Kecil (PK):</span
+                                            >
+                                            <div
+                                                class="text-slate-600 space-y-0.5 text-[10.5px]"
+                                            >
+                                                <div>
+                                                    &bull; Energi:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >330 - 413 kkal</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Protein:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >8.0 - 10.0 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Lemak:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >11.0 - 13.8 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Karbo:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >50.0 - 62.5 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Serat:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >4.0 - 7.0 g</strong
+                                                    >
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1">
-                                            <span class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]">Porsi Besar (PB):</span>
-                                            <div class="text-slate-600 space-y-0.5 text-[10.5px]">
-                                                <div>&bull; Energi: <strong class="text-slate-900">585 - 831 kkal</strong></div>
-                                                <div>&bull; Protein: <strong class="text-slate-900">15.8 - 24.5 g</strong></div>
-                                                <div>&bull; Lemak: <strong class="text-slate-900">19.5 - 26.3 g</strong></div>
-                                                <div>&bull; Karbo: <strong class="text-slate-900">87.0 - 122.5 g</strong></div>
-                                                <div>&bull; Serat: <strong class="text-slate-900">6.0 - 10.0 g</strong></div>
+                                        <div
+                                            class="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/70 space-y-1"
+                                        >
+                                            <span
+                                                class="font-extrabold text-blue-950 block border-b border-blue-200 pb-0.5 text-[11px]"
+                                                >Porsi Besar (PB):</span
+                                            >
+                                            <div
+                                                class="text-slate-600 space-y-0.5 text-[10.5px]"
+                                            >
+                                                <div>
+                                                    &bull; Energi:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >585 - 831 kkal</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Protein:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >15.8 - 24.5 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Lemak:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >19.5 - 26.3 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Karbo:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >87.0 - 122.5 g</strong
+                                                    >
+                                                </div>
+                                                <div>
+                                                    &bull; Serat:
+                                                    <strong
+                                                        class="text-slate-900"
+                                                        >6.0 - 10.0 g</strong
+                                                    >
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -10642,7 +11588,10 @@ watch(
                                         class="w-full py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
                                     >
                                         <Table class="w-3.5 h-3.5" />
-                                        <span>Lihat Tabel 2 Rujukan AKG Lengkap (12 Kelompok) & Rumus</span>
+                                        <span
+                                            >Lihat Tabel 2 Rujukan AKG Lengkap
+                                            (12 Kelompok) & Rumus</span
+                                        >
                                     </button>
                                 </div>
                             </div>
@@ -10657,7 +11606,7 @@ watch(
                                 <h5
                                     class="text-xs font-black text-slate-800 uppercase tracking-wider"
                                 >
-                                    A. Standar AKG Porsi Normal (PK & PB)
+                                    {{ (activeAlergiAkgList && activeAlergiAkgList.length > 0) ? 'A. Standar AKG Porsi Normal (PK & PB)' : 'Standar AKG Porsi Normal (PK & PB)' }}
                                 </h5>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -11017,7 +11966,7 @@ watch(
                             <div
                                 v-for="alRes in activeAlergiAkgList"
                                 :key="'akg-al-' + alRes.jenis_alergi"
-                                class="p-3.5 bg-rose-50/40 rounded-xl border border-rose-200 space-y-3"
+                                class="p-3.5 bg-white rounded-xl border border-rose-200 space-y-3"
                             >
                                 <div
                                     class="flex items-center justify-between flex-wrap gap-2"
@@ -11387,7 +12336,7 @@ watch(
                     <!-- 4. EVALUASI FOOD COST & PAGU ANGGARAN PER PORSI & PER SUB MENU -->
                     <!-- ========================================================================= -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
@@ -11413,7 +12362,7 @@ watch(
                         <!-- Ringkasan Alergi Jika Ada -->
                         <div
                             v-if="activeAlergiFoodCostList.length > 0"
-                            class="p-3.5 bg-amber-50/40 rounded-xl border border-amber-200/80 space-y-2"
+                            class="p-3.5 bg-white rounded-xl border border-amber-200/80 space-y-2"
                         >
                             <div
                                 class="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-amber-950"
@@ -11441,11 +12390,10 @@ watch(
                                     >
                                         <span>{{ al.jenis_alergi }}</span>
                                         <span
-                                            class="text-[10.5px] text-amber-800 font-black"
+                                            class="text-[10.5px] text-slate-700 font-black"
                                         >
                                             {{ al.total_pm }} Porsi (PK:
-                                            {{ al.pm_pk }}, PB:
-                                            {{ al.pm_pb }})
+                                            {{ al.pm_pk }}, PB: {{ al.pm_pb }})
                                         </span>
                                     </div>
                                     <div
@@ -11473,7 +12421,7 @@ watch(
                             class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs"
                         >
                             <div
-                                class="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
+                                class="p-3 bg-white border-b border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
                                 <span
                                     class="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider"
@@ -11511,12 +12459,12 @@ watch(
                                                 BAHAN BAKU
                                             </th>
                                             <th
-                                                class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                class="p-2.5 text-right min-w-[150px] bg-white text-amber-950 font-black"
                                             >
                                                 FOOD COST PK
                                             </th>
                                             <th
-                                                class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                class="p-2.5 text-right min-w-[150px] bg-white text-slate-800 font-black"
                                             >
                                                 FOOD COST PB
                                             </th>
@@ -11535,7 +12483,7 @@ watch(
                                                 smCost, idx
                                             ) in foodCostSubMenuNormal"
                                             :key="smCost.key"
-                                            class="hover:bg-slate-50/70 transition-colors"
+                                            class="hover:bg-white transition-colors"
                                         >
                                             <td
                                                 class="p-2.5 text-center font-bold text-slate-400 align-middle"
@@ -11588,7 +12536,7 @@ watch(
                                                 >
                                             </td>
                                             <td
-                                                class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                class="p-2.5 text-right align-middle bg-white"
                                             >
                                                 <div
                                                     class="font-black text-slate-900 text-xs"
@@ -11600,7 +12548,7 @@ watch(
                                                     }}
                                                 </div>
                                                 <div
-                                                    class="text-[10px] text-amber-800 font-medium"
+                                                    class="text-[10px] text-slate-700 font-medium"
                                                 >
                                                     {{
                                                         smCost.percent_pk.toFixed(
@@ -11610,7 +12558,7 @@ watch(
                                                 </div>
                                             </td>
                                             <td
-                                                class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                class="p-2.5 text-right align-middle bg-white"
                                             >
                                                 <div
                                                     class="font-black text-slate-900 text-xs"
@@ -11639,19 +12587,14 @@ watch(
                                                         class="flex items-center gap-1.5 text-[9.5px]"
                                                     >
                                                         <span
-                                                            class="font-bold text-amber-800 w-5 shrink-0"
+                                                            class="font-bold text-slate-700 w-5 shrink-0"
                                                             >PK</span
                                                         >
                                                         <div
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                class="bg-amber-500 h-full rounded-full transition-all"
-                                                                :style="{
-                                                                    width:
-                                                                        smCost.percent_pk +
-                                                                        '%',
-                                                                }"
+                                                                :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -11666,12 +12609,7 @@ watch(
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                class="bg-blue-600 h-full rounded-full transition-all"
-                                                                :style="{
-                                                                    width:
-                                                                        smCost.percent_pb +
-                                                                        '%',
-                                                                }"
+                                                                :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -11680,7 +12618,7 @@ watch(
                                         </tr>
                                     </tbody>
                                     <tfoot
-                                        class="bg-slate-50/90 font-black border-t border-slate-200 text-xs"
+                                        class="bg-white font-black border-t border-slate-200 text-xs"
                                     >
                                         <tr>
                                             <td
@@ -11690,7 +12628,7 @@ watch(
                                                 TOTAL FOOD COST PORSI NORMAL:
                                             </td>
                                             <td
-                                                class="p-2.5 text-right text-emerald-900 bg-amber-100/40 text-sm"
+                                                class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                             >
                                                 {{
                                                     formatRupiah(
@@ -11699,7 +12637,7 @@ watch(
                                                 }}
                                             </td>
                                             <td
-                                                class="p-2.5 text-right text-emerald-900 bg-blue-100/40 text-sm"
+                                                class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                             >
                                                 {{
                                                     formatRupiah(
@@ -11715,6 +12653,28 @@ watch(
                                         </tr>
                                     </tfoot>
                                 </table>
+                            </div>
+
+                            <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
+                            <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                                    <span>📊</span>
+                                    <span>Keterangan Indikator Porsi Biaya (PK / PB):</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-[11px] font-medium flex-wrap">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                        <span><strong>Hijau:</strong> Rendah (&le; 25%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                                        <span><strong>Kuning:</strong> Sedang (26% - 50%)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                        <span><strong>Merah:</strong> Dominan / Tinggi (&gt; 50%)</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -11738,7 +12698,7 @@ watch(
                                     >
                                 </span>
                                 <span
-                                    class="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg"
+                                    class="text-[11px] font-bold text-slate-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg"
                                 >
                                     {{ activeAlergiFoodCostList.length }} Varian
                                     Alergi Terdaftar
@@ -11751,7 +12711,7 @@ watch(
                                 class="bg-white rounded-2xl border border-amber-200/90 overflow-hidden shadow-2xs"
                             >
                                 <div
-                                    class="p-3 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
+                                    class="p-3 bg-white border-b border-amber-200 flex items-center justify-between flex-wrap gap-2"
                                 >
                                     <span
                                         class="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider"
@@ -11763,7 +12723,7 @@ watch(
                                         {{ alCost.jenis_alergi }})
                                     </span>
                                     <span
-                                        class="text-[11px] text-amber-800 font-medium"
+                                        class="text-[11px] text-slate-700 font-medium"
                                     >
                                         {{ alCost.total_pm }} Porsi (PK:
                                         {{ alCost.pm_pk }}, PB:
@@ -11776,7 +12736,7 @@ watch(
                                         class="w-full text-left text-xs border-collapse"
                                     >
                                         <thead
-                                            class="bg-amber-50/40 text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
+                                            class="bg-white text-slate-700 font-bold border-b border-amber-200 uppercase text-[10px] select-none"
                                         >
                                             <tr>
                                                 <th
@@ -11793,12 +12753,12 @@ watch(
                                                     BAHAN BAKU
                                                 </th>
                                                 <th
-                                                    class="p-2.5 text-right min-w-[150px] bg-amber-50/50 text-amber-950 font-black"
+                                                    class="p-2.5 text-right min-w-[150px] bg-white text-amber-950 font-black"
                                                 >
                                                     FOOD COST PK
                                                 </th>
                                                 <th
-                                                    class="p-2.5 text-right min-w-[150px] bg-blue-50/50 text-blue-950 font-black"
+                                                    class="p-2.5 text-right min-w-[150px] bg-white text-slate-800 font-black"
                                                 >
                                                     FOOD COST PB
                                                 </th>
@@ -11819,7 +12779,7 @@ watch(
                                                     alCost.jenis_alergi,
                                                 )"
                                                 :key="smCost.key"
-                                                class="hover:bg-amber-50/30 transition-colors"
+                                                class="hover:bg-white transition-colors"
                                             >
                                                 <td
                                                     class="p-2.5 text-center font-bold text-slate-400 align-middle"
@@ -11854,7 +12814,7 @@ watch(
                                                                 v-else-if="
                                                                     smCost.is_eliminated
                                                                 "
-                                                                class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-black text-[9.5px]"
+                                                                class="px-1.5 py-0.5 rounded bg-amber-100 text-slate-700 border border-amber-300 font-black text-[9.5px]"
                                                             >
                                                                 ⚠ Alergen
                                                                 Dieliminasi
@@ -11902,7 +12862,7 @@ watch(
                                                     >
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right align-middle bg-amber-50/20"
+                                                    class="p-2.5 text-right align-middle bg-white"
                                                 >
                                                     <div
                                                         class="font-black text-slate-900 text-xs"
@@ -11914,7 +12874,7 @@ watch(
                                                         }}
                                                     </div>
                                                     <div
-                                                        class="text-[10px] text-amber-800 font-medium"
+                                                        class="text-[10px] text-slate-700 font-medium"
                                                     >
                                                         {{
                                                             smCost.percent_pk.toFixed(
@@ -11924,7 +12884,7 @@ watch(
                                                     </div>
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right align-middle bg-blue-50/20"
+                                                    class="p-2.5 text-right align-middle bg-white"
                                                 >
                                                     <div
                                                         class="font-black text-slate-900 text-xs"
@@ -11953,19 +12913,14 @@ watch(
                                                             class="flex items-center gap-1.5 text-[9.5px]"
                                                         >
                                                             <span
-                                                                class="font-bold text-amber-800 w-5 shrink-0"
+                                                                class="font-bold text-slate-700 w-5 shrink-0"
                                                                 >PK</span
                                                             >
                                                             <div
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-amber-500 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pk +
-                                                                            '%',
-                                                                    }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -11980,12 +12935,7 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    class="bg-blue-600 h-full rounded-full transition-all"
-                                                                    :style="{
-                                                                        width:
-                                                                            smCost.percent_pb +
-                                                                            '%',
-                                                                    }"
+                                                                    :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -11994,7 +12944,7 @@ watch(
                                             </tr>
                                         </tbody>
                                         <tfoot
-                                            class="bg-amber-50/70 font-black border-t border-amber-200 text-xs"
+                                            class="bg-white font-black border-t border-amber-200 text-xs"
                                         >
                                             <tr>
                                                 <td
@@ -12005,7 +12955,7 @@ watch(
                                                     {{ alCost.jenis_alergi }}:
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right text-emerald-900 bg-amber-100/60 text-sm"
+                                                    class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                 >
                                                     {{
                                                         formatRupiah(
@@ -12014,7 +12964,7 @@ watch(
                                                     }}
                                                 </td>
                                                 <td
-                                                    class="p-2.5 text-right text-emerald-900 bg-blue-100/60 text-sm"
+                                                    class="p-2.5 text-right text-emerald-900 bg-white text-sm"
                                                 >
                                                     {{
                                                         formatRupiah(
@@ -12039,7 +12989,7 @@ watch(
                     <!-- 5. TABEL REKAPITULASI KEBUTUHAN BAHAN PANGAN & ESTIMASI BELANJA PO -->
                     <!-- ========================================================================= -->
                     <div
-                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
                     >
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
@@ -12077,7 +13027,7 @@ watch(
                         >
                             <table class="w-full text-xs text-left">
                                 <thead
-                                    class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
+                                    class="bg-white text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
                                         <th class="p-3 w-10 text-center">No</th>
@@ -12091,6 +13041,7 @@ watch(
                                             Tipe Porsi
                                         </th>
                                         <th class="p-3">Kategori</th>
+                                        <th class="p-3 text-center">Satuan</th>
                                         <th class="p-3 text-center">
                                             Gram PK / PB
                                         </th>
@@ -12117,7 +13068,7 @@ watch(
                                     <tr
                                         v-for="(b, i) in bahanCalculations"
                                         :key="b.id || i"
-                                        class="hover:bg-slate-50/60"
+                                        class="hover:bg-white"
                                     >
                                         <td
                                             class="p-3 text-center font-bold text-slate-500"
@@ -12126,9 +13077,28 @@ watch(
                                         </td>
                                         <td class="p-3">
                                             <div
-                                                class="font-black text-slate-900 leading-tight"
+                                                class="font-black text-slate-900 leading-tight flex items-center gap-1.5 flex-wrap"
                                             >
-                                                {{ b.nama }}
+                                                <span>{{ b.nama }}</span>
+                                                <span
+                                                    v-if="
+                                                        b.is_custom ||
+                                                        (typeof b.code ===
+                                                            'string' &&
+                                                            b.code.startsWith(
+                                                                'custom_',
+                                                            )) ||
+                                                        (typeof b.id ===
+                                                            'string' &&
+                                                            b.id.startsWith(
+                                                                'custom_',
+                                                            ))
+                                                    "
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-slate-700 border border-amber-300 shadow-2xs"
+                                                    title="Bahan Ditambahkan Secara Manual"
+                                                >
+                                                    ✍️ Manual
+                                                </span>
                                             </div>
                                             <div
                                                 class="text-[11px] text-primary font-bold mt-0.5"
@@ -12137,7 +13107,7 @@ watch(
                                             </div>
                                             <span
                                                 v-if="b.alergen"
-                                                class="inline-block text-[9.5px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-semibold mt-1"
+                                                class="inline-block text-[9.5px] bg-amber-50 text-slate-700 border border-amber-200 px-1.5 py-0.2 rounded font-semibold mt-1"
                                             >
                                                 Alergen: {{ b.alergen }}
                                             </span>
@@ -12207,11 +13177,20 @@ watch(
                                         >
                                             {{ b.kategori }}
                                         </td>
+                                        <td class="p-3 text-center">
+                                            <span
+                                                class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-bold"
+                                            >
+                                                {{ b.satuan || "Kg" }}
+                                            </span>
+                                        </td>
                                         <td
                                             class="p-3 text-center font-bold text-slate-800 whitespace-nowrap"
                                         >
-                                            {{ b.gram_pk || 0 }}g /
-                                            {{ b.gram_pb || 0 }}g
+                                            {{ b.gram_pk || 0 }}
+                                            {{ getPortionUnit(b.satuan) }} /
+                                            {{ b.gram_pb || 0 }}
+                                            {{ getPortionUnit(b.satuan) }}
                                         </td>
                                         <td
                                             class="p-3 text-center text-[11px] text-slate-600 whitespace-nowrap"
@@ -12224,15 +13203,17 @@ watch(
                                             class="p-3 text-right font-bold text-slate-900 whitespace-nowrap"
                                         >
                                             {{
-                                                formatGrossWeight(
+                                                formatGrossQty(
                                                     b.totalGrossKg,
+                                                    b.satuan,
                                                 )
                                             }}
                                         </td>
                                         <td
                                             class="p-3 text-right text-slate-600 whitespace-nowrap"
                                         >
-                                            {{ formatRupiah(b.harga_master) }}
+                                            {{ formatRupiah(b.harga_master) }} /
+                                            {{ b.satuan || "Kg" }}
                                         </td>
                                         <td
                                             class="p-3 text-right font-black text-emerald-900 whitespace-nowrap"
@@ -12331,24 +13312,38 @@ watch(
         <!-- MODAL DATASET RUJUKAN ANGKA KECUKUPAN GIZI (AKG) SATU KALI MBG   -->
         <!-- Berdasarkan Peraturan Kementerian Kesehatan Nomor 28 Tahun 2019   -->
         <!-- ================================================================= -->
-        <Modal :show="showAkgReferenceModal" @close="showAkgReferenceModal = false" max-width="6xl">
+        <Modal
+            :show="showAkgReferenceModal"
+            @close="showAkgReferenceModal = false"
+            max-width="6xl"
+        >
             <div class="p-6 space-y-6 max-h-[90vh] overflow-y-auto">
                 <!-- Modal Header -->
-                <div class="flex items-start justify-between border-b border-slate-200 pb-4">
+                <div
+                    class="flex items-start justify-between border-b border-slate-200 pb-4"
+                >
                     <div class="space-y-1">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <div class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                            <div
+                                class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs"
+                            >
                                 <HeartPulse class="w-5 h-5" />
                             </div>
                             <h3 class="text-base font-black text-slate-900">
-                                Tabel 2. Rujukan Angka Kecukupan Gizi Satu Kali MBG
+                                Tabel 2. Rujukan Angka Kecukupan Gizi Satu Kali
+                                MBG
                             </h3>
-                            <Badge variant="outline" class="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold">
+                            <Badge
+                                variant="outline"
+                                class="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold"
+                            >
                                 Permenkes No. 28/2019
                             </Badge>
                         </div>
                         <p class="text-xs text-slate-500 leading-relaxed">
-                            Standar acuan resmi pemenuhan zat gizi per porsi siap santap MBG berdasarkan Peraturan Kementerian Kesehatan RI No. 28 Tahun 2019.
+                            Standar acuan resmi pemenuhan zat gizi per porsi
+                            siap santap MBG berdasarkan Peraturan Kementerian
+                            Kesehatan RI No. 28 Tahun 2019.
                         </p>
                     </div>
                     <button
@@ -12361,7 +13356,9 @@ watch(
                 </div>
 
                 <!-- Filter & Search Toolbar -->
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
+                <div
+                    class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80"
+                >
                     <div class="flex items-center gap-1.5 w-full sm:w-auto">
                         <button
                             type="button"
@@ -12370,7 +13367,7 @@ watch(
                                 'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer',
                                 akgFilterKelompok === 'all'
                                     ? 'bg-slate-900 text-white shadow-xs'
-                                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200',
                             ]"
                         >
                             Semua (12)
@@ -12382,7 +13379,7 @@ watch(
                                 'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
                                 akgFilterKelompok === 'pk'
                                     ? 'bg-amber-600 text-white shadow-xs'
-                                    : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-200'
+                                    : 'bg-white text-slate-700 hover:bg-amber-50 border border-amber-200',
                             ]"
                         >
                             <span>Porsi Kecil / Pagi (5)</span>
@@ -12394,7 +13391,7 @@ watch(
                                 'px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
                                 akgFilterKelompok === 'pb'
                                     ? 'bg-blue-600 text-white shadow-xs'
-                                    : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200'
+                                    : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200',
                             ]"
                         >
                             <span>Porsi Besar / Siang (7)</span>
@@ -12402,7 +13399,9 @@ watch(
                     </div>
 
                     <div class="relative w-full sm:w-64">
-                        <Search class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search
+                            class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        />
                         <input
                             v-model="akgSearchQuery"
                             type="text"
@@ -12413,67 +13412,155 @@ watch(
                 </div>
 
                 <!-- Table Container -->
-                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+                <div
+                    class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs"
+                >
                     <table class="w-full text-xs text-left border-collapse">
                         <thead>
-                            <tr class="bg-blue-50/70 border-b border-blue-200 text-blue-950 font-black">
-                                <th class="py-3 px-3 text-center w-12 border-r border-blue-100 whitespace-nowrap">No</th>
-                                <th class="py-3 px-3.5 border-r border-blue-100 min-w-[190px]">Kelompok Sasaran</th>
-                                <th class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap">Pendistribusian</th>
-                                <th class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap">Rujukan % AKG</th>
-                                <th class="py-3 px-3 text-center bg-amber-50/60 text-amber-950 border-r border-amber-100 whitespace-nowrap">Energi (kkal)</th>
-                                <th class="py-3 px-3 text-center bg-emerald-50/60 text-emerald-950 border-r border-emerald-100 whitespace-nowrap">Protein (g)</th>
-                                <th class="py-3 px-3 text-center bg-indigo-50/60 text-indigo-950 border-r border-indigo-100 whitespace-nowrap">Lemak (g)</th>
-                                <th class="py-3 px-3 text-center bg-orange-50/60 text-orange-950 border-r border-orange-100 whitespace-nowrap">Karbohidrat (g)</th>
-                                <th class="py-3 px-4 text-center whitespace-nowrap min-w-[125px]">Tipe Porsi</th>
+                            <tr
+                                class="bg-white border-b border-slate-200 text-slate-800 font-black"
+                            >
+                                <th
+                                    class="py-3 px-3 text-center w-12 border-r border-blue-100 whitespace-nowrap"
+                                >
+                                    No
+                                </th>
+                                <th
+                                    class="py-3 px-3.5 border-r border-blue-100 min-w-[190px]"
+                                >
+                                    Kelompok Sasaran
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap"
+                                >
+                                    Pendistribusian
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center border-r border-blue-100 whitespace-nowrap"
+                                >
+                                    Rujukan % AKG
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center bg-white text-amber-950 border-r border-amber-100 whitespace-nowrap"
+                                >
+                                    Energi (kkal)
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center bg-white text-slate-800 border-r border-emerald-100 whitespace-nowrap"
+                                >
+                                    Protein (g)
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center bg-white text-slate-800 border-r border-indigo-100 whitespace-nowrap"
+                                >
+                                    Lemak (g)
+                                </th>
+                                <th
+                                    class="py-3 px-3 text-center bg-white text-slate-800 border-r border-orange-100 whitespace-nowrap"
+                                >
+                                    Karbohidrat (g)
+                                </th>
+                                <th
+                                    class="py-3 px-4 text-center whitespace-nowrap min-w-[125px]"
+                                >
+                                    Tipe Porsi
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <tr
                                 v-for="item in filteredRujukanAkg"
                                 :key="'rujukan-' + item.no"
-                                class="hover:bg-slate-50/80 transition-colors"
+                                class="hover:bg-white transition-colors"
                             >
-                                <td class="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100 whitespace-nowrap">
+                                <td
+                                    class="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100 whitespace-nowrap"
+                                >
                                     {{ item.no }}
                                 </td>
-                                <td class="py-2.5 px-3.5 font-bold text-slate-900 border-r border-slate-100">
+                                <td
+                                    class="py-2.5 px-3.5 font-bold text-slate-900 border-r border-slate-100"
+                                >
                                     {{ item.kelompokSasaran }}
                                 </td>
-                                <td class="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                                <td
+                                    class="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap"
+                                >
                                     <span
                                         :class="[
                                             'px-2.5 py-0.5 rounded-md text-[10px] font-extrabold whitespace-nowrap inline-block',
                                             item.pendistribusian === 'Pagi'
-                                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                                : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                ? 'bg-amber-100 text-slate-700 border border-amber-200'
+                                                : 'bg-blue-100 text-blue-800 border border-blue-200',
                                         ]"
                                     >
                                         {{ item.pendistribusian }}
                                     </span>
                                 </td>
-                                <td class="py-2.5 px-3 text-center font-semibold text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                                <td
+                                    class="py-2.5 px-3 text-center font-semibold text-slate-700 border-r border-slate-100 whitespace-nowrap"
+                                >
                                     {{ item.rujukanAkgPct }}
                                 </td>
-                                <td class="py-2.5 px-3 text-center font-black text-amber-900 bg-amber-50/30 border-r border-amber-100 whitespace-nowrap">
+                                <td
+                                    class="py-2.5 px-3 text-center font-black text-slate-800 bg-white border-r border-amber-100 whitespace-nowrap"
+                                >
                                     {{ item.energiMin }} - {{ item.energiMax }}
                                 </td>
-                                <td class="py-2.5 px-3 text-center font-black text-emerald-900 bg-emerald-50/30 border-r border-emerald-100 whitespace-nowrap">
-                                    {{ item.proteinMin.toFixed(1).replace('.', ',') }} - {{ item.proteinMax.toFixed(1).replace('.', ',') }}
+                                <td
+                                    class="py-2.5 px-3 text-center font-black text-emerald-900 bg-white border-r border-emerald-100 whitespace-nowrap"
+                                >
+                                    {{
+                                        item.proteinMin
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
+                                    -
+                                    {{
+                                        item.proteinMax
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
                                 </td>
-                                <td class="py-2.5 px-3 text-center font-black text-indigo-900 bg-indigo-50/30 border-r border-indigo-100 whitespace-nowrap">
-                                    {{ item.lemakMin.toFixed(1).replace('.', ',') }} - {{ item.lemakMax.toFixed(1).replace('.', ',') }}
+                                <td
+                                    class="py-2.5 px-3 text-center font-black text-indigo-900 bg-white border-r border-indigo-100 whitespace-nowrap"
+                                >
+                                    {{
+                                        item.lemakMin
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
+                                    -
+                                    {{
+                                        item.lemakMax
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
                                 </td>
-                                <td class="py-2.5 px-3 text-center font-black text-orange-900 bg-orange-50/30 border-r border-orange-100 whitespace-nowrap">
-                                    {{ item.karbohidratMin.toFixed(1).replace('.', ',') }} - {{ item.karbohidratMax.toFixed(1).replace('.', ',') }}
+                                <td
+                                    class="py-2.5 px-3 text-center font-black text-orange-900 bg-white border-r border-orange-100 whitespace-nowrap"
+                                >
+                                    {{
+                                        item.karbohidratMin
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
+                                    -
+                                    {{
+                                        item.karbohidratMax
+                                            .toFixed(1)
+                                            .replace(".", ",")
+                                    }}
                                 </td>
-                                <td class="py-2.5 px-4 text-center whitespace-nowrap">
+                                <td
+                                    class="py-2.5 px-4 text-center whitespace-nowrap"
+                                >
                                     <span
                                         :class="[
                                             'px-3 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap inline-flex items-center justify-center tracking-tight shadow-2xs',
                                             item.tipePorsi === 'Porsi Kecil'
-                                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                                : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                                ? 'bg-amber-50 text-slate-700 border border-amber-200'
+                                                : 'bg-indigo-50 text-indigo-800 border border-indigo-200',
                                         ]"
                                     >
                                         {{ item.tipePorsi }}
@@ -12485,48 +13572,83 @@ watch(
                 </div>
 
                 <!-- Rumus & Penjelasan Perhitungan Gizi -->
-                <div class="space-y-3 bg-gradient-to-br from-amber-50/60 to-rose-50/40 p-4 rounded-2xl border border-amber-200/80">
+                <div
+                    class="space-y-3 bg-gradient-to-br from-amber-50/60 to-rose-50/40 p-4 rounded-2xl border border-amber-200/80"
+                >
                     <div class="flex items-center gap-2">
                         <Calculator class="w-4 h-4 text-amber-700" />
-                        <h4 class="text-xs font-black uppercase tracking-wider text-amber-950">
+                        <h4
+                            class="text-xs font-black uppercase tracking-wider text-amber-950"
+                        >
                             Rumus & Logika Perhitungan Kandungan Gizi SPPG
                         </h4>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
-                            <span class="font-bold text-amber-900 block text-[11px]">1. Kandungan Gizi Bahan:</span>
-                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
-                                Zat Gizi = (Berat Bersih &divide; 100) &times; Nilai TKPI
+                        <div
+                            class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs"
+                        >
+                            <span
+                                class="font-bold text-slate-800 block text-[11px]"
+                                >1. Kandungan Gizi Bahan:</span
+                            >
+                            <div
+                                class="p-2 bg-white rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60"
+                            >
+                                Zat Gizi = (Berat Bersih &divide; 100) &times;
+                                Nilai TKPI
                             </div>
                             <p class="text-[10px] text-slate-500 leading-snug">
-                                Dihitung otomatis dari gramatur porsi bersih (edible weight) dikali nilai zat gizi per 100g pada basis data TKPI Kemenkes.
+                                Dihitung otomatis dari gramatur porsi bersih
+                                (edible weight) dikali nilai zat gizi per 100g
+                                pada basis data TKPI Kemenkes.
                             </p>
                         </div>
-                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
-                            <span class="font-bold text-amber-900 block text-[11px]">2. Total Gizi per Porsi Menu:</span>
-                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
+                        <div
+                            class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs"
+                        >
+                            <span
+                                class="font-bold text-slate-800 block text-[11px]"
+                                >2. Total Gizi per Porsi Menu:</span
+                            >
+                            <div
+                                class="p-2 bg-white rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60"
+                            >
                                 Total = &sum; [ Zat Gizi Seluruh Bahan Masakan ]
                             </div>
                             <p class="text-[10px] text-slate-500 leading-snug">
-                                Mengakumulasikan kontribusi energi (kkal), protein, lemak, karbohidrat, dan serat dari setiap komponen sajian menu.
+                                Mengakumulasikan kontribusi energi (kkal),
+                                protein, lemak, karbohidrat, dan serat dari
+                                setiap komponen sajian menu.
                             </p>
                         </div>
-                        <div class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs">
-                            <span class="font-bold text-amber-900 block text-[11px]">3. Evaluasi Kepatuhan AKG:</span>
-                            <div class="p-2 bg-amber-50/70 rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60">
+                        <div
+                            class="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5 shadow-2xs"
+                        >
+                            <span
+                                class="font-bold text-slate-800 block text-[11px]"
+                                >3. Evaluasi Kepatuhan AKG:</span
+                            >
+                            <div
+                                class="p-2 bg-white rounded-lg text-slate-800 font-mono text-[10.5px] font-bold border border-amber-200/60"
+                            >
                                 Status = Min &le; Total Terhitung &le; Max
                             </div>
                             <p class="text-[10px] text-slate-500 leading-snug">
-                                PK target SD 1-3 (330-413 kkal), PB target SD 4-6 s.d. SMA/Tendik (585-831 kkal). Otomatis menandai status Memenuhi / Kurang / Lebih.
+                                PK target SD 1-3 (330-413 kkal), PB target SD
+                                4-6 s.d. SMA/Tendik (585-831 kkal). Otomatis
+                                menandai status Memenuhi / Kurang / Lebih.
                             </p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer Modal -->
-                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                <div
+                    class="flex items-center justify-between pt-2 border-t border-slate-200"
+                >
                     <p class="text-[11px] text-slate-500 italic">
-                        Catatan: Perhitungan Standar Gizi MBG mengikuti Peraturan Kementerian Kesehatan Nomor 28 Tahun 2019.
+                        Catatan: Perhitungan Standar Gizi MBG mengikuti
+                        Peraturan Kementerian Kesehatan Nomor 28 Tahun 2019.
                     </p>
                     <Button
                         type="button"
@@ -12535,6 +13657,401 @@ watch(
                     >
                         Tutup
                     </Button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================== -->
+        <!-- MODAL TAMBAH BAHAN PANGAN MANUAL -->
+        <!-- ========================================== -->
+        <Modal
+            :show="showManualBahanModal"
+            @close="showManualBahanModal = false"
+            maxWidth="xl"
+        >
+            <div class="p-5 sm:p-6 space-y-5">
+                <!-- Header Modal -->
+                <div
+                    class="flex items-start justify-between gap-3 border-b border-slate-100 pb-4"
+                >
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="p-2.5 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs shrink-0"
+                        >
+                            <Package class="w-6 h-6 stroke-[2]" />
+                        </div>
+                        <div>
+                            <h3
+                                class="text-base sm:text-lg font-black text-slate-900 leading-tight flex items-center gap-2"
+                            >
+                                <span>Tambah Bahan Baku Manual</span>
+                                <span
+                                    v-if="manualBahanTargetBlock"
+                                    class="text-xs px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold"
+                                >
+                                    {{ manualBahanTargetBlock.subLabel }}
+                                </span>
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Input bahan pangan manual untuk dialokasikan ke
+                                <strong>{{
+                                    manualBahanTargetBlock?.namaMenu ||
+                                    "Sub Menu"
+                                }}</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showManualBahanModal = false"
+                        class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Form Body -->
+                <div class="space-y-4">
+                    <!-- Row 1: Nama Bahan & Nama di PO -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-700 mb-1"
+                            >
+                                Nama Bahan <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                v-model="manualBahanForm.nama"
+                                @input="delete manualBahanErrors.nama"
+                                placeholder="contoh: Minyak Goreng Bimoli"
+                                :class="[
+                                    'w-full px-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden',
+                                    manualBahanErrors.nama
+                                        ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                        : 'border-slate-200 focus:border-primary',
+                                ]"
+                                autofocus
+                            />
+                            <p
+                                v-if="manualBahanErrors.nama"
+                                class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                                <span>{{ manualBahanErrors.nama }}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-700 mb-1"
+                            >
+                                Nama di PO <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                v-model="manualBahanForm.nama_po"
+                                @input="delete manualBahanErrors.nama_po"
+                                placeholder="contoh: Minyak Goreng Bimoli 1 L"
+                                :class="[
+                                    'w-full px-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden',
+                                    manualBahanErrors.nama_po
+                                        ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                        : 'border-slate-200 focus:border-primary',
+                                ]"
+                            />
+                            <p
+                                v-if="manualBahanErrors.nama_po"
+                                class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                                <span>{{ manualBahanErrors.nama_po }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Kategori, Satuan & Harga -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-700 mb-1"
+                            >
+                                Kategori <span class="text-rose-500">*</span>
+                            </label>
+                            <select
+                                v-model="manualBahanForm.kategori"
+                                @change="delete manualBahanErrors.kategori"
+                                :class="[
+                                    'w-full px-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-800 cursor-pointer transition focus:outline-hidden',
+                                    manualBahanErrors.kategori
+                                        ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                        : 'border-slate-200 focus:border-primary',
+                                ]"
+                            >
+                                <option value="Serealia & Hasil Olahannya">
+                                    Serealia & Hasil Olahannya
+                                </option>
+                                <option value="Umbi-umbian & Olahannya">
+                                    Umbi-umbian & Olahannya
+                                </option>
+                                <option value="Daging & Unggas">
+                                    Daging & Unggas
+                                </option>
+                                <option value="Ikan & Seafood">
+                                    Ikan & Seafood
+                                </option>
+                                <option value="Telur & Olahannya">
+                                    Telur & Olahannya
+                                </option>
+                                <option value="Susu & Produk Olahannya">
+                                    Susu & Produk Olahannya
+                                </option>
+                                <option value="Sayuran & Olahannya">
+                                    Sayuran & Olahannya
+                                </option>
+                                <option value="Buah-buahan">Buah-buahan</option>
+                                <option value="Kacang-kacangan & Biji-bijian">
+                                    Kacang-kacangan & Biji-bijian
+                                </option>
+                                <option value="Minyak, Lemak & Mentega">
+                                    Minyak, Lemak & Mentega
+                                </option>
+                                <option value="Bumbu, Rempah & Penyedap">
+                                    Bumbu, Rempah & Penyedap
+                                </option>
+                                <option value="Makanan Campuran & Olahan">
+                                    Makanan Campuran & Olahan
+                                </option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                            <p
+                                v-if="manualBahanErrors.kategori"
+                                class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                                <span>{{ manualBahanErrors.kategori }}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-700 mb-1"
+                            >
+                                Satuan <span class="text-rose-500">*</span>
+                            </label>
+                            <select
+                                v-model="manualBahanForm.satuan"
+                                @change="delete manualBahanErrors.satuan"
+                                :class="[
+                                    'w-full px-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-800 cursor-pointer transition focus:outline-hidden',
+                                    manualBahanErrors.satuan
+                                        ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                        : 'border-slate-200 focus:border-primary',
+                                ]"
+                            >
+                                <option value="Kg">Kg (Kilogram)</option>
+                                <option value="g">g (Gram)</option>
+                                <option value="L">L (Liter)</option>
+                                <option value="ml">ml (Mililiter)</option>
+                            </select>
+                            <p
+                                v-if="manualBahanErrors.satuan"
+                                class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                                <span>{{ manualBahanErrors.satuan }}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-700 mb-1"
+                            >
+                                Harga (Rp / {{ manualBahanForm.satuan || 'Satuan' }}) <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <span
+                                    class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400"
+                                    >Rp</span
+                                >
+                                <input
+                                    type="number"
+                                    min="0"
+                                    v-model.number="manualBahanForm.harga_master"
+                                    @input="delete manualBahanErrors.harga_master"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full pl-9 pr-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden',
+                                        manualBahanErrors.harga_master
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                            </div>
+                            <p
+                                v-if="manualBahanErrors.harga_master"
+                                class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
+                            >
+                                <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                                <span>{{ manualBahanErrors.harga_master }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Kandungan Gizi per 100g (Wajib Diisi untuk Perhitungan AKG) -->
+                    <div class="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <label class="block text-xs font-black text-slate-800">
+                                📊 Kandungan Nutrisi (per 100g bahan) <span class="text-rose-500">*</span>
+                            </label>
+                            <span class="text-[10px] text-slate-500 font-bold">Wajib diisi untuk kalkulasi AKG</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                            <!-- Energi -->
+                            <div>
+                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
+                                    Energi (kkal) <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    v-model.number="manualBahanForm.energi"
+                                    @keydown="handleDecimalKeydown"
+                                    @input="delete manualBahanErrors.energi"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
+                                        manualBahanErrors.energi
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                                <p v-if="manualBahanErrors.energi" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                    {{ manualBahanErrors.energi }}
+                                </p>
+                            </div>
+                            <!-- Protein -->
+                            <div>
+                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
+                                    Protein (g) <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    v-model.number="manualBahanForm.protein"
+                                    @keydown="handleDecimalKeydown"
+                                    @input="delete manualBahanErrors.protein"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
+                                        manualBahanErrors.protein
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                                <p v-if="manualBahanErrors.protein" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                    {{ manualBahanErrors.protein }}
+                                </p>
+                            </div>
+                            <!-- Lemak -->
+                            <div>
+                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
+                                    Lemak (g) <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    v-model.number="manualBahanForm.lemak"
+                                    @keydown="handleDecimalKeydown"
+                                    @input="delete manualBahanErrors.lemak"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
+                                        manualBahanErrors.lemak
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                                <p v-if="manualBahanErrors.lemak" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                    {{ manualBahanErrors.lemak }}
+                                </p>
+                            </div>
+                            <!-- Karbohidrat -->
+                            <div>
+                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
+                                    Karbohidrat (g) <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    v-model.number="manualBahanForm.karbohidrat"
+                                    @keydown="handleDecimalKeydown"
+                                    @input="delete manualBahanErrors.karbohidrat"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
+                                        manualBahanErrors.karbohidrat
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                                <p v-if="manualBahanErrors.karbohidrat" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                    {{ manualBahanErrors.karbohidrat }}
+                                </p>
+                            </div>
+                            <!-- Serat -->
+                            <div>
+                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
+                                    Serat (g) <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    v-model.number="manualBahanForm.serat"
+                                    @keydown="handleDecimalKeydown"
+                                    @input="delete manualBahanErrors.serat"
+                                    placeholder="0"
+                                    :class="[
+                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
+                                        manualBahanErrors.serat
+                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
+                                            : 'border-slate-200 focus:border-primary',
+                                    ]"
+                                />
+                                <p v-if="manualBahanErrors.serat" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                    {{ manualBahanErrors.serat }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Modal -->
+                <div
+                    class="flex items-center justify-between pt-3 border-t border-slate-100"
+                >
+                    <button
+                        type="button"
+                        @click="showManualBahanModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="saveManualBahan"
+                        class="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <Plus class="w-4 h-4 stroke-[2.5]" />
+                        <span
+                            >Tambahkan ke
+                            {{
+                                manualBahanTargetBlock?.subLabel || "Sub Menu"
+                            }}</span
+                        >
+                    </button>
                 </div>
             </div>
         </Modal>

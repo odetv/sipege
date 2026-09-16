@@ -179,6 +179,7 @@ class GiziController extends Controller
                     'nama' => $item['nama'] ?? 'Bahan',
                     'nama_po' => $item['nama_po'] ?? $item['nama'] ?? 'Bahan',
                     'kategori' => $item['kategori'] ?? 'Lainnya',
+                    'satuan' => $item['satuan'] ?? 'Kg',
                     'tipe_porsi' => $item['tipe_porsi'] ?? 'normal',
                     'jenis_alergi' => $item['jenis_alergi'] ?? null,
                     'alergen' => $item['alergen'] ?? null,
@@ -249,6 +250,7 @@ class GiziController extends Controller
                     'work_order_item_id' => $woItem->id,
                     'nama' => $woItem->nama_po ?: $woItem->nama,
                     'kategori' => $woItem->kategori,
+                    'satuan' => $woItem->satuan ?? 'Kg',
                     'tipe' => $woItem->tipe_porsi === 'alergi' ? 'Alergi' : 'Normal',
                     'gross_kg' => $woItem->total_gross_kg,
                     'stok_digunakan_kg' => 0,
@@ -371,7 +373,7 @@ class GiziController extends Controller
 
         $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan)) 
             ? $activeWorkOrder->database_pangan 
-            : 'fta';
+            : 'csv';
 
         $initialTkpiList = ($defaultSource === 'csv' && !empty($csvData)) ? $csvData : (!empty($ftaData) ? $ftaData : $csvData);
 
