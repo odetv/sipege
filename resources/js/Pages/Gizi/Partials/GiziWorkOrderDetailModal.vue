@@ -20,6 +20,13 @@ import {
     RUJUKAN_AKG_MBG,
 } from "@/Services/akgConfig";
 import {
+    SATUAN_LIST,
+    SATUAN_VALUES,
+    formatGrossQty,
+    getGroupedUnitList,
+    formatGroupedUnitSummary,
+} from "@/Services/satuanConfig";
+import {
     FileSpreadsheet,
     Users,
     Activity,
@@ -126,90 +133,8 @@ function getPortionUnit(satuan = "Kg") {
     return satuan || "Kg";
 }
 
-function formatGrossQty(qty, satuan = "Kg") {
-    if (qty === null || qty === undefined || qty === "" || isNaN(Number(qty)))
-        return `0 ${satuan || "Kg"}`;
-    const num = Number(qty);
-    if (num <= 0) return `0 ${satuan || "Kg"}`;
-    const s = (satuan || "Kg").trim();
-
-    if (s === "Kg" || s === "Liter" || s === "L") {
-        if (num < 0.001) {
-            return `${parseFloat(num.toFixed(4))} ${s}`;
-        } else if (num < 0.01) {
-            return `${parseFloat(num.toFixed(3))} ${s}`;
-        } else {
-            return `${parseFloat(num.toFixed(2))} ${s}`;
-        }
-    }
-    if (s === "Gram" || s === "g" || s === "mL") {
-        return `${Number(num.toFixed(1)).toLocaleString("id-ID")} ${s}`;
-    }
-    if (Number.isInteger(num)) {
-        return `${num.toLocaleString("id-ID")} ${s}`;
-    }
-    return `${Number(num.toFixed(2)).toLocaleString("id-ID")} ${s}`;
-}
-
 function formatGrossWeight(kg, satuan = "Kg") {
     return formatGrossQty(kg, satuan);
-}
-
-// Helper pengelompokan ringkasan satuan beragam (Opsi A: Grouped Breakdown)
-function formatGroupedUnitSummary(items, delimiter = " • ") {
-    if (!items || !items.length) return "0 Kg";
-
-    let totalWeightKg = 0;
-    let totalVolumeL = 0;
-    const countUnits = {};
-    let hasWeight = false;
-    let hasVolume = false;
-
-    items.forEach((it) => {
-        const s = (it.satuan || "Kg").trim();
-        const sLower = s.toLowerCase();
-        const qty = Number(it.totalGrossKg || 0);
-        if (qty <= 0) return;
-
-        if (sLower === "kg" || sLower === "kilogram") {
-            totalWeightKg += qty;
-            hasWeight = true;
-        } else if (sLower === "gram" || sLower === "g") {
-            totalWeightKg += qty / 1000;
-            hasWeight = true;
-        } else if (sLower === "liter" || sLower === "l") {
-            totalVolumeL += qty;
-            hasVolume = true;
-        } else if (sLower === "ml") {
-            totalVolumeL += qty / 1000;
-            hasVolume = true;
-        } else {
-            const unitLabel = s || "Pcs";
-            countUnits[unitLabel] = (countUnits[unitLabel] || 0) + qty;
-        }
-    });
-
-    const parts = [];
-    if (hasWeight) {
-        parts.push(formatGrossQty(totalWeightKg, "Kg"));
-    }
-    if (hasVolume) {
-        parts.push(formatGrossQty(totalVolumeL, "Liter"));
-    }
-    for (const [unit, qty] of Object.entries(countUnits)) {
-        if (qty > 0) {
-            const formattedVal = Number.isInteger(qty)
-                ? qty.toLocaleString("id-ID")
-                : parseFloat(qty.toFixed(2)).toLocaleString("id-ID");
-            parts.push(`${formattedVal} ${unit}`);
-        }
-    }
-
-    if (!parts.length) {
-        return "0 Kg";
-    }
-
-    return parts.join(delimiter);
 }
 
 // Config 5 Sub Menu
@@ -496,12 +421,17 @@ const bahanCalculations = computed(() => {
                 ? (pbGram / (bdd / 100)) * (1 + buffer / 100)
                 : 0;
 
-        const costPK = isKgOrL
-            ? (grossPerPK / 1000) * harga
-            : grossPerPK * harga;
-        const costPB = isKgOrL
-            ? (grossPerPB / 1000) * harga
-            : grossPerPB * harga;
+        const isOperasional = (it.jenis || "bahan_baku") === "operasional";
+        const costPK = isOperasional
+            ? 0
+            : isKgOrL
+              ? (grossPerPK / 1000) * harga
+              : grossPerPK * harga;
+        const costPB = isOperasional
+            ? 0
+            : isKgOrL
+              ? (grossPerPB / 1000) * harga
+              : grossPerPB * harga;
 
         let totalWeightKg = 0;
         if (s === "kg" || s === "liter" || s === "l") {
@@ -534,8 +464,13 @@ const bahanCalculations = computed(() => {
             subtotalMaster: subtotal,
             costPK: costPK,
             costPB: costPB,
-            nutrisiPK: it.nutrisi_pk || it.nutrisiPK || null,
-            nutrisiPB: it.nutrisi_pb || it.nutrisiPB || null,
+            jenis: it.jenis || "bahan_baku",
+            nutrisiPK: isOperasional
+                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+                : (it.nutrisi_pk || it.nutrisiPK || null),
+            nutrisiPB: isOperasional
+                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+                : (it.nutrisi_pb || it.nutrisiPB || null),
             keterangan: it.keterangan || "",
             is_custom:
                 it.is_custom ||
@@ -3146,27 +3081,28 @@ function getSubMenuLabelForBahan(it) {
                                 >
                                     <tr>
                                         <td
-                                            colspan="7"
-                                            class="p-3.5 text-right text-slate-700"
+                                            colspan="8"
+                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
                                         >
                                             Grand Total Estimasi Biaya Belanja
                                             Bahan:
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                grandTotalDraftMaster
-                                                    ? formatGroupedUnitSummary(
-                                                          bahanCalculations,
-                                                          " • ",
-                                                      )
-                                                    : "-"
-                                            }}
+                                            <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-900 text-xs font-black shadow-2xs"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td></td>
                                         <td
-                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap align-middle"
                                         >
                                             {{
                                                 formatRupiah(
@@ -3174,6 +3110,7 @@ function getSubMenuLabelForBahan(it) {
                                                 )
                                             }}
                                         </td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>

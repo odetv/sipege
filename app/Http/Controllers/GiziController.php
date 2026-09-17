@@ -180,6 +180,7 @@ class GiziController extends Controller
                     'nama_po' => $item['nama_po'] ?? $item['nama'] ?? 'Bahan',
                     'kategori' => $item['kategori'] ?? 'Lainnya',
                     'satuan' => $item['satuan'] ?? 'Kg',
+                    'jenis' => $item['jenis'] ?? 'bahan_baku',
                     'tipe_porsi' => $item['tipe_porsi'] ?? 'normal',
                     'jenis_alergi' => $item['jenis_alergi'] ?? null,
                     'alergen' => $item['alergen'] ?? null,

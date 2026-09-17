@@ -10,6 +10,13 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import {
+    SATUAN_LIST,
+    SATUAN_VALUES,
+    formatGrossQty,
+    getGroupedUnitList,
+    formatGroupedUnitSummary,
+} from "@/Services/satuanConfig";
+import {
     UtensilsCrossed,
     Users,
     ClipboardList,
@@ -1076,90 +1083,8 @@ function calculateGrossWeightKg(
     return grossPerPortion * totalPortions;
 }
 
-function formatGrossQty(qty, satuan = "Kg") {
-    if (qty === null || qty === undefined || qty === "" || isNaN(Number(qty)))
-        return `0 ${satuan || "Kg"}`;
-    const num = Number(qty);
-    if (num <= 0) return `0 ${satuan || "Kg"}`;
-    const s = (satuan || "Kg").trim();
-
-    if (s === "Kg" || s === "Liter" || s === "L") {
-        if (num < 0.001) {
-            return `${parseFloat(num.toFixed(4))} ${s}`;
-        } else if (num < 0.01) {
-            return `${parseFloat(num.toFixed(3))} ${s}`;
-        } else {
-            return `${parseFloat(num.toFixed(2))} ${s}`;
-        }
-    }
-    if (s === "Gram" || s === "g" || s === "mL") {
-        return `${Number(num.toFixed(1)).toLocaleString("id-ID")} ${s}`;
-    }
-    if (Number.isInteger(num)) {
-        return `${num.toLocaleString("id-ID")} ${s}`;
-    }
-    return `${Number(num.toFixed(2)).toLocaleString("id-ID")} ${s}`;
-}
-
 function formatGrossWeight(kg, satuan = "Kg") {
     return formatGrossQty(kg, satuan);
-}
-
-// Helper pengelompokan ringkasan satuan beragam (Opsi A: Grouped Breakdown)
-function formatGroupedUnitSummary(items, delimiter = " • ") {
-    if (!items || !items.length) return "0 Kg";
-
-    let totalWeightKg = 0;
-    let totalVolumeL = 0;
-    const countUnits = {};
-    let hasWeight = false;
-    let hasVolume = false;
-
-    items.forEach((it) => {
-        const s = (it.satuan || "Kg").trim();
-        const sLower = s.toLowerCase();
-        const qty = Number(it.totalGrossKg || 0);
-        if (qty <= 0) return;
-
-        if (sLower === "kg" || sLower === "kilogram") {
-            totalWeightKg += qty;
-            hasWeight = true;
-        } else if (sLower === "gram" || sLower === "g") {
-            totalWeightKg += qty / 1000;
-            hasWeight = true;
-        } else if (sLower === "liter" || sLower === "l") {
-            totalVolumeL += qty;
-            hasVolume = true;
-        } else if (sLower === "ml") {
-            totalVolumeL += qty / 1000;
-            hasVolume = true;
-        } else {
-            const unitLabel = s || "Pcs";
-            countUnits[unitLabel] = (countUnits[unitLabel] || 0) + qty;
-        }
-    });
-
-    const parts = [];
-    if (hasWeight) {
-        parts.push(formatGrossQty(totalWeightKg, "Kg"));
-    }
-    if (hasVolume) {
-        parts.push(formatGrossQty(totalVolumeL, "Liter"));
-    }
-    for (const [unit, qty] of Object.entries(countUnits)) {
-        if (qty > 0) {
-            const formattedVal = Number.isInteger(qty)
-                ? qty.toLocaleString("id-ID")
-                : parseFloat(qty.toFixed(2)).toLocaleString("id-ID");
-            parts.push(`${formattedVal} ${unit}`);
-        }
-    }
-
-    if (!parts.length) {
-        return "0 Kg";
-    }
-
-    return parts.join(delimiter);
 }
 
 function formatPortionValue(val, satuan = "Kg") {
@@ -1175,8 +1100,8 @@ function formatGram(gram, satuan = "Kg") {
     return formatPortionValue(gram, satuan);
 }
 
-function calculateNutritionFromNetGram(itemTkpi, netGram) {
-    if (!itemTkpi || !netGram) {
+function calculateNutritionFromNetGram(itemTkpi, netGram, jenis = "bahan_baku") {
+    if (jenis === "operasional" || !itemTkpi || !netGram) {
         return { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
     }
     const factor = netGram / 100;
@@ -1195,8 +1120,9 @@ function calculateItemFoodCostPerPortion(
     bufferPercent,
     hargaPerSatuan,
     satuan = "Kg",
+    jenis = "bahan_baku",
 ) {
-    if (!netGram || !hargaPerSatuan || !bddPercent || bddPercent <= 0) return 0;
+    if (jenis === "operasional" || !netGram || !hargaPerSatuan || !bddPercent || bddPercent <= 0) return 0;
     const bddFactor = (bddPercent || 100) / 100;
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossPerPortion = (netGram / bddFactor) * bufferFactor;
@@ -1347,6 +1273,12 @@ function getFilteredTkpiListForBlock(blockId) {
     });
 }
 
+function handleRowJenisChange(originalIndex, val) {
+    if (selectedBahanList.value[originalIndex]) {
+        selectedBahanList.value[originalIndex].jenis = val;
+    }
+}
+
 function selectTkpiItemForBlock(master, block) {
     if (!master || !block) return;
     let bddValue = 100;
@@ -1364,6 +1296,7 @@ function selectTkpiItemForBlock(master, block) {
         sub_menu_block_id: block.id,
         sub_menu_key: block.subKey,
         nama_sub_menu: block.namaMenu,
+        jenis: "bahan_baku",
         kategori: master.kategori || "Lainnya",
         satuan: master.satuan || "Kg",
         nama: master.nama,
@@ -1397,6 +1330,7 @@ const manualBahanErrors = ref({});
 const manualBahanForm = ref({
     nama: "",
     nama_po: "",
+    jenis: "bahan_baku",
     kategori: "Lainnya",
     satuan: "Kg",
     harga_master: null,
@@ -1414,6 +1348,7 @@ function openManualBahanModal(block) {
     manualBahanForm.value = {
         nama: currentQ ? currentQ.trim() : "",
         nama_po: currentQ ? currentQ.trim() : "",
+        jenis: "bahan_baku",
         kategori: "Lainnya",
         satuan: "Kg",
         harga_master: null,
@@ -1455,27 +1390,30 @@ function saveManualBahan() {
             "Harga tidak boleh bernilai negatif.";
     }
 
-    // Validasi Wajib Kandungan Gizi (Energi, Protein, Lemak, Karbohidrat, Serat)
-    const giziList = [
-        { key: "energi", label: "Energi" },
-        { key: "protein", label: "Protein" },
-        { key: "lemak", label: "Lemak" },
-        { key: "karbohidrat", label: "Karbohidrat" },
-        { key: "serat", label: "Serat" },
-    ];
-    giziList.forEach((g) => {
-        const val = manualBahanForm.value[g.key];
-        if (
-            val === null ||
-            val === undefined ||
-            val === "" ||
-            isNaN(Number(val))
-        ) {
-            manualBahanErrors.value[g.key] = `${g.label} wajib diisi (minimal 0).`;
-        } else if (Number(val) < 0) {
-            manualBahanErrors.value[g.key] = `${g.label} tidak boleh bernilai negatif.`;
-        }
-    });
+    // Validasi Wajib Kandungan Gizi (Hanya jika Jenis = Bahan Baku)
+    const isBahanBaku = (manualBahanForm.value.jenis || "bahan_baku") === "bahan_baku";
+    if (isBahanBaku) {
+        const giziList = [
+            { key: "energi", label: "Energi" },
+            { key: "protein", label: "Protein" },
+            { key: "lemak", label: "Lemak" },
+            { key: "karbohidrat", label: "Karbohidrat" },
+            { key: "serat", label: "Serat" },
+        ];
+        giziList.forEach((g) => {
+            const val = manualBahanForm.value[g.key];
+            if (
+                val === null ||
+                val === undefined ||
+                val === "" ||
+                isNaN(Number(val))
+            ) {
+                manualBahanErrors.value[g.key] = `${g.label} wajib diisi (minimal 0).`;
+            } else if (Number(val) < 0) {
+                manualBahanErrors.value[g.key] = `${g.label} tidak boleh bernilai negatif.`;
+            }
+        });
+    }
 
     if (Object.keys(manualBahanErrors.value).length > 0) {
         return;
@@ -1486,11 +1424,12 @@ function saveManualBahan() {
 
     const customId =
         "custom_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-    const energiNum = Number(manualBahanForm.value.energi) || 0;
-    const proteinNum = Number(manualBahanForm.value.protein) || 0;
-    const lemakNum = Number(manualBahanForm.value.lemak) || 0;
-    const karbohidratNum = Number(manualBahanForm.value.karbohidrat) || 0;
-    const seratNum = Number(manualBahanForm.value.serat) || 0;
+    const isOperasionalItem = (manualBahanForm.value.jenis || "bahan_baku") === "operasional";
+    const energiNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.energi) || 0);
+    const proteinNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.protein) || 0);
+    const lemakNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.lemak) || 0);
+    const karbohidratNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.karbohidrat) || 0);
+    const seratNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.serat) || 0);
 
     const customItem = {
         id: customId,
@@ -1499,6 +1438,7 @@ function saveManualBahan() {
         sub_menu_block_id: block.id,
         sub_menu_key: block.subKey,
         nama_sub_menu: block.namaMenu,
+        jenis: manualBahanForm.value.jenis || "bahan_baku",
         kategori: manualBahanForm.value.kategori || "Lainnya",
         satuan: manualBahanForm.value.satuan || "Kg",
         nama: manualBahanForm.value.nama.trim(),
@@ -1740,6 +1680,7 @@ function getBlockSummary(blockId) {
         (sum, it) => sum + (it.subtotalAktual || 0),
         0,
     );
+    const groupedList = getGroupedUnitList(items);
     const groupedSummary = formatGroupedUnitSummary(items, " • ");
     const groupedSummaryComma = formatGroupedUnitSummary(items, ", ");
     return {
@@ -1748,6 +1689,7 @@ function getBlockSummary(blockId) {
         totalGrossKg: totalGrossWeightKg,
         totalCostMaster,
         totalCostAktual,
+        groupedList,
         groupedSummary,
         groupedSummaryComma,
     };
@@ -2742,25 +2684,36 @@ const bahanCalculations = computed(() => {
                 );
             }
 
+            // Pengecekan Jenis: Operasional tidak dihitung Food Cost & Kandungan Gizi
+            const isOperasional = (b.jenis || "bahan_baku") === "operasional";
+
             // Food cost per porsi
-            const costPK = calculateItemFoodCostPerPortion(
-                b.gram_pk,
-                bdd,
-                buffer,
-                b.harga_aktual || b.harga_master,
-                b.satuan || "Kg",
-            );
-            const costPB = calculateItemFoodCostPerPortion(
-                b.gram_pb,
-                bdd,
-                buffer,
-                b.harga_aktual || b.harga_master,
-                b.satuan || "Kg",
-            );
+            const costPK = isOperasional
+                ? 0
+                : calculateItemFoodCostPerPortion(
+                      b.gram_pk,
+                      bdd,
+                      buffer,
+                      b.harga_aktual || b.harga_master,
+                      b.satuan || "Kg",
+                  );
+            const costPB = isOperasional
+                ? 0
+                : calculateItemFoodCostPerPortion(
+                      b.gram_pb,
+                      bdd,
+                      buffer,
+                      b.harga_aktual || b.harga_master,
+                      b.satuan || "Kg",
+                  );
 
             // Nutrisi per porsi
-            const nutrisiPK = calculateNutritionFromNetGram(tkpi, b.gram_pk);
-            const nutrisiPB = calculateNutritionFromNetGram(tkpi, b.gram_pb);
+            const nutrisiPK = isOperasional
+                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+                : calculateNutritionFromNetGram(tkpi, b.gram_pk);
+            const nutrisiPB = isOperasional
+                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+                : calculateNutritionFromNetGram(tkpi, b.gram_pb);
 
             // Berat total dalam Kg untuk agregasi ringkasan Sub Menu & Rekapitulasi
             const s = (b.satuan || "Kg").toLowerCase().trim();
@@ -2898,6 +2851,7 @@ function syncGiziFromBahan() {
         nama: b.nama,
         kategori: b.kategori || "Lainnya",
         satuan: b.satuan || "Kg",
+        jenis: b.jenis || "bahan_baku",
         tipe_porsi: b.tipe_porsi || "normal",
         jenis_alergi: b.jenis_alergi || "",
         alergen: b.alergen || "",
@@ -2928,6 +2882,7 @@ const giziCalculations = computed(() => {
             ) ||
             b;
 
+        const isOperasional = (b.jenis || "bahan_baku") === "operasional";
         const isAlergi = b.tipe_porsi === "alergi";
         let targetPKCount = totalPK.value;
         let targetPBCount = totalPB.value;
@@ -2947,12 +2902,17 @@ const giziCalculations = computed(() => {
         const netKgPB = ((Number(b.gram_pb) || 0) * targetPBCount) / 1000;
         const totalNetKg = netKgPK + netKgPB;
 
-        const nutrisiPK = calculateNutritionFromNetGram(tkpi, b.gram_pk);
-        const nutrisiPB = calculateNutritionFromNetGram(tkpi, b.gram_pb);
+        const nutrisiPK = isOperasional
+            ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+            : calculateNutritionFromNetGram(tkpi, b.gram_pk, b.jenis || "bahan_baku");
+        const nutrisiPB = isOperasional
+            ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
+            : calculateNutritionFromNetGram(tkpi, b.gram_pb, b.jenis || "bahan_baku");
 
         return {
             ...b,
             tkpi,
+            isOperasional,
             isAlergi,
             targetPKCount,
             targetPBCount,
@@ -3611,6 +3571,7 @@ function getPayload(statusStr, stepNumber = 3) {
             tkpi_id: b.id || b.code,
             nama: b.nama,
             nama_po: b.nama_po || b.nama,
+            jenis: b.jenis || "bahan_baku",
             kategori: b.kategori,
             satuan: b.satuan || "Kg",
             tipe_porsi: b.tipe_porsi || "normal",
@@ -3843,6 +3804,7 @@ watch(
                         nama_sub_menu: it.nama_sub_menu || null,
                         nama: it.nama || matchedTkpi.nama,
                         nama_po: it.nama_po || it.nama || matchedTkpi.nama,
+                        jenis: it.jenis || "bahan_baku",
                         kategori:
                             it.kategori || matchedTkpi.kategori || "Lainnya",
                         satuan: it.satuan || matchedTkpi.satuan || "Kg",
@@ -6915,31 +6877,31 @@ watch(
                             class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600"
                         >
                             <div
-                                class="p-2 bg-white rounded-lg border border-slate-200"
+                                class="p-2.5 bg-white rounded-lg border border-amber-200 space-y-1"
                             >
-                                <strong class="text-slate-800 block mb-0.5"
-                                    >1. Berat Bersih (Net Kg):</strong
+                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>1. Berat Bersih (Net):</strong
                                 >
-                                <code>(Gram Bersih × Target PM) ÷ 1.000</code>
+                                <code class="block font-mono text-[10.5px] bg-slate-50 p-1 rounded border border-slate-200 text-slate-800">(Gram Bersih × Target PM) ÷ 1.000</code>
+                                <span class="text-[10px] text-slate-500 block leading-tight">Khusus bahan baku pangan. Operasional diisi sesuai kebutuhan unit.</span>
                             </div>
                             <div
-                                class="p-2 bg-white rounded-lg border border-slate-200"
+                                class="p-2.5 bg-white rounded-lg border border-blue-200 space-y-1"
                             >
-                                <strong class="text-slate-800 block mb-0.5"
-                                    >2. Berat Kotor (Gross Kg):</strong
+                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>2. Pengadaan PO (Gross):</strong
                                 >
-                                <code
-                                    >(Net Gram ÷ (BDD/100)) × (1 + Buffer%) × PM
-                                    ÷ 1.000</code
-                                >
+                                <code class="block font-mono text-[10.5px] bg-blue-50/50 p-1 rounded border border-blue-200 text-slate-800">[Net ÷ (BDD%/100)] × (1 + Buffer%)</code>
+                                <span class="text-[10px] text-slate-500 block leading-tight">Faktor BDD% & Buffer% (Bahan Baku & Kebutuhan Operasional).</span>
                             </div>
                             <div
-                                class="p-2 bg-white rounded-lg border border-slate-200"
+                                class="p-2.5 bg-white rounded-lg border border-emerald-200 space-y-1"
                             >
-                                <strong class="text-slate-800 block mb-0.5"
-                                    >3. Subtotal Biaya PO:</strong
+                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>3. Estimasi Anggaran PO:</strong
                                 >
-                                <code>Gross Kg × Harga Satuan Master (Rp)</code>
+                                <code class="block font-mono text-[10.5px] bg-emerald-50/50 p-1 rounded border border-emerald-200 text-slate-800">Gross × Harga Satuan (Rp)</code>
+                                <span class="text-[10px] text-slate-500 block leading-tight">Total anggaran pengadaan PO (Bahan Baku + Operasional).</span>
                             </div>
                         </div>
                     </div>
@@ -7089,14 +7051,15 @@ watch(
                                         {{ getBlockSummary(block.id).count }}
                                         Bahan
                                     </span>
-                                    <span
-                                        class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
-                                    >
-                                        {{
-                                            getBlockSummary(block.id)
-                                                .groupedSummary
-                                        }}
-                                    </span>
+                                    <div class="flex items-center gap-1 flex-wrap">
+                                        <span
+                                            v-for="(grp, gIdx) in getBlockSummary(block.id).groupedList"
+                                            :key="gIdx"
+                                            class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
+                                        >
+                                            {{ grp.label }}
+                                        </span>
+                                    </div>
                                     <span
                                         class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
                                     >
@@ -7353,6 +7316,12 @@ watch(
                                             </th>
                                             <th
                                                 rowspan="2"
+                                                class="p-2.5 min-w-[125px] text-center border-r border-slate-200/80 whitespace-normal break-words leading-tight"
+                                            >
+                                                Jenis
+                                            </th>
+                                            <th
+                                                rowspan="2"
                                                 class="p-2.5 min-w-[210px] text-center border-r border-slate-200/80 whitespace-normal break-words leading-tight"
                                             >
                                                 Peruntukan Porsi
@@ -7451,7 +7420,7 @@ watch(
                                             "
                                         >
                                             <td
-                                                colspan="15"
+                                                colspan="16"
                                                 class="p-6 text-center text-slate-400 font-medium bg-slate-50/30"
                                             >
                                                 <div
@@ -7631,19 +7600,51 @@ watch(
                                                     "
                                                     class="w-full px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-bold text-slate-800 text-center cursor-pointer shadow-2xs hover:border-slate-300"
                                                 >
-                                                    <option value="Kg">
-                                                        Kg
-                                                    </option>
-                                                    <option value="g">
-                                                        g
-                                                    </option>
-                                                    <option value="L">
-                                                        L
-                                                    </option>
-                                                    <option value="ml">
-                                                        ml
+                                                    <option
+                                                        v-for="s in SATUAN_LIST"
+                                                        :key="s.value"
+                                                        :value="s.value"
+                                                    >
+                                                        {{ s.value }}
                                                     </option>
                                                 </select>
+                                            </td>
+                                            <!-- 2.C Jenis Item (Bahan Baku / Operasional) -->
+                                            <td
+                                                class="p-3 align-top pt-3 border-r border-slate-100 min-w-[125px] text-center"
+                                            >
+                                                <select
+                                                    :value="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.jenis || 'bahan_baku'
+                                                    "
+                                                    @change="
+                                                        handleRowJenisChange(
+                                                            it.originalIndex,
+                                                            $event.target.value,
+                                                        )
+                                                    "
+                                                    :class="[
+                                                        'w-full px-2 py-1.5 text-xs font-bold rounded-lg border focus:outline-hidden transition cursor-pointer shadow-2xs text-center',
+                                                        (selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional'
+                                                            ? 'bg-amber-50 text-amber-800 border-amber-300 focus:border-amber-500'
+                                                            : 'bg-emerald-50 text-emerald-800 border-emerald-300 focus:border-emerald-500'
+                                                    ]"
+                                                >
+                                                    <option value="bahan_baku">
+                                                        🥗 Bahan Baku
+                                                    </option>
+                                                    <option value="operasional">
+                                                        📦 Operasional
+                                                    </option>
+                                                </select>
+                                                <span
+                                                    class="block text-[9px] font-bold mt-1"
+                                                    :class="(selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional' ? 'text-amber-700' : 'text-emerald-700'"
+                                                >
+                                                    {{ (selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional' ? 'Non-Gizi & Cost' : 'Gizi & Food Cost' }}
+                                                </span>
                                             </td>
                                             <!-- 3. Peruntukan Porsi (Wrap & Full Display) -->
                                             <td
@@ -8103,20 +8104,24 @@ watch(
                                     >
                                         <tr>
                                             <td
-                                                colspan="11"
+                                                colspan="12"
                                                 class="p-2.5 text-right uppercase text-[10.5px] text-slate-600 font-extrabold border-r border-slate-200/80"
                                             >
                                                 Total Kebutuhan
                                                 {{ block.subLabel }}:
                                             </td>
                                             <td
-                                                class="p-2.5 text-right font-black text-blue-950 bg-blue-100/30 whitespace-nowrap border-r border-slate-200/80"
+                                                class="p-2.5 text-right font-black text-blue-950 bg-blue-100/30 whitespace-nowrap border-r border-slate-200/80 align-middle"
                                             >
-                                                {{
-                                                    getBlockSummary(
-                                                        block.id,
-                                                    ).groupedSummary
-                                                }}
+                                                <div class="flex flex-col items-end justify-center gap-1">
+                                                    <div
+                                                        v-for="(grp, gIdx) in getBlockSummary(block.id).groupedList"
+                                                        :key="gIdx"
+                                                        class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
+                                                    >
+                                                        <span>{{ grp.label }}</span>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td
                                                 class="border-r border-slate-200/80"
@@ -8625,14 +8630,17 @@ watch(
                                             (PO):
                                         </td>
                                         <td
-                                            class="p-3.5 text-right font-black text-blue-950 bg-white whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-blue-950 bg-white whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                formatGroupedUnitSummary(
-                                                    bahanCalculations,
-                                                    " • ",
-                                                )
-                                            }}
+                                            <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-900 text-xs font-black"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td></td>
                                         <td
@@ -8783,16 +8791,13 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-emerald-50/80 p-2 rounded-lg border border-emerald-200 text-center font-bold"
                                     >
-                                        Grand Total = &sum; [ Gross (Kg) &times;
-                                        Harga Satuan per Kg ]
+                                        Grand Total = &sum; [ Gross &times; Harga Satuan ]
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Akumulasi subtotal estimasi biaya
-                                        seluruh item bahan mentah berdasarkan
-                                        harga pasar/katalog yang diajukan ke
-                                        bagian logistik pengadaan SPPG.
+                                        Akumulasi estimasi biaya seluruh item
+                                        pengadaan (<strong>Bahan Baku</strong> pangan + kebutuhan <strong>Operasional</strong>/kemasan) yang diajukan ke bagian logistik SPPG.
                                     </p>
                                 </div>
                             </div>
@@ -8829,15 +8834,14 @@ watch(
                                 >
                                     Total Kebutuhan Pengadaan (Gross)
                                 </span>
-                                <div
-                                    class="text-base sm:text-lg font-black text-blue-950"
-                                >
-                                    {{
-                                        formatGroupedUnitSummary(
-                                            bahanCalculations,
-                                            " • ",
-                                        )
-                                    }}
+                                <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                    <span
+                                        v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
+                                        :key="gIdx"
+                                        class="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
+                                    >
+                                        {{ grp.label }}
+                                    </span>
                                 </div>
                             </div>
                             <div
@@ -8894,56 +8898,47 @@ watch(
                             >
                                 <Info class="h-4 w-4 text-blue-600 shrink-0" />
                                 <span
-                                    >Metode Perhitungan Food Cost per Porsi
-                                    (Normal & Varian Alergi)</span
+                                    >Metode Perhitungan Food Cost per Porsi (Normal & Varian Alergi)</span
                                 >
                             </div>
                             <div
                                 class="grid grid-cols-1 md:grid-cols-2 gap-3 leading-relaxed"
                             >
                                 <div
-                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-1.5"
+                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-2"
                                 >
                                     <strong
-                                        class="text-blue-950 font-bold block"
-                                        >1. Rumus Food Cost per Bahan:</strong
+                                        class="text-blue-950 font-bold block flex items-center gap-1.5"
+                                        ><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>1. Rumus Food Cost per Bahan Baku:</strong
                                     >
                                     <p
-                                        class="text-[11px] text-slate-600 font-mono bg-slate-50 p-1.5 rounded border border-slate-200"
+                                        class="text-[11px] text-slate-700 font-mono bg-slate-50 p-2 rounded-lg border border-slate-200 font-semibold"
                                     >
-                                        (Berat Bersih ÷ BDD%) × (1 + Buffer%) ×
-                                        (Harga/Kg ÷ 1000)
+                                        Cost/Porsi = [ (Gram Bersih ÷ BDD%) × (1 + Buffer%) ] × Harga per Satuan
                                     </p>
-                                    <p class="text-[11px] text-slate-500">
-                                        Perhitungan memperhitungkan bagian yang
-                                        dapat dimakan (BDD) serta buffer
-                                        pengadaan secara presisi tanpa
-                                        pembulatan prematur.
+                                    <p class="text-[11px] text-slate-500 leading-snug">
+                                        &bull; <strong>Penyesuaian Jenis:</strong> Hanya item berjenis <strong>🥗 Bahan Baku (Pangan)</strong> yang dihitung ke dalam Food Cost per porsi. Item berjenis <strong>📦 Operasional (Non-Gizi)</strong> dikecualikan (Rp 0/porsi) karena masuk beban belanja PO logistik.<br/>
+                                        &bull; Untuk satuan Kg/Liter, formula otomatis membagi 1.000 terhadap harga per Kg/L.
                                     </p>
                                 </div>
                                 <div
-                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-1.5"
+                                    class="p-3 bg-white rounded-xl border border-blue-100 space-y-2"
                                 >
                                     <strong
-                                        class="text-blue-950 font-bold block"
-                                        >2. Klasifikasi Porsi Normal vs Varian
-                                        Alergi:</strong
+                                        class="text-blue-950 font-bold block flex items-center gap-1.5"
+                                        ><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>2. Klasifikasi Porsi Normal vs Varian Alergi:</strong
                                     >
                                     <ul
-                                        class="text-[11px] text-slate-600 space-y-1 list-disc list-inside"
+                                        class="text-[11px] text-slate-600 space-y-1.5 list-disc list-inside leading-snug"
                                     >
                                         <li>
-                                            <strong>Porsi Normal:</strong>
-                                            Akumulasi seluruh bahan porsi normal
-                                            untuk PM tanpa alergi terdampak.
+                                            <strong>Porsi Normal:</strong> Akumulasi bahan baku pangan porsi normal untuk seluruh PM non-alergi.
                                         </li>
                                         <li>
-                                            <strong>Porsi Alergi:</strong>
-                                            (Bahan Normal Aman / Bebas Alergen)
-                                            + (Bahan Substitusi Alergi). Bahan
-                                            normal yang mengandung alergen
-                                            otomatis dikeluarkan dari varian
-                                            ini.
+                                            <strong>Porsi Alergi:</strong> (Bahan Baku Normal Aman / Bebas Alergen) + (Bahan Baku Substitusi Alergi). Bahan baku ber-alergen otomatis dieliminasi.
+                                        </li>
+                                        <li>
+                                            <strong>Pagu Standar BGN:</strong> Porsi Kecil (PK) pagu <strong>Rp 8.000</strong>, Porsi Besar (PB) pagu <strong>Rp 10.000</strong>.
                                         </li>
                                     </ul>
                                 </div>
@@ -9913,13 +9908,7 @@ watch(
                                         <p
                                             class="text-[11px] text-slate-500 leading-snug"
                                         >
-                                            Kandungan zat gizi (Energi, Protein,
-                                            Lemak, Karbohidrat, Serat) dihitung
-                                            otomatis berdasarkan porsi berat
-                                            bersih (<em>edible weight</em>)
-                                            masing-masing bahan masakan terhadap
-                                            basis data Tabel Komposisi Pangan
-                                            Indonesia (TKPI).
+                                            Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) bahan masakan terhadap database TKPI. <strong>Catatan:</strong> Hanya item berjenis <strong>🥗 Bahan Baku (Pangan)</strong> yang menyumbang nilai gizi. Item <strong>📦 Operasional (Non-Gizi)</strong> otomatis dinilai 0 zat gizi.
                                         </p>
                                     </div>
                                     <div
@@ -13712,6 +13701,39 @@ watch(
 
                 <!-- Form Body -->
                 <div class="space-y-4">
+                    <!-- Opsi Jenis: Bahan Baku vs Operasional -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">
+                            Jenis Kebutuhan <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <button
+                                type="button"
+                                @click="manualBahanForm.jenis = 'bahan_baku'"
+                                :class="[
+                                    'px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition cursor-pointer',
+                                    (manualBahanForm.jenis || 'bahan_baku') === 'bahan_baku'
+                                        ? 'bg-emerald-50 text-emerald-900 border-emerald-400 ring-2 ring-emerald-200'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                ]"
+                            >
+                                <span>🥗 Bahan Baku (Pangan)</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="manualBahanForm.jenis = 'operasional'; manualBahanForm.energi = 0; manualBahanForm.protein = 0; manualBahanForm.lemak = 0; manualBahanForm.karbohidrat = 0; manualBahanForm.serat = 0; delete manualBahanErrors.energi; delete manualBahanErrors.protein; delete manualBahanErrors.lemak; delete manualBahanErrors.karbohidrat; delete manualBahanErrors.serat;"
+                                :class="[
+                                    'px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition cursor-pointer',
+                                    manualBahanForm.jenis === 'operasional'
+                                        ? 'bg-amber-50 text-amber-900 border-amber-400 ring-2 ring-amber-200'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                ]"
+                            >
+                                <span>📦 Operasional (Non-Gizi)</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Row 1: Nama Bahan & Nama di PO -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
@@ -13847,10 +13869,13 @@ watch(
                                         : 'border-slate-200 focus:border-primary',
                                 ]"
                             >
-                                <option value="Kg">Kg (Kilogram)</option>
-                                <option value="g">g (Gram)</option>
-                                <option value="L">L (Liter)</option>
-                                <option value="ml">ml (Mililiter)</option>
+                                <option
+                                    v-for="s in SATUAN_LIST"
+                                    :key="s.value"
+                                    :value="s.value"
+                                >
+                                    {{ s.label }}
+                                </option>
                             </select>
                             <p
                                 v-if="manualBahanErrors.satuan"
@@ -13895,132 +13920,156 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Row 3: Kandungan Gizi per 100g (Wajib Diisi untuk Perhitungan AKG) -->
-                    <div class="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2.5">
+                    <!-- Row 3: Kandungan Gizi per 100g (Wajib Diisi untuk Bahan Baku, Disabled untuk Operasional) -->
+                    <div
+                        class="p-3.5 rounded-2xl border space-y-2.5 transition-colors"
+                        :class="manualBahanForm.jenis === 'operasional' ? 'bg-slate-50/80 border-slate-200' : 'bg-white border-slate-200'"
+                    >
                         <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <label class="block text-xs font-black text-slate-800">
-                                📊 Kandungan Nutrisi (per 100g bahan) <span class="text-rose-500">*</span>
+                            <label class="block text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                <span>📊 Kandungan Nutrisi (per 100g bahan)</span>
+                                <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                             </label>
-                            <span class="text-[10px] text-slate-500 font-bold">Wajib diisi untuk kalkulasi AKG</span>
+                            <span
+                                class="text-[10px] font-bold px-2 py-0.5 rounded-md"
+                                :class="manualBahanForm.jenis === 'operasional' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+                            >
+                                {{ manualBahanForm.jenis === 'operasional' ? '🚫 Dinonaktifkan untuk Operasional' : 'Wajib diisi untuk kalkulasi AKG' }}
+                            </span>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                             <!-- Energi -->
                             <div>
                                 <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Energi (kkal) <span class="text-rose-500">*</span>
+                                    Energi (kkal) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
+                                    :disabled="manualBahanForm.jenis === 'operasional'"
                                     v-model.number="manualBahanForm.energi"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.energi"
                                     placeholder="0"
                                     :class="[
-                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
-                                        manualBahanErrors.energi
-                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                                            : 'border-slate-200 focus:border-primary',
+                                        'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
+                                        manualBahanForm.jenis === 'operasional'
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+                                            : manualBahanErrors.energi
+                                              ? 'bg-white border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 text-slate-900'
+                                              : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.energi" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p v-if="manualBahanErrors.energi && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
                                     {{ manualBahanErrors.energi }}
                                 </p>
                             </div>
                             <!-- Protein -->
                             <div>
                                 <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Protein (g) <span class="text-rose-500">*</span>
+                                    Protein (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
+                                    :disabled="manualBahanForm.jenis === 'operasional'"
                                     v-model.number="manualBahanForm.protein"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.protein"
                                     placeholder="0"
                                     :class="[
-                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
-                                        manualBahanErrors.protein
-                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                                            : 'border-slate-200 focus:border-primary',
+                                        'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
+                                        manualBahanForm.jenis === 'operasional'
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+                                            : manualBahanErrors.protein
+                                              ? 'bg-white border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 text-slate-900'
+                                              : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.protein" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p v-if="manualBahanErrors.protein && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
                                     {{ manualBahanErrors.protein }}
                                 </p>
                             </div>
                             <!-- Lemak -->
                             <div>
                                 <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Lemak (g) <span class="text-rose-500">*</span>
+                                    Lemak (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
+                                    :disabled="manualBahanForm.jenis === 'operasional'"
                                     v-model.number="manualBahanForm.lemak"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.lemak"
                                     placeholder="0"
                                     :class="[
-                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
-                                        manualBahanErrors.lemak
-                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                                            : 'border-slate-200 focus:border-primary',
+                                        'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
+                                        manualBahanForm.jenis === 'operasional'
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+                                            : manualBahanErrors.lemak
+                                              ? 'bg-white border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 text-slate-900'
+                                              : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.lemak" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p v-if="manualBahanErrors.lemak && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
                                     {{ manualBahanErrors.lemak }}
                                 </p>
                             </div>
                             <!-- Karbohidrat -->
                             <div>
                                 <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Karbohidrat (g) <span class="text-rose-500">*</span>
+                                    Karbohidrat (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
+                                    :disabled="manualBahanForm.jenis === 'operasional'"
                                     v-model.number="manualBahanForm.karbohidrat"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.karbohidrat"
                                     placeholder="0"
                                     :class="[
-                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
-                                        manualBahanErrors.karbohidrat
-                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                                            : 'border-slate-200 focus:border-primary',
+                                        'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
+                                        manualBahanForm.jenis === 'operasional'
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+                                            : manualBahanErrors.karbohidrat
+                                              ? 'bg-white border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 text-slate-900'
+                                              : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.karbohidrat" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p v-if="manualBahanErrors.karbohidrat && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
                                     {{ manualBahanErrors.karbohidrat }}
                                 </p>
                             </div>
                             <!-- Serat -->
                             <div>
                                 <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Serat (g) <span class="text-rose-500">*</span>
+                                    Serat (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
+                                    :disabled="manualBahanForm.jenis === 'operasional'"
                                     v-model.number="manualBahanForm.serat"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.serat"
                                     placeholder="0"
                                     :class="[
-                                        'w-full px-2.5 py-1.5 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden text-center',
-                                        manualBahanErrors.serat
-                                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                                            : 'border-slate-200 focus:border-primary',
+                                        'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
+                                        manualBahanForm.jenis === 'operasional'
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+                                            : manualBahanErrors.serat
+                                              ? 'bg-white border-rose-400 focus:border-rose-500 ring-2 ring-rose-100 text-slate-900'
+                                              : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.serat" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p v-if="manualBahanErrors.serat && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
                                     {{ manualBahanErrors.serat }}
                                 </p>
                             </div>

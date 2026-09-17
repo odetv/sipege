@@ -17,6 +17,11 @@ class RincianPenerimaManfaatSeeder extends Seeder
         $driver = DB::getDriverName();
         if ($driver === 'pgsql') {
             DB::statement('TRUNCATE TABLE rincian_penerima_manfaat RESTART IDENTITY CASCADE;');
+        } elseif ($driver === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = OFF;');
+            DB::table('rincian_penerima_manfaat')->delete();
+            DB::statement('DELETE FROM sqlite_sequence WHERE name = "rincian_penerima_manfaat";');
+            DB::statement('PRAGMA foreign_keys = ON;');
         } else {
             DB::table('rincian_penerima_manfaat')->delete();
         }
@@ -24,6 +29,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
         $now = now();
 
         $rincianRaw = [
+
             // 1. RA Baitul Mutaallim (ID KPM = 1)
             [1, 'Pelajar', 'Porsi Kecil', 28, 30],
             [1, 'Pendukung (Guru)', 'Porsi Besar', 0, 3],
@@ -102,7 +108,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [11, 'Pendukung (Guru)', 'Porsi Besar', 4, 3],
             [11, 'Pendukung (Tenaga Kependidikan)', 'Porsi Besar', 1, 1],
 
-            // 12. MIS Abul'Abbas NW (ID KPM = 12)
+            // 12. MIS Abul`Abbas NW (ID KPM = 12)
             [12, 'Kelas 1', 'Porsi Kecil', 11, 7],
             [12, 'Kelas 2', 'Porsi Kecil', 9, 13],
             [12, 'Kelas 3', 'Porsi Kecil', 7, 8],
@@ -111,7 +117,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [12, 'Kelas 6', 'Porsi Besar', 11, 6],
             [12, 'Pendukung (Guru)', 'Porsi Besar', 6, 9],
 
-            // 13. MTs Abul'Abbas NW (ID KPM = 13)
+            // 13. MTs Abul`Abbas NW (ID KPM = 13)
             [13, 'Kelas 7', 'Porsi Besar', 10, 6],
             [13, 'Kelas 8', 'Porsi Besar', 7, 6],
             [13, 'Kelas 9', 'Porsi Besar', 6, 6],

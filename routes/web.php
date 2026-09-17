@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\AsetDigitalController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\PeriodeController;
+use App\Http\Controllers\PetunjukController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WilayahController;
 use Illuminate\Foundation\Application;
@@ -97,6 +99,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Periode Operasional SPPG
     Route::resource('periode', PeriodeController::class)->only(['index', 'store', 'update', 'destroy']);
+
+    // Menu Petunjuk (SOP, Juknis & Pedoman) SPPG
+    Route::prefix('petunjuk')->name('petunjuk.')->group(function () {
+        Route::get('/', [PetunjukController::class, 'index'])->name('index');
+        Route::get('/sop', [PetunjukController::class, 'sop'])->name('sop');
+        Route::get('/juknis', [PetunjukController::class, 'juknis'])->name('juknis');
+        Route::get('/pedoman', [PetunjukController::class, 'pedoman'])->name('pedoman');
+        Route::get('/stream/{type}/{filename}', [PetunjukController::class, 'stream'])->name('stream');
+        Route::get('/download/{type}/{filename}', [PetunjukController::class, 'download'])->name('download');
+    });
+
+    // Menu Aset Digital (Logo, Denah, Plang Ruangan, Poster, Kop Dokumen)
+    Route::prefix('aset-digital')->name('aset-digital.')->group(function () {
+        Route::get('/', [AsetDigitalController::class, 'index'])->name('index');
+        Route::get('/logo', [AsetDigitalController::class, 'logo'])->name('logo');
+        Route::get('/denah', [AsetDigitalController::class, 'denah'])->name('denah');
+        Route::get('/struktur', [AsetDigitalController::class, 'struktur'])->name('struktur');
+        Route::get('/plang-ruangan', [AsetDigitalController::class, 'plangRuangan'])->name('plang-ruangan');
+        Route::get('/poster', [AsetDigitalController::class, 'poster'])->name('poster');
+        Route::get('/kop-dokumen', [AsetDigitalController::class, 'kopDokumen'])->name('kop-dokumen');
+        Route::get('/stream/{category}/{filename}', [AsetDigitalController::class, 'stream'])->name('stream');
+        Route::get('/download/{category}/{filename}', [AsetDigitalController::class, 'download'])->name('download');
+    });
+
+    // Backward-compatibility / shortcut routes untuk SOP
+    Route::prefix('sop')->name('sop.')->group(function () {
+        Route::get('/', [PetunjukController::class, 'sop'])->name('index');
+        Route::get('/stream/{filename}', fn($filename) => redirect()->route('petunjuk.stream', ['type' => 'sop', 'filename' => $filename]))->name('stream');
+        Route::get('/download/{filename}', fn($filename) => redirect()->route('petunjuk.download', ['type' => 'sop', 'filename' => $filename]))->name('download');
+    });
 });
 
 require __DIR__ . '/auth.php';

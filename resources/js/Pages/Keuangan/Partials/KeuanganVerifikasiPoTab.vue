@@ -10,6 +10,12 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import {
+    formatGrossQty,
+    getGroupedUnitList,
+    formatGroupedUnitSummary,
+    SATUAN_LIST,
+} from "@/Services/satuanConfig";
+import {
     ShieldCheck,
     Receipt,
     CheckCircle2,
@@ -66,6 +72,13 @@ const props = defineProps({
         },
     },
 });
+
+function getPortionUnit(satuan = "Kg") {
+    const s = (satuan || "Kg").toLowerCase().trim();
+    if (s === "kg" || s === "g" || s === "gram") return "g";
+    if (s === "l" || s === "liter" || s === "ml") return "ml";
+    return satuan || "g";
+}
 
 function formatGrossWeight(kg) {
     if (kg === null || kg === undefined || kg === "" || isNaN(Number(kg)))
@@ -1040,41 +1053,52 @@ function rejectPo() {
                             class="bg-amber-50/60 p-2 rounded-lg border border-amber-200/60"
                         >
                             <span
-                                class="text-amber-800 text-[10px] uppercase font-bold block"
+                                class="text-amber-800 text-[10px] uppercase font-bold block mb-0.5"
                                 >Resep Gizi (Gross)</span
                             >
-                            <span
-                                class="font-black text-amber-900 text-xs sm:text-sm"
-                                >{{
-                                    formatGrossWeight(grandTotalGrossKg)
-                                }}</span
-                            >
+                            <div class="flex flex-wrap items-center gap-1">
+                                <span
+                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, 'gross_kg')"
+                                    :key="gIdx"
+                                    class="px-1.5 py-0.5 rounded bg-white border border-amber-200 text-amber-950 text-xs font-black shadow-2xs"
+                                >
+                                    {{ grp.label }}
+                                </span>
+                            </div>
                         </div>
                         <div
                             class="bg-blue-50/60 p-2 rounded-lg border border-blue-200/60"
                         >
                             <span
-                                class="text-blue-800 text-[10px] uppercase font-bold block"
+                                class="text-blue-800 text-[10px] uppercase font-bold block mb-0.5"
                                 >Pengalihan Stok</span
                             >
-                            <span
-                                class="font-black text-blue-900 text-xs sm:text-sm"
-                                >{{ formatGrossWeight(grandTotalStokKg) }}</span
-                            >
+                            <div class="flex flex-wrap items-center gap-1">
+                                <span
+                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, 'stok_digunakan_kg')"
+                                    :key="gIdx"
+                                    class="px-1.5 py-0.5 rounded bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
+                                >
+                                    {{ grp.label }}
+                                </span>
+                            </div>
                         </div>
                         <div
                             class="bg-emerald-50/60 p-2 rounded-lg border border-emerald-200/60"
                         >
                             <span
-                                class="text-emerald-800 text-[10px] uppercase font-bold block"
+                                class="text-emerald-800 text-[10px] uppercase font-bold block mb-0.5"
                                 >Total Belanja PO</span
                             >
-                            <span
-                                class="font-black text-emerald-900 text-xs sm:text-sm"
-                                >{{
-                                    formatGrossWeight(grandTotalBeliPoKg)
-                                }}</span
-                            >
+                            <div class="flex flex-wrap items-center gap-1">
+                                <span
+                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, (it) => it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null ? it.qty_beli_po_kg : Math.max(0, (it.gross_kg || 0) - (it.stok_digunakan_kg || 0)))"
+                                    :key="gIdx"
+                                    class="px-1.5 py-0.5 rounded bg-white border border-emerald-300 text-emerald-950 text-xs font-black shadow-2xs"
+                                >
+                                    {{ grp.label }}
+                                </span>
+                            </div>
                         </div>
                         <div
                             class="bg-emerald-100/70 p-2 rounded-lg border border-emerald-300"
@@ -1149,14 +1173,14 @@ function rejectPo() {
                             class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs"
                         >
                             <table
-                                class="w-full text-xs text-left border-collapse min-w-[1250px]"
+                                class="w-full text-xs text-left border-collapse min-w-[1350px]"
                             >
                                 <thead
                                     class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
                                 >
                                     <tr>
                                         <th class="p-3 w-10 text-center">NO</th>
-                                        <th class="p-3 min-w-[160px]">
+                                        <th class="p-3 min-w-[170px]">
                                             BAHAN PANGAN & NAMA DI PO
                                         </th>
                                         <th
@@ -1165,17 +1189,23 @@ function rejectPo() {
                                             PERUNTUKAN / SUB MENU
                                         </th>
                                         <th
-                                            class="p-3 text-center min-w-[110px]"
+                                            class="p-3 text-center min-w-[100px]"
                                         >
                                             TIPE PORSI
                                         </th>
-                                        <th class="p-3 min-w-[120px]">
+                                        <th class="p-3 min-w-[100px]">
                                             KATEGORI
                                         </th>
+                                        <th class="p-3 text-center min-w-[80px]">
+                                            SATUAN
+                                        </th>
+                                        <th class="p-3 text-center min-w-[110px]">
+                                            JENIS
+                                        </th>
                                         <th
-                                            class="p-3 text-center min-w-[85px]"
+                                            class="p-3 text-center min-w-[95px]"
                                         >
-                                            GRAM PK / PB
+                                            GRAMASI / PORSI
                                         </th>
                                         <th
                                             class="p-3 text-center min-w-[85px]"
@@ -1183,22 +1213,22 @@ function rejectPo() {
                                             BDD / BUFFER
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[100px] bg-amber-50/40"
+                                            class="p-3 text-right min-w-[120px] bg-amber-50/40"
                                         >
                                             KEBUTUHAN KOTOR (RESEP)
                                         </th>
                                         <th
                                             class="p-3 text-center min-w-[145px] bg-blue-50/50"
                                         >
-                                            STOK GUDANG (KG)
+                                            STOK GUDANG
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[125px] bg-emerald-50/40"
+                                            class="p-3 text-right min-w-[130px] bg-emerald-50/40"
                                         >
-                                            QTY BELI PO (KG)
+                                            QTY BELI PO
                                         </th>
                                         <th
-                                            class="p-3 text-right min-w-[105px]"
+                                            class="p-3 text-right min-w-[110px]"
                                         >
                                             HARGA MASTER
                                         </th>
@@ -1308,12 +1338,12 @@ function rejectPo() {
                                                 ]"
                                             >
                                                 {{
-                                                    b.tipe_porsi === "alergi" ||
-                                                    b.tipe === "Alergi"
-                                                        ? "Alergi: " +
+                                                    b.tipe_porsi === 'alergi' ||
+                                                    b.tipe === 'Alergi'
+                                                        ? 'Alergi: ' +
                                                           (b.jenis_alergi ||
-                                                              "Khusus")
-                                                        : "Normal"
+                                                              'Khusus')
+                                                        : 'Normal'
                                                 }}
                                             </span>
                                         </td>
@@ -1322,18 +1352,39 @@ function rejectPo() {
                                         <td
                                             class="p-3 text-slate-600 text-[11px] font-medium"
                                         >
-                                            {{ b.kategori || "Bahan Baku" }}
+                                            {{ b.kategori || 'Lainnya' }}
                                         </td>
 
-                                        <!-- 6. GRAM PK / PB -->
+                                        <!-- 6. SATUAN -->
+                                        <td class="p-3 text-center">
+                                            <span class="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black">
+                                                {{ b.satuan || 'Kg' }}
+                                            </span>
+                                        </td>
+
+                                        <!-- 7. JENIS -->
+                                        <td class="p-3 text-center">
+                                            <span
+                                                :class="[
+                                                    'px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1',
+                                                    (b.jenis || 'bahan_baku') === 'operasional'
+                                                        ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                ]"
+                                            >
+                                                {{ (b.jenis || 'bahan_baku') === 'operasional' ? '📦 Operasional' : '🥗 Bahan Baku' }}
+                                            </span>
+                                        </td>
+
+                                        <!-- 8. GRAMASI / PORSI -->
                                         <td
                                             class="p-3 text-center font-bold text-slate-800 whitespace-nowrap"
                                         >
-                                            {{ b.gram_pk || 0 }}g /
-                                            {{ b.gram_pb || 0 }}g
+                                            {{ b.gram_pk || 0 }} {{ getPortionUnit(b.satuan) }} /
+                                            {{ b.gram_pb || 0 }} {{ getPortionUnit(b.satuan) }}
                                         </td>
 
-                                        <!-- 7. BDD / BUFFER -->
+                                        <!-- 9. BDD / BUFFER -->
                                         <td
                                             class="p-3 text-center text-[11px] text-slate-600 whitespace-nowrap"
                                         >
@@ -1342,7 +1393,7 @@ function rejectPo() {
                                             }}%
                                         </td>
 
-                                        <!-- 8. KEBUTUHAN KOTOR (RESEP - UTUH TIDAK BERUBAH) -->
+                                        <!-- 10. KEBUTUHAN KOTOR (RESEP - UTUH TIDAK BERUBAH) -->
                                         <td
                                             class="p-3 text-right font-black text-slate-900 whitespace-nowrap bg-amber-50/20"
                                         >
@@ -1350,8 +1401,9 @@ function rejectPo() {
                                                 class="text-xs font-black text-slate-900"
                                             >
                                                 {{
-                                                    formatGrossWeight(
+                                                    formatGrossQty(
                                                         b.gross_kg,
+                                                        b.satuan
                                                     )
                                                 }}
                                             </div>
@@ -1362,7 +1414,7 @@ function rejectPo() {
                                             </span>
                                         </td>
 
-                                        <!-- 9. PENGALIHAN DARI STOK (KG) -->
+                                        <!-- 11. PENGALIHAN DARI STOK GUDANG -->
                                         <td
                                             class="p-2.5 text-center bg-blue-50/30"
                                         >
@@ -1371,7 +1423,7 @@ function rejectPo() {
                                                 class="space-y-1"
                                             >
                                                 <div
-                                                    class="relative flex items-center min-w-[100px] max-w-[125px] mx-auto"
+                                                    class="relative flex items-center min-w-[105px] max-w-[130px] mx-auto"
                                                 >
                                                     <input
                                                         v-model.number="
@@ -1385,11 +1437,11 @@ function rejectPo() {
                                                         @change="
                                                             onStokChange(b)
                                                         "
-                                                        class="w-full pr-7 pl-2 py-1 text-right text-xs font-black border border-blue-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-blue-900 shadow-2xs"
+                                                        class="w-full pr-8 pl-2 py-1 text-right text-xs font-black border border-blue-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-blue-900 shadow-2xs"
                                                     />
                                                     <span
-                                                        class="absolute right-2 text-[10.5px] text-slate-400 font-bold pointer-events-none"
-                                                        >kg</span
+                                                        class="absolute right-2 text-[10px] text-slate-400 font-bold pointer-events-none"
+                                                        >{{ b.satuan || 'Kg' }}</span
                                                     >
                                                 </div>
                                                 <div
@@ -1411,9 +1463,9 @@ function rejectPo() {
                                                             setItemResetStok(b)
                                                         "
                                                         class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                                                        title="Reset tanpa stok (0 kg)"
+                                                        title="Reset tanpa stok (0)"
                                                     >
-                                                        0 kg
+                                                        0 {{ b.satuan || 'Kg' }}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1422,15 +1474,16 @@ function rejectPo() {
                                                 class="font-bold text-slate-800"
                                             >
                                                 {{
-                                                    formatGrossWeight(
+                                                    formatGrossQty(
                                                         b.stok_digunakan_kg ||
                                                             0,
+                                                        b.satuan
                                                     )
                                                 }}
                                             </div>
                                         </td>
 
-                                        <!-- 10. QTY BELI PO (KG) -->
+                                        <!-- 12. QTY BELI PO -->
                                         <td
                                             class="p-3 text-right whitespace-nowrap bg-emerald-50/20"
                                         >
@@ -1438,7 +1491,7 @@ function rejectPo() {
                                                 class="font-black text-xs text-slate-900"
                                             >
                                                 {{
-                                                    formatGrossWeight(
+                                                    formatGrossQty(
                                                         b.qty_beli_po_kg !==
                                                             undefined &&
                                                             b.qty_beli_po_kg !==
@@ -1451,6 +1504,7 @@ function rejectPo() {
                                                                       (b.stok_digunakan_kg ||
                                                                           0),
                                                               ),
+                                                        b.satuan
                                                     )
                                                 }}
                                             </div>
@@ -1474,8 +1528,9 @@ function rejectPo() {
                                                     class="inline-block text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 border border-blue-200"
                                                 >
                                                     Parsial Stok (-{{
-                                                        formatGrossWeight(
+                                                        formatGrossQty(
                                                             b.stok_digunakan_kg,
+                                                            b.satuan
                                                         )
                                                     }})
                                                 </span>
@@ -1488,14 +1543,14 @@ function rejectPo() {
                                             </div>
                                         </td>
 
-                                        <!-- 11. HARGA MASTER -->
+                                        <!-- 13. HARGA MASTER -->
                                         <td
                                             class="p-3 text-right text-slate-600 whitespace-nowrap"
                                         >
-                                            {{ formatRupiah(b.harga_master) }}
+                                            {{ formatRupiah(b.harga_master) }} / {{ b.satuan || 'Kg' }}
                                         </td>
 
-                                        <!-- 12. HARGA SATUAN AKTUAL (INPUT / READONLY) -->
+                                        <!-- 14. HARGA SATUAN AKTUAL (INPUT / READONLY) -->
                                         <td class="p-2 text-right">
                                             <div
                                                 v-if="!isReadOnlyMode"
@@ -1523,11 +1578,11 @@ function rejectPo() {
                                                         b.harga_aktual ||
                                                             b.harga_master,
                                                     )
-                                                }}
+                                                }} / {{ b.satuan || 'Kg' }}
                                             </div>
                                         </td>
 
-                                        <!-- 13. SUBTOTAL PO AKTUAL -->
+                                        <!-- 15. SUBTOTAL PO AKTUAL -->
                                         <td
                                             class="p-3 text-right font-black whitespace-nowrap bg-emerald-50/20"
                                             :class="
@@ -1559,7 +1614,7 @@ function rejectPo() {
                                             </span>
                                         </td>
 
-                                        <!-- 14. KETERANGAN / CATATAN SPESIFIKASI BAHAN -->
+                                        <!-- 16. KETERANGAN / CATATAN SPESIFIKASI BAHAN -->
                                         <td
                                             class="p-3 text-slate-600 align-middle text-xs min-w-[140px] whitespace-normal break-words"
                                         >
@@ -1585,45 +1640,61 @@ function rejectPo() {
                                     </tr>
                                 </tbody>
                                 <tfoot
-                                    class="bg-slate-50 font-bold border-t border-slate-200 text-xs"
+                                    class="bg-white font-bold border-t border-slate-200 text-xs"
                                 >
                                     <tr>
                                         <td
-                                            colspan="7"
-                                            class="p-3.5 text-right text-slate-700 font-bold"
+                                            colspan="9"
+                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
                                         >
                                             Grand Total Rekapitulasi Kebutuhan &
                                             Pembelian PO:
                                         </td>
+                                        <!-- 10. Resep Gross Grouped Chips -->
                                         <td
-                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap bg-amber-50/50"
+                                            class="p-3.5 text-right font-black text-slate-900 bg-amber-50/40 whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                formatGrossWeight(
-                                                    grandTotalGrossKg,
-                                                )
-                                            }}
+                                            <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, 'gross_kg')"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-950 text-xs font-black shadow-2xs"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
                                         </td>
+                                        <!-- 11. Stok Grouped Chips -->
                                         <td
-                                            class="p-3.5 text-right font-black text-blue-900 whitespace-nowrap bg-blue-50/60"
+                                            class="p-3.5 text-right font-black text-blue-900 bg-blue-50/50 whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                formatGrossWeight(
-                                                    grandTotalStokKg,
-                                                )
-                                            }}
+                                            <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, 'stok_digunakan_kg')"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
                                         </td>
+                                        <!-- 12. Beli PO Grouped Chips -->
                                         <td
-                                            class="p-3.5 text-right font-black text-emerald-900 whitespace-nowrap bg-emerald-50/60"
+                                            class="p-3.5 text-right font-black text-emerald-900 bg-emerald-50/40 whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                formatGrossWeight(
-                                                    grandTotalBeliPoKg,
-                                                )
-                                            }}
+                                            <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    v-for="(grp, gIdx) in getGroupedUnitList(selectedPo.items, (it) => it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null ? it.qty_beli_po_kg : Math.max(0, (it.gross_kg || 0) - (it.stok_digunakan_kg || 0)))"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-emerald-300 text-emerald-950 text-xs font-black shadow-2xs"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
                                         </td>
+                                        <!-- 13. Harga Master Grand Total -->
                                         <td
-                                            class="p-3.5 text-right text-slate-600 whitespace-nowrap"
+                                            class="p-3.5 text-right text-slate-600 whitespace-nowrap align-middle font-bold"
                                         >
                                             {{
                                                 formatRupiah(
@@ -1631,16 +1702,19 @@ function rejectPo() {
                                                 )
                                             }}
                                         </td>
+                                        <!-- 14. Label Total Aktual -->
                                         <td
-                                            class="p-3.5 text-right text-[11px] text-slate-500 font-semibold"
+                                            class="p-3.5 text-right text-[11px] text-slate-500 font-bold whitespace-nowrap align-middle"
                                         >
                                             Total Aktual PO:
                                         </td>
+                                        <!-- 15. Total Aktual Nilai Rupiah -->
                                         <td
-                                            class="p-3.5 text-right font-black text-emerald-950 text-sm whitespace-nowrap bg-emerald-100/70"
+                                            class="p-3.5 text-right font-black text-emerald-950 text-sm whitespace-nowrap bg-emerald-100/70 align-middle"
                                         >
                                             {{ formatRupiah(totalAktualBiaya) }}
                                         </td>
+                                        <!-- 16. Empty cell for keterangan -->
                                         <td></td>
                                     </tr>
                                 </tfoot>

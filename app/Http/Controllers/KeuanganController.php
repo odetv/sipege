@@ -479,6 +479,8 @@ class KeuanganController extends Controller
                             'sub_menu_key' => $subKey,
                             'sub_menu_block_id' => $woItem ? $woItem->sub_menu_block_id : null,
                             'nama_sub_menu' => $subNama,
+                            'satuan' => $woItem ? ($woItem->satuan ?: ($it->satuan ?: 'Kg')) : ($it->satuan ?: 'Kg'),
+                            'jenis' => $woItem ? ($woItem->jenis ?: ($it->jenis ?: 'bahan_baku')) : ($it->jenis ?: 'bahan_baku'),
                             'kategori' => $woItem ? ($woItem->kategori ?: $it->kategori) : $it->kategori,
                             'tipe_porsi' => $woItem ? ($woItem->tipe_porsi ?: strtolower($it->tipe ?: 'normal')) : strtolower($it->tipe ?: 'normal'),
                             'tipe' => $it->tipe,

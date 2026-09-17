@@ -39,6 +39,14 @@ import {
     PieChart,
     Store,
     Truck,
+    BookCheck,
+    BookMarked,
+    Layers,
+    Image,
+    Map,
+    Network,
+    Signpost,
+    FileImage,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -147,63 +155,133 @@ const isLabelActive = computed(() => {
     }
 });
 
-// Default tertutup, hanya terbuka jika sub-menunya sedang aktif/dibuka
-const isGiziExpanded = ref(isGiziActive.value);
-const isKeuanganExpanded = ref(isKeuanganActive.value);
-const isSpjExpanded = ref(isSpjActive.value);
-const isLaporanExpanded = ref(isLaporanActive.value);
-const isLabelExpanded = ref(isLabelActive.value);
+const isPetunjukActive = computed(() => {
+    try {
+        return route().current("petunjuk.*") || route().current("sop.*");
+    } catch {
+        return false;
+    }
+});
+
+const isAsetDigitalActive = computed(() => {
+    try {
+        return route().current("aset-digital.*");
+    } catch {
+        return false;
+    }
+});
+
+function getInitialMenu() {
+    if (isGiziActive.value) return "gizi";
+    if (isKeuanganActive.value) return "keuangan";
+    if (isLabelActive.value) return "label";
+    if (isPetunjukActive.value) return "petunjuk";
+    if (isAsetDigitalActive.value) return "aset-digital";
+    return null;
+}
+
+function getInitialKeuanganSubMenu() {
+    if (isSpjActive.value) return "spj";
+    if (isLaporanActive.value) return "laporan";
+    return null;
+}
+
+// Single source of truth: hanya 1 menu accordion yang terbuka dalam satu waktu
+const activeExpandedMenu = ref(getInitialMenu());
+const activeKeuanganSubMenu = ref(getInitialKeuanganSubMenu());
+
+const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
+const isKeuanganExpanded = computed(
+    () => activeExpandedMenu.value === "keuangan",
+);
+const isLabelExpanded = computed(() => activeExpandedMenu.value === "label");
+const isPetunjukExpanded = computed(
+    () => activeExpandedMenu.value === "petunjuk",
+);
+const isAsetDigitalExpanded = computed(
+    () => activeExpandedMenu.value === "aset-digital",
+);
+
+const isSpjExpanded = computed(() => activeKeuanganSubMenu.value === "spj");
+const isLaporanExpanded = computed(
+    () => activeKeuanganSubMenu.value === "laporan",
+);
 
 watch(
     () => page.url,
     () => {
         if (isGiziActive.value) {
-            isGiziExpanded.value = true;
+            activeExpandedMenu.value = "gizi";
+        } else if (isKeuanganActive.value) {
+            activeExpandedMenu.value = "keuangan";
+        } else if (isLabelActive.value) {
+            activeExpandedMenu.value = "label";
+        } else if (isPetunjukActive.value) {
+            activeExpandedMenu.value = "petunjuk";
+        } else if (isAsetDigitalActive.value) {
+            activeExpandedMenu.value = "aset-digital";
+        } else {
+            activeExpandedMenu.value = null;
         }
-        if (isKeuanganActive.value) {
-            isKeuanganExpanded.value = true;
+
+        if (isSpjActive.value) {
+            activeKeuanganSubMenu.value = "spj";
+        } else if (isLaporanActive.value) {
+            activeKeuanganSubMenu.value = "laporan";
+        } else {
+            activeKeuanganSubMenu.value = null;
         }
-        if (isLabelActive.value) {
-            isLabelExpanded.value = true;
-        }
-        isSpjExpanded.value = isSpjActive.value;
-        isLaporanExpanded.value = isLaporanActive.value;
     },
 );
 
 function toggleSpjMenu() {
-    isSpjExpanded.value = !isSpjExpanded.value;
+    activeKeuanganSubMenu.value =
+        activeKeuanganSubMenu.value === "spj" ? null : "spj";
 }
 
 function toggleLaporanMenu() {
-    isLaporanExpanded.value = !isLaporanExpanded.value;
+    activeKeuanganSubMenu.value =
+        activeKeuanganSubMenu.value === "laporan" ? null : "laporan";
 }
 
 function toggleGiziMenu() {
     if (props.isCollapsed) {
         emit("update:isCollapsed", false);
-        isGiziExpanded.value = true;
-    } else {
-        isGiziExpanded.value = !isGiziExpanded.value;
     }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "gizi" ? null : "gizi";
 }
 
 function toggleKeuanganMenu() {
     if (props.isCollapsed) {
         emit("update:isCollapsed", false);
-        isKeuanganExpanded.value = true;
-    } else {
-        isKeuanganExpanded.value = !isKeuanganExpanded.value;
     }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "keuangan" ? null : "keuangan";
 }
 
 function toggleLabelMenu() {
     if (props.isCollapsed) {
         emit("update:isCollapsed", false);
-        isLabelExpanded.value = true;
-    } else {
-        isLabelExpanded.value = !isLabelExpanded.value;
     }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "label" ? null : "label";
+}
+
+function togglePetunjukMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "petunjuk" ? null : "petunjuk";
+}
+
+function toggleAsetDigitalMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "aset-digital" ? null : "aset-digital";
 }
 
 const currentUser = computed(() => {
@@ -1053,6 +1131,237 @@ function logout() {
                         ]"
                     ></div>
                 </Link>
+
+                <!-- 7. Menu Petunjuk (Accordion with Submenu: SOP, Juknis, Pedoman) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Petunjuk Button -->
+                    <button
+                        type="button"
+                        @click="togglePetunjukMenu"
+                        :title="isCollapsed ? 'Petunjuk' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isPetunjukActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <BookOpen class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Petunjuk</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isPetunjukExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: SOP, Juknis, Pedoman -->
+                    <div
+                        v-if="!isCollapsed && isPetunjukExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: SOP -->
+                        <Link
+                            :href="route('petunjuk.sop')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petunjuk.sop') ||
+                                route().current('sop.*') ||
+                                (route().current('petunjuk.index') &&
+                                    page.props.activeType === 'sop')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileCheck2 class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">SOP</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Juknis -->
+                        <Link
+                            :href="route('petunjuk.juknis')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petunjuk.juknis') ||
+                                (route().current('petunjuk.index') &&
+                                    page.props.activeType === 'juknis')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileText class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Juknis</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Pedoman -->
+                        <Link
+                            :href="route('petunjuk.pedoman')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petunjuk.pedoman') ||
+                                (route().current('petunjuk.index') &&
+                                    page.props.activeType === 'pedoman')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <BookMarked class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Pedoman</span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 8. Menu Aset Digital (Accordion with Submenu: Logo, Denah, Plang Ruangan, Poster, Kop Dokumen) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Aset Digital Button -->
+                    <button
+                        type="button"
+                        @click="toggleAsetDigitalMenu"
+                        :title="isCollapsed ? 'Aset Digital' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isAsetDigitalActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <Layers class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Aset Digital</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isAsetDigitalExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Logo, Denah, Plang Ruangan, Poster, Kop Dokumen -->
+                    <div
+                        v-if="!isCollapsed && isAsetDigitalExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Logo -->
+                        <Link
+                            :href="route('aset-digital.logo')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.logo') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'logo')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Image class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Logo</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Denah -->
+                        <Link
+                            :href="route('aset-digital.denah')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.denah') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'denah')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Map class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Denah</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Struktur -->
+                        <Link
+                            :href="route('aset-digital.struktur')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.struktur') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'struktur')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Network class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Struktur</span>
+                        </Link>
+
+                        <!-- Sub-menu 4: Plang Ruangan -->
+                        <Link
+                            :href="route('aset-digital.plang-ruangan')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.plang-ruangan') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'plang-ruangan')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Signpost class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Plang Ruangan</span>
+                        </Link>
+
+                        <!-- Sub-menu 4: Poster -->
+                        <Link
+                            :href="route('aset-digital.poster')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.poster') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'poster')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileImage class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Poster</span>
+                        </Link>
+
+                        <!-- Sub-menu 5: Kop Dokumen -->
+                        <Link
+                            :href="route('aset-digital.kop-dokumen')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('aset-digital.kop-dokumen') ||
+                                (route().current('aset-digital.index') &&
+                                    page.props.activeTab === 'kop-dokumen')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileText class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kop Dokumen</span>
+                        </Link>
+                    </div>
+                </div>
             </div>
         </div>
 
