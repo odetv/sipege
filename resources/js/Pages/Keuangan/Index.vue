@@ -20,6 +20,7 @@ import KeuanganBapsdTab from "@/Pages/Keuangan/Partials/KeuanganBapsdTab.vue";
 import KeuanganStokTab from "@/Pages/Keuangan/Partials/KeuanganStokTab.vue";
 import KeuanganLaporanHarianTab from "@/Pages/Keuangan/Partials/KeuanganLaporanHarianTab.vue";
 import KeuanganLaporanPeriodikTab from "@/Pages/Keuangan/Partials/KeuanganLaporanPeriodikTab.vue";
+import KeuanganSurveiHargaTab from "@/Pages/Keuangan/Partials/KeuanganSurveiHargaTab.vue";
 
 const props = defineProps({
     user: {
@@ -47,6 +48,14 @@ const props = defineProps({
         default: () => [],
     },
     suppliers: {
+        type: Array,
+        default: () => [],
+    },
+    surveiHargaList: {
+        type: Array,
+        default: () => [],
+    },
+    defaultSurveiItems: {
         type: Array,
         default: () => [],
     },
@@ -81,6 +90,7 @@ const normalizeTab = (tab) => {
     if (tab === "lpa") return "lpa";
     if (tab === "sptj") return "sptj";
     if (tab === "bapsd") return "bapsd";
+    if (tab === "survei-harga" || tab === "survei_harga" || tab === "survei") return "survei_harga";
     return tab || "anggaran";
 };
 
@@ -546,6 +556,18 @@ function formatTanggalIndo(tgl) {
                 v-if="activeTab === 'laporan-periodik' || activeTab === 'laporan_periodik'"
                 :summary="summary"
                 :format-rupiah="formatRupiah"
+            />
+
+            <!-- 16. SURVEI HARGA PASAR -->
+            <KeuanganSurveiHargaTab
+                v-if="activeTab === 'survei-harga' || activeTab === 'survei_harga'"
+                :user="user"
+                :unit-sppg="unitSppg"
+                :suppliers="suppliers"
+                :survei-harga-list="surveiHargaList"
+                :default-survei-items="defaultSurveiItems"
+                :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
             />
         </div>
     </AppLayout>

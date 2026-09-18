@@ -253,13 +253,24 @@ watch(
             form.jumlah_kader = null;
         }
 
-        const subList = getSubKategoriByKategori(newKategori);
-        const newRincian = subList.map((sub) => ({
-            sub_kategori: sub,
-            jenis_porsi: getJenisPorsiBySubKategori(sub, newKategori),
-            jumlah_laki_laki: 0,
-            jumlah_perempuan: 0,
-        }));
+        const newSubList = getSubKategoriByKategori(newKategori);
+        const existingMap = new Map();
+        if (Array.isArray(form.rincian)) {
+            form.rincian.forEach((r) => {
+                existingMap.set(r.sub_kategori, r);
+            });
+        }
+
+        const newRincian = newSubList.map((sub) => {
+            const existing = existingMap.get(sub);
+            return {
+                sub_kategori: sub,
+                jenis_porsi: getJenisPorsiBySubKategori(sub, newKategori),
+                jumlah_laki_laki: existing ? Number(existing.jumlah_laki_laki) || 0 : 0,
+                jumlah_perempuan: existing ? Number(existing.jumlah_perempuan) || 0 : 0,
+            };
+        });
+
         form.rincian = sortRincianByKategori(newRincian, newKategori);
         clearFieldError("rincian");
     },
@@ -278,9 +289,13 @@ function getAvailableSubKategoriForRow(currentRowIdx) {
         .map((r) => r.sub_kategori)
         .filter(Boolean);
 
-    return allOptions.filter(
+    let filtered = allOptions.filter(
         (opt) => opt === currentVal || !selectedOthers.includes(opt),
     );
+    if (currentVal && !filtered.includes(currentVal)) {
+        filtered = [currentVal, ...filtered];
+    }
+    return filtered;
 }
 
 function onSubKategoriChange(item) {

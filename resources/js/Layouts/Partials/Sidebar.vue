@@ -687,6 +687,23 @@ function logout() {
                             <span class="truncate">Daftar PO</span>
                         </Link>
 
+                        <!-- 4. Survei Harga Pasar -->
+                        <Link
+                            :href="route('keuangan.survei-harga')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.survei-harga') ||
+                                (route().current('keuangan.*') &&
+                                    (page.props.activeTab === 'survei-harga' ||
+                                        page.props.activeTab === 'survei_harga'))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <ClipboardList class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Survei Harga Pasar</span>
+                        </Link>
+
                         <!-- 4. SPJ (Grouping Accordion) -->
                         <div class="space-y-0.5 pt-0.5">
                             <button

@@ -66,6 +66,24 @@ function normalizeAlergiData(data) {
     });
 }
 
+function normalizeKategori(kat, nama = "") {
+    if (!kat) return "SD";
+    const k = kat.trim();
+    if (k === "SD/MI") {
+        const u = (nama || "").toUpperCase();
+        return u.includes("MI ") || u.startsWith("MIN ") || u.startsWith("MIS ") || u.includes("MADRASAH IBTIDAIYAH") ? "MI" : "SD";
+    }
+    if (k === "SMP/MTs") {
+        const u = (nama || "").toUpperCase();
+        return u.includes("MTS") || u.includes("MADRASAH TSANAWIYAH") ? "MTs" : "SMP";
+    }
+    if (k === "SMA/MA" || k === "SMA/SMK/MA" || k === "SMA/SMK") {
+        const u = (nama || "").toUpperCase();
+        return u.includes("MA ") || u.startsWith("MAN ") || u.startsWith("MAS ") || u.includes("MADRASAH ALIYAH") ? "MA" : (u.includes("SMK") ? "SMK" : "SMA");
+    }
+    return k;
+}
+
 function cleanPhone(newVal) {
     let cleaned = (newVal || "").toString().replace(/\D/g, "");
     if (cleaned.startsWith("0")) {
@@ -78,9 +96,11 @@ function cleanPhone(newVal) {
 }
 
 // Form state
+const initialKategori = normalizeKategori(props.kelompok.kategori, props.kelompok.nama_kelompok);
+
 const form = useForm({
     nama_kelompok: props.kelompok.nama_kelompok || "",
-    kategori: props.kelompok.kategori || "SD",
+    kategori: initialKategori,
     jenis_kepemilikan: props.kelompok.jenis_kepemilikan || "Negeri",
     tipe_identitas: props.kelompok.tipe_identitas || "NPSN",
     kode_identitas: props.kelompok.kode_identitas || "",
@@ -102,7 +122,7 @@ const form = useForm({
         : null,
     jumlah_kader:
         Number(props.kelompok.jumlah_kader) ||
-        (props.kelompok.kategori === "Posyandu" ? 5 : 0),
+        (initialKategori === "Posyandu" ? 5 : 0),
     alergi_porsi_kecil: Number(props.kelompok.alergi_porsi_kecil) || 0,
     alergi_porsi_besar: Number(props.kelompok.alergi_porsi_besar) || 0,
     keterangan_alergi: normalizeAlergiData(props.kelompok.keterangan_alergi),
@@ -115,13 +135,13 @@ const form = useForm({
                       r.jenis_porsi ||
                       getJenisPorsiBySubKategori(
                           r.sub_kategori,
-                          props.kelompok.kategori,
+                          initialKategori,
                       ),
                   jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
                   jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
               }))
             : [],
-        props.kelompok.kategori,
+        initialKategori,
     ),
 });
 
@@ -285,6 +305,49 @@ function cleanKabupatenName(name) {
     return name.replace(/^Kabupaten\s+/i, "").replace(/^Kota\s+/i, "");
 }
 
+// Otomatis update sub-kategori saat Kategori utama diubah pengguna
+watch(
+    () => form.kategori,
+    (newKategori, oldKategori) => {
+        if (!newKategori || newKategori === oldKategori) return;
+
+        if (newKategori === "Posyandu" && !form.jumlah_kader) {
+            form.jumlah_kader = 5;
+        } else if (newKategori !== "Posyandu") {
+            form.jumlah_kader = null;
+        }
+
+        const newSubList = getSubKategoriByKategori(newKategori);
+        const existingMap = new Map();
+        if (Array.isArray(form.rincian)) {
+            form.rincian.forEach((r) => {
+                existingMap.set(r.sub_kategori, r);
+            });
+        }
+
+        const updated = newSubList.map((sub) => {
+            const existing = existingMap.get(sub);
+            return {
+                id: existing?.id,
+                sub_kategori: sub,
+                jenis_porsi:
+                    existing?.jenis_porsi ||
+                    getJenisPorsiBySubKategori(sub, newKategori),
+                jumlah_laki_laki: existing
+                    ? Number(existing.jumlah_laki_laki) || 0
+                    : 0,
+                jumlah_perempuan: existing
+                    ? Number(existing.jumlah_perempuan) || 0
+                    : 0,
+            };
+        });
+
+        form.rincian = sortRincianByKategori(updated, newKategori);
+        clearFieldError("rincian");
+        clearFieldError("kategori");
+    },
+);
+
 // Subkategori options
 const currentCategorySubOptions = computed(() => {
     if (!form.kategori) return [];
@@ -299,9 +362,13 @@ function getAvailableSubKategoriForRow(currentRowIdx) {
         .map((r) => r.sub_kategori)
         .filter(Boolean);
 
-    return allOptions.filter(
+    let filtered = allOptions.filter(
         (opt) => opt === currentVal || !selectedOthers.includes(opt),
     );
+    if (currentVal && !filtered.includes(currentVal)) {
+        filtered = [currentVal, ...filtered];
+    }
+    return filtered;
 }
 
 function onSubKategoriChange(item) {

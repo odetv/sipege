@@ -77,6 +77,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/stok', [KeuanganController::class, 'stok'])->name('stok');
         Route::get('/laporan-harian', [KeuanganController::class, 'laporanHarian'])->name('laporan-harian');
         Route::get('/laporan-periodik', [KeuanganController::class, 'laporanPeriodik'])->name('laporan-periodik');
+        Route::get('/survei-harga', [KeuanganController::class, 'surveiHarga'])->name('survei-harga');
+        Route::post('/survei-harga', [KeuanganController::class, 'storeSurveiHarga'])->name('survei-harga.store');
+        Route::put('/survei-harga/{id}', [KeuanganController::class, 'updateSurveiHarga'])->name('survei-harga.update');
+        Route::delete('/survei-harga/{id}', [KeuanganController::class, 'destroySurveiHarga'])->name('survei-harga.destroy');
 
         // PO Actions
         Route::post('/po/{id}/verifikasi', [KeuanganController::class, 'verifikasiPo'])->name('po.verifikasi');

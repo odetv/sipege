@@ -11,6 +11,9 @@ export const SATUAN_LIST = [
     { value: "pcs", label: "pcs (Pieces)", short: "pcs", type: "count" },
     { value: "bks", label: "bks (Bungkus)", short: "bks", type: "count" },
     { value: "buah", label: "buah (Buah)", short: "buah", type: "count" },
+    { value: "lonjor", label: "lonjor (Lonjor)", short: "lonjor", type: "count" },
+    { value: "ember", label: "ember (Ember)", short: "ember", type: "volume" },
+    { value: "jirigen", label: "jirigen (Jirigen)", short: "jirigen", type: "volume" },
 ];
 
 export const SATUAN_VALUES = SATUAN_LIST.map((s) => s.value);

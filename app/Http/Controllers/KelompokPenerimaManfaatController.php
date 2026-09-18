@@ -124,7 +124,7 @@ class KelompokPenerimaManfaatController extends Controller
 
         $validated = $request->validate([
             'nama_kelompok' => ['required', 'string', 'max:255'],
-            'kategori' => ['required', 'string', 'in:TK,RA,PAUD,SD,MI,SMP,MTs,SMA,SMK,MA,MAK,Posyandu'],
+            'kategori' => ['required', 'string', 'in:TK,RA,PAUD,SD,MI,SMP,MTs,SMA,SMK,MA,MAK,Posyandu,SD/MI,SMP/MTs,SMA/MA,TK/RA'],
             'jenis_kepemilikan' => ['required', 'string', 'in:Negeri,Swasta'],
             'tipe_identitas' => ['required', 'string', 'in:NPSN,NSPP,NSM,NSNP,TPK,Lainnya'],
             'kode_identitas' => ['required', 'string', 'max:100'],
@@ -142,11 +142,11 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap' => ['required', 'string'],
             'latitude' => ['required', 'numeric'],
             'longitude' => ['required', 'numeric'],
-            'jumlah_kader' => ['nullable', 'required_if:kategori,Posyandu', 'integer', 'min:1'],
+            'jumlah_kader' => $request->input('kategori') === 'Posyandu' ? ['required', 'integer', 'min:1'] : ['nullable'],
             'alergi_porsi_kecil' => ['nullable', 'integer', 'min:0'],
             'alergi_porsi_besar' => ['nullable', 'integer', 'min:0'],
             'keterangan_alergi' => ['nullable', 'array'],
-            'keterangan_alergi.*' => ['nullable', 'string', 'max:255'],
+            'keterangan_alergi.*' => ['nullable'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
@@ -285,14 +285,14 @@ class KelompokPenerimaManfaatController extends Controller
     public static function getSubKategoriOrder(string $kategori): array
     {
         return match ($kategori) {
-            'TK', 'RA', 'PAUD' => [
+            'TK', 'RA', 'PAUD', 'TK/RA', 'TK/RA/PAUD' => [
                 'Pelajar',
                 'Pendukung (Guru)',
                 'Pendukung (Tenaga Kependidikan)',
                 'Pendukung (Satpam)',
                 'Pendukung (Lainnya)',
             ],
-            'SD', 'MI' => [
+            'SD', 'MI', 'SD/MI' => [
                 'Kelas 1',
                 'Kelas 2',
                 'Kelas 3',
@@ -304,7 +304,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'Pendukung (Satpam)',
                 'Pendukung (Lainnya)',
             ],
-            'SMP', 'MTs' => [
+            'SMP', 'MTs', 'SMP/MTs' => [
                 'Kelas 7',
                 'Kelas 8',
                 'Kelas 9',
@@ -313,7 +313,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'Pendukung (Satpam)',
                 'Pendukung (Lainnya)',
             ],
-            'SMA', 'SMK', 'MA', 'MAK' => [
+            'SMA', 'SMK', 'MA', 'MAK', 'SMA/MA', 'SMA/SMK', 'SMA/SMK/MA' => [
                 'Kelas 10',
                 'Kelas 11',
                 'Kelas 12',
@@ -328,7 +328,13 @@ class KelompokPenerimaManfaatController extends Controller
                 'Balita',
                 'Pendukung (Lainnya)',
             ],
-            default => [],
+            default => [
+                'Penerima Utama',
+                'Pendukung (Guru)',
+                'Pendukung (Tenaga Kependidikan)',
+                'Pendukung (Satpam)',
+                'Pendukung (Lainnya)',
+            ],
         };
     }
 
@@ -409,7 +415,7 @@ class KelompokPenerimaManfaatController extends Controller
 
         $validated = $request->validate([
             'nama_kelompok' => ['required', 'string', 'max:255'],
-            'kategori' => ['required', 'string', 'in:TK,RA,PAUD,SD,MI,SMP,MTs,SMA,SMK,MA,MAK,Posyandu'],
+            'kategori' => ['required', 'string', 'in:TK,RA,PAUD,SD,MI,SMP,MTs,SMA,SMK,MA,MAK,Posyandu,SD/MI,SMP/MTs,SMA/MA,TK/RA'],
             'jenis_kepemilikan' => ['required', 'string', 'in:Negeri,Swasta'],
             'tipe_identitas' => ['required', 'string', 'in:NPSN,NSPP,NSM,NSNP,TPK,Lainnya'],
             'kode_identitas' => ['required', 'string', 'max:100'],
@@ -427,11 +433,11 @@ class KelompokPenerimaManfaatController extends Controller
             'alamat_lengkap' => ['required', 'string'],
             'latitude' => ['required', 'numeric'],
             'longitude' => ['required', 'numeric'],
-            'jumlah_kader' => ['nullable', 'required_if:kategori,Posyandu', 'integer', 'min:1'],
+            'jumlah_kader' => $request->input('kategori') === 'Posyandu' ? ['required', 'integer', 'min:1'] : ['nullable'],
             'alergi_porsi_kecil' => ['nullable', 'integer', 'min:0'],
             'alergi_porsi_besar' => ['nullable', 'integer', 'min:0'],
             'keterangan_alergi' => ['nullable', 'array'],
-            'keterangan_alergi.*' => ['nullable', 'string', 'max:255'],
+            'keterangan_alergi.*' => ['nullable'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
@@ -461,7 +467,7 @@ class KelompokPenerimaManfaatController extends Controller
             'rincian.required' => 'Rincian jumlah penerima manfaat wajib diisi.',
         ]);
 
-        DB::transaction(function () use ($validated, $penerima_manfaat) {
+        DB::transaction(function () use ($validated, $penerima_manfaat, $unitSppg) {
             $totalLakiLaki = 0;
             $totalPerempuan = 0;
             $totalPorsiKecil = 0;
@@ -598,7 +604,7 @@ class KelompokPenerimaManfaatController extends Controller
         $finalPB = $totalPB > 0 ? $totalPB : max(0, (int) $directPB);
 
         return [
-            'keterangan_alergi' => $cleanedList,
+            'keterangan_alergi' => array_values($cleanedList),
             'alergi_porsi_kecil' => $finalPK,
             'alergi_porsi_besar' => $finalPB,
         ];

@@ -71,3 +71,26 @@
   font-family: inherit;
   z-index: 10;
 }
+
+/* Global Print Styles - Enforce pure white background everywhere */
+@media print {
+  @page {
+    size: portrait;
+    margin: 8mm;
+  }
+
+  html,
+  body,
+  #app,
+  div,
+  main,
+  section,
+  header,
+  footer,
+  aside {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+}

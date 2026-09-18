@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KelompokPenerimaManfaat;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
+use App\Models\SurveiHargaPasar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,135 @@ class KeuanganController extends Controller
     public function daftarPo(Request $request): Response
     {
         return $this->renderKeuanganView($request, 'daftar-po');
+    }
+
+    /**
+     * Sub-menu: Survei Harga Pasar.
+     */
+    public function surveiHarga(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'survei-harga');
+    }
+
+    /**
+     * Simpan data survei harga pasar baru.
+     */
+    public function storeSurveiHarga(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $validated = $request->validate([
+            'no_dokumen' => ['nullable', 'string', 'max:255'],
+            'revisi' => ['nullable', 'string', 'max:50'],
+            'tanggal_berlaku' => ['nullable', 'date'],
+            'tanggal_survei' => ['required', 'date'],
+            'hari_survei' => ['nullable', 'string', 'max:50'],
+            'lokasi_survei' => ['nullable', 'string', 'max:255'],
+            'petugas_survei' => ['nullable', 'string', 'max:255'],
+            'petugas_survei_2' => ['nullable', 'string', 'max:255'],
+            'mengetahui_nama' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'string', 'max:50'],
+            'items' => ['required', 'array'],
+            'catatan' => ['nullable', 'string'],
+            'uid' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $indonesianDays = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $carbonDate = \Carbon\Carbon::parse($validated['tanggal_survei']);
+        $computedHari = $indonesianDays[$carbonDate->dayOfWeek] ?? '';
+
+        $romanMonths = [
+            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV',
+            5 => 'V', 6 => 'VI', 7 => 'VII', 8 => 'VIII',
+            9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'
+        ];
+        $romanMonth = $romanMonths[(int) date('n')] ?? 'I';
+        $year = date('Y');
+        $countThisYear = SurveiHargaPasar::where('unit_sppg_id', $unitSppg?->id)
+            ->whereYear('created_at', $year)
+            ->count() + 1;
+        $defaultNoDokumen = sprintf('%03d/SPPG/KEU/SHP/%s/%s', $countThisYear, $romanMonth, $year);
+
+        $survei = SurveiHargaPasar::create([
+            'uid' => !empty($validated['uid']) ? $validated['uid'] : (string) \Illuminate\Support\Str::uuid(),
+            'unit_sppg_id' => $unitSppg?->id,
+            'user_id' => $user->id,
+            'no_dokumen' => $validated['no_dokumen'] ?? $defaultNoDokumen,
+            'revisi' => !empty($validated['revisi']) ? $validated['revisi'] : null,
+            'tanggal_berlaku' => $validated['tanggal_berlaku'] ?? now()->toDateString(),
+            'tanggal_survei' => $validated['tanggal_survei'],
+            'hari_survei' => !empty($validated['hari_survei']) ? $validated['hari_survei'] : $computedHari,
+            'lokasi_survei' => $validated['lokasi_survei'] ?? null,
+            'petugas_survei' => $validated['petugas_survei'] ?? ($user->nama_lengkap ?: ($user->nama ?: 'Kepala SPPG')),
+            'petugas_survei_2' => $validated['petugas_survei_2'] ?? null,
+            'mengetahui_nama' => $validated['mengetahui_nama'] ?? null,
+            'status' => $validated['status'] ?? 'Selesai',
+            'items' => $validated['items'],
+            'catatan' => $validated['catatan'] ?? null,
+        ]);
+
+        return back()->with('success', 'Data formulir survei harga pasar berhasil disimpan.');
+    }
+
+    /**
+     * Update data survei harga pasar.
+     */
+    public function updateSurveiHarga(Request $request, $id): RedirectResponse
+    {
+        $survei = is_numeric($id)
+            ? SurveiHargaPasar::where('id', $id)->firstOrFail()
+            : SurveiHargaPasar::where('uid', $id)->firstOrFail();
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'no_dokumen' => ['nullable', 'string', 'max:255'],
+            'revisi' => ['nullable', 'string', 'max:50'],
+            'tanggal_berlaku' => ['nullable', 'date'],
+            'tanggal_survei' => ['required', 'date'],
+            'hari_survei' => ['nullable', 'string', 'max:50'],
+            'lokasi_survei' => ['nullable', 'string', 'max:255'],
+            'petugas_survei' => ['nullable', 'string', 'max:255'],
+            'petugas_survei_2' => ['nullable', 'string', 'max:255'],
+            'mengetahui_nama' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'string', 'max:50'],
+            'items' => ['required', 'array'],
+            'catatan' => ['nullable', 'string'],
+        ]);
+
+        $indonesianDays = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $carbonDate = \Carbon\Carbon::parse($validated['tanggal_survei']);
+        $computedHari = $indonesianDays[$carbonDate->dayOfWeek] ?? '';
+
+        $survei->update([
+            'no_dokumen' => $validated['no_dokumen'] ?? $survei->no_dokumen,
+            'revisi' => !empty($validated['revisi']) ? $validated['revisi'] : null,
+            'tanggal_berlaku' => $validated['tanggal_berlaku'] ?? $survei->tanggal_berlaku,
+            'tanggal_survei' => $validated['tanggal_survei'],
+            'hari_survei' => !empty($validated['hari_survei']) ? $validated['hari_survei'] : $computedHari,
+            'lokasi_survei' => $validated['lokasi_survei'] ?? null,
+            'petugas_survei' => $validated['petugas_survei'] ?? ($survei->petugas_survei ?: ($user->nama_lengkap ?: $user->nama)),
+            'petugas_survei_2' => $validated['petugas_survei_2'] ?? null,
+            'mengetahui_nama' => $validated['mengetahui_nama'] ?? null,
+            'status' => $validated['status'] ?? 'Selesai',
+            'items' => $validated['items'],
+            'catatan' => $validated['catatan'] ?? null,
+        ]);
+
+        return back()->with('success', 'Formulir survei harga pasar berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus data survei harga pasar.
+     */
+    public function destroySurveiHarga($id): RedirectResponse
+    {
+        $survei = is_numeric($id)
+            ? SurveiHargaPasar::where('id', $id)->firstOrFail()
+            : SurveiHargaPasar::where('uid', $id)->firstOrFail();
+        $survei->delete();
+
+        return back()->with('success', 'Formulir survei harga pasar berhasil dihapus.');
     }
 
     /**
@@ -532,6 +662,37 @@ class KeuanganController extends Controller
         $hariEfektifBulan = 25;
         $paguBulanan = $paguHarian * $hariEfektifBulan;
 
+        // 3. Data Survei Harga Pasar
+        $surveiHargaList = SurveiHargaPasar::with(['user', 'unitSppg'])
+            ->when($unitSppg, function ($q) use ($unitSppg) {
+                $q->where('unit_sppg_id', $unitSppg->id);
+            })
+            ->latest('tanggal_survei')
+            ->latest('id')
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'uid' => $s->uid,
+                    'no_dokumen' => $s->no_dokumen,
+                    'revisi' => $s->revisi,
+                    'tanggal_berlaku' => $s->tanggal_berlaku ? $s->tanggal_berlaku->format('Y-m-d') : null,
+                    'tanggal_survei' => $s->tanggal_survei ? $s->tanggal_survei->format('Y-m-d') : null,
+                    'hari_survei' => $s->hari_survei,
+                    'lokasi_survei' => $s->lokasi_survei,
+                    'petugas_survei' => $s->petugas_survei,
+                    'petugas_survei_2' => $s->petugas_survei_2,
+                    'mengetahui_nama' => $s->mengetahui_nama,
+                    'status' => $s->status,
+                    'catatan' => $s->catatan,
+                    'items' => $s->items ?? [],
+                    'total_items' => is_array($s->items) ? count($s->items) : 0,
+                    'created_at' => $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : null,
+                ];
+            });
+
+        $defaultSurveiItems = self::getDefaultSurveiItems();
+
         return Inertia::render('Keuangan/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
@@ -540,6 +701,8 @@ class KeuanganController extends Controller
             'verifikasiPoList' => $verifikasiPoList ?? [],
             'poList' => $poList,
             'suppliers' => $suppliers ?? [],
+            'surveiHargaList' => $surveiHargaList,
+            'defaultSurveiItems' => $defaultSurveiItems,
             'stats' => [
                 'total_penerima' => $totalPenerima,
                 'total_porsi_kecil' => $totalPorsiKecil,
@@ -552,4 +715,78 @@ class KeuanganController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Template Daftar Bahan Baku Standar Formulir Survei Harga Pasar (Sesuai Format Resmi BGN).
+     */
+    public static function getDefaultSurveiItems(): array
+    {
+        return [
+            // 1. KARBOHIDRAT
+            ['id' => 1, 'kategori' => 'karbohidrat', 'kategori_label' => 'KARBOHIDRAT', 'nomor' => 1, 'nama_bahan' => 'Beras', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 2, 'kategori' => 'karbohidrat', 'kategori_label' => 'KARBOHIDRAT', 'nomor' => 2, 'nama_bahan' => 'Kentang', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+
+            // 2. HEWANI
+            ['id' => 3, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 1, 'nama_bahan' => 'Ayam Potong', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 4, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 2, 'nama_bahan' => 'Ayam Fillet', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 5, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 3, 'nama_bahan' => 'Telur Ukuran Besar', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 6, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 4, 'nama_bahan' => 'Telur Ukuran Sedang', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 7, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 5, 'nama_bahan' => 'Telur Ukuran Kecil', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 8, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 6, 'nama_bahan' => 'Daging Sapi', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 9, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 7, 'nama_bahan' => 'Telur Puyuh', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 10, 'kategori' => 'hewani', 'kategori_label' => 'HEWANI', 'nomor' => 8, 'nama_bahan' => 'Susu Full Cream', 'satuan' => 'Pcs', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+
+            // 3. NABATI
+            ['id' => 11, 'kategori' => 'nabati', 'kategori_label' => 'NABATI', 'nomor' => 1, 'nama_bahan' => 'Tahu', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 12, 'kategori' => 'nabati', 'kategori_label' => 'NABATI', 'nomor' => 2, 'nama_bahan' => 'Tempe', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+
+            // 4. SAYURAN
+            ['id' => 13, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 1, 'nama_bahan' => 'Bayam', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 14, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 2, 'nama_bahan' => 'Buncis', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 15, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 3, 'nama_bahan' => 'Jagung Pipil', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 16, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 4, 'nama_bahan' => 'Kol Putih', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 17, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 5, 'nama_bahan' => 'Wortel Lokal', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 18, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 6, 'nama_bahan' => 'Wortel Berastagi', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 19, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 7, 'nama_bahan' => 'Brokoli', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 20, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 8, 'nama_bahan' => 'Kembang Kol', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 21, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 9, 'nama_bahan' => 'Tomat', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 22, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 10, 'nama_bahan' => 'Daun Pandan', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 23, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 11, 'nama_bahan' => 'Daun Seledri', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 24, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 12, 'nama_bahan' => 'Daun Salam', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 25, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 13, 'nama_bahan' => 'Cabe Teropong Merah', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 26, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 14, 'nama_bahan' => 'Cabe Keriting', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 27, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 15, 'nama_bahan' => 'Jeruk Nipis', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 28, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 16, 'nama_bahan' => 'Kunyit Mentah', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 29, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 17, 'nama_bahan' => 'Lengkuas', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 30, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 18, 'nama_bahan' => 'Pala', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 31, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 19, 'nama_bahan' => 'Bawang Merah Kupas', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 32, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 20, 'nama_bahan' => 'Bawang Putih Kupas', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 33, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 21, 'nama_bahan' => 'Asam Jawa', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 34, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 22, 'nama_bahan' => 'Bawang Bombay', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 35, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 23, 'nama_bahan' => 'Gula Merah', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 36, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 24, 'nama_bahan' => 'Sereh', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 37, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 25, 'nama_bahan' => 'Bawang Merah Utuh', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 38, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 26, 'nama_bahan' => 'Bawang Putih Utuh', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 39, 'kategori' => 'sayuran', 'kategori_label' => 'SAYURAN', 'nomor' => 27, 'nama_bahan' => 'Kemiri Pecah', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+
+            // 5. BUAH
+            ['id' => 40, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 1, 'nama_bahan' => 'Buah Naga', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 41, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 2, 'nama_bahan' => 'Jeruk Manis', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 42, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 3, 'nama_bahan' => 'Jeruk Santang', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 43, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 4, 'nama_bahan' => 'Kelengkeng', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 44, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 5, 'nama_bahan' => 'Anggur', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 45, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 6, 'nama_bahan' => 'Apel Fuji', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 46, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 7, 'nama_bahan' => 'Melon', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 47, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 8, 'nama_bahan' => 'Semangka Merah', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 48, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 9, 'nama_bahan' => 'Semangka Kuning', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 49, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 10, 'nama_bahan' => 'Pisang Mas', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 50, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 11, 'nama_bahan' => 'Pisang Ambon', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 51, 'kategori' => 'buah', 'kategori_label' => 'BUAH', 'nomor' => 12, 'nama_bahan' => 'Salak', 'satuan' => 'Kg', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+
+            // 6. LAIN-LAIN
+            ['id' => 52, 'kategori' => 'lain_lain', 'kategori_label' => 'Lain-lain', 'nomor' => 1, 'nama_bahan' => 'Sabun Cuci Piring', 'satuan' => 'Pcs', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+            ['id' => 53, 'kategori' => 'lain_lain', 'kategori_label' => 'Lain-lain', 'nomor' => 2, 'nama_bahan' => 'Karbol', 'satuan' => 'Btl', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
+        ];
+    }
 }
+

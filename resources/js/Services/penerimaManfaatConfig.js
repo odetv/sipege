@@ -404,6 +404,8 @@ export function getSubKategoriByKategori(kategori) {
         case "TK":
         case "RA":
         case "PAUD":
+        case "TK/RA":
+        case "TK/RA/PAUD":
             return [
                 "Pelajar",
                 "Pendukung (Guru)",
@@ -414,6 +416,7 @@ export function getSubKategoriByKategori(kategori) {
 
         case "SD":
         case "MI":
+        case "SD/MI":
             return [
                 "Kelas 1",
                 "Kelas 2",
@@ -429,6 +432,7 @@ export function getSubKategoriByKategori(kategori) {
 
         case "SMP":
         case "MTs":
+        case "SMP/MTs":
             return [
                 "Kelas 7",
                 "Kelas 8",
@@ -443,6 +447,9 @@ export function getSubKategoriByKategori(kategori) {
         case "SMK":
         case "MA":
         case "MAK":
+        case "SMA/MA":
+        case "SMA/SMK":
+        case "SMA/SMK/MA":
             return [
                 "Kelas 10",
                 "Kelas 11",
