@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { ref, computed } from "vue";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -16,6 +16,10 @@ import {
     AlertCircle,
     UserCheck,
     CheckCircle2,
+    GraduationCap,
+    Baby,
+    Search,
+    X,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -52,6 +56,42 @@ const totalPB = computed(() => {
 });
 
 const totalPM = computed(() => totalPK.value + totalPB.value);
+
+// Statistik Khusus PM Sekolah
+const sekolahStats = computed(() => {
+    const list = (props.kelompokList || []).filter(
+        (k) => k.kategori !== "Posyandu",
+    );
+    const count = list.length || Number(props.stats?.total_sekolah) || 0;
+    const pk = list.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_kecil) || 0),
+        0,
+    );
+    const pb = list.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_besar) || 0),
+        0,
+    );
+    const total = pk + pb;
+    return { count, pk, pb, total };
+});
+
+// Statistik Khusus PM Posyandu
+const posyanduStats = computed(() => {
+    const list = (props.kelompokList || []).filter(
+        (k) => k.kategori === "Posyandu",
+    );
+    const count = list.length || Number(props.stats?.total_posyandu) || 0;
+    const pk = list.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_kecil) || 0),
+        0,
+    );
+    const pb = list.reduce(
+        (acc, k) => acc + (Number(k.total_porsi_besar) || 0),
+        0,
+    );
+    const total = pk + pb;
+    return { count, pk, pb, total };
+});
 
 // Rekapitulasi Alergi Master PM (Tab 2: Analisa PM)
 const rekapAlergiMasterPm = computed(() => {
@@ -139,6 +179,55 @@ const rekapAlergiMasterPm = computed(() => {
 
 const totalMasterPmAlergi = computed(() => {
     return rekapAlergiMasterPm.value.reduce((s, a) => s + a.total, 0);
+});
+
+// Realtime Search Filters
+const searchAlergi = ref("");
+const searchTabel = ref("");
+
+// Filtered Rekap Alergi
+const filteredRekapAlergi = computed(() => {
+    const q = searchAlergi.value.trim().toLowerCase();
+    if (!q) return rekapAlergiMasterPm.value;
+
+    return rekapAlergiMasterPm.value.filter((al) => {
+        const matchesJenis = al.jenis_alergi.toLowerCase().includes(q);
+        const matchesKelompok = al.kelompok_list.some(
+            (kel) =>
+                kel.nama_kelompok.toLowerCase().includes(q) ||
+                (kel.desa_kelurahan &&
+                    kel.desa_kelurahan.toLowerCase().includes(q)) ||
+                (kel.kategori && kel.kategori.toLowerCase().includes(q)),
+        );
+        return matchesJenis || matchesKelompok;
+    });
+});
+
+// Filtered Kelompok List untuk Tabel
+const filteredKelompokList = computed(() => {
+    const q = searchTabel.value.trim().toLowerCase();
+    if (!q) return props.kelompokList || [];
+
+    return (props.kelompokList || []).filter((k) => {
+        const matchNama = (k.nama_kelompok || "").toLowerCase().includes(q);
+        const matchKategori = (k.kategori || "").toLowerCase().includes(q);
+        const matchDesa = (k.desa_kelurahan || "").toLowerCase().includes(q);
+        const matchKecamatan = (k.kecamatan || "").toLowerCase().includes(q);
+        const matchAlergi =
+            Array.isArray(k.keterangan_alergi) &&
+            k.keterangan_alergi.some((al) => {
+                const jenis = typeof al === "string" ? al : al?.jenis_alergi;
+                return jenis && jenis.toLowerCase().includes(q);
+            });
+
+        return (
+            matchNama ||
+            matchKategori ||
+            matchDesa ||
+            matchKecamatan ||
+            matchAlergi
+        );
+    });
 });
 </script>
 
@@ -250,6 +339,227 @@ const totalMasterPmAlergi = computed(() => {
             </Card>
         </div>
 
+        <!-- 2 Breakdown Cards: Sasaran Sekolah & Sasaran Posyandu -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4">
+            <!-- 1. Card Sasaran Sekolah -->
+            <Card
+                className="bg-white border-blue-200/80 shadow-xs overflow-hidden"
+            >
+                <CardContent className="p-4 sm:p-5 space-y-3.5">
+                    <!-- Header -->
+                    <div
+                        class="flex items-center justify-between gap-3 pb-3 border-b border-slate-100"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-2xs"
+                            >
+                                <GraduationCap class="h-5 w-5 sm:h-6 sm:w-6" />
+                            </div>
+                            <div>
+                                <h4
+                                    class="text-sm sm:text-base font-bold text-slate-900 leading-tight"
+                                >
+                                    Penerima Manfaat Sekolah
+                                </h4>
+                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                    Jenjang TK, SD, SMP, SMA/SMK sederajat
+                                </p>
+                            </div>
+                        </div>
+                        <span
+                            class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                        >
+                            {{ sekolahStats.count }} Sekolah
+                        </span>
+                    </div>
+
+                    <!-- 3 Metric Columns: PK, PB, Total -->
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                        <!-- PK -->
+                        <div
+                            class="p-3 rounded-xl bg-amber-50/60 border border-amber-200/70 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-amber-800 uppercase tracking-tight"
+                                >Porsi Kecil (PK)</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-amber-900 block leading-tight"
+                                >
+                                    {{
+                                        sekolahStats.pk.toLocaleString("id-ID")
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-amber-700/80 font-medium"
+                                    >Porsi</span
+                                >
+                            </div>
+                        </div>
+
+                        <!-- PB -->
+                        <div
+                            class="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200/70 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-indigo-800 uppercase tracking-tight"
+                                >Porsi Besar (PB)</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-indigo-900 block leading-tight"
+                                >
+                                    {{
+                                        sekolahStats.pb.toLocaleString("id-ID")
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-indigo-700/80 font-medium"
+                                    >Porsi</span
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Total PM Sekolah -->
+                        <div
+                            class="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-blue-800 uppercase tracking-tight"
+                                >Total Sekolah</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-blue-900 block leading-tight"
+                                >
+                                    {{
+                                        sekolahStats.total.toLocaleString(
+                                            "id-ID",
+                                        )
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-blue-700/80 font-medium"
+                                    >Porsi</span
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- 2. Card Sasaran Posyandu -->
+            <Card
+                className="bg-white border-emerald-200/80 shadow-xs overflow-hidden"
+            >
+                <CardContent className="p-4 sm:p-5 space-y-3.5">
+                    <!-- Header -->
+                    <div
+                        class="flex items-center justify-between gap-3 pb-3 border-b border-slate-100"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs"
+                            >
+                                <Baby class="h-5 w-5 sm:h-6 sm:w-6" />
+                            </div>
+                            <div>
+                                <h4
+                                    class="text-sm sm:text-base font-bold text-slate-900 leading-tight"
+                                >
+                                    Penerima Manfaat Posyandu
+                                </h4>
+                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                    Sasaran Balita, Ibu Hamil & Menyusui
+                                </p>
+                            </div>
+                        </div>
+                        <span
+                            class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        >
+                            {{ posyanduStats.count }} Posyandu
+                        </span>
+                    </div>
+
+                    <!-- 3 Metric Columns: PK, PB, Total -->
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                        <!-- PK -->
+                        <div
+                            class="p-3 rounded-xl bg-amber-50/60 border border-amber-200/70 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-amber-800 uppercase tracking-tight"
+                                >Porsi Kecil (PK)</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-amber-900 block leading-tight"
+                                >
+                                    {{
+                                        posyanduStats.pk.toLocaleString("id-ID")
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-amber-700/80 font-medium"
+                                    >Balita</span
+                                >
+                            </div>
+                        </div>
+
+                        <!-- PB -->
+                        <div
+                            class="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200/70 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-indigo-800 uppercase tracking-tight"
+                                >Porsi Besar (PB)</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-indigo-900 block leading-tight"
+                                >
+                                    {{
+                                        posyanduStats.pb.toLocaleString("id-ID")
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-indigo-700/80 font-medium"
+                                    >Bumil/Busui</span
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Total PM Posyandu -->
+                        <div
+                            class="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-center flex flex-col justify-between"
+                        >
+                            <span
+                                class="text-[10px] sm:text-[10.5px] font-bold text-emerald-800 uppercase tracking-tight"
+                                >Total Posyandu</span
+                            >
+                            <div class="mt-1">
+                                <span
+                                    class="text-base sm:text-lg font-black text-emerald-900 block leading-tight"
+                                >
+                                    {{
+                                        posyanduStats.total.toLocaleString(
+                                            "id-ID",
+                                        )
+                                    }}
+                                </span>
+                                <span
+                                    class="text-[10px] text-emerald-700/80 font-medium"
+                                    >Porsi</span
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+
         <!-- Card Sebaran & Pemetaan Alergi Penerima Manfaat (Hanya Tampil Jika Ada PM Alergi) -->
         <Card
             v-if="rekapAlergiMasterPm.length > 0"
@@ -259,7 +569,7 @@ const totalMasterPmAlergi = computed(() => {
                 className="p-4 sm:p-5 border-b border-rose-100 bg-rose-50/50"
             >
                 <div
-                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
                 >
                     <div>
                         <div class="flex items-center gap-2 flex-wrap">
@@ -287,17 +597,41 @@ const totalMasterPmAlergi = computed(() => {
                             terdampak untuk perencanaan menu substitusi MBG.
                         </CardDescription>
                     </div>
-                    <span
-                        class="text-xs font-bold text-rose-900 px-3 py-1 bg-white rounded-xl border border-rose-200 shadow-2xs self-start sm:self-auto"
-                    >
-                        {{ rekapAlergiMasterPm.length }} Jenis Alergen
-                    </span>
+
+                    <!-- Search & Badge Filter Header -->
+                    <div class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                        <div class="relative w-full sm:w-64">
+                            <Search
+                                class="w-4 h-4 text-rose-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                            />
+                            <input
+                                v-model="searchAlergi"
+                                type="text"
+                                placeholder="Cari jenis alergen / kelompok..."
+                                class="w-full pl-9 pr-8 py-1.5 rounded-xl border border-rose-200 bg-white text-xs font-medium text-slate-800 placeholder:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 shadow-2xs transition-all"
+                            />
+                            <button
+                                v-if="searchAlergi"
+                                type="button"
+                                @click="searchAlergi = ''"
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                                title="Hapus pencarian"
+                            >
+                                <X class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        <span
+                            class="text-xs font-bold text-rose-900 px-3 py-1.5 bg-white rounded-xl border border-rose-200 shadow-2xs whitespace-nowrap shrink-0"
+                        >
+                            {{ filteredRekapAlergi.length }} Jenis Alergen
+                        </span>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
-                <div class="flex flex-wrap gap-3.5">
+                <div v-if="filteredRekapAlergi.length > 0" class="flex flex-wrap gap-3.5">
                     <div
-                        v-for="(al, alIdx) in rekapAlergiMasterPm"
+                        v-for="(al, alIdx) in filteredRekapAlergi"
                         :key="alIdx"
                         class="flex-1 min-w-[280px] sm:min-w-[320px] rounded-xl border border-slate-200/90 bg-slate-50/40 p-3.5 space-y-3 flex flex-col justify-start hover:border-rose-300 transition-colors shadow-2xs"
                     >
@@ -381,13 +715,27 @@ const totalMasterPmAlergi = computed(() => {
                                             class="block text-[9.5px] text-slate-400 font-normal"
                                         >
                                             (PK: {{ kel.porsi_kecil }}, PB:
-                                            {{ kel.porsi_besar }})
+                                             {{ kel.porsi_besar }})
                                         </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Empty Search State Alergi -->
+                <div v-else class="p-8 text-center bg-rose-50/30 rounded-xl border border-dashed border-rose-200">
+                    <p class="text-xs text-rose-700 font-semibold">
+                        Tidak ada data alergen atau kelompok yang cocok dengan pencarian "{{ searchAlergi }}".
+                    </p>
+                    <button
+                        type="button"
+                        @click="searchAlergi = ''"
+                        class="mt-2 text-xs font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+                    >
+                        Reset Pencarian Alergi
+                    </button>
                 </div>
             </CardContent>
         </Card>
@@ -397,19 +745,49 @@ const totalMasterPmAlergi = computed(() => {
             <CardHeader
                 className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50"
             >
-                <CardTitle
-                    className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
+                <div
+                    class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
                 >
-                    <Users class="h-5 w-5 text-primary" />
-                    <span
-                        >Tabel Detail Jumlah Penerima Manfaat (PM) per Kategori
-                        Sasaran</span
-                    >
-                </CardTitle>
-                <CardDescription class="text-xs sm:text-sm">
-                    Dasar kuota produksi harian MBG SPPG terklasifikasi
-                    berdasarkan jenjang pendidikan dan kategori porsi.
-                </CardDescription>
+                    <div>
+                        <CardTitle
+                            className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
+                        >
+                            <Users class="h-5 w-5 text-primary" />
+                            <span
+                                >Tabel Detail Jumlah Penerima Manfaat (PM) per Kategori
+                                Sasaran</span
+                            >
+                        </CardTitle>
+                        <CardDescription class="text-xs sm:text-sm mt-0.5">
+                            Dasar kuota produksi harian MBG SPPG terklasifikasi
+                            berdasarkan jenjang pendidikan dan kategori porsi.
+                        </CardDescription>
+                    </div>
+
+                    <!-- Search Box Realtime untuk Tabel -->
+                    <div class="flex items-center gap-2.5 w-full lg:w-auto">
+                        <div class="relative w-full sm:w-72">
+                            <Search
+                                class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                            />
+                            <input
+                                v-model="searchTabel"
+                                type="text"
+                                placeholder="Cari kelompok, wilayah, atau alergi..."
+                                class="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-all"
+                            />
+                            <button
+                                v-if="searchTabel"
+                                type="button"
+                                @click="searchTabel = ''"
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                                title="Hapus pencarian"
+                            >
+                                <X class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </CardHeader>
             <div class="overflow-x-auto">
                 <table
@@ -419,6 +797,7 @@ const totalMasterPmAlergi = computed(() => {
                         <tr
                             class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider select-none"
                         >
+                            <th class="py-3.5 px-4 w-12 text-center">No</th>
                             <th class="py-3.5 px-4">Nama Kelompok</th>
                             <th class="py-3.5 px-4">Kategori</th>
                             <th class="py-3.5 px-4 text-center">Laki-Laki</th>
@@ -431,10 +810,15 @@ const totalMasterPmAlergi = computed(() => {
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
-                            v-for="k in kelompokList"
+                            v-for="(k, kIndex) in filteredKelompokList"
                             :key="k.id"
                             class="hover:bg-slate-50/70 transition-colors"
                         >
+                            <td
+                                class="p-3.5 text-center font-medium text-slate-400"
+                            >
+                                {{ kIndex + 1 }}
+                            </td>
                             <td class="p-3.5 font-bold text-slate-900">
                                 <div class="flex items-center gap-2">
                                     <span>{{ k.nama_kelompok }}</span>
@@ -531,17 +915,20 @@ const totalMasterPmAlergi = computed(() => {
                                     class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded"
                                 >
                                     <CheckCircle2 class="h-3 w-3" />
-                                    Standar Normal (0 Alergi)
+                                    Normal (0 Alergi)
                                 </span>
                             </td>
                         </tr>
-                        <tr v-if="kelompokList.length === 0">
+                        <tr v-if="filteredKelompokList.length === 0">
                             <td
-                                colspan="8"
+                                colspan="9"
                                 class="p-8 text-center text-slate-400 font-semibold"
                             >
-                                Belum ada data kelompok penerima manfaat yang
-                                terdaftar.
+                                {{
+                                    searchTabel
+                                        ? `Tidak ada data kelompok yang cocok dengan pencarian "${searchTabel}".`
+                                        : "Belum ada data kelompok penerima manfaat yang terdaftar."
+                                }}
                             </td>
                         </tr>
                     </tbody>
@@ -550,21 +937,21 @@ const totalMasterPmAlergi = computed(() => {
                     >
                         <tr>
                             <td
-                                colspan="4"
+                                colspan="5"
                                 class="p-3.5 uppercase tracking-wider text-slate-700"
                             >
                                 Total Produksi Porsi SPPG:
                             </td>
                             <td class="p-3.5 text-center text-amber-900">
-                                {{ totalPK }}
+                                {{ totalPK.toLocaleString("id-ID") }}
                             </td>
                             <td class="p-3.5 text-center text-indigo-900">
-                                {{ totalPB }}
+                                {{ totalPB.toLocaleString("id-ID") }}
                             </td>
                             <td
                                 class="p-3.5 text-center text-emerald-950 text-sm"
                             >
-                                {{ totalPM }}
+                                {{ totalPM.toLocaleString("id-ID") }}
                             </td>
                             <td></td>
                         </tr>

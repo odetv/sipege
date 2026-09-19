@@ -29,7 +29,6 @@ class RincianPenerimaManfaatSeeder extends Seeder
         $now = now();
 
         $rincianRaw = [
-
             // 1. RA Baitul Mutaallim (ID KPM = 1)
             [1, 'Pelajar', 'Porsi Kecil', 28, 30],
             [1, 'Pendukung (Guru)', 'Porsi Besar', 0, 3],
@@ -152,6 +151,7 @@ class RincianPenerimaManfaatSeeder extends Seeder
             [18, 'Ibu Hamil', 'Porsi Besar', 0, 0],
             [18, 'Ibu Menyusui', 'Porsi Besar', 0, 21],
             [18, 'Balita', 'Porsi Kecil', 17, 16],
+
         ];
 
         $batch = [];

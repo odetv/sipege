@@ -443,7 +443,9 @@ function triggerAutoSave() {
                 revisi: revisi.value || null,
                 tanggal_berlaku: tanggalBerlaku.value,
                 tanggal_survei: tanggalSurvei.value,
-                hari_survei: getFormattedHariTanggal(tanggalSurvei.value).split(",")[0],
+                hari_survei: getFormattedHariTanggal(tanggalSurvei.value).split(
+                    ",",
+                )[0],
                 lokasi_survei: lokasiSurvei.value || null,
                 petugas_survei:
                     petugasSurvei1.value || userFullNameFromDb.value || null,
@@ -463,11 +465,14 @@ function triggerAutoSave() {
                     only: ["surveiHargaList"],
                     onSuccess: () => {
                         autoSaveStatus.value = "saved";
-                        lastSavedTime.value = new Date().toLocaleTimeString("id-ID", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                        });
+                        lastSavedTime.value = new Date().toLocaleTimeString(
+                            "id-ID",
+                            {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                            },
+                        );
                     },
                     onError: () => {
                         autoSaveStatus.value = "error";
@@ -738,10 +743,12 @@ const hasNewSurveyModifications = computed(() => {
         (i) => i.keterangan && i.keterangan.trim() !== "",
     );
     const hasLocation = lokasiSurvei.value && lokasiSurvei.value.trim() !== "";
-    const hasPetugas2 = petugasSurvei2.value && petugasSurvei2.value.trim() !== "";
+    const hasPetugas2 =
+        petugasSurvei2.value && petugasSurvei2.value.trim() !== "";
     const hasCatatan = catatan.value && catatan.value.trim() !== "";
     const hasMengetahui =
-        mengetahuiKepalaPasar.value && mengetahuiKepalaPasar.value.trim() !== "";
+        mengetahuiKepalaPasar.value &&
+        mengetahuiKepalaPasar.value.trim() !== "";
     return (
         hasPrice ||
         hasStore ||
@@ -834,10 +841,7 @@ function confirmDeleteSurvey() {
         onSuccess: () => {
             isDeleting.value = false;
             showDeleteModal.value = false;
-            if (
-                formId.value === targetId ||
-                currentUid.value === targetId
-            ) {
+            if (formId.value === targetId || currentUid.value === targetId) {
                 goBackToList();
             }
             surveyToDelete.value = null;
@@ -1093,17 +1097,16 @@ function saveSurvey() {
 
 // Open delete modal for survey
 function deleteSurvey(idOrUid) {
-    const found =
-        props.surveiHargaList.find(
-            (s) => s.uid === idOrUid || s.id === idOrUid,
-        ) || {
-            id: idOrUid,
-            uid: idOrUid,
-            no_dokumen: noDokumen.value,
-            lokasi_survei: lokasiSurvei.value,
-            tanggal_survei: tanggalSurvei.value,
-            petugas_survei: petugasSurvei1.value,
-        };
+    const found = props.surveiHargaList.find(
+        (s) => s.uid === idOrUid || s.id === idOrUid,
+    ) || {
+        id: idOrUid,
+        uid: idOrUid,
+        no_dokumen: noDokumen.value,
+        lokasi_survei: lokasiSurvei.value,
+        tanggal_survei: tanggalSurvei.value,
+        petugas_survei: petugasSurvei1.value,
+    };
     openDeleteModal(found);
 }
 
@@ -1580,9 +1583,7 @@ async function downloadPdf() {
                                         localDraftItem.noDokumen || "Draft Baru"
                                     }}</strong>
                                     •
-                                    {{
-                                        (localDraftItem.items || []).length
-                                    }}
+                                    {{ (localDraftItem.items || []).length }}
                                     Bahan
                                     <span v-if="localDraftItem.lokasiSurvei">
                                         • Lokasi:
@@ -1613,7 +1614,7 @@ async function downloadPdf() {
                         </div>
                     </div>
 
-                    <!-- Empty State -->
+                    <!-- Empty State (No DB records and no draft) -->
                     <div
                         v-if="
                             props.surveiHargaList.length === 0 &&
@@ -1646,9 +1647,27 @@ async function downloadPdf() {
                         </Button>
                     </div>
 
-                    <!-- Empty Filtered History State -->
+                    <!-- State when draft exists but no saved surveys in DB yet -->
                     <div
-                        v-else-if="filteredHistoryList.length === 0"
+                        v-else-if="props.surveiHargaList.length === 0"
+                        class="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200/90 space-y-1.5"
+                    >
+                        <ClipboardList class="w-5 h-5 text-slate-300 mx-auto" />
+                        <p class="text-xs font-semibold text-slate-600">
+                            Belum ada dokumen survei yang tersimpan di database
+                        </p>
+                        <p class="text-[11px] text-slate-400">
+                            Lanjutkan draft aktif di atas untuk menyimpan ke
+                            database atau buat survei baru.
+                        </p>
+                    </div>
+
+                    <!-- Empty Filtered History State (when searching and 0 matches found) -->
+                    <div
+                        v-else-if="
+                            historySearchQuery &&
+                            filteredHistoryList.length === 0
+                        "
                         class="py-12 text-center bg-slate-50/50 rounded-xl border border-slate-200 space-y-2"
                     >
                         <Search class="w-6 h-6 text-slate-400 mx-auto" />
@@ -1661,7 +1680,7 @@ async function downloadPdf() {
                             variant="outline"
                             size="sm"
                             @click="historySearchQuery = ''"
-                            class="text-xs font-bold mt-1"
+                            class="text-xs font-bold mt-1 cursor-pointer"
                         >
                             Hapus Pencarian
                         </Button>
@@ -3023,7 +3042,9 @@ async function downloadPdf() {
                             Konfirmasi Keluar dari Formulir Baru
                         </h3>
                         <p class="text-xs text-slate-500 leading-relaxed">
-                            Anda sedang mengisi formulir survei baru dan terdapat data yang belum disimpan ke database. Bagaimana Anda ingin memproses formulir ini?
+                            Anda sedang mengisi formulir survei baru dan
+                            terdapat data yang belum disimpan ke database.
+                            Bagaimana Anda ingin memproses formulir ini?
                         </p>
                     </div>
                 </div>
@@ -3037,7 +3058,11 @@ async function downloadPdf() {
                         class="w-full bg-primary hover:bg-primary/90 text-white text-xs font-bold h-10 gap-2 cursor-pointer shadow-xs"
                     >
                         <Save class="w-4 h-4" />
-                        <span>{{ isSaving ? 'Menyimpan ke Database...' : 'Simpan sebagai Formulir Baru & Keluar' }}</span>
+                        <span>{{
+                            isSaving
+                                ? "Menyimpan ke Database..."
+                                : "Simpan sebagai Formulir Baru & Keluar"
+                        }}</span>
                     </Button>
 
                     <Button
@@ -3080,7 +3105,9 @@ async function downloadPdf() {
                             Hapus Dokumen Survei Pasar?
                         </h3>
                         <p class="text-xs text-slate-500 leading-relaxed">
-                            Apakah Anda yakin ingin menghapus arsip survei harga pasar ini dari database? Tindakan ini bersifat permanen dan tidak dapat dibatalkan.
+                            Apakah Anda yakin ingin menghapus arsip survei harga
+                            pasar ini dari database? Tindakan ini bersifat
+                            permanen dan tidak dapat dibatalkan.
                         </p>
                     </div>
                 </div>
@@ -3098,7 +3125,9 @@ async function downloadPdf() {
                     <div class="flex items-center justify-between">
                         <span class="text-slate-500">Tanggal Survei:</span>
                         <span class="font-semibold text-slate-800">{{
-                            getFormattedHariTanggal(surveyToDelete.tanggal_survei)
+                            getFormattedHariTanggal(
+                                surveyToDelete.tanggal_survei,
+                            )
                         }}</span>
                     </div>
                     <div
@@ -3141,7 +3170,9 @@ async function downloadPdf() {
                         class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold gap-1.5 cursor-pointer shadow-xs"
                     >
                         <Trash2 class="w-3.5 h-3.5" />
-                        <span>{{ isDeleting ? "Menghapus..." : "Ya, Hapus Survei" }}</span>
+                        <span>{{
+                            isDeleting ? "Menghapus..." : "Ya, Hapus Survei"
+                        }}</span>
                     </Button>
                 </div>
             </div>
@@ -3165,7 +3196,8 @@ async function downloadPdf() {
                             Buang Draft Lokal?
                         </h3>
                         <p class="text-xs text-slate-500 mt-1 leading-relaxed">
-                            Draft formulir yang tersimpan pada penyimpanan peramban lokal Anda akan dihapus secara permanen.
+                            Draft formulir yang tersimpan pada penyimpanan
+                            peramban lokal Anda akan dihapus secara permanen.
                         </p>
                     </div>
                 </div>

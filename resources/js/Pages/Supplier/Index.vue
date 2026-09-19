@@ -69,15 +69,36 @@ const jenisOptions = [
 ];
 
 const jenisColors = {
-    KDMP: { bg: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-    Koperasi: { bg: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500" },
-    Bumdes: { bg: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500" },
-    Bumdesma: { bg: "bg-violet-50 text-violet-700 border-violet-200", dot: "bg-violet-500" },
-    UMKM: { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+    KDMP: {
+        bg: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dot: "bg-emerald-500",
+    },
+    Koperasi: {
+        bg: "bg-blue-50 text-blue-700 border-blue-200",
+        dot: "bg-blue-500",
+    },
+    Bumdes: {
+        bg: "bg-indigo-50 text-indigo-700 border-indigo-200",
+        dot: "bg-indigo-500",
+    },
+    Bumdesma: {
+        bg: "bg-violet-50 text-violet-700 border-violet-200",
+        dot: "bg-violet-500",
+    },
+    UMKM: {
+        bg: "bg-amber-50 text-amber-700 border-amber-200",
+        dot: "bg-amber-500",
+    },
     UD: { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500" },
-    CV: { bg: "bg-purple-50 text-purple-700 border-purple-200", dot: "bg-purple-500" },
+    CV: {
+        bg: "bg-purple-50 text-purple-700 border-purple-200",
+        dot: "bg-purple-500",
+    },
     PT: { bg: "bg-teal-50 text-teal-700 border-teal-200", dot: "bg-teal-500" },
-    Lainnya: { bg: "bg-slate-50 text-slate-700 border-slate-200", dot: "bg-slate-500" },
+    Lainnya: {
+        bg: "bg-slate-50 text-slate-700 border-slate-200",
+        dot: "bg-slate-500",
+    },
 };
 
 // Rekap list seluruh komoditas unik untuk filter
@@ -107,12 +128,16 @@ const filteredSuppliers = computed(() => {
             (s.kabupaten && s.kabupaten.toLowerCase().includes(query)) ||
             (s.kecamatan && s.kecamatan.toLowerCase().includes(query)) ||
             (s.kelurahan && s.kelurahan.toLowerCase().includes(query)) ||
-            (s.alamat_lengkap && s.alamat_lengkap.toLowerCase().includes(query)) ||
+            (s.alamat_lengkap &&
+                s.alamat_lengkap.toLowerCase().includes(query)) ||
             (Array.isArray(s.komoditas) &&
-                s.komoditas.some((k) => String(k).toLowerCase().includes(query)));
+                s.komoditas.some((k) =>
+                    String(k).toLowerCase().includes(query),
+                ));
 
         const matchesJenis =
-            selectedJenis.value === "all" || s.jenis_supplier === selectedJenis.value;
+            selectedJenis.value === "all" ||
+            s.jenis_supplier === selectedJenis.value;
 
         const matchesKomoditas =
             selectedKomoditasFilter.value === "all" ||
@@ -242,7 +267,10 @@ async function onRegencyChange(regCleanName) {
     if (!regCleanName) return;
 
     const found = regencies.value.find(
-        (r) => r.displayName === regCleanName || cleanKabupatenName(r.name) === regCleanName || r.name === regCleanName
+        (r) =>
+            r.displayName === regCleanName ||
+            cleanKabupatenName(r.name) === regCleanName ||
+            r.name === regCleanName,
     );
     if (found) {
         selectedRegencyCode.value = found.code;
@@ -333,7 +361,9 @@ async function openEditModal(supplier) {
     form.jenis_supplier = supplier.jenis_supplier || "KDMP";
     form.nama_usaha = supplier.nama_usaha || "";
     form.nama_pemilik = supplier.nama_pemilik || "";
-    form.komoditas = Array.isArray(supplier.komoditas) ? [...supplier.komoditas] : [];
+    form.komoditas = Array.isArray(supplier.komoditas)
+        ? [...supplier.komoditas]
+        : [];
     form.provinsi = supplier.provinsi || "";
     form.kabupaten = cleanKabupatenName(supplier.kabupaten || "");
     form.kecamatan = supplier.kecamatan || "";
@@ -366,7 +396,9 @@ async function openEditModal(supplier) {
 
             if (form.kabupaten) {
                 const reg = regencies.value.find(
-                    (r) => r.displayName === form.kabupaten || cleanKabupatenName(r.name) === form.kabupaten
+                    (r) =>
+                        r.displayName === form.kabupaten ||
+                        cleanKabupatenName(r.name) === form.kabupaten,
                 );
                 if (reg) {
                     selectedRegencyCode.value = reg.code;
@@ -378,7 +410,9 @@ async function openEditModal(supplier) {
                     }
 
                     if (form.kecamatan) {
-                        const dist = districts.value.find((d) => d.name === form.kecamatan);
+                        const dist = districts.value.find(
+                            (d) => d.name === form.kecamatan,
+                        );
                         if (dist) {
                             selectedDistrictCode.value = dist.code;
                             isLoadingVillages.value = true;
@@ -476,20 +510,29 @@ function submitDelete() {
             </div>
 
             <!-- ─── HEADER & CTA ────────────────────────────────────────────── -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+            <div
+                class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"
+            >
                 <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-xs">
+                    <div
+                        class="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-xs"
+                    >
                         <Store class="w-6 h-6" />
                     </div>
                     <div>
-                        <h1 class="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <h1
+                            class="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2"
+                        >
                             Daftar Supplier & Rekanan SPPG
-                            <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200">
+                            <span
+                                class="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200"
+                            >
                                 {{ suppliers.length }} Vendor
                             </span>
                         </h1>
                         <p class="text-xs sm:text-sm text-slate-500 mt-1">
-                            Penyedia bahan baku pangan lokal (KDMP, Koperasi, BUMDes, UMKM) & vendor operasional unit SPPG.
+                            Penyedia bahan baku pangan lokal (KDMP, Koperasi,
+                            BUMDes, UMKM) & vendor operasional unit SPPG.
                         </p>
                     </div>
                 </div>
@@ -509,67 +552,115 @@ function submitDelete() {
             <!-- ─── METRIC CARDS ────────────────────────────────────────────── -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <!-- Card 1: Total Supplier -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                <div
+                    class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between"
+                >
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Supplier</span>
-                        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                        <span
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                            >Total Supplier</span
+                        >
+                        <div
+                            class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100"
+                        >
                             <Store class="w-5 h-5" />
                         </div>
                     </div>
                     <div class="mt-4">
-                        <div class="text-2xl font-black text-slate-900">{{ summary.total_supplier || 0 }}</div>
-                        <p class="text-xs text-slate-500 mt-1">Rekanan terdaftar di sistem</p>
+                        <div class="text-2xl font-black text-slate-900">
+                            {{ summary.total_supplier || 0 }}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Rekanan terdaftar di sistem
+                        </p>
                     </div>
                 </div>
 
                 <!-- Card 2: KDMP, Koperasi & BUMDes -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                <div
+                    class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between"
+                >
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">KDMP, Koperasi & BUMDes</span>
-                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                        <span
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                            >KDMP, Koperasi & BUMDes</span
+                        >
+                        <div
+                            class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100"
+                        >
                             <Building2 class="w-5 h-5" />
                         </div>
                     </div>
                     <div class="mt-4">
-                        <div class="text-2xl font-black text-emerald-600">{{ summary.total_kdmp_koperasi || 0 }}</div>
-                        <p class="text-xs text-slate-500 mt-1">Lembaga ekonomi desa & kolektif</p>
+                        <div class="text-2xl font-black text-emerald-600">
+                            {{ summary.total_kdmp_koperasi || 0 }}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Lembaga ekonomi desa & kolektif
+                        </p>
                     </div>
                 </div>
 
                 <!-- Card 3: UMKM & Swasta -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                <div
+                    class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between"
+                >
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pelaku Usaha UMKM</span>
-                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+                        <span
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                            >Pelaku Usaha UMKM</span
+                        >
+                        <div
+                            class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100"
+                        >
                             <Briefcase class="w-5 h-5" />
                         </div>
                     </div>
                     <div class="mt-4">
-                        <div class="text-2xl font-black text-amber-600">{{ summary.total_umkm || 0 }}</div>
-                        <p class="text-xs text-slate-500 mt-1">Usaha mikro & toko lokal</p>
+                        <div class="text-2xl font-black text-amber-600">
+                            {{ summary.total_umkm || 0 }}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Usaha mikro & toko lokal
+                        </p>
                     </div>
                 </div>
 
                 <!-- Card 4: Ragam Komoditas -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                <div
+                    class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between"
+                >
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ragam Komoditas</span>
-                        <div class="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100">
+                        <span
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                            >Ragam Komoditas</span
+                        >
+                        <div
+                            class="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100"
+                        >
                             <Boxes class="w-5 h-5" />
                         </div>
                     </div>
                     <div class="mt-4">
-                        <div class="text-2xl font-black text-violet-600">{{ summary.total_komoditas || 0 }}</div>
-                        <p class="text-xs text-slate-500 mt-1">Jenis bahan baku dipasok</p>
+                        <div class="text-2xl font-black text-violet-600">
+                            {{ summary.total_komoditas || 0 }}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Jenis bahan baku dipasok
+                        </p>
                     </div>
                 </div>
             </div>
 
             <!-- ─── TOOLBAR & FILTERS ───────────────────────────────────────── -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col lg:flex-row gap-3 items-center justify-between">
+            <div
+                class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col lg:flex-row gap-3 items-center justify-between"
+            >
                 <!-- Search Box -->
                 <div class="relative w-full lg:w-96">
-                    <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Search
+                        class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"
+                    />
                     <input
                         v-model="searchQuery"
                         type="text"
@@ -586,30 +677,49 @@ function submitDelete() {
                 </div>
 
                 <!-- Filter Dropdowns -->
-                <div class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                <div
+                    class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto"
+                >
                     <!-- Filter Jenis Supplier -->
                     <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Jenis:</span>
+                        <span
+                            class="text-xs font-semibold text-slate-500 hidden sm:inline"
+                            >Jenis:</span
+                        >
                         <select
                             v-model="selectedJenis"
                             class="text-xs sm:text-sm font-medium rounded-xl border border-slate-200 bg-slate-50/50 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700"
                         >
                             <option value="all">Semua Jenis</option>
-                            <option v-for="opt in jenisOptions" :key="opt.value" :value="opt.value">
+                            <option
+                                v-for="opt in jenisOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
                                 {{ opt.label }}
                             </option>
                         </select>
                     </div>
 
                     <!-- Filter Komoditas -->
-                    <div v-if="allKomoditasList.length > 0" class="flex items-center gap-1.5">
-                        <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Komoditas:</span>
+                    <div
+                        v-if="allKomoditasList.length > 0"
+                        class="flex items-center gap-1.5"
+                    >
+                        <span
+                            class="text-xs font-semibold text-slate-500 hidden sm:inline"
+                            >Komoditas:</span
+                        >
                         <select
                             v-model="selectedKomoditasFilter"
                             class="text-xs sm:text-sm font-medium rounded-xl border border-slate-200 bg-slate-50/50 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700 max-w-[180px] truncate"
                         >
                             <option value="all">Semua Komoditas</option>
-                            <option v-for="k in allKomoditasList" :key="k" :value="k">
+                            <option
+                                v-for="k in allKomoditasList"
+                                :key="k"
+                                :value="k"
+                            >
                                 {{ k }}
                             </option>
                         </select>
@@ -617,8 +727,16 @@ function submitDelete() {
 
                     <!-- Reset Filter Button -->
                     <button
-                        v-if="searchQuery || selectedJenis !== 'all' || selectedKomoditasFilter !== 'all'"
-                        @click="searchQuery = ''; selectedJenis = 'all'; selectedKomoditasFilter = 'all'"
+                        v-if="
+                            searchQuery ||
+                            selectedJenis !== 'all' ||
+                            selectedKomoditasFilter !== 'all'
+                        "
+                        @click="
+                            searchQuery = '';
+                            selectedJenis = 'all';
+                            selectedKomoditasFilter = 'all';
+                        "
                         class="text-xs font-semibold text-rose-600 hover:text-rose-700 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 transition-colors"
                     >
                         Reset Filter
@@ -627,40 +745,69 @@ function submitDelete() {
             </div>
 
             <!-- ─── SUPPLIERS TABLE ─────────────────────────────────────────── -->
-            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div
+                class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+            >
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
-                            <tr class="border-b border-slate-100 bg-slate-50/60 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                            <tr
+                                class="border-b border-slate-100 bg-slate-50/60 text-slate-600 text-xs font-bold uppercase tracking-wider"
+                            >
                                 <th class="py-3.5 px-4 w-12 text-center">No</th>
-                                <th class="py-3.5 px-4 min-w-[200px]">Toko / Usaha & Pemilik</th>
+                                <th class="py-3.5 px-4 min-w-[200px]">
+                                    Toko / Usaha & Pemilik
+                                </th>
                                 <th class="py-3.5 px-4 w-36">Jenis Supplier</th>
-                                <th class="py-3.5 px-4 min-w-[220px]">Komoditas Bahan Baku</th>
-                                <th class="py-3.5 px-4 min-w-[220px]">Alamat & Wilayah</th>
-                                <th class="py-3.5 px-4 w-24 text-center">Jml PO</th>
-                                <th class="py-3.5 px-4 w-28 text-right">Aksi</th>
+                                <th class="py-3.5 px-4 min-w-[220px]">
+                                    Komoditas Bahan Baku
+                                </th>
+                                <th class="py-3.5 px-4 min-w-[220px]">
+                                    Alamat & Wilayah
+                                </th>
+                                <th class="py-3.5 px-4 w-24 text-center">
+                                    Jml PO
+                                </th>
+                                <th class="py-3.5 px-4 w-28 text-right">
+                                    Aksi
+                                </th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+                        <tbody
+                            class="divide-y divide-slate-100 text-xs sm:text-sm"
+                        >
                             <tr
                                 v-for="(sup, idx) in filteredSuppliers"
                                 :key="sup.id"
                                 class="hover:bg-slate-50/70 transition-colors group"
                             >
                                 <!-- No -->
-                                <td class="py-4 px-4 text-center font-medium text-slate-400">
+                                <td
+                                    class="py-4 px-4 text-center font-medium text-slate-400"
+                                >
                                     {{ idx + 1 }}
                                 </td>
 
                                 <!-- Nama Toko / Usaha & Pemilik -->
                                 <td class="py-4 px-4">
-                                    <div class="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                                        <Store class="w-4 h-4 text-primary shrink-0" />
+                                    <div
+                                        class="font-bold text-slate-900 text-sm flex items-center gap-1.5"
+                                    >
+                                        <Store
+                                            class="w-4 h-4 text-primary shrink-0"
+                                        />
                                         <span>{{ sup.nama_usaha }}</span>
                                     </div>
-                                    <div class="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <span v-if="sup.nama_pemilik" class="flex items-center gap-1">
-                                            <User class="w-3.5 h-3.5 text-slate-400" />
+                                    <div
+                                        class="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"
+                                    >
+                                        <span
+                                            v-if="sup.nama_pemilik"
+                                            class="flex items-center gap-1"
+                                        >
+                                            <User
+                                                class="w-3.5 h-3.5 text-slate-400"
+                                            />
                                             {{ sup.nama_pemilik }}
                                         </span>
                                         <a
@@ -670,7 +817,9 @@ function submitDelete() {
                                             class="flex items-center gap-1 text-primary hover:underline font-semibold"
                                             title="Hubungi via WhatsApp"
                                         >
-                                            <Phone class="w-3.5 h-3.5 text-emerald-500" />
+                                            <Phone
+                                                class="w-3.5 h-3.5 text-emerald-500"
+                                            />
                                             +{{ sup.no_telp }}
                                         </a>
                                     </div>
@@ -681,13 +830,16 @@ function submitDelete() {
                                     <span
                                         :class="[
                                             'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border',
-                                            jenisColors[sup.jenis_supplier]?.bg || 'bg-slate-50 text-slate-700 border-slate-200',
+                                            jenisColors[sup.jenis_supplier]
+                                                ?.bg ||
+                                                'bg-slate-50 text-slate-700 border-slate-200',
                                         ]"
                                     >
                                         <span
                                             :class="[
                                                 'w-1.5 h-1.5 rounded-full',
-                                                jenisColors[sup.jenis_supplier]?.dot || 'bg-slate-400',
+                                                jenisColors[sup.jenis_supplier]
+                                                    ?.dot || 'bg-slate-400',
                                             ]"
                                         ></span>
                                         {{ sup.jenis_supplier }}
@@ -696,7 +848,13 @@ function submitDelete() {
 
                                 <!-- Komoditas Bahan -->
                                 <td class="py-4 px-4">
-                                    <div v-if="Array.isArray(sup.komoditas) && sup.komoditas.length > 0" class="flex flex-wrap gap-1.5 max-w-md">
+                                    <div
+                                        v-if="
+                                            Array.isArray(sup.komoditas) &&
+                                            sup.komoditas.length > 0
+                                        "
+                                        class="flex flex-wrap gap-1.5 max-w-md"
+                                    >
                                         <span
                                             v-for="(kom, kIdx) in sup.komoditas"
                                             :key="kIdx"
@@ -705,33 +863,57 @@ function submitDelete() {
                                             {{ kom }}
                                         </span>
                                     </div>
-                                    <span v-else class="text-xs text-slate-400 italic">Belum ada komoditas</span>
+                                    <span
+                                        v-else
+                                        class="text-xs text-slate-400 italic"
+                                        >Belum ada komoditas</span
+                                    >
                                 </td>
 
                                 <!-- Alamat & Wilayah -->
                                 <td class="py-4 px-4">
-                                    <div class="text-xs text-slate-700 leading-relaxed font-medium">
-                                        <span v-if="sup.alamat_lengkap">{{ sup.alamat_lengkap }}, </span>
-                                        <span v-if="sup.kelurahan">{{ sup.kelurahan }}, </span>
-                                        <span v-if="sup.kecamatan">Kec. {{ sup.kecamatan }}, </span>
-                                        <span v-if="sup.kabupaten">{{ cleanKabupatenName(sup.kabupaten) }}</span>
+                                    <div
+                                        class="text-xs text-slate-700 leading-relaxed font-medium"
+                                    >
+                                        <span v-if="sup.alamat_lengkap"
+                                            >{{ sup.alamat_lengkap }},
+                                        </span>
+                                        <span v-if="sup.kelurahan"
+                                            >{{ sup.kelurahan }},
+                                        </span>
+                                        <span v-if="sup.kecamatan"
+                                            >Kec. {{ sup.kecamatan }},
+                                        </span>
+                                        <span v-if="sup.kabupaten">{{
+                                            cleanKabupatenName(sup.kabupaten)
+                                        }}</span>
                                     </div>
-                                    <div class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                                        <span v-if="sup.provinsi">{{ sup.provinsi }}</span>
-                                        <span v-if="sup.kode_pos"> • Kode Pos: {{ sup.kode_pos }}</span>
+                                    <div
+                                        class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1"
+                                    >
+                                        <span v-if="sup.provinsi">{{
+                                            sup.provinsi
+                                        }}</span>
+                                        <span v-if="sup.kode_pos">
+                                            • Kode Pos: {{ sup.kode_pos }}</span
+                                        >
                                     </div>
                                 </td>
 
                                 <!-- Jml PO -->
                                 <td class="py-4 px-4 text-center">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                                    <span
+                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700"
+                                    >
                                         {{ sup.purchase_orders_count || 0 }} PO
                                     </span>
                                 </td>
 
                                 <!-- Aksi -->
                                 <td class="py-4 px-4 text-right">
-                                    <div class="flex items-center justify-end gap-1.5">
+                                    <div
+                                        class="flex items-center justify-end gap-1.5"
+                                    >
                                         <button
                                             type="button"
                                             @click="openEditModal(sup)"
@@ -755,20 +937,32 @@ function submitDelete() {
                             <!-- Empty State -->
                             <tr v-if="filteredSuppliers.length === 0">
                                 <td colspan="7" class="py-12 px-4 text-center">
-                                    <div class="max-w-sm mx-auto flex flex-col items-center">
-                                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                                    <div
+                                        class="max-w-sm mx-auto flex flex-col items-center"
+                                    >
+                                        <div
+                                            class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3"
+                                        >
                                             <Store class="w-6 h-6" />
                                         </div>
-                                        <h3 class="text-sm font-bold text-slate-800">Tidak ada supplier ditemukan</h3>
+                                        <h3
+                                            class="text-sm font-bold text-slate-800"
+                                        >
+                                            Tidak ada supplier ditemukan
+                                        </h3>
                                         <p class="text-xs text-slate-500 mt-1">
                                             {{
-                                                searchQuery || selectedJenis !== 'all'
-                                                    ? 'Coba ubah kata kunci pencarian atau filter Anda.'
-                                                    : 'Belum ada data supplier rekanan. Tambahkan supplier baru sekarang.'
+                                                searchQuery ||
+                                                selectedJenis !== "all"
+                                                    ? "Coba ubah kata kunci pencarian atau filter Anda."
+                                                    : "Belum ada data supplier rekanan. Tambahkan supplier baru sekarang."
                                             }}
                                         </p>
                                         <button
-                                            v-if="!searchQuery && selectedJenis === 'all'"
+                                            v-if="
+                                                !searchQuery &&
+                                                selectedJenis === 'all'
+                                            "
                                             type="button"
                                             @click="openCreateModal"
                                             class="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-semibold shadow-sm hover:bg-primary/95 transition-all"
@@ -795,17 +989,26 @@ function submitDelete() {
                     class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-3xl overflow-hidden my-8 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-150"
                 >
                     <!-- Modal Header -->
-                    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
+                    <div
+                        class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0"
+                    >
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                            <div
+                                class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold"
+                            >
                                 <Store class="w-5 h-5" />
                             </div>
                             <div>
                                 <h2 class="text-base font-bold text-slate-900">
-                                    {{ isEditing ? 'Edit Data Supplier Rekanan' : 'Tambah Supplier Rekanan Baru' }}
+                                    {{
+                                        isEditing
+                                            ? "Edit Data Supplier Rekanan"
+                                            : "Tambah Supplier Rekanan Baru"
+                                    }}
                                 </h2>
                                 <p class="text-xs text-slate-500">
-                                    Lengkapi profil toko, penyedia bahan baku pangan lokal, atau vendor operasional SPPG.
+                                    Lengkapi profil toko, penyedia bahan baku
+                                    pangan lokal, atau vendor operasional SPPG.
                                 </p>
                             </div>
                         </div>
@@ -819,10 +1022,14 @@ function submitDelete() {
                     </div>
 
                     <!-- Modal Body -->
-                    <div class="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm">
+                    <div
+                        class="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm"
+                    >
                         <!-- SECTION 1: INFORMASI USAHA & KONTAK -->
                         <div class="space-y-4">
-                            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100">
+                            <div
+                                class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100"
+                            >
                                 <Briefcase class="w-4 h-4 text-primary" />
                                 <span>1. Profil Toko & Usaha Supplier</span>
                             </div>
@@ -830,31 +1037,62 @@ function submitDelete() {
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Jenis Supplier -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">
-                                        Jenis Supplier <span class="text-rose-500">*</span>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                    >
+                                        Jenis Supplier
+                                        <span class="text-rose-500">*</span>
                                     </label>
                                     <select
                                         v-model="form.jenis_supplier"
                                         class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 text-xs sm:text-sm font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                     >
-                                        <option value="" disabled>-- Pilih Jenis Supplier --</option>
-                                        <option value="KDMP">KDMP (Kelompok Dapur Mandiri Pangan)</option>
-                                        <option value="Koperasi">Koperasi</option>
-                                        <option value="Bumdes">BUMDes (Badan Usaha Milik Desa)</option>
-                                        <option value="Bumdesma">BUMDesma (BUMDes Bersama)</option>
-                                        <option value="UMKM">UMKM (Usaha Mikro, Kecil, Menengah)</option>
-                                        <option value="UD">UD (Usaha Dagang)</option>
-                                        <option value="CV">CV (Commanditaire Vennootschap)</option>
-                                        <option value="PT">PT (Perseroan Terbatas)</option>
-                                        <option value="Lainnya">Lainnya / Vendor Swasta</option>
+                                        <option value="" disabled>
+                                            -- Pilih Jenis Supplier --
+                                        </option>
+                                        <option value="KDMP">
+                                            KDMP (Kelompok Dapur Mandiri Pangan)
+                                        </option>
+                                        <option value="Koperasi">
+                                            Koperasi
+                                        </option>
+                                        <option value="Bumdes">
+                                            BUMDes (Badan Usaha Milik Desa)
+                                        </option>
+                                        <option value="Bumdesma">
+                                            BUMDesma (BUMDes Bersama)
+                                        </option>
+                                        <option value="UMKM">
+                                            UMKM (Usaha Mikro, Kecil, Menengah)
+                                        </option>
+                                        <option value="UD">
+                                            UD (Usaha Dagang)
+                                        </option>
+                                        <option value="CV">
+                                            CV (Commanditaire Vennootschap)
+                                        </option>
+                                        <option value="PT">
+                                            PT (Perseroan Terbatas)
+                                        </option>
+                                        <option value="Lainnya">
+                                            Lainnya / Vendor Swasta
+                                        </option>
                                     </select>
-                                    <p v-if="form.errors.jenis_supplier" class="text-[11px] text-rose-600">{{ form.errors.jenis_supplier }}</p>
+                                    <p
+                                        v-if="form.errors.jenis_supplier"
+                                        class="text-[11px] text-rose-600"
+                                    >
+                                        {{ form.errors.jenis_supplier }}
+                                    </p>
                                 </div>
 
                                 <!-- Nama Dagang Usaha / Toko -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">
-                                        Nama Dagang Toko / Usaha <span class="text-rose-500">*</span>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                    >
+                                        Nama Dagang Toko / Usaha
+                                        <span class="text-rose-500">*</span>
                                     </label>
                                     <input
                                         v-model="form.nama_usaha"
@@ -862,12 +1100,19 @@ function submitDelete() {
                                         placeholder="Contoh: Toko Tani Berkah / KDMP Sukamaju"
                                         class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                     />
-                                    <p v-if="form.errors.nama_usaha" class="text-[11px] text-rose-600">{{ form.errors.nama_usaha }}</p>
+                                    <p
+                                        v-if="form.errors.nama_usaha"
+                                        class="text-[11px] text-rose-600"
+                                    >
+                                        {{ form.errors.nama_usaha }}
+                                    </p>
                                 </div>
 
                                 <!-- Nama Pemilik Usaha -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                    >
                                         Nama Pemilik Usaha / Penanggung Jawab
                                     </label>
                                     <input
@@ -876,16 +1121,27 @@ function submitDelete() {
                                         placeholder="Contoh: H. Ahmad Subarjo"
                                         class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                     />
-                                    <p v-if="form.errors.nama_pemilik" class="text-[11px] text-rose-600">{{ form.errors.nama_pemilik }}</p>
+                                    <p
+                                        v-if="form.errors.nama_pemilik"
+                                        class="text-[11px] text-rose-600"
+                                    >
+                                        {{ form.errors.nama_pemilik }}
+                                    </p>
                                 </div>
 
                                 <!-- No. Telepon / WhatsApp dengan Panduan +62 -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                    >
                                         No. Telp / WhatsApp
                                     </label>
-                                    <div class="flex items-stretch rounded-xl overflow-hidden border border-slate-200 bg-slate-50/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-                                        <div class="flex items-center justify-center px-3.5 bg-slate-100/80 border-r border-slate-200 text-slate-700 font-bold text-xs select-none tracking-wide shrink-0">
+                                    <div
+                                        class="flex items-stretch rounded-xl overflow-hidden border border-slate-200 bg-slate-50/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all"
+                                    >
+                                        <div
+                                            class="flex items-center justify-center px-3.5 bg-slate-100/80 border-r border-slate-200 text-slate-700 font-bold text-xs select-none tracking-wide shrink-0"
+                                        >
                                             +62
                                         </div>
                                         <input
@@ -896,19 +1152,35 @@ function submitDelete() {
                                             class="w-full min-w-0 bg-transparent py-2.5 px-3 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none placeholder:text-slate-400"
                                         />
                                     </div>
-                                    <p class="text-[10.5px] text-slate-400 mt-0.5">
-                                        Mulai langsung dengan angka 8... Disimpan di sistem sebagai <span class="font-mono text-slate-600">62{{ rawPhone || '8...' }}</span>
+                                    <p
+                                        class="text-[10.5px] text-slate-400 mt-0.5"
+                                    >
+                                        Mulai langsung dengan angka 8...
+                                        Disimpan di sistem sebagai
+                                        <span class="font-mono text-slate-600"
+                                            >62{{ rawPhone || "8..." }}</span
+                                        >
                                     </p>
-                                    <p v-if="form.errors.no_telp" class="text-[11px] text-rose-600">{{ form.errors.no_telp }}</p>
+                                    <p
+                                        v-if="form.errors.no_telp"
+                                        class="text-[11px] text-rose-600"
+                                    >
+                                        {{ form.errors.no_telp }}
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
                         <!-- SECTION 2: KOMODITAS BAHAN YANG DISEDIAKAN -->
                         <div class="space-y-4">
-                            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100">
+                            <div
+                                class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100"
+                            >
                                 <Boxes class="w-4 h-4 text-primary" />
-                                <span>2. Komoditas Bahan Yang Disediakan Supplier (Bisa Lebih Dari 1)</span>
+                                <span
+                                    >2. Komoditas Bahan Yang Disediakan Supplier
+                                    (Bisa Lebih Dari 1)</span
+                                >
                             </div>
 
                             <!-- Input komoditas custom -->
@@ -931,7 +1203,10 @@ function submitDelete() {
                                 </div>
 
                                 <!-- List Komoditas Terpilih -->
-                                <div v-if="form.komoditas.length > 0" class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex flex-wrap gap-2">
+                                <div
+                                    v-if="form.komoditas.length > 0"
+                                    class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex flex-wrap gap-2"
+                                >
                                     <span
                                         v-for="(item, idx) in form.komoditas"
                                         :key="idx"
@@ -950,14 +1225,19 @@ function submitDelete() {
 
                                 <!-- Quick Suggestions -->
                                 <div>
-                                    <span class="text-[11px] font-semibold text-slate-400 block mb-1.5">Saran Cepat:</span>
+                                    <span
+                                        class="text-[11px] font-semibold text-slate-400 block mb-1.5"
+                                        >Saran Cepat:</span
+                                    >
                                     <div class="flex flex-wrap gap-1.5">
                                         <button
                                             v-for="sug in komoditasSuggestions"
                                             :key="sug"
                                             type="button"
                                             @click="addKomoditas(sug)"
-                                            :disabled="form.komoditas.includes(sug)"
+                                            :disabled="
+                                                form.komoditas.includes(sug)
+                                            "
                                             :class="[
                                                 'text-[11px] px-2 py-0.5 rounded-md border font-medium transition-colors cursor-pointer',
                                                 form.komoditas.includes(sug)
@@ -974,92 +1254,173 @@ function submitDelete() {
 
                         <!-- SECTION 3: WILAYAH ADMINISTRASI & ALAMAT -->
                         <div class="space-y-4">
-                            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100">
+                            <div
+                                class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 pb-1 border-b border-slate-100"
+                            >
                                 <MapPin class="w-4 h-4 text-primary" />
-                                <span>3. Wilayah Administrasi & Alamat Lengkap</span>
+                                <span
+                                    >3. Wilayah Administrasi & Alamat
+                                    Lengkap</span
+                                >
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <!-- Provinsi -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">Provinsi</label>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                        >Provinsi</label
+                                    >
                                     <div class="relative">
                                         <select
                                             :value="form.provinsi"
-                                            @change="onProvinceChange($event.target.value)"
+                                            @change="
+                                                onProvinceChange(
+                                                    $event.target.value,
+                                                )
+                                            "
                                             :disabled="isLoadingProvinces"
                                             class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 pr-8 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-slate-100"
                                         >
-                                            <option value="">-- Pilih Provinsi --</option>
-                                            <option v-for="prov in provinces" :key="prov.code" :value="prov.name">
+                                            <option value="">
+                                                -- Pilih Provinsi --
+                                            </option>
+                                            <option
+                                                v-for="prov in provinces"
+                                                :key="prov.code"
+                                                :value="prov.name"
+                                            >
                                                 {{ prov.name }}
                                             </option>
                                         </select>
-                                        <Loader2 v-if="isLoadingProvinces" class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <Loader2
+                                            v-if="isLoadingProvinces"
+                                            class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                        />
                                     </div>
                                 </div>
 
                                 <!-- Kabupaten / Kota -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">Kabupaten / Kota</label>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                        >Kabupaten / Kota</label
+                                    >
                                     <div class="relative">
                                         <select
                                             :value="form.kabupaten"
-                                            @change="onRegencyChange($event.target.value)"
-                                            :disabled="isLoadingRegencies || !form.provinsi"
+                                            @change="
+                                                onRegencyChange(
+                                                    $event.target.value,
+                                                )
+                                            "
+                                            :disabled="
+                                                isLoadingRegencies ||
+                                                !form.provinsi
+                                            "
                                             class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 pr-8 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-slate-100"
                                         >
-                                            <option value="">-- Pilih Kab/Kota --</option>
-                                            <option v-for="reg in regencies" :key="reg.code" :value="reg.displayName">
+                                            <option value="">
+                                                -- Pilih Kab/Kota --
+                                            </option>
+                                            <option
+                                                v-for="reg in regencies"
+                                                :key="reg.code"
+                                                :value="reg.displayName"
+                                            >
                                                 {{ reg.displayName }}
                                             </option>
                                         </select>
-                                        <Loader2 v-if="isLoadingRegencies" class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <Loader2
+                                            v-if="isLoadingRegencies"
+                                            class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                        />
                                     </div>
                                 </div>
 
                                 <!-- Kecamatan -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">Kecamatan</label>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                        >Kecamatan</label
+                                    >
                                     <div class="relative">
                                         <select
                                             :value="form.kecamatan"
-                                            @change="onDistrictChange($event.target.value)"
-                                            :disabled="isLoadingDistricts || !form.kabupaten"
+                                            @change="
+                                                onDistrictChange(
+                                                    $event.target.value,
+                                                )
+                                            "
+                                            :disabled="
+                                                isLoadingDistricts ||
+                                                !form.kabupaten
+                                            "
                                             class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 pr-8 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-slate-100"
                                         >
-                                            <option value="">-- Pilih Kecamatan --</option>
-                                            <option v-for="dist in districts" :key="dist.code" :value="dist.name">
+                                            <option value="">
+                                                -- Pilih Kecamatan --
+                                            </option>
+                                            <option
+                                                v-for="dist in districts"
+                                                :key="dist.code"
+                                                :value="dist.name"
+                                            >
                                                 {{ dist.name }}
                                             </option>
                                         </select>
-                                        <Loader2 v-if="isLoadingDistricts" class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <Loader2
+                                            v-if="isLoadingDistricts"
+                                            class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                        />
                                     </div>
                                 </div>
 
                                 <!-- Kelurahan / Desa -->
                                 <div class="space-y-1">
-                                    <label class="block text-xs font-bold text-slate-700">Kelurahan / Desa</label>
+                                    <label
+                                        class="block text-xs font-bold text-slate-700"
+                                        >Kelurahan / Desa</label
+                                    >
                                     <div class="relative">
                                         <select
                                             :value="form.kelurahan"
-                                            @change="onVillageChange($event.target.value)"
-                                            :disabled="isLoadingVillages || !form.kecamatan"
+                                            @change="
+                                                onVillageChange(
+                                                    $event.target.value,
+                                                )
+                                            "
+                                            :disabled="
+                                                isLoadingVillages ||
+                                                !form.kecamatan
+                                            "
                                             class="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 px-3 pr-8 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-slate-100"
                                         >
-                                            <option value="">-- Pilih Kelurahan/Desa --</option>
-                                            <option v-for="vil in villages" :key="vil.code" :value="vil.name">
+                                            <option value="">
+                                                -- Pilih Kelurahan/Desa --
+                                            </option>
+                                            <option
+                                                v-for="vil in villages"
+                                                :key="vil.code"
+                                                :value="vil.name"
+                                            >
                                                 {{ vil.name }}
                                             </option>
                                         </select>
-                                        <Loader2 v-if="isLoadingVillages" class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <Loader2
+                                            v-if="isLoadingVillages"
+                                            class="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                        />
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Alamat Lengkap -->
                             <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-700">Alamat Lengkap / Jalan / RT RW</label>
+                                <label
+                                    class="block text-xs font-bold text-slate-700"
+                                    >Alamat Lengkap / Jalan / RT RW</label
+                                >
                                 <textarea
                                     v-model="form.alamat_lengkap"
                                     rows="2"
@@ -1070,7 +1431,10 @@ function submitDelete() {
 
                             <!-- Kode Pos -->
                             <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-700">Kode Pos</label>
+                                <label
+                                    class="block text-xs font-bold text-slate-700"
+                                    >Kode Pos</label
+                                >
                                 <input
                                     v-model="form.kode_pos"
                                     type="text"
@@ -1082,7 +1446,9 @@ function submitDelete() {
                     </div>
 
                     <!-- Modal Footer -->
-                    <div class="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end gap-3 shrink-0">
+                    <div
+                        class="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end gap-3 shrink-0"
+                    >
                         <button
                             type="button"
                             @click="closeModal"
@@ -1097,7 +1463,13 @@ function submitDelete() {
                             class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/95 text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
                         >
                             <Check class="w-4 h-4" />
-                            {{ form.processing ? 'Menyimpan...' : (isEditing ? 'Simpan Perubahan' : 'Tambah Supplier') }}
+                            {{
+                                form.processing
+                                    ? "Menyimpan..."
+                                    : isEditing
+                                      ? "Simpan Perubahan"
+                                      : "Tambah Supplier"
+                            }}
                         </button>
                     </div>
                 </div>
@@ -1110,15 +1482,22 @@ function submitDelete() {
                 v-if="isDeleteModalOpen"
                 class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
             >
-                <div class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md p-6 animate-in zoom-in-95 duration-150">
-                    <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-100">
+                <div
+                    class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md p-6 animate-in zoom-in-95 duration-150"
+                >
+                    <div
+                        class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-100"
+                    >
                         <Trash2 class="w-6 h-6" />
                     </div>
-                    <h3 class="text-base font-bold text-slate-900">Hapus Data Supplier Rekanan?</h3>
+                    <h3 class="text-base font-bold text-slate-900">
+                        Hapus Data Supplier Rekanan?
+                    </h3>
                     <p class="text-xs sm:text-sm text-slate-600 mt-2">
                         Apakah Anda yakin ingin menghapus data supplier
-                        <span class="font-bold text-slate-800">"{{ supplierToDelete?.nama_usaha }}"</span>?
-                        Tindakan ini tidak dapat dibatalkan.
+                        <span class="font-bold text-slate-800"
+                            >"{{ supplierToDelete?.nama_usaha }}"</span
+                        >? Tindakan ini tidak dapat dibatalkan.
                     </p>
 
                     <div class="mt-6 flex items-center justify-end gap-3">
