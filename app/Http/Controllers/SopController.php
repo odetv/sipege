@@ -15,7 +15,10 @@ class SopController extends Controller
      */
     public function index(Request $request): Response
     {
-        $sopDir = database_path('data/sop');
+        $sopDir = public_path('files/sop');
+        if (!File::exists($sopDir)) {
+            $sopDir = database_path('data/sop');
+        }
         $sops = [];
 
         if (File::exists($sopDir)) {
@@ -77,7 +80,10 @@ class SopController extends Controller
     {
         // Sanitasi nama file untuk mencegah directory traversal
         $cleanFilename = basename($filename);
-        $path = database_path('data/sop/' . $cleanFilename);
+        $path = public_path('files/sop/' . $cleanFilename);
+        if (!File::exists($path)) {
+            $path = database_path('data/sop/' . $cleanFilename);
+        }
 
         if (!File::exists($path)) {
             abort(404, 'Dokumen SOP tidak ditemukan.');
@@ -97,7 +103,10 @@ class SopController extends Controller
     public function download(string $filename): BinaryFileResponse
     {
         $cleanFilename = basename($filename);
-        $path = database_path('data/sop/' . $cleanFilename);
+        $path = public_path('files/sop/' . $cleanFilename);
+        if (!File::exists($path)) {
+            $path = database_path('data/sop/' . $cleanFilename);
+        }
 
         if (!File::exists($path)) {
             abort(404, 'Dokumen SOP tidak ditemukan.');
@@ -174,6 +183,7 @@ class SopController extends Controller
             'description' => $desc,
             'size_bytes' => $sizeBytes,
             'size_formatted' => $formattedSize,
+            'file_url' => asset('files/sop/' . $filename),
             'stream_url' => route('sop.stream', ['filename' => $filename]),
             'download_url' => route('sop.download', ['filename' => $filename]),
         ];

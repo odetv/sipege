@@ -372,7 +372,7 @@ const bannerBadgeText = computed(() => {
                 <!-- Kiri: Logo Resmi BGN Bergambar + Teks (BGN_LOGOTYPE_MAIN.png) -->
                 <div style="display: flex; align-items: center">
                     <img
-                        src="/images/BGN_LOGOTYPE_MAIN.png"
+                        src="/images/logo/BGN_LOGOTYPE_MAIN.png"
                         alt="Badan Gizi Nasional"
                         :style="{
                             height: dyn.logoHeight,
@@ -380,7 +380,7 @@ const bannerBadgeText = computed(() => {
                             objectFit: 'contain',
                             objectPosition: 'left center',
                         }"
-                        onerror="this.src = '/images/BGN_LOGO_MAIN.png'"
+                        onerror="this.src = '/images/logo/BGN_LOGO_MAIN.png'"
                     />
                 </div>
 

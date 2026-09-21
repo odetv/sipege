@@ -84,6 +84,7 @@ import {
     DASAR_HUKUM_AKG,
     RUMUS_GIZI_INFO,
     getAkgStatusBadge,
+    getNutrientStatus,
     evaluateNutrientDetail,
     findRujukanAkgByKelompok,
 } from "@/Services/akgConfig";
@@ -2781,6 +2782,115 @@ const grandTotalAktual = computed(() => {
         0,
     );
 });
+
+// Batas Total Pagu Standar BGN (Porsi Kecil: Rp 8.000 / porsi, Porsi Besar: Rp 10.000 / porsi)
+const totalBatasPaguMaster = computed(() => {
+    const pk = Number(totalPK.value || 0);
+    const pb = Number(totalPB.value || 0);
+    return pk * 8000 + pb * 10000;
+});
+
+// Selisih Pagu vs Grand Total Belanja PO (Positif: Sisa/Hemat, Negatif: Over Budget/Defisit)
+const selisihPaguMaster = computed(() => {
+    return totalBatasPaguMaster.value - grandTotalDraftMaster.value;
+});
+
+// Persentase Penyerapan / Penggunaan Pagu Anggaran
+const persentasePenggunaanPaguMaster = computed(() => {
+    if (!totalBatasPaguMaster.value || totalBatasPaguMaster.value <= 0) return 0;
+    const pct = (grandTotalDraftMaster.value / totalBatasPaguMaster.value) * 100;
+    return Number.isInteger(pct) ? pct : parseFloat(pct.toFixed(1));
+});
+
+// Status & Indikator Evaluasi Pagu Anggaran (Kurang/Hemat, Pas, Optimal, Lebih/Over Budget)
+const statusEvaluasiPaguMaster = computed(() => {
+    const pagu = totalBatasPaguMaster.value;
+    const belanja = grandTotalDraftMaster.value;
+
+    if (pagu === 0) {
+        return {
+            status: "empty",
+            label: "Belum Ada Sasaran PM",
+            badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
+            cardClass: "border-slate-200 bg-slate-50/50",
+            barClass: "bg-slate-300",
+            percent: 0,
+            percentFormatted: "0%",
+            selisihFormatted: "Rp 0",
+            selisihLabel: "Selisih Pagu",
+            sublabel: "Tentukan sasaran penerima manfaat terlebih dahulu",
+            keterangan: "Pagu dihitung dari total porsi sasaran PM (PK × Rp 8.000 + PB × Rp 10.000).",
+        };
+    }
+
+    const selisih = pagu - belanja;
+    const pct = pagu > 0 ? (belanja / pagu) * 100 : 0;
+    const percentFormatted = pct.toFixed(1) + "%";
+
+    if (belanja > pagu) {
+        const defisit = Math.abs(selisih);
+        return {
+            status: "over",
+            label: "Melebihi Pagu (Over Budget)",
+            badgeClass: "bg-rose-100 text-rose-800 border-rose-300 shadow-2xs font-extrabold",
+            cardClass: "border-rose-300 bg-rose-50/60 text-rose-950",
+            barClass: "bg-rose-500",
+            percent: Math.min(pct, 100),
+            percentFormatted,
+            selisihFormatted: `- ${formatRupiah(defisit)}`,
+            selisihLabel: "Defisit Anggaran",
+            sublabel: `Melebihi pagu sebesar ${formatRupiah(defisit)}`,
+            keterangan: `Total belanja PO melampaui batas pagu sebesar ${formatRupiah(defisit)} (${percentFormatted} dari pagu). Perlu efisiensi gramatur atau penyesuaian bahan.`,
+        };
+    }
+
+    if (belanja === pagu) {
+        return {
+            status: "exact",
+            label: "Pas Sesuai Pagu (100%)",
+            badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs font-extrabold",
+            cardClass: "border-emerald-300 bg-emerald-50/60 text-emerald-950",
+            barClass: "bg-emerald-500",
+            percent: 100,
+            percentFormatted: "100%",
+            selisihFormatted: "Rp 0 (Pas)",
+            selisihLabel: "Sesuai Pagu",
+            sublabel: "Anggaran belanja PO tepat 100% dari batas pagu",
+            keterangan: "Penggunaan anggaran belanja PO tepat 100% dari batas pagu anggaran yang dialokasikan.",
+        };
+    }
+
+    if (pct >= 85) {
+        return {
+            status: "optimal",
+            label: "Optimal / Mendekati Pagu",
+            badgeClass: "bg-teal-100 text-teal-800 border-teal-300 shadow-2xs font-extrabold",
+            cardClass: "border-teal-300 bg-teal-50/60 text-teal-950",
+            barClass: "bg-teal-500",
+            percent: pct,
+            percentFormatted,
+            selisihFormatted: `+ ${formatRupiah(selisih)}`,
+            selisihLabel: "Sisa Pagu Efisien",
+            sublabel: `Tersisa hemat ${formatRupiah(selisih)} (${percentFormatted} terserap)`,
+            keterangan: `Alokasi belanja PO sangat optimal dengan tingkat penyerapan ${percentFormatted} dan sisa efisiensi anggaran ${formatRupiah(selisih)}.`,
+        };
+    }
+
+    return {
+        status: "under",
+        label: "Di Bawah Pagu (Hemat)",
+        badgeClass: "bg-amber-100 text-amber-900 border-amber-300 shadow-2xs font-extrabold",
+        cardClass: "border-amber-300 bg-amber-50/60 text-amber-950",
+        barClass: "bg-amber-500",
+        percent: pct,
+        percentFormatted,
+        selisihFormatted: `+ ${formatRupiah(selisih)}`,
+        selisihLabel: "Sisa Pagu Anggaran",
+        sublabel: `Tersisa hemat ${formatRupiah(selisih)} (${percentFormatted} terserap)`,
+        keterangan: `Belanja PO di bawah pagu dengan penghematan anggaran sebesar ${formatRupiah(selisih)} (${percentFormatted} dari pagu).`,
+    };
+});
+
 
 // ==========================================
 // STATE & DATA FORMULA GIZI SIAP SANTAP (LANGKAH 3)
@@ -8721,7 +8831,7 @@ watch(
                                 >
                             </div>
                             <div
-                                class="grid grid-cols-1 md:grid-cols-3 gap-3 leading-relaxed"
+                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 leading-relaxed"
                             >
                                 <div
                                     class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
@@ -8737,17 +8847,12 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-white p-2 rounded-lg border border-amber-200 text-center font-bold"
                                     >
-                                        Net (Kg) = &sum; [ (Gram Bersih &times;
-                                        Sasaran PM) &divide; 1.000 ]
+                                        Net = &sum; [ (Gram &times; PM) &divide; 1.000 ]
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Total berat porsi konsumsi bersih
-                                        seluruh PM (Porsi Kecil + Porsi Besar).
-                                        Pada menu varian alergi, jumlah sasaran
-                                        disesuaikan otomatis dengan data PM
-                                        alergi terdampak.
+                                        Total berat porsi konsumsi bersih seluruh PM (Porsi Kecil + Porsi Besar).
                                     </p>
                                 </div>
                                 <div
@@ -8759,22 +8864,39 @@ watch(
                                         <span
                                             class="w-2 h-2 rounded-full bg-blue-500 inline-block"
                                         ></span>
-                                        2. Berat Pengadaan Kotor (Gross Kg):
+                                        2. Pengadaan Kotor (Gross Kg):
                                     </strong>
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-blue-50/80 p-2 rounded-lg border border-blue-200 text-center font-bold"
                                     >
-                                        Gross (Kg) = [ Net &divide; (BDD%
-                                        &divide; 100) ] &times; (1 + Buffer%)
+                                        Gross = [ Net &divide; BDD% ] &times; (1 + Buffer%)
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Memperhitungkan faktor bagian yang dapat
-                                        dimakan (<strong>BDD%</strong>) dari
-                                        kulit/tulang terbuang serta persentase
-                                        <strong>Buffer Margin</strong> untuk
-                                        toleransi penyusutan/masak.
+                                        Faktor BDD% bagian termakan + Buffer% toleransi susut/masak.
+                                    </p>
+                                </div>
+                                <div
+                                    class="p-3 bg-white rounded-xl border border-emerald-100 space-y-1.5 shadow-2xs"
+                                >
+                                    <strong
+                                        class="text-emerald-950 font-bold block flex items-center gap-1.5"
+                                    >
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-purple-500 inline-block"
+                                        ></span>
+                                        3. Batas Total Pagu (BGN):
+                                    </strong>
+                                    <p
+                                        class="text-[11px] text-slate-800 font-mono bg-purple-50/80 p-2 rounded-lg border border-purple-200 text-center font-bold"
+                                    >
+                                        Pagu = (PK &times; 8.000) + (PB &times; 10.000)
+                                    </p>
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        Alokasi pagu standar BGN untuk seluruh porsi sasaran harian.
                                     </p>
                                 </div>
                                 <div
@@ -8786,34 +8908,40 @@ watch(
                                         <span
                                             class="w-2 h-2 rounded-full bg-emerald-500 inline-block"
                                         ></span>
-                                        3. Grand Total Anggaran Belanja PO:
+                                        4. Grand Total & Evaluasi:
                                     </strong>
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-emerald-50/80 p-2 rounded-lg border border-emerald-200 text-center font-bold"
                                     >
-                                        Grand Total = &sum; [ Gross &times; Harga Satuan ]
+                                        Selisih = Total Pagu - Grand Total PO
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Akumulasi estimasi biaya seluruh item
-                                        pengadaan (<strong>Bahan Baku</strong> pangan + kebutuhan <strong>Operasional</strong>/kemasan) yang diajukan ke bagian logistik SPPG.
+                                        Indikator status: Kurang (Hemat), Pas (100%), Optimal (85-99%), atau Lebih (Over).
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <!-- Baris 1: Ringkasan Bobot & Pengadaan (Net & Gross) -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div
-                                class="p-3 rounded-xl bg-white border border-amber-200/90 text-amber-950"
+                                class="p-3.5 rounded-2xl bg-white border border-amber-200/90 text-amber-950 shadow-2xs space-y-1"
                             >
-                                <span
-                                    class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1"
-                                >
-                                    Total Berat Bersih (Net)
-                                </span>
+                                <div class="flex items-center justify-between">
+                                    <span
+                                        class="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5"
+                                    >
+                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                        Total Berat Bersih (Net)
+                                    </span>
+                                    <span class="text-[10.5px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                        Porsi Konsumsi
+                                    </span>
+                                </div>
                                 <div
-                                    class="text-base sm:text-lg font-black text-amber-950"
+                                    class="text-xl sm:text-2xl font-black text-amber-950"
                                 >
                                     {{
                                         formatGrossWeight(
@@ -8825,37 +8953,150 @@ watch(
                                         )
                                     }}
                                 </div>
+                                <p class="text-[11px] text-slate-500">
+                                    Total berat bersih siap santap untuk {{ totalPM.toLocaleString("id-ID") }} porsi PM
+                                </p>
                             </div>
+
                             <div
-                                class="p-3 rounded-xl bg-blue-50/70 border border-blue-200/90 text-blue-950"
+                                class="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/90 text-blue-950 shadow-2xs space-y-1"
                             >
-                                <span
-                                    class="text-[11px] font-bold text-blue-800 uppercase tracking-wider block mb-1"
-                                >
-                                    Total Kebutuhan Pengadaan (Gross)
-                                </span>
-                                <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                <div class="flex items-center justify-between">
+                                    <span
+                                        class="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5"
+                                    >
+                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        Total Kebutuhan Pengadaan (Gross)
+                                    </span>
+                                    <span class="text-[10.5px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                                        Termasuk BDD & Margin
+                                    </span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
                                     <span
                                         v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
                                         :key="gIdx"
-                                        class="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
+                                        class="px-3 py-1 rounded-xl bg-white border border-blue-200 text-blue-950 text-sm font-black shadow-2xs"
                                     >
                                         {{ grp.label }}
                                     </span>
                                 </div>
+                                <p class="text-[11px] text-blue-700/80">
+                                    Total volume belanja mentah diajukan ke logistik SPPG
+                                </p>
                             </div>
+                        </div>
+
+                        <!-- Baris 2: Evaluasi Finansial (Batas Pagu, Grand Total Belanja PO, dan Selisih/Status) -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <!-- Card 1: Batas Total Pagu Anggaran -->
                             <div
-                                class="p-3 rounded-xl bg-emerald-50/80 border border-emerald-300 text-emerald-950 shadow-2xs"
+                                class="p-4 rounded-2xl bg-slate-50/90 border border-slate-300 text-slate-900 shadow-2xs space-y-2 flex flex-col justify-between"
                             >
-                                <span
-                                    class="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider block mb-1"
-                                >
-                                    Grand Total Anggaran Belanja PO
-                                </span>
-                                <div
-                                    class="text-base sm:text-xl font-black text-emerald-900"
-                                >
-                                    {{ formatRupiah(grandTotalDraftMaster) }}
+                                <div>
+                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                        <span
+                                            class="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5"
+                                        >
+                                            <Coins class="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            Batas Total Pagu Anggaran
+                                        </span>
+                                        <span class="text-[10.5px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                                            Standar BGN
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="text-xl sm:text-2xl font-black text-slate-900"
+                                    >
+                                        {{ formatRupiah(totalBatasPaguMaster) }}
+                                    </div>
+                                </div>
+                                <div class="space-y-1 pt-1 border-t border-slate-200/80 text-[11px] text-slate-600">
+                                    <div class="flex justify-between items-center">
+                                        <span>PK ({{ totalPK.toLocaleString("id-ID") }} &times; Rp 8.000):</span>
+                                        <strong class="text-slate-800">{{ formatRupiah(totalPK * 8000) }}</strong>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span>PB ({{ totalPB.toLocaleString("id-ID") }} &times; Rp 10.000):</span>
+                                        <strong class="text-slate-800">{{ formatRupiah(totalPB * 10000) }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Grand Total Anggaran Belanja PO -->
+                            <div
+                                class="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-300 text-emerald-950 shadow-2xs space-y-2 flex flex-col justify-between"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                        <span
+                                            class="text-[11px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"
+                                        >
+                                            <ShoppingBag class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                            Grand Total Belanja (PO)
+                                        </span>
+                                        <span class="text-[10.5px] font-bold text-emerald-800 bg-white border border-emerald-200 px-2 py-0.5 rounded-md">
+                                            {{ selectedBahanList.length }} Item
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="text-xl sm:text-2xl font-black text-emerald-900"
+                                    >
+                                        {{ formatRupiah(grandTotalDraftMaster) }}
+                                    </div>
+                                </div>
+                                <div class="pt-1 border-t border-emerald-200/80 text-[11px] text-emerald-800 flex justify-between items-center">
+                                    <span>Estimasi Bahan PO:</span>
+                                    <strong>{{ formatRupiah(grandTotalDraftMaster) }}</strong>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Selisih & Status Evaluasi Pagu -->
+                            <div
+                                class="p-4 rounded-2xl border shadow-2xs space-y-2 flex flex-col justify-between transition-all"
+                                :class="statusEvaluasiPaguMaster.cardClass"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                        <span
+                                            class="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5"
+                                        >
+                                            <Activity class="h-3.5 w-3.5 shrink-0" />
+                                            Selisih & Evaluasi Pagu
+                                        </span>
+                                        <span
+                                            class="text-[10.5px] px-2 py-0.5 rounded-lg border font-black"
+                                            :class="statusEvaluasiPaguMaster.badgeClass"
+                                        >
+                                            {{ statusEvaluasiPaguMaster.label }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-baseline justify-between gap-2">
+                                        <div
+                                            class="text-xl sm:text-2xl font-black"
+                                        >
+                                            {{ statusEvaluasiPaguMaster.selisihFormatted }}
+                                        </div>
+                                        <span class="text-xs font-bold text-slate-600">
+                                            {{ statusEvaluasiPaguMaster.percentFormatted }} pagu
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-1.5 pt-1 border-t border-slate-200/60">
+                                    <!-- Progress Bar Penyerapan Pagu -->
+                                    <div class="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                                        <div
+                                            class="h-full transition-all rounded-full"
+                                            :class="statusEvaluasiPaguMaster.barClass"
+                                            :style="{
+                                                width: `${Math.min(statusEvaluasiPaguMaster.percent, 100)}%`,
+                                            }"
+                                        ></div>
+                                    </div>
+                                    <p class="text-[11px] leading-snug text-slate-700 font-medium">
+                                        {{ statusEvaluasiPaguMaster.keterangan }}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -10122,12 +10363,21 @@ watch(
                                             class="grid grid-cols-3 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Energi</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Energi</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPKNormal.energi, 330, 413).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10137,18 +10387,26 @@ watch(
                                                     kkal
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
-                                                    >Target: 330 - 413
-                                                    kkal</span
+                                                    class="text-[9.5px] text-slate-400 block"
+                                                    >Target: 330 - 413 kkal</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Protein</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Protein</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10158,17 +10416,26 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 8.0 - 10.0 g</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Lemak</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Lemak</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10178,7 +10445,7 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 11.0 - 13.8 g</span
                                                 >
                                             </div>
@@ -10187,12 +10454,21 @@ watch(
                                             class="grid grid-cols-2 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Karbohidrat</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Karbohidrat</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10202,17 +10478,26 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 50.0 - 62.5 g</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Serat</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Serat</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10222,7 +10507,7 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 4.0 - 7.0 g</span
                                                 >
                                             </div>
@@ -10265,12 +10550,21 @@ watch(
                                             class="grid grid-cols-3 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Energi</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Energi</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPBNormal.energi, 585, 831).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10280,18 +10574,26 @@ watch(
                                                     kkal
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
-                                                    >Target: 585 - 831
-                                                    kkal</span
+                                                    class="text-[9.5px] text-slate-400 block"
+                                                    >Target: 585 - 831 kkal</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Protein</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Protein</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10301,17 +10603,26 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 15.8 - 24.5 g</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Lemak</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Lemak</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10321,7 +10632,7 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 19.5 - 26.3 g</span
                                                 >
                                             </div>
@@ -10330,12 +10641,21 @@ watch(
                                             class="grid grid-cols-2 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Karbohidrat</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Karbohidrat</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10345,18 +10665,26 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
-                                                    >Target: 87.0 - 122.5
-                                                    g</span
+                                                    class="text-[9.5px] text-slate-400 block"
+                                                    >Target: 87.0 - 122.5 g</span
                                                 >
                                             </div>
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                    >Serat</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span
+                                                        class="text-slate-500 text-[10px] uppercase font-bold"
+                                                        >Serat</span
+                                                    >
+                                                    <span
+                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                        :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).badgeClass"
+                                                    >
+                                                        {{ getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).label }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-black text-slate-900 text-sm mt-0.5"
                                                 >
@@ -10366,7 +10694,7 @@ watch(
                                                     g
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400"
+                                                    class="text-[9.5px] text-slate-400 block"
                                                     >Target: 6.0 - 10.0 g</span
                                                 >
                                             </div>
@@ -10455,12 +10783,21 @@ watch(
                                                 class="grid grid-cols-3 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pk.energi, 330, 413).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Energi</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Energi</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pk.energi, 330, 413).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pk.energi, 330, 413).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
@@ -10468,42 +10805,60 @@ watch(
                                                         kkal
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 450 - 550</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 330 - 413 kkal</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Protein</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Protein</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pk.protein, 8.0, 10.0).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pk.protein }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 15 - 22 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 8.0 - 10.0 g</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Lemak</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Lemak</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pk.lemak }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 12 - 18 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 11.0 - 13.8 g</span
                                                     >
                                                 </div>
                                             </div>
@@ -10511,12 +10866,21 @@ watch(
                                                 class="grid grid-cols-2 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Karbohidrat</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Karbohidrat</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
@@ -10526,25 +10890,34 @@ watch(
                                                         g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 65 - 85 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 50.0 - 62.5 g</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Serat</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Serat</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pk.serat, 4.0, 7.0).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pk.serat }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: Min 4.0 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 4.0 - 7.0 g</span
                                                     >
                                                 </div>
                                             </div>
@@ -10592,12 +10965,21 @@ watch(
                                                 class="grid grid-cols-3 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pb.energi, 585, 831).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Energi</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Energi</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pb.energi, 585, 831).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pb.energi, 585, 831).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
@@ -10605,42 +10987,60 @@ watch(
                                                         kkal
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 650 - 800</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 585 - 831 kkal</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Protein</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Protein</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pb.protein, 15.8, 24.5).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pb.protein }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 24 - 35 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 15.8 - 24.5 g</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Lemak</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Lemak</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pb.lemak }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 18 - 26 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 19.5 - 26.3 g</span
                                                     >
                                                 </div>
                                             </div>
@@ -10648,12 +11048,21 @@ watch(
                                                 class="grid grid-cols-2 gap-2 text-xs"
                                             >
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Karbohidrat</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Karbohidrat</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
@@ -10663,26 +11072,34 @@ watch(
                                                         g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: 85 - 110
-                                                        g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 87.0 - 122.5 g</span
                                                     >
                                                 </div>
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border border-slate-200/80"
+                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).borderClass"
                                                 >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold block"
-                                                        >Serat</span
-                                                    >
+                                                    <div class="flex items-center justify-between">
+                                                        <span
+                                                            class="text-slate-500 text-[10px] uppercase font-bold"
+                                                            >Serat</span
+                                                        >
+                                                        <span
+                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
+                                                            :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).badgeClass"
+                                                        >
+                                                            {{ getNutrientStatus(alRes.pb.serat, 6.0, 10.0).label }}
+                                                        </span>
+                                                    </div>
                                                     <div
                                                         class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{ alRes.pb.serat }} g
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400"
-                                                        >Target: Min 6.0 g</span
+                                                        class="text-[9.5px] text-slate-400 block"
+                                                        >Target: 6.0 - 10.0 g</span
                                                     >
                                                 </div>
                                             </div>
@@ -10900,23 +11317,50 @@ watch(
                             </p>
                         </div>
 
-                        <!-- Card Terakhir: Total Anggaran PO -->
+                        <!-- Card: Batas Total Pagu BGN -->
                         <div
-                            class="p-3.5 bg-white rounded-xl border border-emerald-200/80 col-span-2 sm:col-span-1"
+                            class="p-3.5 bg-white rounded-xl border border-slate-200 col-span-1 shadow-2xs space-y-0.5"
                         >
                             <p
-                                class="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider"
+                                class="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider"
                             >
-                                Total Anggaran Draft PO
+                                Batas Total Pagu
                             </p>
                             <p
-                                class="text-sm sm:text-base font-black text-emerald-950 mt-1"
+                                class="text-sm sm:text-base font-black text-slate-900 mt-1"
+                            >
+                                {{ formatRupiah(totalBatasPaguMaster) }}
+                            </p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">
+                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB: {{ totalPB.toLocaleString("id-ID") }}
+                            </p>
+                        </div>
+
+                        <!-- Card Terakhir: Total Anggaran PO & Status Evaluasi -->
+                        <div
+                            class="p-3.5 rounded-xl border col-span-2 sm:col-span-1 shadow-2xs space-y-0.5"
+                            :class="statusEvaluasiPaguMaster.cardClass"
+                        >
+                            <div class="flex items-center justify-between">
+                                <p
+                                    class="text-[10.5px] font-bold uppercase tracking-wider"
+                                >
+                                    Total Anggaran Draft PO
+                                </p>
+                                <span
+                                    class="text-[9.5px] px-1.5 py-0.5 rounded border font-bold"
+                                    :class="statusEvaluasiPaguMaster.badgeClass"
+                                >
+                                    {{ statusEvaluasiPaguMaster.label }}
+                                </span>
+                            </div>
+                            <p
+                                class="text-sm sm:text-base font-black mt-1"
                             >
                                 {{ formatRupiah(grandTotalDraftMaster) }}
                             </p>
-                            <p class="text-[11px] text-emerald-800 mt-0.5">
-                                Total Porsi:
-                                {{ totalPM.toLocaleString("id-ID") }} Porsi
+                            <p class="text-[10.5px] font-semibold mt-0.5">
+                                Selisih: {{ statusEvaluasiPaguMaster.selisihFormatted }} ({{ statusEvaluasiPaguMaster.percentFormatted }})
                             </p>
                         </div>
                     </div>

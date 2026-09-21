@@ -1160,7 +1160,7 @@ async function downloadPdf() {
         pdf.line(34, 10, 34, 30);
         try {
             const logoData = await getBase64ImageFromUrl(
-                "/images/BGN_LOGO_MAIN.png",
+                "/images/logo/BGN_LOGO_MAIN.png",
             );
             if (logoData) {
                 pdf.addImage(logoData, "PNG", margin + 3.5, 12.5, 15, 15);
@@ -2611,7 +2611,7 @@ async function downloadPdf() {
                             class="border-r-2 border-slate-900 px-2.5 sm:px-3 py-1.5 flex items-center justify-center bg-white shrink-0"
                         >
                             <img
-                                src="/images/BGN_LOGO_MAIN.png"
+                                src="/images/logo/BGN_LOGO_MAIN.png"
                                 alt="Logo BGN"
                                 class="h-12 w-12 sm:h-14 sm:w-14 object-contain"
                             />

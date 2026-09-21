@@ -1,3 +1,4 @@
+import { generateKopHtml } from "@/Services/kopDokumenHelper";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -306,10 +307,9 @@ export function exportWorkOrderWord(wo) {
             </style>
         </head>
         <body>
-            <div class="kop-header">
-                <p class="kop-title">PROGRAM MAKAN BERGIZI GRATIS (MBG)</p>
-                <p class="kop-sub">SATUAN PELAYANAN PROGRAM GIZI (SPPG)</p>
-                <p class="kop-desc">LEMBAR PERENCANAAN WORK ORDER & FORMULASI GIZI MENU HARIAN</p>
+            ${generateKopHtml(null, { mode: 'word' })}
+            <div style="text-align: center; margin-bottom: 14px;">
+                <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; text-decoration: underline;">LEMBAR PERENCANAAN WORK ORDER & FORMULASI GIZI MENU HARIAN</div>
             </div>
 
             <table class="info-table" style="width: 100%;">
@@ -478,9 +478,9 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
             </style>
         </head>
         <body>
-            <div class="kop">
-                <h2>SATUAN PELAYANAN PROGRAM GIZI (SPPG)</h2>
-                <p>LEMBAR WORK ORDER (WO) PERENCANAAN & FORMULASI GIZI MAKAN BERGIZI GRATIS (MBG)</p>
+            ${generateKopHtml(null, { mode: 'print' })}
+            <div style="text-align: center; margin-bottom: 10px;">
+                <div style="font-size: 10.5pt; font-weight: bold; text-transform: uppercase; text-decoration: underline; color: #0f172a;">LEMBAR WORK ORDER (WO) PERENCANAAN & FORMULASI GIZI MAKAN BERGIZI GRATIS (MBG)</div>
             </div>
 
             <div class="grid-info">
@@ -867,10 +867,10 @@ export function exportPoWord(po) {
             </style>
         </head>
         <body>
-            <div class="kop-header">
-                <p class="kop-title">PROGRAM MAKAN BERGIZI GRATIS (MBG)</p>
-                <p class="kop-sub">SATUAN PELAYANAN PROGRAM GIZI (SPPG)</p>
-                <p class="kop-desc">SURAT PESANAN PEMBELIAN BAHAN BAKU / PURCHASE ORDER (PO)</p>
+            ${generateKopHtml(null, { isForWord: true })}
+            <div style="text-align: center; margin-top: 10px; margin-bottom: 16px;">
+                <p style="font-size: 13pt; font-weight: bold; margin: 0; text-transform: uppercase;">SURAT PESANAN PEMBELIAN BAHAN BAKU / PURCHASE ORDER (PO)</p>
+                <p style="font-size: 10pt; color: #475569; margin: 2px 0 0 0;">Program Makan Bergizi Gratis (MBG)</p>
             </div>
 
             <table class="info-table" style="width: 100%;">
@@ -1056,9 +1056,10 @@ export function exportPoPdf(po) {
             </style>
         </head>
         <body>
-            <div class="kop">
-                <h2>SATUAN PELAYANAN PROGRAM GIZI (SPPG)</h2>
-                <p>SURAT PESANAN PEMBELIAN BAHAN BAKU / PURCHASE ORDER (PO) RESMI MBG</p>
+            ${generateKopHtml(null, { isForWord: false })}
+            <div style="text-align: center; margin-top: 8px; margin-bottom: 14px;">
+                <h3 style="margin: 0; font-size: 13pt; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">SURAT PESANAN PEMBELIAN BAHAN BAKU / PURCHASE ORDER (PO) RESMI</h3>
+                <p style="margin: 2px 0 0 0; font-size: 9pt; color: #64748b;">Program Makan Bergizi Gratis (MBG)</p>
             </div>
 
             <div class="grid-info">

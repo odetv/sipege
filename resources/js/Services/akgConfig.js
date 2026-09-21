@@ -305,6 +305,52 @@ export function getAkgStatusBadge(nutritionObj, isPB = false) {
 }
 
 /**
+ * Evaluasi status singkat tiap komponen zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat)
+ * Return: { status, label, shortLabel, badgeClass, borderClass, textClass }
+ */
+export function getNutrientStatus(val, minTarget, maxTarget) {
+    const num = Number(val) || 0;
+    if (num === 0) {
+        return {
+            status: "empty",
+            label: "Belum Ada",
+            shortLabel: "-",
+            badgeClass: "bg-slate-100 text-slate-500 border-slate-200",
+            borderClass: "border-slate-200/80",
+            textClass: "text-slate-500",
+        };
+    }
+    if (num >= minTarget && num <= maxTarget) {
+        return {
+            status: "sesuai",
+            label: "✓ Sesuai",
+            shortLabel: "✓ Sesuai",
+            badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold",
+            borderClass: "border-emerald-200/90",
+            textClass: "text-emerald-700",
+        };
+    } else if (num < minTarget) {
+        return {
+            status: "kurang",
+            label: "⚠ Kurang",
+            shortLabel: "↓ Kurang",
+            badgeClass: "bg-amber-50 text-amber-800 border-amber-300 font-extrabold",
+            borderClass: "border-amber-200/90",
+            textClass: "text-amber-700",
+        };
+    } else {
+        return {
+            status: "lebih",
+            label: "⚡ Lebih",
+            shortLabel: "↑ Lebih",
+            badgeClass: "bg-blue-50 text-blue-800 border-blue-300 font-extrabold",
+            borderClass: "border-blue-200/90",
+            textClass: "text-blue-700",
+        };
+    }
+}
+
+/**
  * Evaluasi status setiap zat gizi makro (Energi, Protein, Lemak, Karbohidrat)
  */
 export function evaluateNutrientDetail(val, minTarget, maxTarget, unit = "g") {

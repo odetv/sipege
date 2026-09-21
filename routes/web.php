@@ -123,6 +123,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/plang-ruangan', [AsetDigitalController::class, 'plangRuangan'])->name('plang-ruangan');
         Route::get('/poster', [AsetDigitalController::class, 'poster'])->name('poster');
         Route::get('/kop-dokumen', [AsetDigitalController::class, 'kopDokumen'])->name('kop-dokumen');
+        Route::post('/kop-dokumen', [AsetDigitalController::class, 'saveKopDokumen'])->name('kop-dokumen.save');
+        Route::post('/kop-dokumen/upload-logo', [AsetDigitalController::class, 'uploadKopLogo'])->name('kop-dokumen.upload-logo');
+        Route::get('/kop-dokumen/template/{format}', [AsetDigitalController::class, 'downloadKopTemplate'])->name('kop-dokumen.download-template');
         Route::get('/stream/{category}/{filename}', [AsetDigitalController::class, 'stream'])->name('stream');
         Route::get('/download/{category}/{filename}', [AsetDigitalController::class, 'download'])->name('download');
     });

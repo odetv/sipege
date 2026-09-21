@@ -54,4 +54,11 @@ class UnitSppg extends Model
     {
         return $this->hasMany(KelompokPenerimaManfaat::class);
     }
+    /**
+     * Get the setting kop dokumen for the unit SPPG.
+     */
+    public function settingKopDokumen(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SettingKopDokumen::class);
+    }
 }

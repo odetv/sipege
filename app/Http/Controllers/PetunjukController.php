@@ -54,7 +54,10 @@ class PetunjukController extends Controller
         }
 
         $cleanFilename = basename($filename);
-        $path = database_path("data/{$cleanType}/" . $cleanFilename);
+        $path = public_path("files/{$cleanType}/" . $cleanFilename);
+        if (!File::exists($path)) {
+            $path = database_path("data/{$cleanType}/" . $cleanFilename);
+        }
 
         if (!File::exists($path)) {
             abort(404, 'Dokumen tidak ditemukan.');
@@ -79,7 +82,10 @@ class PetunjukController extends Controller
         }
 
         $cleanFilename = basename($filename);
-        $path = database_path("data/{$cleanType}/" . $cleanFilename);
+        $path = public_path("files/{$cleanType}/" . $cleanFilename);
+        if (!File::exists($path)) {
+            $path = database_path("data/{$cleanType}/" . $cleanFilename);
+        }
 
         if (!File::exists($path)) {
             abort(404, 'Dokumen tidak ditemukan.');
@@ -96,7 +102,10 @@ class PetunjukController extends Controller
         $allDocuments = [];
 
         // 1. Scan SOP Documents
-        $sopDir = database_path('data/sop');
+        $sopDir = public_path('files/sop');
+        if (!File::exists($sopDir)) {
+            $sopDir = database_path('data/sop');
+        }
         if (File::exists($sopDir)) {
             $files = File::files($sopDir);
             foreach ($files as $file) {
@@ -107,7 +116,10 @@ class PetunjukController extends Controller
         }
 
         // 2. Scan Juknis Documents
-        $juknisDir = database_path('data/juknis');
+        $juknisDir = public_path('files/juknis');
+        if (!File::exists($juknisDir)) {
+            $juknisDir = database_path('data/juknis');
+        }
         if (File::exists($juknisDir)) {
             $files = File::files($juknisDir);
             $juknisCounter = 1;
@@ -119,7 +131,10 @@ class PetunjukController extends Controller
         }
 
         // 3. Scan Pedoman Documents
-        $pedomanDir = database_path('data/pedoman');
+        $pedomanDir = public_path('files/pedoman');
+        if (!File::exists($pedomanDir)) {
+            $pedomanDir = database_path('data/pedoman');
+        }
         if (File::exists($pedomanDir)) {
             $files = File::files($pedomanDir);
             $pedomanCounter = 1;
@@ -227,6 +242,7 @@ class PetunjukController extends Controller
             'description' => $desc,
             'size_bytes' => $sizeBytes,
             'size_formatted' => $this->formatFileSize($sizeBytes),
+            'file_url' => asset('files/sop/' . $filename),
             'stream_url' => route('petunjuk.stream', ['type' => 'sop', 'filename' => $filename]),
             'download_url' => route('petunjuk.download', ['type' => 'sop', 'filename' => $filename]),
         ];
@@ -253,6 +269,7 @@ class PetunjukController extends Controller
             'description' => 'Petunjuk teknis resmi tata kelola, mekanisme pembiayaan, dan akuntabilitas penyelenggaraan program Makan Bergizi Gratis (MBG).',
             'size_bytes' => $sizeBytes,
             'size_formatted' => $this->formatFileSize($sizeBytes),
+            'file_url' => asset('files/juknis/' . $filename),
             'stream_url' => route('petunjuk.stream', ['type' => 'juknis', 'filename' => $filename]),
             'download_url' => route('petunjuk.download', ['type' => 'juknis', 'filename' => $filename]),
         ];
@@ -278,6 +295,7 @@ class PetunjukController extends Controller
             'description' => 'Buku pedoman acuan penyelenggaraan operasional, alur kerja, standar fasilitas, dan manajemen Unit SPPG.',
             'size_bytes' => $sizeBytes,
             'size_formatted' => $this->formatFileSize($sizeBytes),
+            'file_url' => asset('files/pedoman/' . $filename),
             'stream_url' => route('petunjuk.stream', ['type' => 'pedoman', 'filename' => $filename]),
             'download_url' => route('petunjuk.download', ['type' => 'pedoman', 'filename' => $filename]),
         ];

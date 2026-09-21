@@ -8,6 +8,10 @@ import CardDescription from "@/Components/ui/CardDescription.vue";
 import CardContent from "@/Components/ui/CardContent.vue";
 import Button from "@/Components/ui/Button.vue";
 import {
+    checkTextMatchesAllergen,
+    matchWordBoundary,
+} from "@/Services/penerimaManfaatConfig";
+import {
     exportWorkOrderExcel,
     exportWorkOrderWord,
     exportWorkOrderPdf,
@@ -15,6 +19,7 @@ import {
 } from "@/Services/exportDocHelper";
 import {
     getAkgStatusBadge,
+    getNutrientStatus,
     STANDAR_AKG_PORSI_KECIL,
     STANDAR_AKG_PORSI_BESAR,
     RUJUKAN_AKG_MBG,
@@ -248,41 +253,54 @@ const totalPM = computed(() => {
     );
 });
 
-const totalFoodCostPKNormal = computed(() => {
-    return Number(
-        props.workOrder?.cost_pk ||
-            props.workOrder?.food_cost_pk ||
-            props.workOrder?.raw?.food_cost_pk ||
-            0,
-    );
-});
-
-const totalFoodCostPBNormal = computed(() => {
-    return Number(
-        props.workOrder?.cost_pb ||
-            props.workOrder?.food_cost_pb ||
-            props.workOrder?.raw?.food_cost_pb ||
-            0,
-    );
-});
-
-const grandTotalDraftMaster = computed(() => {
-    return Number(
-        props.workOrder?.total_anggaran ||
-            props.workOrder?.total_anggaran_master ||
-            props.workOrder?.raw?.total_anggaran_master ||
-            0,
-    );
-});
-
-const targetSasaranNormal = computed(() => {
+// Helper Perhitungan Gizi & Food Cost Sesuai Standar GiziRancangMenuTab
+function calculateNutritionFromNetGram(itemTkpi, netGram, jenis = "bahan_baku") {
+    if (jenis === "operasional" || !itemTkpi || !netGram) {
+        return { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+    }
+    const factor = netGram / 100;
     return {
-        pk: totalPK.value,
-        pb: totalPB.value,
+        energi: Number(((itemTkpi.energi || 0) * factor).toFixed(1)),
+        protein: Number(((itemTkpi.protein || 0) * factor).toFixed(1)),
+        lemak: Number(((itemTkpi.lemak || 0) * factor).toFixed(1)),
+        karbohidrat: Number(((itemTkpi.karbohidrat || 0) * factor).toFixed(1)),
+        serat: Number(((itemTkpi.serat || 0) * factor).toFixed(1)),
     };
-});
+}
 
-// Sub Menu Komponen
+function calculateItemFoodCostPerPortion(
+    netGram,
+    bddPercent,
+    bufferPercent,
+    hargaPerSatuan,
+    satuan = "Kg",
+    jenis = "bahan_baku",
+) {
+    if (jenis === "operasional" || !netGram || !hargaPerSatuan || !bddPercent || bddPercent <= 0) return 0;
+    const bddFactor = (bddPercent || 100) / 100;
+    const bufferFactor = 1 + (bufferPercent || 0) / 100;
+    const grossPerPortion = (netGram / bddFactor) * bufferFactor;
+    const s = (satuan || "Kg").toLowerCase().trim();
+
+    if (s === "kg" || s === "liter" || s === "l") {
+        const cost = (grossPerPortion / 1000) * hargaPerSatuan;
+        return Number(cost) || 0;
+    }
+    const cost = grossPerPortion * hargaPerSatuan;
+    return Number(cost) || 0;
+}
+
+function isBahanContainsAlergen(b, jenisAlergi) {
+    if (!b || !jenisAlergi) return false;
+    const namaBahan = (b.nama || (b.tkpi && b.tkpi.nama) || "").trim();
+    const alergenField = (b.alergen || (b.tkpi && b.tkpi.alergen) || "").trim();
+    const kategori = (b.kategori || (b.tkpi && b.tkpi.kategori) || "").trim();
+    const combinedText = `${namaBahan} ${alergenField} ${kategori}`.trim();
+
+    return checkTextMatchesAllergen(combinedText, jenisAlergi);
+}
+
+// Sub Menu Komponen dari Work Order
 const subMenuKomponen = computed(() => {
     const raw = props.workOrder?.raw || props.workOrder || {};
     return {
@@ -392,7 +410,44 @@ const totalPBAlergi = computed(() => {
     );
 });
 
-// Bahan Calculations List
+// Helper Pencocokan PM Terdampak Alergi
+function findAlergiDetail(jenisName) {
+    if (!jenisName) return { porsi_kecil: 0, porsi_besar: 0, total: 0 };
+    const clean = jenisName.toLowerCase().trim();
+    const cleanNoPrefix = clean.replace(/^alergi\s+/, "");
+    
+    let pmPK = 0, pmPB = 0;
+    for (const kel of woKelompokList.value) {
+        if (!Array.isArray(kel.detail_alergi)) continue;
+        for (const da of kel.detail_alergi) {
+            if (!da || !da.jenis_alergi) continue;
+            const rClean = da.jenis_alergi.toLowerCase().trim();
+            const rCleanNoPrefix = rClean.replace(/^alergi\s+/, "");
+            if (
+                rClean === clean ||
+                rCleanNoPrefix === cleanNoPrefix ||
+                matchWordBoundary(cleanNoPrefix, rCleanNoPrefix) ||
+                matchWordBoundary(rCleanNoPrefix, cleanNoPrefix) ||
+                checkTextMatchesAllergen(da.jenis_alergi, jenisName) ||
+                checkTextMatchesAllergen(jenisName, da.jenis_alergi)
+            ) {
+                pmPK += Number(da.porsi_kecil) || 0;
+                pmPB += Number(da.porsi_besar) || 0;
+            }
+        }
+    }
+    if (pmPK === 0 && pmPB === 0) {
+        pmPK = totalPKAlergi.value || 0;
+        pmPB = totalPBAlergi.value || 0;
+    }
+    return {
+        porsi_kecil: pmPK,
+        porsi_besar: pmPB,
+        total: pmPK + pmPB,
+    };
+}
+
+// Bahan Calculations List (Mengikuti GiziRancangMenuTab: harga_aktual || harga_master)
 const bahanCalculations = computed(() => {
     const rawItems = props.workOrder?.items || props.workOrder?.raw?.items || [];
     return rawItems.map((it, idx) => {
@@ -400,38 +455,86 @@ const bahanCalculations = computed(() => {
         const pbGram = Number(it.gram_pb || 0);
         const bdd = Number(it.bdd || 100);
         const buffer = Number(it.buffer || 0);
-        const harga = Number(it.harga_master || it.harga_aktual || 0);
+        const harga = Number(
+            (it.harga_aktual !== undefined && it.harga_aktual !== null && Number(it.harga_aktual) > 0)
+                ? it.harga_aktual
+                : (it.harga_master || 0)
+        );
         const totalGross = Number(it.total_gross_kg || it.gross_kg || 0);
         const subtotal = Number(
-            it.subtotal_master !== undefined
-                ? it.subtotal_master
-                : it.subtotal_aktual !== undefined
-                  ? it.subtotal_aktual
-                  : totalGross * harga,
+            it.subtotal_aktual !== undefined && it.subtotal_aktual !== null && Number(it.subtotal_aktual) > 0
+                ? it.subtotal_aktual
+                : it.subtotal_master !== undefined
+                  ? it.subtotal_master
+                  : totalGross * harga
         );
 
         const s = (it.satuan || "Kg").toLowerCase().trim();
-        const isKgOrL = ["kg", "liter", "l"].includes(s);
-        const grossPerPK =
-            pkGram > 0
-                ? (pkGram / (bdd / 100)) * (1 + buffer / 100)
-                : 0;
-        const grossPerPB =
-            pbGram > 0
-                ? (pbGram / (bdd / 100)) * (1 + buffer / 100)
-                : 0;
+        const jenis = it.jenis || "bahan_baku";
+        const isOperasional = jenis === "operasional";
 
-        const isOperasional = (it.jenis || "bahan_baku") === "operasional";
-        const costPK = isOperasional
-            ? 0
-            : isKgOrL
-              ? (grossPerPK / 1000) * harga
-              : grossPerPK * harga;
-        const costPB = isOperasional
-            ? 0
-            : isKgOrL
-              ? (grossPerPB / 1000) * harga
-              : grossPerPB * harga;
+        const costPK = calculateItemFoodCostPerPortion(
+            pkGram,
+            bdd,
+            buffer,
+            harga,
+            it.satuan || "Kg",
+            jenis,
+        );
+        const costPB = calculateItemFoodCostPerPortion(
+            pbGram,
+            bdd,
+            buffer,
+            harga,
+            it.satuan || "Kg",
+            jenis,
+        );
+
+        const tkpi = it.tkpi || {
+            energi: Number(it.energi || it.kalori || 0),
+            protein: Number(it.protein || 0),
+            lemak: Number(it.lemak || 0),
+            karbohidrat: Number(it.karbohidrat || 0),
+            serat: Number(it.serat || 0),
+            nama: it.nama,
+            alergen: it.alergen || "",
+            kategori: it.kategori || "",
+        };
+
+        let nutrisiPK = null;
+        let nutrisiPB = null;
+        if (!isOperasional) {
+            if (it.nutrisi_pk && (it.nutrisi_pk.energi || it.nutrisi_pk.protein)) {
+                nutrisiPK = {
+                    energi: Number(it.nutrisi_pk.energi || 0),
+                    protein: Number(it.nutrisi_pk.protein || 0),
+                    lemak: Number(it.nutrisi_pk.lemak || 0),
+                    karbohidrat: Number(it.nutrisi_pk.karbohidrat || 0),
+                    serat: Number(it.nutrisi_pk.serat || 0),
+                };
+            } else if (it.nutrisiPK) {
+                nutrisiPK = it.nutrisiPK;
+            } else {
+                nutrisiPK = calculateNutritionFromNetGram(tkpi, pkGram, jenis);
+            }
+
+            if (it.nutrisi_pb && (it.nutrisi_pb.energi || it.nutrisi_pb.protein)) {
+                nutrisiPB = {
+                    energi: Number(it.nutrisi_pb.energi || 0),
+                    protein: Number(it.nutrisi_pb.protein || 0),
+                    lemak: Number(it.nutrisi_pb.lemak || 0),
+                    karbohidrat: Number(it.nutrisi_pb.karbohidrat || 0),
+                    serat: Number(it.nutrisi_pb.serat || 0),
+                };
+            } else if (it.nutrisiPB) {
+                nutrisiPB = it.nutrisiPB;
+            } else {
+                nutrisiPB = calculateNutritionFromNetGram(tkpi, pbGram, jenis);
+            }
+        } else {
+            nutrisiPK = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+            nutrisiPB = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+        }
 
         let totalWeightKg = 0;
         if (s === "kg" || s === "liter" || s === "l") {
@@ -452,7 +555,7 @@ const bahanCalculations = computed(() => {
             kategori: it.kategori || "Lainnya",
             satuan: it.satuan || "Kg",
             tipe_porsi: it.tipe_porsi || "normal",
-            jenis_alergi: it.jenis_alergi || "",
+            jenis_alergi: (it.jenis_alergi || "").trim(),
             alergen: it.alergen || "",
             gram_pk: pkGram,
             gram_pb: pbGram,
@@ -461,141 +564,188 @@ const bahanCalculations = computed(() => {
             totalGrossKg: totalGross,
             totalWeightKg: totalWeightKg,
             harga_master: harga,
+            harga_aktual: it.harga_aktual,
             subtotalMaster: subtotal,
             costPK: costPK,
             costPB: costPB,
-            jenis: it.jenis || "bahan_baku",
-            nutrisiPK: isOperasional
-                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
-                : (it.nutrisi_pk || it.nutrisiPK || null),
-            nutrisiPB: isOperasional
-                ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
-                : (it.nutrisi_pb || it.nutrisiPB || null),
+            jenis: jenis,
+            tkpi: tkpi,
+            nutrisiPK: nutrisiPK,
+            nutrisiPB: nutrisiPB,
             keterangan: it.keterangan || "",
             is_custom:
                 it.is_custom ||
-                (typeof it.code === "string" &&
-                    it.code.startsWith("custom_")) ||
-                (typeof it.id === "string" &&
-                    it.id.startsWith("custom_")) ||
+                (typeof it.code === "string" && it.code.startsWith("custom_")) ||
+                (typeof it.id === "string" && it.id.startsWith("custom_")) ||
                 false,
         };
     });
 });
 
-// Helper Status Badge AKG Real-Time uses imported getAkgStatusBadge from akgConfig.js
+// Total Food Cost Normal dihitung dinamis dari bahanCalculations (Persis GiziRancangMenuTab)
+const totalFoodCostPKNormal = computed(() => {
+    return bahanCalculations.value
+        .filter((item) => item.tipe_porsi !== "alergi")
+        .reduce((acc, item) => acc + (Number(item.costPK) || 0), 0);
+});
 
-// AKG Result PK & PB Normal
-const akgResultPKNormal = computed(() => {
-    const rawAkg = props.workOrder?.akg_pk || props.workOrder?.raw?.akg_pk;
-    if (rawAkg && (rawAkg.energi || rawAkg.protein)) {
-        return {
-            energi: Number(rawAkg.energi || 0),
-            protein: Number(rawAkg.protein || 0),
-            lemak: Number(rawAkg.lemak || 0),
-            karbohidrat: Number(rawAkg.karbohidrat || 0),
-            serat: Number(rawAkg.serat || 0),
-        };
-    }
-    // Fallback hitung dari items
-    const normalItems = bahanCalculations.value.filter(
-        (b) => b.tipe_porsi !== "alergi",
+const totalFoodCostPBNormal = computed(() => {
+    return bahanCalculations.value
+        .filter((item) => item.tipe_porsi !== "alergi")
+        .reduce((acc, item) => acc + (Number(item.costPB) || 0), 0);
+});
+
+const grandTotalDraftMaster = computed(() => {
+    return Number(
+        props.workOrder?.total_anggaran ||
+            props.workOrder?.total_anggaran_master ||
+            props.workOrder?.raw?.total_anggaran_master ||
+            0,
     );
+});
+
+// Total AKG Normal dihitung dinamis dari bahanCalculations (Persis GiziRancangMenuTab)
+const akgResultPKNormal = computed(() => {
     const res = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-    normalItems.forEach((b) => {
-        if (b.nutrisiPK) {
-            res.energi += Number(b.nutrisiPK.energi || 0);
-            res.protein += Number(b.nutrisiPK.protein || 0);
-            res.lemak += Number(b.nutrisiPK.lemak || 0);
-            res.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
-            res.serat += Number(b.nutrisiPK.serat || 0);
-        }
-    });
-    return res;
+    bahanCalculations.value
+        .filter((b) => b.tipe_porsi !== "alergi")
+        .forEach((b) => {
+            if (b.nutrisiPK) {
+                res.energi += Number(b.nutrisiPK.energi || 0);
+                res.protein += Number(b.nutrisiPK.protein || 0);
+                res.lemak += Number(b.nutrisiPK.lemak || 0);
+                res.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
+                res.serat += Number(b.nutrisiPK.serat || 0);
+            }
+        });
+    return {
+        energi: Number(res.energi.toFixed(1)),
+        protein: Number(res.protein.toFixed(1)),
+        lemak: Number(res.lemak.toFixed(1)),
+        karbohidrat: Number(res.karbohidrat.toFixed(1)),
+        serat: Number(res.serat.toFixed(1)),
+    };
 });
 
 const akgResultPBNormal = computed(() => {
-    const rawAkg = props.workOrder?.akg_pb || props.workOrder?.raw?.akg_pb;
-    if (rawAkg && (rawAkg.energi || rawAkg.protein)) {
-        return {
-            energi: Number(rawAkg.energi || 0),
-            protein: Number(rawAkg.protein || 0),
-            lemak: Number(rawAkg.lemak || 0),
-            karbohidrat: Number(rawAkg.karbohidrat || 0),
-            serat: Number(rawAkg.serat || 0),
-        };
-    }
-    // Fallback hitung dari items
-    const normalItems = bahanCalculations.value.filter(
-        (b) => b.tipe_porsi !== "alergi",
-    );
     const res = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-    normalItems.forEach((b) => {
-        if (b.nutrisiPB) {
-            res.energi += Number(b.nutrisiPB.energi || 0);
-            res.protein += Number(b.nutrisiPB.protein || 0);
-            res.lemak += Number(b.nutrisiPB.lemak || 0);
-            res.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
-            res.serat += Number(b.nutrisiPB.serat || 0);
-        }
-    });
-    return res;
+    bahanCalculations.value
+        .filter((b) => b.tipe_porsi !== "alergi")
+        .forEach((b) => {
+            if (b.nutrisiPB) {
+                res.energi += Number(b.nutrisiPB.energi || 0);
+                res.protein += Number(b.nutrisiPB.protein || 0);
+                res.lemak += Number(b.nutrisiPB.lemak || 0);
+                res.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
+                res.serat += Number(b.nutrisiPB.serat || 0);
+            }
+        });
+    return {
+        energi: Number(res.energi.toFixed(1)),
+        protein: Number(res.protein.toFixed(1)),
+        lemak: Number(res.lemak.toFixed(1)),
+        karbohidrat: Number(res.karbohidrat.toFixed(1)),
+        serat: Number(res.serat.toFixed(1)),
+    };
 });
 
-// Varian Alergi Food Cost & AKG List
-const activeAlergiFoodCostList = computed(() => {
-    const alergiItems = bahanCalculations.value.filter(
-        (b) => b.tipe_porsi === "alergi" && b.jenis_alergi,
-    );
-    const jenisSet = [...new Set(alergiItems.map((b) => b.jenis_alergi))];
-    return jenisSet.map((ja) => {
-        const items = alergiItems.filter((b) => b.jenis_alergi === ja);
-        const costPK = items.reduce((sum, it) => sum + (it.costPK || 0), 0);
-        const costPB = items.reduce((sum, it) => sum + (it.costPB || 0), 0);
-
-        // Hitung terdampak dari detail_alergi kelompok
-        let pmPK = 0, pmPB = 0;
-        for (const kel of woKelompokList.value) {
-            if (!Array.isArray(kel.detail_alergi)) continue;
-            for (const da of kel.detail_alergi) {
-                if (!da || da.jenis_alergi !== ja) continue;
-                pmPK += Number(da.porsi_kecil) || 0;
-                pmPB += Number(da.porsi_besar) || 0;
+// Seluruh Jenis Alergi yang Aktif
+const determinedActiveAlergiTypes = computed(() => {
+    const types = new Set();
+    if (subMenuAlergi.value && typeof subMenuAlergi.value === "object") {
+        Object.values(subMenuAlergi.value).forEach((arr) => {
+            if (Array.isArray(arr)) {
+                arr.forEach((al) => {
+                    if (al && al.jenis_alergi && al.jenis_alergi.trim()) {
+                        types.add(al.jenis_alergi.trim());
+                    }
+                });
             }
+        });
+    }
+    bahanCalculations.value.forEach((b) => {
+        if (b.tipe_porsi === "alergi" && b.jenis_alergi && b.jenis_alergi.trim()) {
+            types.add(b.jenis_alergi.trim());
         }
+    });
+    return Array.from(types);
+});
+
+// Target Sasaran Normal (dikurangi PM Alergi, persis GiziRancangMenuTab)
+const targetSasaranNormal = computed(() => {
+    let pk = totalPK.value || 0;
+    let pb = totalPB.value || 0;
+
+    determinedActiveAlergiTypes.value.forEach((jenis) => {
+        const detailPm = findAlergiDetail(jenis);
+        if (detailPm) {
+            pk = Math.max(0, pk - (Number(detailPm.porsi_kecil) || 0));
+            pb = Math.max(0, pb - (Number(detailPm.porsi_besar) || 0));
+        }
+    });
+
+    return {
+        pk,
+        pb,
+        total: pk + pb,
+    };
+});
+
+// Active Alergi Food Cost List (Persis GiziRancangMenuTab: bahan aman + substitusi)
+const activeAlergiFoodCostList = computed(() => {
+    const activeTypes = determinedActiveAlergiTypes.value;
+    if (activeTypes.length === 0) return [];
+
+    return activeTypes.map((jenis) => {
+        const detailPm = findAlergiDetail(jenis);
+        const jmlPk = detailPm ? Number(detailPm.porsi_kecil) || 0 : 0;
+        const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
+        const jmlTotal = detailPm ? Number(detailPm.total) || 0 : (jmlPk + jmlPb);
+
+        const substitusiBahans = bahanCalculations.value.filter(
+            (b) => b.tipe_porsi === "alergi" && b.jenis_alergi === jenis,
+        );
+
+        const bahanNormalSafe = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            return !isBahanContainsAlergen(b, jenis);
+        });
+
+        const bahanNormalDikeluarkan = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            return isBahanContainsAlergen(b, jenis);
+        });
+
+        const allItems = [...bahanNormalSafe, ...substitusiBahans];
+        const costPK = allItems.reduce(
+            (acc, it) => acc + (Number(it.costPK) || 0),
+            0,
+        );
+        const costPB = allItems.reduce(
+            (acc, it) => acc + (Number(it.costPB) || 0),
+            0,
+        );
 
         return {
-            jenis_alergi: ja,
-            total_pm: pmPK + pmPB,
-            pm_pk: pmPK,
-            pm_pb: pmPB,
-            cost_pk: costPK || totalFoodCostPKNormal.value,
-            cost_pb: costPB || totalFoodCostPBNormal.value,
+            jenis_alergi: jenis,
+            total_pm: jmlTotal,
+            pm_pk: jmlPk,
+            pm_pb: jmlPb,
+            cost_pk: costPK,
+            cost_pb: costPB,
+            total_biaya: jmlPk * costPK + jmlPb * costPB,
+            bahan_normal_aman: bahanNormalSafe,
+            bahan_substitusi: substitusiBahans,
+            bahan_dikeluarkan: bahanNormalDikeluarkan,
+            all_included_items: allItems,
         };
     });
 });
 
-// Set jenis alergi yang benar-benar ada di bahan/sub menu (tipe_porsi === 'alergi')
 const activeAlergiJenisSet = computed(() => {
-    const items = (props.workOrder?.items || props.workOrder?.raw?.items || []);
-    const jenisSet = new Set();
-    for (const it of items) {
-        if (it.tipe_porsi === 'alergi' && it.jenis_alergi) {
-            jenisSet.add(it.jenis_alergi);
-        }
-    }
-    // Fallback: ambil dari bahanCalculations jika items raw tidak cukup
-    if (jenisSet.size === 0) {
-        for (const b of bahanCalculations.value) {
-            if (b.tipe_porsi === 'alergi' && b.jenis_alergi) {
-                jenisSet.add(b.jenis_alergi);
-            }
-        }
-    }
-    return jenisSet;
+    return new Set(determinedActiveAlergiTypes.value);
 });
 
-// Total PM yang benar-benar terdampak alergi di menu ini
 const totalTerdampakAlergi = computed(() =>
     activeAlergiFoodCostList.value.reduce(
         (acc, al) => acc + (Number(al.total_pm) || 0),
@@ -603,47 +753,10 @@ const totalTerdampakAlergi = computed(() =>
     )
 );
 
-const activeAlergiAkgList = computed(() => {
-    const alergiItems = bahanCalculations.value.filter(
-        (b) => b.tipe_porsi === "alergi" && b.jenis_alergi,
-    );
-    const jenisSet = [...new Set(alergiItems.map((b) => b.jenis_alergi))];
-    return jenisSet.map((ja) => {
-        const items = alergiItems.filter((b) => b.jenis_alergi === ja);
-        const pk = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-        const pb = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
-        items.forEach((b) => {
-            if (b.nutrisiPK) {
-                pk.energi += Number(b.nutrisiPK.energi || 0);
-                pk.protein += Number(b.nutrisiPK.protein || 0);
-                pk.lemak += Number(b.nutrisiPK.lemak || 0);
-                pk.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
-                pk.serat += Number(b.nutrisiPK.serat || 0);
-            }
-            if (b.nutrisiPB) {
-                pb.energi += Number(b.nutrisiPB.energi || 0);
-                pb.protein += Number(b.nutrisiPB.protein || 0);
-                pb.lemak += Number(b.nutrisiPB.lemak || 0);
-                pb.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
-                pb.serat += Number(b.nutrisiPB.serat || 0);
-            }
-        });
-        return {
-            jenis_alergi: ja,
-            total_pm: items.length > 0 ? totalPKAlergi.value + totalPBAlergi.value || 1 : 0,
-            pm_pk: totalPKAlergi.value,
-            pm_pb: totalPBAlergi.value,
-            bahan_count: items.length,
-            pk,
-            pb,
-        };
-    });
-});
-
-// Food Cost Breakdown per Sub Menu (Porsi Normal)
+// Rincian Food Cost per Sub Menu untuk Porsi Normal (Persis GiziRancangMenuTab)
 const foodCostSubMenuNormal = computed(() => {
-    const totalPKCost = totalFoodCostPKNormal.value || 1;
-    const totalPBCost = totalFoodCostPBNormal.value || 1;
+    const totalPK = totalFoodCostPKNormal.value || 0;
+    const totalPB = totalFoodCostPBNormal.value || 0;
 
     return subMenuKeysConfig.map((sm) => {
         const menuName =
@@ -665,8 +778,8 @@ const foodCostSubMenuNormal = computed(() => {
             0,
         );
 
-        const percentPK = totalPKCost > 0 ? (costPK / totalPKCost) * 100 : 0;
-        const percentPB = totalPBCost > 0 ? (costPB / totalPBCost) * 100 : 0;
+        const percentPK = totalPK > 0 ? (costPK / totalPK) * 100 : 0;
+        const percentPB = totalPB > 0 ? (costPB / totalPB) * 100 : 0;
 
         return {
             key: sm.key,
@@ -683,12 +796,13 @@ const foodCostSubMenuNormal = computed(() => {
     });
 });
 
+// Helper Rincian Food Cost per Sub Menu Varian Alergi (Persis GiziRancangMenuTab)
 function getFoodCostSubMenuForAlergi(jenisAlergi) {
     const detail = activeAlergiFoodCostList.value.find(
         (a) => a.jenis_alergi === jenisAlergi,
     );
-    const totalPKCost = detail ? detail.cost_pk : 1;
-    const totalPBCost = detail ? detail.cost_pb : 1;
+    const totalPK = detail ? detail.cost_pk : 0;
+    const totalPB = detail ? detail.cost_pb : 0;
 
     return subMenuKeysConfig.map((sm) => {
         const normalMenuName =
@@ -709,7 +823,16 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
                 ? b.sub_menu_key === sm.key
                 : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
             if (!matchKey) return false;
-            return !(b.alergen && b.alergen.toLowerCase().includes(jenisAlergi.toLowerCase()));
+            return !isBahanContainsAlergen(b, jenisAlergi);
+        });
+
+        const normalDikeluarkanBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            const matchKey = b.sub_menu_key
+                ? b.sub_menu_key === sm.key
+                : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
+            if (!matchKey) return false;
+            return isBahanContainsAlergen(b, jenisAlergi);
         });
 
         const allItems = [...normalSafeBahans, ...substitusiBahans];
@@ -723,6 +846,7 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
         );
 
         const isSubstituted = substitusiBahans.length > 0;
+        const isEliminated = normalDikeluarkanBahans.length > 0 && substitusiBahans.length === 0;
 
         let displayName = normalMenuName;
         if (isSubstituted) {
@@ -736,8 +860,8 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
             }
         }
 
-        const percentPK = totalPKCost > 0 ? (costPK / totalPKCost) * 100 : 0;
-        const percentPB = totalPBCost > 0 ? (costPB / totalPBCost) * 100 : 0;
+        const percentPK = totalPK > 0 ? (costPK / totalPK) * 100 : 0;
+        const percentPB = totalPB > 0 ? (costPB / totalPB) * 100 : 0;
 
         return {
             key: sm.key,
@@ -745,12 +869,14 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
             nama_menu: displayName,
             normal_menu_name: normalMenuName,
             is_substituted: isSubstituted,
-            is_eliminated: false,
+            is_eliminated: isEliminated,
             dotColor: sm.dotColor,
             badgeColor: isSubstituted
                 ? "bg-rose-50 text-rose-900 border-rose-200"
                 : sm.badgeColor,
             items_count: allItems.length,
+            substitusi_count: substitusiBahans.length,
+            dikeluarkan_names: normalDikeluarkanBahans.map((b) => b.nama),
             cost_pk: costPK,
             cost_pb: costPB,
             percent_pk: percentPK,
@@ -758,6 +884,232 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
         };
     });
 }
+
+// Rincian Kandungan Gizi per Sub Menu untuk Porsi Normal (5 Komponen)
+const nutrisiSubMenuNormal = computed(() => {
+    return subMenuKeysConfig.map((sm) => {
+        const menuName =
+            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+        const items = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            if (b.sub_menu_key) return b.sub_menu_key === sm.key;
+            if (b.sub_menu_block_id)
+                return b.sub_menu_block_id.startsWith(sm.key);
+            return false;
+        });
+
+        const pk = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+        const pb = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+
+        items.forEach((b) => {
+            if (b.nutrisiPK) {
+                pk.energi += Number(b.nutrisiPK.energi || 0);
+                pk.protein += Number(b.nutrisiPK.protein || 0);
+                pk.lemak += Number(b.nutrisiPK.lemak || 0);
+                pk.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
+                pk.serat += Number(b.nutrisiPK.serat || 0);
+            }
+            if (b.nutrisiPB) {
+                pb.energi += Number(b.nutrisiPB.energi || 0);
+                pb.protein += Number(b.nutrisiPB.protein || 0);
+                pb.lemak += Number(b.nutrisiPB.lemak || 0);
+                pb.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
+                pb.serat += Number(b.nutrisiPB.serat || 0);
+            }
+        });
+
+        return {
+            key: sm.key,
+            label: sm.label,
+            nama_menu: menuName,
+            dotColor: sm.dotColor,
+            badgeColor: sm.badgeColor,
+            items_count: items.length,
+            bahan_names: items.map((b) => b.nama),
+            pk: {
+                energi: Number(pk.energi.toFixed(1)),
+                protein: Number(pk.protein.toFixed(1)),
+                lemak: Number(pk.lemak.toFixed(1)),
+                karbohidrat: Number(pk.karbohidrat.toFixed(1)),
+                serat: Number(pk.serat.toFixed(1)),
+            },
+            pb: {
+                energi: Number(pb.energi.toFixed(1)),
+                protein: Number(pb.protein.toFixed(1)),
+                lemak: Number(pb.lemak.toFixed(1)),
+                karbohidrat: Number(pb.karbohidrat.toFixed(1)),
+                serat: Number(pb.serat.toFixed(1)),
+            },
+        };
+    });
+});
+
+// Helper Rincian Kandungan Gizi per Sub Menu Varian Alergi (5 Komponen)
+function getNutrisiSubMenuForAlergi(jenisAlergi) {
+    return subMenuKeysConfig.map((sm) => {
+        const normalMenuName =
+            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+
+        const substitusiBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi !== "alergi" || b.jenis_alergi !== jenisAlergi)
+                return false;
+            if (b.sub_menu_key) return b.sub_menu_key === sm.key;
+            if (b.sub_menu_block_id)
+                return b.sub_menu_block_id.startsWith(sm.key);
+            return false;
+        });
+
+        const normalSafeBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            const matchKey = b.sub_menu_key
+                ? b.sub_menu_key === sm.key
+                : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
+            if (!matchKey) return false;
+            return !isBahanContainsAlergen(b, jenisAlergi);
+        });
+
+        const normalDikeluarkanBahans = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            const matchKey = b.sub_menu_key
+                ? b.sub_menu_key === sm.key
+                : b.sub_menu_block_id && b.sub_menu_block_id.startsWith(sm.key);
+            if (!matchKey) return false;
+            return isBahanContainsAlergen(b, jenisAlergi);
+        });
+
+        const allItems = [...normalSafeBahans, ...substitusiBahans];
+        const isSubstituted = substitusiBahans.length > 0;
+        const isEliminated = normalDikeluarkanBahans.length > 0 && substitusiBahans.length === 0;
+
+        let displayName = normalMenuName;
+        if (isSubstituted) {
+            const alMenu = subMenuAlergi.value[sm.key]?.find(
+                (x) => x.jenis_alergi === jenisAlergi,
+            );
+            if (alMenu && alMenu.menu_pengganti) {
+                displayName = alMenu.menu_pengganti;
+            } else if (substitusiBahans[0]?.nama_sub_menu) {
+                displayName = substitusiBahans[0].nama_sub_menu;
+            }
+        }
+
+        const pk = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+        const pb = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+
+        allItems.forEach((b) => {
+            if (b.nutrisiPK) {
+                pk.energi += Number(b.nutrisiPK.energi || 0);
+                pk.protein += Number(b.nutrisiPK.protein || 0);
+                pk.lemak += Number(b.nutrisiPK.lemak || 0);
+                pk.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
+                pk.serat += Number(b.nutrisiPK.serat || 0);
+            }
+            if (b.nutrisiPB) {
+                pb.energi += Number(b.nutrisiPB.energi || 0);
+                pb.protein += Number(b.nutrisiPB.protein || 0);
+                pb.lemak += Number(b.nutrisiPB.lemak || 0);
+                pb.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
+                pb.serat += Number(b.nutrisiPB.serat || 0);
+            }
+        });
+
+        return {
+            key: sm.key,
+            label: sm.label,
+            nama_menu: displayName,
+            normal_menu_name: normalMenuName,
+            is_substituted: isSubstituted,
+            is_eliminated: isEliminated,
+            dotColor: sm.dotColor,
+            badgeColor: isSubstituted
+                ? "bg-rose-50 text-rose-900 border-rose-200"
+                : sm.badgeColor,
+            items_count: allItems.length,
+            bahan_names: allItems.map((b) => b.nama),
+            dikeluarkan_names: normalDikeluarkanBahans.map((b) => b.nama),
+            pk: {
+                energi: Number(pk.energi.toFixed(1)),
+                protein: Number(pk.protein.toFixed(1)),
+                lemak: Number(pk.lemak.toFixed(1)),
+                karbohidrat: Number(pk.karbohidrat.toFixed(1)),
+                serat: Number(pk.serat.toFixed(1)),
+            },
+            pb: {
+                energi: Number(pb.energi.toFixed(1)),
+                protein: Number(pb.protein.toFixed(1)),
+                lemak: Number(pb.lemak.toFixed(1)),
+                karbohidrat: Number(pb.karbohidrat.toFixed(1)),
+                serat: Number(pb.serat.toFixed(1)),
+            },
+        };
+    });
+}
+
+// Evaluasi AKG Varian Alergi (Persis GiziRancangMenuTab: bahan aman + substitusi)
+const activeAlergiAkgList = computed(() => {
+    const activeTypes = determinedActiveAlergiTypes.value;
+    if (activeTypes.length === 0) return [];
+
+    return activeTypes.map((jenis) => {
+        const detailPm = findAlergiDetail(jenis);
+        const jmlPk = detailPm ? Number(detailPm.porsi_kecil) || 0 : 0;
+        const jmlPb = detailPm ? Number(detailPm.porsi_besar) || 0 : 0;
+        const jmlTotal = detailPm ? Number(detailPm.total) || 0 : (jmlPk + jmlPb);
+
+        const substitusiBahans = bahanCalculations.value.filter(
+            (b) => b.tipe_porsi === "alergi" && b.jenis_alergi === jenis,
+        );
+        const bahanNormalSafe = bahanCalculations.value.filter((b) => {
+            if (b.tipe_porsi === "alergi") return false;
+            return !isBahanContainsAlergen(b, jenis);
+        });
+
+        const allBahanVarian = [...bahanNormalSafe, ...substitusiBahans];
+
+        const pk = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+        const pb = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+
+        allBahanVarian.forEach((b) => {
+            if (b.nutrisiPK) {
+                pk.energi += Number(b.nutrisiPK.energi || 0);
+                pk.protein += Number(b.nutrisiPK.protein || 0);
+                pk.lemak += Number(b.nutrisiPK.lemak || 0);
+                pk.karbohidrat += Number(b.nutrisiPK.karbohidrat || 0);
+                pk.serat += Number(b.nutrisiPK.serat || 0);
+            }
+            if (b.nutrisiPB) {
+                pb.energi += Number(b.nutrisiPB.energi || 0);
+                pb.protein += Number(b.nutrisiPB.protein || 0);
+                pb.lemak += Number(b.nutrisiPB.lemak || 0);
+                pb.karbohidrat += Number(b.nutrisiPB.karbohidrat || 0);
+                pb.serat += Number(b.nutrisiPB.serat || 0);
+            }
+        });
+
+        return {
+            jenis_alergi: jenis,
+            total_pm: jmlTotal,
+            pm_pk: jmlPk,
+            pm_pb: jmlPb,
+            bahan_count: substitusiBahans.length,
+            pk: {
+                energi: Number(pk.energi.toFixed(1)),
+                protein: Number(pk.protein.toFixed(1)),
+                lemak: Number(pk.lemak.toFixed(1)),
+                karbohidrat: Number(pk.karbohidrat.toFixed(1)),
+                serat: Number(pk.serat.toFixed(1)),
+            },
+            pb: {
+                energi: Number(pb.energi.toFixed(1)),
+                protein: Number(pb.protein.toFixed(1)),
+                lemak: Number(pb.lemak.toFixed(1)),
+                karbohidrat: Number(pb.karbohidrat.toFixed(1)),
+                serat: Number(pb.serat.toFixed(1)),
+            },
+            sub_menus: getNutrisiSubMenuForAlergi(jenis),
+        };
+    });
+});
 
 function getSubMenuLabelForBahan(it) {
     const keyMap = {
@@ -781,6 +1133,7 @@ function getSubMenuLabelForBahan(it) {
             : "bg-slate-100 text-slate-800 border-slate-300",
     };
 }
+
 </script>
 
 <template>
@@ -1516,14 +1869,23 @@ function getSubMenuLabelForBahan(it) {
                                     </div>
                                     <div class="grid grid-cols-6 gap-2 text-xs">
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Energi</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPKNormal.energi, 330, 413).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Energi</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPKNormal.energi.toFixed(
                                                         1,
@@ -1540,14 +1902,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Protein</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Protein</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPKNormal.protein.toFixed(
                                                         1,
@@ -1564,14 +1935,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Lemak</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Lemak</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPKNormal.lemak.toFixed(
                                                         1,
@@ -1588,14 +1968,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Karbohidrat</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Karbohidrat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPKNormal.karbohidrat.toFixed(
                                                         1,
@@ -1612,14 +2001,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Serat</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Serat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPKNormal.serat.toFixed(
                                                         1,
@@ -1675,14 +2073,23 @@ function getSubMenuLabelForBahan(it) {
                                     </div>
                                     <div class="grid grid-cols-6 gap-2 text-xs">
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Energi</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPBNormal.energi, 585, 831).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Energi</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPBNormal.energi.toFixed(
                                                         1,
@@ -1699,14 +2106,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Protein</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Protein</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPBNormal.protein.toFixed(
                                                         1,
@@ -1723,14 +2139,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                            class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Lemak</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Lemak</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPBNormal.lemak.toFixed(
                                                         1,
@@ -1747,14 +2172,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Karbohidrat</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Karbohidrat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPBNormal.karbohidrat.toFixed(
                                                         1,
@@ -1771,14 +2205,23 @@ function getSubMenuLabelForBahan(it) {
                                             >
                                         </div>
                                         <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                            class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                            :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).borderClass"
                                         >
+                                            <div class="flex items-center justify-between">
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-semibold"
+                                                    >Serat</span
+                                                >
+                                                <span
+                                                    class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold"
+                                                    :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).badgeClass"
+                                                >
+                                                    {{ getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).label }}
+                                                </span>
+                                            </div>
                                             <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Serat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
+                                                class="font-black text-slate-900 text-sm block"
                                                 >{{
                                                     akgResultPBNormal.serat.toFixed(
                                                         1,
@@ -1799,7 +2242,194 @@ function getSubMenuLabelForBahan(it) {
                             </div>
                         </div>
 
-                        <!-- 3.B Evaluasi AKG Varian Alergi (Jika Ada) -->
+                                                <!-- TABEL RINCIAN KANDUNGAN GIZI PER KOMPONEN HIDANGAN (PORSI NORMAL) -->
+                        <div class="bg-white rounded-2xl border border-emerald-200 overflow-hidden shadow-2xs mt-4">
+                            <div class="p-3 bg-emerald-50/70 border-b border-emerald-200 flex items-center justify-between flex-wrap gap-2">
+                                <span class="text-xs font-black text-emerald-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Layers class="h-3.5 w-3.5 text-emerald-600" />
+                                    RINCIAN KANDUNGAN GIZI PER KOMPONEN HIDANGAN (PORSI NORMAL)
+                                </span>
+                                <span class="text-[11px] text-emerald-800 font-medium">
+                                    Kontribusi zat gizi 5 sub menu hidangan utama untuk Porsi Kecil (PK) dan Porsi Besar (PB)
+                                </span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead class="bg-emerald-50/40 text-slate-700 font-bold border-b border-emerald-200 uppercase text-[10px] select-none">
+                                        <tr>
+                                            <th class="p-2.5 text-center w-10">NO</th>
+                                            <th class="p-2.5 min-w-[200px]">KOMPONEN HIDANGAN</th>
+                                            <th class="p-2.5 text-center min-w-[80px]">BAHAN</th>
+                                            <th class="p-2.5 text-right min-w-[110px]">ENERGI (kkal)</th>
+                                            <th class="p-2.5 text-right min-w-[110px]">PROTEIN (g)</th>
+                                            <th class="p-2.5 text-right min-w-[110px]">LEMAK (g)</th>
+                                            <th class="p-2.5 text-right min-w-[115px]">KARBOHIDRAT (g)</th>
+                                            <th class="p-2.5 text-right min-w-[105px]">SERAT (g)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-slate-800">
+                                        <tr v-for="(smGizi, idx) in nutrisiSubMenuNormal" :key="'akg-sub-normal-' + smGizi.key" class="hover:bg-emerald-50/30 transition-colors">
+                                            <td class="p-2.5 text-center font-bold text-slate-400 align-middle">{{ idx + 1 }}</td>
+                                            <td class="p-2.5 align-middle">
+                                                <div class="flex items-center gap-2">
+                                                    <div>
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <span class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded border" :class="smGizi.badgeColor">
+                                                                {{ smGizi.label }}
+                                                            </span>
+                                                        </div>
+                                                        <div class="font-bold text-slate-900 text-xs mt-1">{{ smGizi.nama_menu }}</div>
+                                                        <div v-if="smGizi.bahan_names && smGizi.bahan_names.length" class="text-[10px] text-slate-400 truncate max-w-xs mt-0.5" :title="smGizi.bahan_names.join(', ')">
+                                                            {{ smGizi.bahan_names.join(', ') }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 text-center align-middle font-medium text-slate-600">
+                                                <span v-if="smGizi.items_count > 0" class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700">
+                                                    {{ smGizi.items_count }} Bahan
+                                                </span>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
+                                            <!-- Energi -->
+                                            <td class="p-2.5 text-right align-middle">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pk.energi.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pb.energi.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <!-- Protein -->
+                                            <td class="p-2.5 text-right align-middle">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pk.protein.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pb.protein.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <!-- Lemak -->
+                                            <td class="p-2.5 text-right align-middle">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pk.lemak.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pb.lemak.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <!-- Karbohidrat -->
+                                            <td class="p-2.5 text-right align-middle">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pk.karbohidrat.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pb.karbohidrat.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <!-- Serat -->
+                                            <td class="p-2.5 text-right align-middle">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pk.serat.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                        <span class="font-bold text-slate-800">{{ smGizi.pb.serat.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="bg-emerald-50/80 font-black border-t-2 border-emerald-200 text-xs">
+                                        <tr>
+                                            <td colspan="3" class="p-2.5 text-right uppercase tracking-wider text-emerald-950 font-extrabold">
+                                                TOTAL KANDUNGAN GIZI (PORSI NORMAL):
+                                            </td>
+                                            <td class="p-2.5 text-right">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                        <span>{{ akgResultPKNormal.energi.toFixed(1) }}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                        <span>{{ akgResultPBNormal.energi.toFixed(1) }}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 text-right">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                        <span>{{ akgResultPKNormal.protein.toFixed(1) }}g</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                        <span>{{ akgResultPBNormal.protein.toFixed(1) }}g</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 text-right">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                        <span>{{ akgResultPKNormal.lemak.toFixed(1) }}g</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                        <span>{{ akgResultPBNormal.lemak.toFixed(1) }}g</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 text-right">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                        <span>{{ akgResultPKNormal.karbohidrat.toFixed(1) }}g</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                        <span>{{ akgResultPBNormal.karbohidrat.toFixed(1) }}g</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-2.5 text-right">
+                                                <div class="space-y-1">
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                        <span>{{ akgResultPKNormal.serat.toFixed(1) }}g</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                        <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                        <span>{{ akgResultPBNormal.serat.toFixed(1) }}g</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+<!-- 3.B Evaluasi AKG Varian Alergi (Jika Ada) -->
                         <div
                             v-if="activeAlergiAkgList.length > 0"
                             class="space-y-4 pt-2 border-t border-slate-200"
@@ -1866,15 +2496,13 @@ function getSubMenuLabelForBahan(it) {
                                     </span>
                                 </div>
 
-                                <div
-                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
-                                >
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <!-- Evaluasi PK Alergi -->
                                     <div
                                         class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
                                     >
                                         <div
-                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
+                                            class="flex items-center justify-between border-b border-slate-100 pb-2.5"
                                         >
                                             <div>
                                                 <span
@@ -1911,124 +2539,84 @@ function getSubMenuLabelForBahan(it) {
                                             class="grid grid-cols-6 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pk.energi, 330, 413).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.energi.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >kkal</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 330 - 413 kkal</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Energi</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pk.energi, 330, 413).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pk.energi, 330, 413).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pk.energi.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">kkal</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 330 - 413 kkal</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.protein.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 8.0 - 10.0g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Protein</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pk.protein, 8.0, 10.0).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pk.protein.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 8.0 - 10.0g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.lemak.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 11.0 - 13.8g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Lemak</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pk.lemak.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 11.0 - 13.8g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                                class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.karbohidrat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 50.0 - 62.5g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Karbohidrat</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pk.karbohidrat.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 50.0 - 62.5g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                                class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.serat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 4.0 - 7.0g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Serat</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pk.serat, 4.0, 7.0).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pk.serat.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 4.0 - 7.0g</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2038,7 +2626,7 @@ function getSubMenuLabelForBahan(it) {
                                         class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
                                     >
                                         <div
-                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
+                                            class="flex items-center justify-between border-b border-slate-100 pb-2.5"
                                         >
                                             <div>
                                                 <span
@@ -2075,126 +2663,295 @@ function getSubMenuLabelForBahan(it) {
                                             class="grid grid-cols-6 gap-2 text-xs"
                                         >
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pb.energi, 585, 831).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.energi.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >kkal</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 585 - 831 kkal</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Energi</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pb.energi, 585, 831).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pb.energi, 585, 831).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pb.energi.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">kkal</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 585 - 831 kkal</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.protein.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 15.8 - 24.5g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Protein</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pb.protein, 15.8, 24.5).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pb.protein.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 15.8 - 24.5g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
+                                                class="p-2 bg-white rounded-lg border col-span-2 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.lemak.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 19.5 - 26.3g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Lemak</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pb.lemak.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 19.5 - 26.3g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                                class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.karbohidrat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 87.0 - 122.5g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Karbohidrat</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pb.karbohidrat.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 87.0 - 122.5g</span>
                                             </div>
                                             <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
+                                                class="p-2 bg-white rounded-lg border col-span-3 space-y-0.5"
+                                                :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).borderClass"
                                             >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.serat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 8 - 12g</span
-                                                >
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[10px] text-slate-500 font-semibold">Serat</span>
+                                                    <span class="text-[8.5px] px-1 py-0.2 rounded border font-extrabold" :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).badgeClass">
+                                                        {{ getNutrientStatus(alRes.pb.serat, 6.0, 10.0).label }}
+                                                    </span>
+                                                </div>
+                                                <span class="font-black text-slate-900 text-sm block">
+                                                    {{ alRes.pb.serat.toFixed(1) }}
+                                                    <span class="text-[10px] font-normal text-slate-500">g</span>
+                                                </span>
+                                                <span class="text-[9.5px] text-slate-400 block mt-0.5">Std: 6.0 - 10.0g</span>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- TABEL RINCIAN KANDUNGAN GIZI PER KOMPONEN HIDANGAN (VARIAN ALERGI) -->
+                                <div class="bg-white rounded-2xl border border-rose-200 overflow-hidden shadow-2xs">
+                                    <div class="p-3 bg-rose-50/70 border-b border-rose-200 flex items-center justify-between flex-wrap gap-2">
+                                        <span class="text-xs font-black text-rose-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                            <Layers class="h-3.5 w-3.5 text-rose-600" />
+                                            RINCIAN KANDUNGAN GIZI PER KOMPONEN HIDANGAN (VARIAN {{ alRes.jenis_alergi }})
+                                        </span>
+                                        <span class="text-[11px] text-rose-800 font-medium">
+                                            Kontribusi zat gizi setelah penyesuaian substitusi alergen & hidangan aman
+                                        </span>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead class="bg-rose-50/40 text-slate-700 font-bold border-b border-rose-200 uppercase text-[10px] select-none">
+                                                <tr>
+                                                    <th class="p-2.5 text-center w-10">NO</th>
+                                                    <th class="p-2.5 min-w-[200px]">KOMPONEN HIDANGAN</th>
+                                                    <th class="p-2.5 text-center min-w-[80px]">BAHAN</th>
+                                                    <th class="p-2.5 text-right min-w-[110px]">ENERGI (kkal)</th>
+                                                    <th class="p-2.5 text-right min-w-[110px]">PROTEIN (g)</th>
+                                                    <th class="p-2.5 text-right min-w-[110px]">LEMAK (g)</th>
+                                                    <th class="p-2.5 text-right min-w-[115px]">KARBOHIDRAT (g)</th>
+                                                    <th class="p-2.5 text-right min-w-[105px]">SERAT (g)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100 text-slate-800">
+                                                <tr v-for="(smGizi, idx) in alRes.sub_menus" :key="'akg-sub-' + alRes.jenis_alergi + '-' + smGizi.key" class="hover:bg-rose-50/30 transition-colors">
+                                                    <td class="p-2.5 text-center font-bold text-slate-400 align-middle">{{ idx + 1 }}</td>
+                                                    <td class="p-2.5 align-middle">
+                                                        <div class="flex items-center gap-2">
+                                                            <div>
+                                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                                    <span class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded border" :class="smGizi.badgeColor">
+                                                                        {{ smGizi.label }}
+                                                                    </span>
+                                                                    <span v-if="smGizi.is_substituted" class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-300">
+                                                                        Substitusi Alergi
+                                                                    </span>
+                                                                    <span v-else-if="smGizi.is_eliminated" class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 border border-slate-300">
+                                                                        Dieliminasi
+                                                                    </span>
+                                                                    <span v-else class="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                        Aman
+                                                                    </span>
+                                                                </div>
+                                                                <div class="font-bold text-slate-900 text-xs mt-1">{{ smGizi.nama_menu }}</div>
+                                                                <div v-if="smGizi.bahan_names && smGizi.bahan_names.length" class="text-[10px] text-slate-400 truncate max-w-xs mt-0.5" :title="smGizi.bahan_names.join(', ')">
+                                                                    {{ smGizi.bahan_names.join(', ') }}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5 text-center align-middle font-medium text-slate-600">
+                                                        <span v-if="smGizi.items_count > 0" class="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[11px] text-slate-700">
+                                                            {{ smGizi.items_count }} Bahan
+                                                        </span>
+                                                        <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                                    </td>
+                                                    <!-- Energi -->
+                                                    <td class="p-2.5 text-right align-middle">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pk.energi.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pb.energi.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <!-- Protein -->
+                                                    <td class="p-2.5 text-right align-middle">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pk.protein.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pb.protein.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <!-- Lemak -->
+                                                    <td class="p-2.5 text-right align-middle">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pk.lemak.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pb.lemak.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <!-- Karbohidrat -->
+                                                    <td class="p-2.5 text-right align-middle">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pk.karbohidrat.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pb.karbohidrat.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <!-- Serat -->
+                                                    <td class="p-2.5 text-right align-middle">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">PK</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pk.serat.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1.5 text-[11px]">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">PB</span>
+                                                                <span class="font-bold text-slate-800">{{ smGizi.pb.serat.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot class="bg-rose-50/80 font-black border-t-2 border-rose-200 text-xs">
+                                                <tr>
+                                                    <td colspan="3" class="p-2.5 text-right uppercase tracking-wider text-rose-950 font-extrabold">
+                                                        TOTAL KANDUNGAN GIZI (VARIAN {{ alRes.jenis_alergi }}):
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                                <span>{{ alRes.pk.energi.toFixed(1) }}</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                                <span>{{ alRes.pb.energi.toFixed(1) }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                                <span>{{ alRes.pk.protein.toFixed(1) }}g</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                                <span>{{ alRes.pb.protein.toFixed(1) }}g</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                                <span>{{ alRes.pk.lemak.toFixed(1) }}g</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                                <span>{{ alRes.pb.lemak.toFixed(1) }}g</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                                <span>{{ alRes.pk.karbohidrat.toFixed(1) }}g</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                                <span>{{ alRes.pb.karbohidrat.toFixed(1) }}g</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="space-y-1">
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-amber-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">PK</span>
+                                                                <span>{{ alRes.pk.serat.toFixed(1) }}g</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-end gap-1 text-[11px] font-black text-blue-900">
+                                                                <span class="text-[8.5px] font-extrabold px-1 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300">PB</span>
+                                                                <span>{{ alRes.pb.serat.toFixed(1) }}g</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    <div class="p-2.5 bg-rose-50/50 border-t border-rose-200 flex items-center justify-between flex-wrap gap-2 text-[10.5px] text-rose-800">
+                                        <div class="flex items-center gap-3">
+                                            <span class="flex items-center gap-1 font-semibold">
+                                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                PK: Porsi Kecil (PAUD, TK, SD 1-3)
+                                            </span>
+                                            <span class="flex items-center gap-1 font-semibold">
+                                                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                PB: Porsi Besar (SD 4-6, SMP, SMA/SMK, Bumil/Busui)
+                                            </span>
+                                        </div>
+                                        <span class="italic text-rose-600">Seluruh komponen hidangan dihitung untuk varian alergi ini</span>
                                     </div>
                                 </div>
                             </div>
