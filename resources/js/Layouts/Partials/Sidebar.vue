@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { Link, router, usePage } from "@inertiajs/vue3";
 import {
-    Building2,
     Home,
     LayoutDashboard,
     LogOut,
@@ -355,11 +354,11 @@ function logout() {
                     ]"
                     :title="isCollapsed ? 'SIPEGE' : ''"
                 >
-                    <div
-                        class="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-md shadow-primary/20 transition-transform group-hover:scale-105 shrink-0"
-                    >
-                        <Building2 class="h-5 w-5" />
-                    </div>
+                    <img
+                        src="/images/logo/BGN_LOGO_MAIN.png"
+                        alt="Logo BGN"
+                        class="h-9 w-9 object-contain drop-shadow-sm transition-transform group-hover:scale-105 shrink-0"
+                    />
                     <div
                         :class="[
                             'transition-opacity duration-200 whitespace-nowrap overflow-hidden',

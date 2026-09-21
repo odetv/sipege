@@ -7,7 +7,6 @@ import Badge from "@/Components/ui/Badge.vue";
 import {
     LogIn,
     UserPlus,
-    Building2,
     Users,
     UtensilsCrossed,
     Wallet,
@@ -20,7 +19,7 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Sistem Pengelolaan SPPG" />
+    <Head title="Sistem Pengelolaan SPPG - Badan Gizi Nasional" />
 
     <div
         class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 flex flex-col justify-between text-slate-900"
@@ -32,16 +31,16 @@ defineProps({
             <div
                 class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
             >
-                <!-- Logo -->
-                <div class="flex items-center gap-3">
-                    <div
-                        class="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20"
-                    >
-                        <Building2 class="h-6 w-6" />
-                    </div>
+                <!-- Logo BGN di Header -->
+                <Link :href="'/'" class="flex items-center gap-3 group">
+                    <img
+                        src="/images/logo/BGN_LOGO_MAIN.png"
+                        alt="Logo Badan Gizi Nasional"
+                        class="h-10 w-10 object-contain drop-shadow-sm transition-transform duration-200 group-hover:scale-105"
+                    />
                     <div>
                         <h1
-                            class="font-bold text-lg leading-tight tracking-tight text-slate-900"
+                            class="font-extrabold text-lg leading-tight tracking-tight text-slate-900 group-hover:text-primary transition-colors"
                         >
                             SIPEGE
                         </h1>
@@ -51,7 +50,7 @@ defineProps({
                             Sistem Pengelolaan SPPG
                         </p>
                     </div>
-                </div>
+                </Link>
 
                 <!-- Auth Navigation -->
                 <nav class="flex items-center gap-3">
@@ -61,7 +60,7 @@ defineProps({
                     >
                         <Button
                             variant="default"
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 shadow-sm"
                         >
                             <span>Dashboard</span>
                         </Button>
@@ -182,9 +181,16 @@ defineProps({
                     &copy; {{ new Date().getFullYear() }} SIPEGE - Sistem
                     Pengelolaan SPPG.
                 </p>
-                <p class="text-slate-400">
-                    Badan Gizi Nasional - Satuan Pelayanan Pemenuhan Gizi
-                </p>
+                <div class="flex items-center gap-2">
+                    <img
+                        src="/images/logo/BGN_LOGO_MAIN.png"
+                        alt="Logo BGN"
+                        class="h-4 w-4 object-contain opacity-75"
+                    />
+                    <p class="text-slate-500">
+                        Badan Gizi Nasional - Satuan Pelayanan Pemenuhan Gizi
+                    </p>
+                </div>
             </div>
         </footer>
     </div>

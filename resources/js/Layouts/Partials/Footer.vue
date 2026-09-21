@@ -21,9 +21,14 @@ defineProps({
             <p>
                 &copy; {{ new Date().getFullYear() }} {{ appName }}.
             </p>
-            <p class="text-slate-400 text-[11px] sm:text-xs">
-                {{ organization }}
-            </p>
+            <div class="flex items-center gap-1.5 text-slate-400 text-[11px] sm:text-xs">
+                <img
+                    src="/images/logo/BGN_LOGO_MAIN.png"
+                    alt="Logo BGN"
+                    class="h-3.5 w-3.5 object-contain opacity-75"
+                />
+                <span>{{ organization }}</span>
+            </div>
         </div>
     </footer>
 </template>

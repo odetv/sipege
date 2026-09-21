@@ -703,11 +703,11 @@ function submit() {
                     :href="'/'"
                     class="inline-flex items-center gap-2.5 mb-2 group"
                 >
-                    <div
-                        class="h-10 w-10 rounded-xl bg-primary text-white flex items-center justify-center shadow-md shadow-primary/25"
-                    >
-                        <Building2 class="h-6 w-6" />
-                    </div>
+                    <img
+                        src="/images/logo/BGN_LOGO_MAIN.png"
+                        alt="Logo BGN"
+                        class="h-10 w-10 object-contain drop-shadow-sm transition-transform group-hover:scale-105"
+                    />
                     <div class="text-left">
                         <span
                             class="font-extrabold text-xl tracking-tight text-slate-900 leading-tight block"

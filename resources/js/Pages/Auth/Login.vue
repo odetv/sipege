@@ -12,7 +12,6 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import CardFooter from "@/Components/ui/CardFooter.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import {
-    Building2,
     LogIn,
     Lock,
     Mail,
@@ -54,11 +53,11 @@ const submit = () => {
         <!-- Header / Brand -->
         <div class="mb-6 text-center">
             <Link :href="'/'" class="inline-flex items-center gap-2.5 group">
-                <div
-                    class="h-11 w-11 rounded-xl bg-primary text-white flex items-center justify-center shadow-md shadow-primary/25 transition-transform group-hover:scale-105"
-                >
-                    <Building2 class="h-6 w-6" />
-                </div>
+                <img
+                    src="/images/logo/BGN_LOGO_MAIN.png"
+                    alt="Logo BGN"
+                    class="h-11 w-11 object-contain drop-shadow-sm transition-transform group-hover:scale-105"
+                />
                 <div class="text-left">
                     <span
                         class="font-extrabold text-2xl tracking-tight text-slate-900 leading-tight block"
