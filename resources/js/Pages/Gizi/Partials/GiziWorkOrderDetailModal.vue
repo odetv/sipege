@@ -3886,7 +3886,7 @@ function getSubMenuLabelForBahan(it) {
                                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold text-xs px-3.5 h-9 rounded-xl flex items-center gap-1.5 cursor-pointer"
                             >
                                 <FileSpreadsheet class="h-4 w-4" />
-                                <span>Export Excel</span>
+                                <span>Export Excel (.xlsx)</span>
                             </Button>
 
                             <!-- Export Word -->
@@ -3896,7 +3896,7 @@ function getSubMenuLabelForBahan(it) {
                                 className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 font-bold text-xs px-3.5 h-9 rounded-xl flex items-center gap-1.5 cursor-pointer"
                             >
                                 <FilePenLine class="h-4 w-4" />
-                                <span>Export Word</span>
+                                <span>Export Word (.docx)</span>
                             </Button>
 
                             <!-- Export PDF -->

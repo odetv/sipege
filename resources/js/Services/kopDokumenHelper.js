@@ -1,3 +1,4 @@
+import { LOGO_BGN_BASE64, LOGO_YAYASAN_BASE64 } from "@/Services/logoBase64Helper";
 /**
  * Service & Helper Terpusat untuk Kop Dokumen Kedinasan SPPG (Universal Letterhead)
  * Digunakan oleh seluruh modul aplikasi (Aset Digital, Work Order, PO, Laporan, dsb)
@@ -143,8 +144,8 @@ export function generateKopHtml(customConfig = null, options = {}) {
 
     const kontakStr = contactParts.length > 0 ? contactParts.join(' | ') : (config.email ? `E-mail: ${config.email}` : '');
 
-    const logoKiriUrl = config.logo_kiri_url || '/images/logo/BGN_LOGO_MAIN.png';
-    const logoKananUrl = config.logo_kanan_url || '/images/logo/Logo_Yayasan.png';
+    const logoKiriUrl = (config.logo_kiri_url && config.logo_kiri_url.startsWith('data:image')) ? config.logo_kiri_url : LOGO_BGN_BASE64;
+    const logoKananUrl = (config.logo_kanan_url && config.logo_kanan_url.startsWith('data:image')) ? config.logo_kanan_url : LOGO_YAYASAN_BASE64;
     const layout = config.layout_logo || 'dual';
     const hasRightLogo = layout === 'dual' && Boolean(logoKananUrl);
 

@@ -1129,7 +1129,7 @@ function executeDeleteWo() {
                         class="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer text-left"
                     >
                         <FileSpreadsheet class="h-3.5 w-3.5 shrink-0" />
-                        Excel (.xls)
+                        Excel (.xlsx)
                     </button>
                     <button
                         type="button"
@@ -1137,7 +1137,7 @@ function executeDeleteWo() {
                         class="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer text-left"
                     >
                         <FilePenLine class="h-3.5 w-3.5 shrink-0" />
-                        Word (.doc)
+                        Word (.docx)
                     </button>
                     <button
                         type="button"
