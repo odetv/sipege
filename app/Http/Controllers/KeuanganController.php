@@ -505,9 +505,14 @@ class KeuanganController extends Controller
 
             // Ambil seluruh data PO dari database
             $allDbPo = PurchaseOrder::where('unit_sppg_id', $unitSppg->id)
-                ->with(['items.supplier', 'workOrder', 'verifikator', 'supplier'])
+                ->with(['items.supplier', 'workOrder.items', 'verifikator', 'supplier'])
                 ->orderBy('tanggal', 'desc')
                 ->get();
+
+            // Pastikan setiap PO memiliki item yang terkelompokan per bahan database pangan (tanpa duplikasi)
+            foreach ($allDbPo as $p) {
+                self::ensurePoItemsConsolidated($p);
+            }
 
             $mapPoItem = function ($po) use ($totalPenerima, $totalPorsiKecil, $totalPorsiBesar) {
                 $rawWo = $po->workOrder ? [
@@ -523,6 +528,14 @@ class KeuanganController extends Controller
                 $totalPorsiVal = $po->workOrder ? ($po->workOrder->total_pm ?: ($po->workOrder->total_porsi ?: ($totalPenerima ?? 0))) : ($totalPenerima ?? 0);
                 $porsiPkVal = $po->workOrder ? ($po->workOrder->total_pk ?: ($po->workOrder->porsi_pk ?: ($totalPorsiKecil ?? 0))) : ($totalPorsiKecil ?? 0);
                 $porsiPbVal = $po->workOrder ? ($po->workOrder->total_pb ?: ($po->workOrder->porsi_pb ?: ($totalPorsiBesar ?? 0))) : ($totalPorsiBesar ?? 0);
+
+                $keyMap = [
+                    'sub_menu_1' => 'Sub Menu 1',
+                    'sub_menu_2' => 'Sub Menu 2',
+                    'sub_menu_3' => 'Sub Menu 3',
+                    'sub_menu_4' => 'Sub Menu 4',
+                    'sub_menu_5' => 'Sub Menu 5',
+                ];
 
                 return [
                     'id' => $po->nomor_po,
@@ -573,51 +586,119 @@ class KeuanganController extends Controller
                     'diverifikasi_pada' => $po->diverifikasi_pada ? $po->diverifikasi_pada->format('Y-m-d H:i:s') : null,
                     'riwayat_verifikasi' => $po->riwayat_verifikasi ?: ($po->workOrder ? $po->workOrder->riwayat_verifikasi : []) ?: [],
                     'raw' => $rawWo,
-                    'items' => $po->items->map(function ($it) use ($po) {
-                        $woItem = $it->workOrderItem;
-                        if (!$woItem && $po->workOrder && $po->workOrder->items) {
-                            $woItem = $po->workOrder->items->first(function ($w) use ($it) {
-                                return $w->nama_po === $it->nama || $w->nama === $it->nama || $w->id === $it->work_order_item_id;
+                    'items' => $po->items->map(function ($it) use ($po, $keyMap) {
+                        $matchingWoItems = collect();
+                        if ($po->workOrder && $po->workOrder->items) {
+                            $matchingWoItems = $po->workOrder->items->filter(function ($w) use ($it) {
+                                return strcasecmp(trim($w->nama_po ?: $w->nama), trim($it->nama)) === 0
+                                    || strcasecmp(trim($w->nama), trim($it->nama)) === 0
+                                    || $w->id === $it->work_order_item_id;
                             });
                         }
 
-                        $subKey = $woItem ? ($woItem->sub_menu_key ?: null) : null;
-                        if (!$subKey) {
-                            $kat = strtolower(($woItem ? $woItem->kategori : $it->kategori) ?? '');
-                            $nm = strtolower(($woItem ? $woItem->nama : $it->nama) ?? '');
-                            if (str_contains($kat, 'serealia') || str_contains($kat, 'karbohidrat') || str_contains($nm, 'beras') || str_contains($nm, 'nasi')) {
-                                $subKey = 'sub_menu_1';
-                            } elseif (str_contains($kat, 'daging') || str_contains($kat, 'unggas') || str_contains($kat, 'ikan') || str_contains($kat, 'telur') || str_contains($nm, 'ayam') || str_contains($nm, 'ikan')) {
-                                $subKey = 'sub_menu_2';
-                            } elseif (str_contains($kat, 'kacang') || str_contains($kat, 'tahu') || str_contains($kat, 'tempe') || str_contains($kat, 'nabati') || str_contains($nm, 'tempe') || str_contains($nm, 'tahu')) {
-                                $subKey = 'sub_menu_3';
-                            } elseif (str_contains($kat, 'sayur') || str_contains($nm, 'sayur') || str_contains($nm, 'urap') || str_contains($nm, 'wortel')) {
-                                $subKey = 'sub_menu_4';
-                            } elseif (str_contains($kat, 'buah') || str_contains($nm, 'semangka') || str_contains($nm, 'melon') || str_contains($nm, 'pisang')) {
-                                $subKey = 'sub_menu_5';
-                            } else {
-                                $subKey = 'sub_menu_1';
+                        $woItem = $matchingWoItems->first() ?: $it->workOrderItem;
+
+                        $subMenusList = [];
+                        $totalGramPk = 0;
+                        $totalGramPb = 0;
+                        $alergenList = [];
+
+                        foreach ($matchingWoItems as $mWo) {
+                            $subKey = $mWo->sub_menu_key;
+                            if (!$subKey) {
+                                $kat = strtolower($mWo->kategori ?? '');
+                                $nm = strtolower($mWo->nama ?? '');
+                                if (str_contains($kat, 'serealia') || str_contains($kat, 'karbohidrat') || str_contains($nm, 'beras') || str_contains($nm, 'nasi')) {
+                                    $subKey = 'sub_menu_1';
+                                } elseif (str_contains($kat, 'daging') || str_contains($kat, 'unggas') || str_contains($kat, 'ikan') || str_contains($kat, 'telur') || str_contains($nm, 'ayam') || str_contains($nm, 'ikan')) {
+                                    $subKey = 'sub_menu_2';
+                                } elseif (str_contains($kat, 'kacang') || str_contains($kat, 'tahu') || str_contains($kat, 'tempe') || str_contains($kat, 'nabati') || str_contains($nm, 'tempe') || str_contains($nm, 'tahu')) {
+                                    $subKey = 'sub_menu_3';
+                                } elseif (str_contains($kat, 'sayur') || str_contains($nm, 'sayur') || str_contains($nm, 'urap') || str_contains($nm, 'wortel')) {
+                                    $subKey = 'sub_menu_4';
+                                } elseif (str_contains($kat, 'buah') || str_contains($nm, 'semangka') || str_contains($nm, 'melon') || str_contains($nm, 'pisang')) {
+                                    $subKey = 'sub_menu_5';
+                                } else {
+                                    $subKey = 'sub_menu_1';
+                                }
+                            }
+
+                            $subNama = $mWo->nama_sub_menu ?: ($po->workOrder ? ($po->workOrder->{$subKey} ?? null) : null);
+                            $label = $keyMap[$subKey] ?? 'Sub Menu 1';
+                            $isAlergiItem = $mWo->tipe_porsi === 'alergi';
+
+                            $subMenusList[] = [
+                                'key' => $subKey,
+                                'label' => $isAlergiItem ? "{$label} • Alergi" : $label,
+                                'nama' => $subNama && $subNama !== '-' ? $subNama : '',
+                                'gross_kg' => (float)$mWo->total_gross_kg,
+                                'gram_pk' => (float)$mWo->gram_pk,
+                                'gram_pb' => (float)$mWo->gram_pb,
+                                'is_alergi' => $isAlergiItem,
+                                'badgeClass' => $isAlergiItem ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-slate-100 text-slate-800 border-slate-300',
+                            ];
+
+                            $totalGramPk += (float)$mWo->gram_pk;
+                            $totalGramPb += (float)$mWo->gram_pb;
+                            if ($mWo->alergen && !in_array($mWo->alergen, $alergenList)) {
+                                $alergenList[] = $mWo->alergen;
                             }
                         }
 
-                        $subNama = $woItem ? ($woItem->nama_sub_menu ?: ($po->workOrder ? ($po->workOrder->{$subKey} ?? null) : null)) : ($po->workOrder ? ($po->workOrder->{$subKey} ?? null) : null);
+                        // Deduplicate subMenus by key + nama + is_alergi
+                        $uniqueSubMenus = [];
+                        foreach ($subMenusList as $sm) {
+                            $uKey = $sm['key'] . '|' . $sm['nama'] . '|' . ($sm['is_alergi'] ? '1' : '0');
+                            if (!isset($uniqueSubMenus[$uKey])) {
+                                $uniqueSubMenus[$uKey] = $sm;
+                            } else {
+                                $uniqueSubMenus[$uKey]['gross_kg'] += $sm['gross_kg'];
+                                $uniqueSubMenus[$uKey]['gram_pk'] += $sm['gram_pk'];
+                                $uniqueSubMenus[$uKey]['gram_pb'] += $sm['gram_pb'];
+                            }
+                        }
+                        $uniqueSubMenus = array_values($uniqueSubMenus);
+
+                        $primarySubKey = !empty($uniqueSubMenus) ? $uniqueSubMenus[0]['key'] : ($woItem ? ($woItem->sub_menu_key ?: 'sub_menu_1') : 'sub_menu_1');
+                        $allDishNames = array_filter(array_unique(array_column($uniqueSubMenus, 'nama')));
+                        $primarySubNama = !empty($allDishNames) ? implode(', ', $allDishNames) : ($woItem ? ($woItem->nama_sub_menu ?: ($po->workOrder ? ($po->workOrder->{$primarySubKey} ?? null) : null)) : null);
+
+                        $gramPkVal = $totalGramPk > 0 ? $totalGramPk : ($woItem ? (float)$woItem->gram_pk : 0);
+                        $gramPbVal = $totalGramPb > 0 ? $totalGramPb : ($woItem ? (float)$woItem->gram_pb : 0);
+
+                        $collectedNotes = [];
+                        foreach ($matchingWoItems as $mWo) {
+                            foreach ([$mWo->keterangan ?? null, $mWo->catatan ?? null, $mWo->spesifikasi ?? null] as $cand) {
+                                if ($cand && trim($cand) !== '' && trim($cand) !== '-' && !str_starts_with(strtolower(trim($cand)), 'sub menu') && !str_starts_with(strtolower(trim($cand)), 'sub_menu')) {
+                                    $collectedNotes[] = trim($cand);
+                                }
+                            }
+                        }
+                        foreach ([$it->keterangan ?? null, $it->catatan ?? null] as $cand) {
+                            if ($cand && trim($cand) !== '' && trim($cand) !== '-' && !str_starts_with(strtolower(trim($cand)), 'sub menu') && !str_starts_with(strtolower(trim($cand)), 'sub_menu')) {
+                                $collectedNotes[] = trim($cand);
+                            }
+                        }
+                        $collectedNotes = array_values(array_unique($collectedNotes));
+                        $finalKeterangan = !empty($collectedNotes) ? implode('; ', $collectedNotes) : '-';
 
                         return [
                             'id' => $it->id,
                             'nama' => $woItem ? $woItem->nama : $it->nama,
-                            'nama_po' => $woItem ? ($woItem->nama_po ?: $woItem->nama) : $it->nama,
-                            'sub_menu_key' => $subKey,
+                            'nama_po' => $it->nama,
+                            'sub_menu_key' => $primarySubKey,
                             'sub_menu_block_id' => $woItem ? $woItem->sub_menu_block_id : null,
-                            'nama_sub_menu' => $subNama,
-                            'satuan' => $woItem ? ($woItem->satuan ?: ($it->satuan ?: 'Kg')) : ($it->satuan ?: 'Kg'),
-                            'jenis' => $woItem ? ($woItem->jenis ?: ($it->jenis ?: 'bahan_baku')) : ($it->jenis ?: 'bahan_baku'),
-                            'kategori' => $woItem ? ($woItem->kategori ?: $it->kategori) : $it->kategori,
-                            'tipe_porsi' => $woItem ? ($woItem->tipe_porsi ?: strtolower($it->tipe ?: 'normal')) : strtolower($it->tipe ?: 'normal'),
+                            'nama_sub_menu' => $primarySubNama,
+                            'sub_menus' => $uniqueSubMenus,
+                            'satuan' => $it->satuan ?: ($woItem ? ($woItem->satuan ?: 'Kg') : 'Kg'),
+                            'jenis' => $it->jenis ?: ($woItem ? ($woItem->jenis ?: 'bahan_baku') : 'bahan_baku'),
+                            'kategori' => $it->kategori ?: ($woItem ? $woItem->kategori : 'Lainnya'),
+                            'tipe_porsi' => strtolower($it->tipe ?: ($woItem ? $woItem->tipe_porsi : 'normal')),
                             'tipe' => $it->tipe,
                             'jenis_alergi' => $woItem ? ($woItem->jenis_alergi ?: '') : '',
-                            'alergen' => $woItem ? ($woItem->alergen ?: '') : '',
-                            'gram_pk' => $woItem ? (float)$woItem->gram_pk : 0,
-                            'gram_pb' => $woItem ? (float)$woItem->gram_pb : 0,
+                            'alergen' => !empty($alergenList) ? implode(', ', $alergenList) : ($woItem ? ($woItem->alergen ?: '') : ''),
+                            'gram_pk' => (float)$gramPkVal,
+                            'gram_pb' => (float)$gramPbVal,
                             'bdd' => $woItem ? (float)($woItem->bdd ?: 100) : 100,
                             'buffer' => $woItem ? (float)($woItem->buffer ?: 0) : 0,
                             'gross_kg' => (float)$it->gross_kg,
@@ -626,9 +707,9 @@ class KeuanganController extends Controller
                             'sumber_pengadaan' => $it->sumber_pengadaan ?: ($it->stok_digunakan_kg > 0 ? ($it->stok_digunakan_kg >= $it->gross_kg ? '100% Dari Stok' : 'Parsial Stok') : 'Beli PO'),
                             'harga_master' => (float)$it->harga_master,
                             'harga_aktual' => (float)($it->harga_aktual ?: $it->harga_master),
-                            'subtotal_master' => (float)($woItem ? ($woItem->subtotal_master ?: ($it->gross_kg * $it->harga_master)) : ($it->gross_kg * $it->harga_master)),
+                            'subtotal_master' => (float)($it->gross_kg * $it->harga_master),
                             'subtotal_aktual' => (float)($it->subtotal_aktual !== null ? $it->subtotal_aktual : (($it->qty_beli_po_kg !== null ? $it->qty_beli_po_kg : $it->gross_kg) * ($it->harga_aktual ?: $it->harga_master))),
-                            'keterangan' => $woItem ? ($woItem->keterangan ?: ($it->keterangan ?? '-')) : ($it->keterangan ?? '-'),
+                            'keterangan' => $finalKeterangan,
                             'supplier_id' => $it->supplier_id,
                             'supplier' => $it->supplier ? [
                                 'id' => $it->supplier->id,
@@ -636,6 +717,7 @@ class KeuanganController extends Controller
                                 'jenis_supplier' => $it->supplier->jenis_supplier,
                                 'nama_pemilik' => $it->supplier->nama_pemilik,
                                 'no_telp' => $it->supplier->no_telp,
+                                'alamat_lengkap' => $it->supplier->alamat_lengkap,
                             ] : null,
                             'jenis_transaksi' => $it->jenis_transaksi,
                         ];
@@ -787,6 +869,88 @@ class KeuanganController extends Controller
             ['id' => 52, 'kategori' => 'lain_lain', 'kategori_label' => 'Lain-lain', 'nomor' => 1, 'nama_bahan' => 'Sabun Cuci Piring', 'satuan' => 'Pcs', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
             ['id' => 53, 'kategori' => 'lain_lain', 'kategori_label' => 'Lain-lain', 'nomor' => 2, 'nama_bahan' => 'Karbol', 'satuan' => 'Btl', 'harga' => null, 'nama_toko' => '', 'kontak' => '', 'keterangan' => ''],
         ];
+    }
+
+    /**
+     * Memastikan seluruh item dalam Purchase Order terkonsolidasi & dikelompokkan
+     * berdasarkan bahan pangan database pangan tanpa duplikasi per sub menu.
+     */
+    public static function ensurePoItemsConsolidated(PurchaseOrder $po): void
+    {
+        $items = $po->items;
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $names = $items->pluck('nama')->map(fn($n) => mb_strtolower(trim($n)));
+        if ($names->count() === $names->unique()->count()) {
+            return; // Sudah unik / tidak ada duplikasi
+        }
+
+        DB::transaction(function () use ($po, $items) {
+            $grouped = [];
+            foreach ($items as $it) {
+                $normName = mb_strtolower(trim($it->nama));
+                $normSatuan = mb_strtolower(trim($it->satuan ?? 'kg'));
+                $normJenis = mb_strtolower(trim($it->jenis ?? 'bahan_baku'));
+                $key = $normName . '|' . $normSatuan . '|' . $normJenis;
+
+                if (!isset($grouped[$key])) {
+                    $grouped[$key] = [
+                        'primary' => $it,
+                        'gross_kg' => 0,
+                        'stok_digunakan_kg' => 0,
+                        'qty_beli_po_kg' => 0,
+                        'tipe' => $it->tipe ?? 'Normal',
+                        'keterangan_list' => [],
+                        'delete_ids' => [],
+                    ];
+                } else {
+                    $grouped[$key]['delete_ids'][] = $it->id;
+                }
+
+                $grouped[$key]['gross_kg'] += (float) $it->gross_kg;
+                $grouped[$key]['stok_digunakan_kg'] += (float) $it->stok_digunakan_kg;
+                $grouped[$key]['qty_beli_po_kg'] += (float) $it->qty_beli_po_kg;
+                if ($it->tipe === 'Alergi') {
+                    $grouped[$key]['tipe'] = 'Alergi';
+                }
+                if ($it->keterangan && $it->keterangan !== '-' && !in_array($it->keterangan, $grouped[$key]['keterangan_list'])) {
+                    $grouped[$key]['keterangan_list'][] = $it->keterangan;
+                }
+            }
+
+            foreach ($grouped as $g) {
+                $primary = $g['primary'];
+                $hargaAktual = (float) ($primary->harga_aktual ?: $primary->harga_master);
+                $gross = round($g['gross_kg'], 4);
+                $stok = round($g['stok_digunakan_kg'], 4);
+                $qtyBeli = round($g['qty_beli_po_kg'], 4);
+                $subtotal = round($qtyBeli * $hargaAktual);
+
+                $primary->update([
+                    'gross_kg' => $gross,
+                    'stok_digunakan_kg' => $stok,
+                    'qty_beli_po_kg' => $qtyBeli,
+                    'subtotal_aktual' => $subtotal,
+                    'tipe' => $g['tipe'],
+                    'keterangan' => !empty($g['keterangan_list']) ? implode('; ', $g['keterangan_list']) : $primary->keterangan,
+                ]);
+
+                if (!empty($g['delete_ids'])) {
+                    \App\Models\PurchaseOrderItem::whereIn('id', $g['delete_ids'])->delete();
+                }
+            }
+
+            $po->load('items');
+            $newItemCount = $po->items->count();
+            $totalNominal = $po->items->sum('subtotal_aktual');
+            $po->update([
+                'items_count' => $newItemCount,
+                'total_nominal_master' => $totalNominal,
+                'total_nominal_aktual' => $totalNominal,
+            ]);
+        });
     }
 }
 

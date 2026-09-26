@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { router } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
@@ -37,6 +37,9 @@ import {
     Package,
     Search,
     Users,
+    ChevronLeft,
+    ChevronRight,
+    ArrowRightLeft,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -154,6 +157,127 @@ const isReadOnlyMode = ref(false);
 const inputCatatanBaru = ref("");
 const searchQuery = ref("");
 const statusFilter = ref("semua");
+
+const mainTableRef = ref(null);
+const detailTableRef = ref(null);
+
+const isDraggingTable = ref(false);
+const dragStartX = ref(0);
+const dragStartScrollLeft = ref(0);
+
+const isDraggingMainTable = ref(false);
+const dragMainStartX = ref(0);
+const dragMainStartScrollLeft = ref(0);
+
+const scrollMainTable = (direction) => {
+    if (!mainTableRef.value) return;
+    const amount = direction === "left" ? -350 : 350;
+    mainTableRef.value.scrollBy({ left: amount, behavior: "smooth" });
+};
+
+const scrollDetailTable = (direction) => {
+    if (!detailTableRef.value) return;
+    const amount = direction === "left" ? -400 : 400;
+    detailTableRef.value.scrollBy({ left: amount, behavior: "smooth" });
+};
+
+// Laptop Trackpad / Mouse Wheel Horizontal Scroll
+const onDetailTableWheel = (e) => {
+    const el = detailTableRef.value;
+    if (!el) return;
+
+    // Trackpad horizontal gesture (two fingers sliding left/right)
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        el.scrollLeft += e.deltaX;
+        e.preventDefault();
+        return;
+    }
+
+    // Shift + vertical wheel to scroll horizontally
+    if (e.shiftKey && e.deltaY !== 0) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+        return;
+    }
+};
+
+const onMainTableWheel = (e) => {
+    const el = mainTableRef.value;
+    if (!el) return;
+
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        el.scrollLeft += e.deltaX;
+        e.preventDefault();
+        return;
+    }
+
+    if (e.shiftKey && e.deltaY !== 0) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+        return;
+    }
+};
+
+// Mouse Drag to Scroll for Detail Table
+const onTableMouseDown = (e) => {
+    const target = e.target;
+    if (target.closest("input, select, button, textarea, a, label")) return;
+
+    const el = detailTableRef.value;
+    if (!el) return;
+
+    isDraggingTable.value = true;
+    dragStartX.value = e.pageX - el.offsetLeft;
+    dragStartScrollLeft.value = el.scrollLeft;
+};
+
+// Mouse Drag to Scroll for Main Table
+const onMainTableMouseDown = (e) => {
+    const target = e.target;
+    if (target.closest("input, select, button, textarea, a, label")) return;
+
+    const el = mainTableRef.value;
+    if (!el) return;
+
+    isDraggingMainTable.value = true;
+    dragMainStartX.value = e.pageX - el.offsetLeft;
+    dragMainStartScrollLeft.value = el.scrollLeft;
+};
+
+const onWindowMouseMove = (e) => {
+    if (isDraggingTable.value && detailTableRef.value) {
+        e.preventDefault();
+        const x = e.pageX - detailTableRef.value.offsetLeft;
+        const walk = (x - dragStartX.value) * 1.5;
+        detailTableRef.value.scrollLeft = dragStartScrollLeft.value - walk;
+    }
+
+    if (isDraggingMainTable.value && mainTableRef.value) {
+        e.preventDefault();
+        const x = e.pageX - mainTableRef.value.offsetLeft;
+        const walk = (x - dragMainStartX.value) * 1.5;
+        mainTableRef.value.scrollLeft = dragMainStartScrollLeft.value - walk;
+    }
+};
+
+const onWindowMouseUp = () => {
+    isDraggingTable.value = false;
+    isDraggingMainTable.value = false;
+};
+
+onMounted(() => {
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("mouseup", onWindowMouseUp);
+});
+
+onUnmounted(() => {
+    window.removeEventListener("mousemove", onWindowMouseMove);
+    window.removeEventListener("mouseup", onWindowMouseUp);
+});
+
+
+
+
 
 const activeList = computed(() => {
     return Array.isArray(props.verifikasiPoList) ? props.verifikasiPoList : [];
@@ -681,13 +805,42 @@ function rejectPo() {
                     </select>
                 </div>
             </div>
+
+            <!-- Scroll Navigation Controls for Main Table -->
+            <div class="flex items-center gap-1 self-end sm:self-center shrink-0">
+                <button
+                    type="button"
+                    @click="scrollMainTable('left')"
+                    class="h-8 w-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                    title="Geser tabel ke kiri"
+                >
+                    <ChevronLeft class="h-4 w-4" />
+                </button>
+                <button
+                    type="button"
+                    @click="scrollMainTable('right')"
+                    class="h-8 w-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                    title="Geser tabel ke kanan"
+                >
+                    <ChevronRight class="h-4 w-4" />
+                </button>
+            </div>
         </div>
 
         <!-- Card: Tabel Utama Verifikasi PO -->
         <div
-            class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white"
+            class="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs bg-white w-full max-w-full min-w-0"
         >
-            <div class="overflow-x-auto">
+            <div
+                ref="mainTableRef"
+                @wheel="onMainTableWheel"
+                @mousedown="onMainTableMouseDown"
+                :class="[
+                    'overflow-x-auto w-full max-w-full table-scroll-container custom-horizontal-scrollbar select-text overscroll-x-contain',
+                    isDraggingMainTable ? 'cursor-grabbing select-none' : 'cursor-grab'
+                ]"
+                style="overscroll-behavior-x: contain; touch-action: pan-x pan-y;"
+            >
                 <table
                     class="w-full min-w-[1050px] text-left text-xs border-collapse"
                 >
@@ -712,14 +865,18 @@ function rejectPo() {
                             <th class="py-3.5 px-4 text-center min-w-[120px]">
                                 Status Verifikasi
                             </th>
-                            <th class="py-3.5 px-4 text-center w-36">Aksi</th>
+                            <th
+                                class="py-3.5 px-4 text-center w-36 sticky right-0 z-20 bg-slate-50 border-l border-slate-200/90 shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.06)]"
+                            >
+                                Aksi
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
                             v-for="(po, index) in filteredList"
                             :key="po.id"
-                            class="hover:bg-slate-50/70 transition-colors"
+                            class="group hover:bg-slate-50/70 transition-colors"
                         >
                             <!-- 1. No Urut -->
                             <td
@@ -862,8 +1019,10 @@ function rejectPo() {
                                 </span>
                             </td>
 
-                            <!-- 8. Aksi -->
-                            <td class="py-4 px-4 text-center whitespace-nowrap">
+                            <!-- 8. Aksi (Sticky Right) -->
+                            <td
+                                class="py-4 px-4 text-center whitespace-nowrap sticky right-0 z-10 bg-white group-hover:bg-slate-50 border-l border-slate-200/90 shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.06)]"
+                            >
                                 <div
                                     class="flex items-center justify-center gap-1.5"
                                 >
@@ -941,7 +1100,7 @@ function rejectPo() {
         >
             <div
                 v-if="selectedPo"
-                class="bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 text-slate-800 flex flex-col max-h-[88vh]"
+                class="bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 text-slate-800 flex flex-col max-h-[88vh] w-full max-w-full min-w-0"
             >
                 <!-- Modal Header -->
                 <div
@@ -993,7 +1152,7 @@ function rejectPo() {
                 </div>
 
                 <!-- Modal Body -->
-                <div class="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1">
+                <div class="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1 min-w-0 max-w-full">
                     <!-- Banner Info Mode -->
                     <div
                         v-if="!isReadOnlyMode"
@@ -1115,7 +1274,7 @@ function rejectPo() {
                     </div>
 
                     <!-- Card Section: Rekapitulasi Kebutuhan Bahan Pangan & Order Pembelian (PO) -->
-                    <div class="space-y-3">
+                    <div class="space-y-3 min-w-0 max-w-full w-full">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3"
                         >
@@ -1130,10 +1289,7 @@ function rejectPo() {
                                     >
                                 </h4>
                                 <p class="text-xs text-slate-500 mt-0.5">
-                                    Standar gramasi per porsi dan kuantitas
-                                    kotor resep tetap terjaga utuh. Tentukan
-                                    porsi pengalihan stok gudang SPPG atau
-                                    kuantitas belanja PO aktual.
+                                    Bahan pangan otomatis dikelompokkan & tertotal per bahan database pangan tanpa duplikasi antar sub menu. Standar gramasi resep tetap utuh. Tentukan porsi pengalihan stok gudang SPPG atau kuantitas belanja PO aktual.
                                 </p>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap">
@@ -1165,22 +1321,55 @@ function rejectPo() {
                                         Semua 100% Stok
                                     </button>
                                 </div>
+
+                                <!-- Horizontal Scroll Buttons for Detail Table -->
+                                <div class="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        @click="scrollDetailTable('left')"
+                                        class="h-7 w-7 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs flex items-center justify-center transition-colors cursor-pointer"
+                                        title="Geser tabel ke kiri"
+                                    >
+                                        <ChevronLeft class="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="scrollDetailTable('right')"
+                                        class="h-7 w-7 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs flex items-center justify-center transition-colors cursor-pointer"
+                                        title="Geser tabel ke kanan"
+                                    >
+                                        <ChevronRight class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Tabel Detail Bahan Baku PO (Style Rancang Menu) -->
                         <div
-                            class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs"
+                            ref="detailTableRef"
+                            @wheel="onDetailTableWheel"
+                            @mousedown="onTableMouseDown"
+                            :class="[
+                                'overflow-auto max-h-[54vh] rounded-xl border border-slate-200 bg-white shadow-2xs max-w-full w-full table-scroll-container custom-horizontal-scrollbar select-text overscroll-x-contain',
+                                isDraggingTable ? 'cursor-grabbing select-none' : 'cursor-grab'
+                            ]"
+                            style="overscroll-behavior-x: contain; touch-action: pan-x pan-y;"
                         >
                             <table
                                 class="w-full text-xs text-left border-collapse min-w-[1350px]"
                             >
                                 <thead
-                                    class="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]"
+                                    class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px] sticky top-0 z-20 shadow-xs"
                                 >
                                     <tr>
-                                        <th class="p-3 w-10 text-center">NO</th>
-                                        <th class="p-3 min-w-[170px]">
+                                        <th
+                                            class="p-3 w-10 text-center sticky left-0 top-0 z-30 bg-slate-100 border-r border-slate-200/60"
+                                        >
+                                            NO
+                                        </th>
+                                        <th
+                                            class="p-3 min-w-[190px] sm:min-w-[220px] sticky left-10 top-0 z-30 bg-slate-100 border-r border-slate-200 shadow-[4px_0_8px_-3px_rgba(0,0,0,0.06)]"
+                                        >
                                             BAHAN PANGAN & NAMA DI PO
                                         </th>
                                         <th
@@ -1253,17 +1442,19 @@ function rejectPo() {
                                     <tr
                                         v-for="(b, i) in selectedPo.items"
                                         :key="b.id || i"
-                                        class="hover:bg-slate-50/60 transition-colors"
+                                        class="group hover:bg-slate-50/60 transition-colors"
                                     >
-                                        <!-- 1. NO -->
+                                        <!-- 1. NO (Sticky Left) -->
                                         <td
-                                            class="p-3 text-center font-bold text-slate-500"
+                                            class="p-3 text-center font-bold text-slate-500 sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200/60"
                                         >
                                             {{ i + 1 }}
                                         </td>
 
-                                        <!-- 2. BAHAN PANGAN & NAMA DI PO -->
-                                        <td class="p-3">
+                                        <!-- 2. BAHAN PANGAN & NAMA DI PO (Sticky Left) -->
+                                        <td
+                                            class="p-3 sticky left-10 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_-3px_rgba(0,0,0,0.06)]"
+                                        >
                                             <div
                                                 class="font-black text-slate-900 leading-tight"
                                             >
@@ -1285,9 +1476,26 @@ function rejectPo() {
                                         <!-- 3. PERUNTUKAN / SUB MENU -->
                                         <td class="p-3 text-center">
                                             <div
-                                                class="inline-flex flex-col items-center"
+                                                class="inline-flex flex-col items-center gap-1"
                                             >
+                                                <!-- Jika bahan berasal dari beberapa Sub Menu sekaligus (dikelompokkan) -->
+                                                <div
+                                                    v-if="b.sub_menus && b.sub_menus.length > 1"
+                                                    class="flex flex-wrap items-center justify-center gap-1 max-w-[200px]"
+                                                >
+                                                    <span
+                                                        v-for="(sm, smIdx) in b.sub_menus"
+                                                        :key="smIdx"
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-black border shadow-2xs"
+                                                        :class="sm.badgeClass || (sm.is_alergi ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-slate-100 text-slate-800 border-slate-300')"
+                                                        :title="sm.nama ? `${sm.label}: ${sm.nama} (${formatGrossQty(sm.gross_kg, b.satuan)})` : sm.label"
+                                                    >
+                                                        {{ sm.label }}
+                                                    </span>
+                                                </div>
+                                                <!-- Jika hanya 1 Sub Menu -->
                                                 <span
+                                                    v-else
                                                     class="px-2 py-0.5 rounded text-[10.5px] font-black border"
                                                     :class="
                                                         getSubMenuLabelForBahan(
@@ -1301,27 +1509,16 @@ function rejectPo() {
                                                         ).label
                                                     }}
                                                 </span>
+
                                                 <span
                                                     v-if="
-                                                        getSubMenuLabelForBahan(
-                                                            b,
-                                                        ).namaMenu &&
-                                                        getSubMenuLabelForBahan(
-                                                            b,
-                                                        ).namaMenu !== '-'
+                                                        (b.nama_sub_menu || getSubMenuLabelForBahan(b).namaMenu) &&
+                                                        (b.nama_sub_menu || getSubMenuLabelForBahan(b).namaMenu) !== '-'
                                                     "
-                                                    class="text-[10px] text-slate-600 font-bold mt-0.5 max-w-[140px] truncate"
-                                                    :title="
-                                                        getSubMenuLabelForBahan(
-                                                            b,
-                                                        ).namaMenu
-                                                    "
+                                                    class="text-[10px] text-slate-600 font-bold mt-0.5 max-w-[170px] truncate block text-center"
+                                                    :title="b.nama_sub_menu || getSubMenuLabelForBahan(b).namaMenu"
                                                 >
-                                                    {{
-                                                        getSubMenuLabelForBahan(
-                                                            b,
-                                                        ).namaMenu
-                                                    }}
+                                                    {{ b.nama_sub_menu || getSubMenuLabelForBahan(b).namaMenu }}
                                                 </span>
                                             </div>
                                         </td>
@@ -1380,8 +1577,16 @@ function rejectPo() {
                                         <td
                                             class="p-3 text-center font-bold text-slate-800 whitespace-nowrap"
                                         >
-                                            {{ b.gram_pk || 0 }} {{ getPortionUnit(b.satuan) }} /
-                                            {{ b.gram_pb || 0 }} {{ getPortionUnit(b.satuan) }}
+                                            <div>
+                                                {{ b.gram_pk || 0 }} {{ getPortionUnit(b.satuan) }} /
+                                                {{ b.gram_pb || 0 }} {{ getPortionUnit(b.satuan) }}
+                                            </div>
+                                            <span
+                                                v-if="b.sub_menus && b.sub_menus.length > 1"
+                                                class="text-[9px] text-blue-600 font-semibold block mt-0.5"
+                                            >
+                                                (Total {{ b.sub_menus.length }} Komponen)
+                                            </span>
                                         </td>
 
                                         <!-- 9. BDD / BUFFER -->
@@ -1408,6 +1613,13 @@ function rejectPo() {
                                                 }}
                                             </div>
                                             <span
+                                                v-if="b.sub_menus && b.sub_menus.length > 1"
+                                                class="text-[9px] text-blue-700 font-bold block"
+                                            >
+                                                Total Gabungan ({{ b.sub_menus.length }} Sub Menu)
+                                            </span>
+                                            <span
+                                                v-else
                                                 class="text-[9.5px] text-slate-400 font-semibold block"
                                             >
                                                 Standar Resep
@@ -1640,15 +1852,27 @@ function rejectPo() {
                                     </tr>
                                 </tbody>
                                 <tfoot
-                                    class="bg-white font-bold border-t border-slate-200 text-xs"
+                                    class="bg-white font-bold border-t border-slate-200 text-xs sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
                                 >
                                     <tr>
+                                        <!-- Col 1: NO Sticky Left -->
                                         <td
-                                            colspan="9"
-                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
+                                            class="p-3 sticky left-0 bottom-0 z-30 bg-slate-50 border-r border-slate-200/60 text-center font-bold text-slate-400"
                                         >
-                                            Grand Total Rekapitulasi Kebutuhan &
-                                            Pembelian PO:
+                                            -
+                                        </td>
+                                        <!-- Col 2: BAHAN PANGAN Sticky Left -->
+                                        <td
+                                            class="p-3 sticky left-10 bottom-0 z-30 bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_-3px_rgba(0,0,0,0.06)] font-black text-slate-800 text-[11px] uppercase tracking-wider"
+                                        >
+                                            Total Rekapitulasi
+                                        </td>
+                                        <!-- Col 3-9: (7 columns) Sub Menu, Tipe, Kategori, Satuan, Jenis, Gramasi, BDD -->
+                                        <td
+                                            colspan="7"
+                                            class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold bg-slate-50"
+                                        >
+                                            Kebutuhan & Pembelian PO:
                                         </td>
                                         <!-- 10. Resep Gross Grouped Chips -->
                                         <td

@@ -1,4 +1,4 @@
-﻿import { generateKopHtml, getActiveKopConfig } from "@/Services/kopDokumenHelper";
+import { generateKopHtml, getActiveKopConfig } from "@/Services/kopDokumenHelper";
 import { 
     LOGO_BGN_BASE64, 
     LOGO_BGN_RAW_BASE64, 
@@ -3585,167 +3585,1275 @@ export function printWorkOrder(wo) {
 // 2. EXPORT PURCHASE ORDER (DAFTAR PO KEUANGAN)
 // -------------------------------------------------------------
 
-export function exportPoExcel(po) {
-    const filename = `${po.id || 'PO-MBG'}_${(po.menu || 'Belanja').replace(/[^a-zA-Z0-9]/g, '_')}.xls`;
-    const items = po.items || [];
+// 2. EXPORT PURCHASE ORDER (DAFTAR PO KEUANGAN) - MULTI-SHEET EXCEL RESMI
+// -------------------------------------------------------------
 
-    let totalNominal = 0;
-    let totalGrossAll = 0;
-    let totalStokAll = 0;
-    let totalBeliAll = 0;
+function sanitizeExcelSheetName(name, existingNames) {
+    let clean = (name || 'Sheet').replace(/[\\/?*:[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (clean.length > 28) {
+        clean = clean.substring(0, 28).trim();
+    }
+    let finalName = clean;
+    let counter = 1;
+    while (existingNames.has(finalName)) {
+        const suffix = ` (${counter++})`;
+        finalName = `${clean.substring(0, 31 - suffix.length)}${suffix}`;
+    }
+    existingNames.add(finalName);
+    return finalName;
+}
 
-    let itemsRows = items.map((it, idx) => {
-        const gross = Number(it.gross_kg) || 0;
-        const stok = Number(it.stok_digunakan_kg || 0);
-        const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
-            ? Number(it.qty_beli_po_kg)
-            : Math.max(0, gross - stok);
-        const harga = Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0));
-        const subtotal = Number(it.subtotal_aktual !== undefined && it.subtotal_aktual !== null ? it.subtotal_aktual : Math.round(qtyBeli * harga));
+function renderKopSuratExcel(sheet, maxCols = 8, logoBgnId = null, logoYayasanId = null) {
+    const lastColLetter = String.fromCharCode(64 + maxCols);
 
-        totalGrossAll += gross;
-        totalStokAll += stok;
-        totalBeliAll += qtyBeli;
-        totalNominal += subtotal;
+    // Merge teks kop dari kolom A sampai kolom terakhir agar benar-benar tepat di tengah-tengah secara simetris
+    sheet.mergeCells(`A1:${lastColLetter}1`);
+    const c1 = sheet.getCell('A1');
+    c1.value = 'SPPG BULELENG SUKASADA TEGALLINGGAH';
+    c1.font = { name: 'Arial', size: 12, bold: true };
+    c1.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 18;
 
-        const supName = it.supplier?.nama_usaha || (it.supplier_id ? `Supplier #${it.supplier_id}` : (po.supplier?.nama_usaha || po.vendor || '-'));
-        const trxType = it.jenis_transaksi || po.jenis_transaksi || 'Bahan Baku';
+    sheet.mergeCells(`A2:${lastColLetter}2`);
+    const c2 = sheet.getCell('A2');
+    c2.value = 'YAYASAN PESANTREN MIFTAHUL ULUM';
+    c2.font = { name: 'Arial', size: 11, bold: true };
+    c2.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(2).height = 17;
 
-        let statusKet = 'Beli PO';
-        if (qtyBeli === 0 || (stok >= gross && gross > 0)) {
-            statusKet = '100% Dari Stok';
-        } else if (stok > 0) {
-            statusKet = 'Parsial Stok';
+    sheet.mergeCells(`A3:${lastColLetter}3`);
+    const c3 = sheet.getCell('A3');
+    c3.value = 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali';
+    c3.font = { name: 'Arial', size: 9 };
+    c3.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(3).height = 15;
+
+    sheet.mergeCells(`A4:${lastColLetter}4`);
+    const c4 = sheet.getCell('A4');
+    c4.value = 'E-mail: sppgsukasadategallinggah@gmail.com';
+    c4.font = { name: 'Arial', size: 9, italic: true };
+    c4.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(4).height = 16;
+
+    // Garis tebal pemisah bawah kop surat (dari kolom A sampai kolom terakhir)
+    for (let c = 1; c <= maxCols; c++) {
+        sheet.getRow(4).getCell(c).border = {
+            bottom: { style: 'medium', color: { argb: 'FF000000' } }
+        };
+    }
+
+    // Logo kiri di Kolom A: sejajar dengan margin kiri (jarak ~8px dari tepi kiri tabel)
+    if (logoBgnId !== null) {
+        sheet.addImage(logoBgnId, {
+            tl: { col: 0.15, row: 0.12 },
+            ext: { width: 56, height: 56 }
+        });
+    }
+    // Logo kanan di Kolom terakhir: simetris dengan jarak logo kiri ke tepi kanan tabel
+    if (logoYayasanId !== null) {
+        const rightOffset = maxCols === 8 ? 0.28 : 0.27;
+        sheet.addImage(logoYayasanId, {
+            tl: { col: maxCols - rightOffset, row: 0.12 },
+            ext: { width: 56, height: 56 }
+        });
+    }
+}
+
+export async function exportPoExcel(po, options = {}) {
+    if (!po) return;
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'SIPEGE SPPG';
+        workbook.created = new Date();
+
+        // 1. Embed Logos
+        let logoBgnId = null;
+        let logoYayasanId = null;
+        try {
+            logoBgnId = workbook.addImage({
+                base64: LOGO_BGN_RAW_BASE64,
+                extension: 'png',
+            });
+            logoYayasanId = workbook.addImage({
+                base64: LOGO_YAYASAN_RAW_BASE64,
+                extension: 'png',
+            });
+        } catch (e) {
+            console.warn('Gagal memuat logo ke workbook Excel:', e);
         }
 
-        return `
-        <tr>
-            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${idx + 1}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${it.nama || '-'}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 6px;">${it.kategori || '-'}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 600; color: #1e40af;">${supName}</td>
-            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${trxType}</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${gross.toFixed(2)} kg</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; color: #1e40af;">${stok.toFixed(2)} kg</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; background-color: #ecfdf5;">${qtyBeli.toFixed(2)} kg</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${formatRupiahNum(harga)}</td>
-            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${formatRupiahNum(subtotal)}</td>
-            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px;">${statusKet}</td>
-        </tr>
-        `;
-    }).join('');
+        // 2. Parse Tanggal Order & Tanggal Kirim
+        const DAYS_INDO = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const MONTHS_INDO = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-    const itemSuppliers = (po.items || []).map(i => i.supplier?.nama_usaha).filter(Boolean);
-    const uniqueSuppliersList = Array.from(new Set(itemSuppliers));
-    const displayVendor = uniqueSuppliersList.length > 0
-        ? uniqueSuppliersList.join(', ')
-        : (po.supplier ? (po.supplier.nama_usaha + (po.supplier.jenis_supplier ? ' (' + po.supplier.jenis_supplier + ')' : '')) : (po.vendor && po.vendor !== 'Rekanan Pangan SPPG' ? po.vendor : '-'));
+        function formatIndoFull(dateObj) {
+            const dayName = DAYS_INDO[dateObj.getDay()];
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            const m = MONTHS_INDO[dateObj.getMonth()];
+            const y = dateObj.getFullYear();
+            return `${dayName}, ${d} ${m} ${y}`;
+        }
 
-    const displayJenisTrx = (po.items || []).map(i => i.jenis_transaksi).filter(Boolean);
-    const uniqueTrxList = Array.from(new Set(displayJenisTrx));
-    const displayTrx = uniqueTrxList.length > 0 ? uniqueTrxList.join(', ') : (po.jenis_transaksi || '-');
+        let kirimDateObj = po.tanggal ? new Date(po.tanggal) : new Date();
+        if (isNaN(kirimDateObj.getTime())) kirimDateObj = new Date();
 
-    const template = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-        <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Purchase Order</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-            <style>
-                body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
-                table { border-collapse: collapse; width: 100%; }
-                th { background-color: #f1f5f9; font-weight: bold; border: 1px solid #94a3b8; padding: 8px; }
-                .title { font-size: 16pt; font-weight: bold; text-align: center; color: #0f172a; margin-bottom: 4px; }
-                .subtitle { font-size: 12pt; text-align: center; color: #475569; margin-bottom: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="title">SURAT PESANAN / PURCHASE ORDER (PO) RESMI</div>
-            <div class="subtitle">Satuan Pelayanan Program Gizi (SPPG) - MBG</div>
-            
-            <table style="margin-bottom: 20px; width: 600px;">
-                <tr>
-                    <td style="font-weight: bold; width: 180px;">Nomor Purchase Order</td>
-                    <td>: ${po.id || '-'}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Referensi Work Order</td>
-                    <td>: ${po.wo_id || '-'}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Nama Menu</td>
-                    <td>: ${po.menu || '-'}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Tanggal Distribusi</td>
-                    <td>: ${formatTanggalIndoFull(po.tanggal)}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Vendor / Rekanan</td>
-                    <td>: ${displayVendor}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Jenis Transaksi</td>
-                    <td>: <strong>${displayTrx}</strong></td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Total Sasaran PM</td>
-                    <td>: ${Number(po.total_porsi || 0).toLocaleString('id-ID')} Porsi (${po.porsi_pk || 0} PK / ${po.porsi_pb || 0} PB)</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Status PO / Pembayaran</td>
-                    <td>: ${po.status_po || 'Disetujui'} / ${po.status_bayar || 'Belum Bayar'}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Total Belanja PO</td>
-                    <td>: <strong>${formatRupiahNum(po.total_nominal || totalNominal)}</strong></td>
-                </tr>
-            </table>
+        let orderDateObj = null;
+        if (options.orderDate) {
+            orderDateObj = new Date(options.orderDate);
+        } else if (po.created_at) {
+            orderDateObj = new Date(po.created_at);
+            if (isNaN(orderDateObj.getTime())) orderDateObj = null;
+        }
 
-            <h3 style="margin-top: 20px; color: #1e293b;">RINCIAN BAHAN BAKU, PENGALIHAN STOK & NILAI PEMBELIAN PO</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 40px;">No</th>
-                        <th>Nama Bahan Baku</th>
-                        <th>Kategori</th>
-                        <th>Supplier Rekanan</th>
-                        <th>Jenis Transaksi</th>
-                        <th>Resep Kotor (Kg)</th>
-                        <th>Dari Stok (Kg)</th>
-                        <th>Qty Beli PO (Kg)</th>
-                        <th>Harga Satuan Aktual</th>
-                        <th>Subtotal Pembelian</th>
-                        <th>Status Pengadaan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsRows || '<tr><td colspan="11" style="text-align: center; padding: 10px;">Tidak ada data bahan</td></tr>'}
-                </tbody>
-                <tfoot>
-                    <tr style="background-color: #f8fafc; font-weight: bold;">
-                        <td colspan="5" style="text-align: right; border: 1px solid #cbd5e1; padding: 8px;">TOTAL KESELURUHAN:</td>
-                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px;">${totalGrossAll.toFixed(2)} kg</td>
-                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; color: #1e40af;">${totalStokAll.toFixed(2)} kg</td>
-                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; color: #047857;">${totalBeliAll.toFixed(2)} kg</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 8px;"></td>
-                        <td style="text-align: right; border: 1px solid #cbd5e1; padding: 8px; font-weight: bold; color: #047857;">${formatRupiahNum(po.total_nominal || totalNominal)}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 8px;"></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </body>
-        </html>
-    `;
+        if (!orderDateObj) {
+            // Default tanggal order H-1 sebelum tanggal kirim
+            orderDateObj = new Date(kirimDateObj);
+            orderDateObj.setDate(orderDateObj.getDate() - 1);
+        }
 
-    const blob = new Blob([template], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+        const orderDateFormatted = formatIndoFull(orderDateObj);
+        const kirimDateFormatted = formatIndoFull(kirimDateObj);
+
+        const ddOrder = String(orderDateObj.getDate()).padStart(2, '0');
+        const mmOrder = String(orderDateObj.getMonth() + 1).padStart(2, '0');
+        const yyyyOrder = String(orderDateObj.getFullYear());
+
+        const orderDateSlash = `${ddOrder}/${mmOrder}/${yyyyOrder}`;
+        const orderDateHyphen = `${ddOrder}-${mmOrder}-${yyyyOrder}`;
+
+        const filename = `NPO-${orderDateHyphen}.xlsx`;
+
+        // 3. Klasifikasi Item (BB vs OPS)
+        function isItemOps(it) {
+            const trx = `${it.jenis_transaksi || ''} ${it.jenis || ''} ${it.kategori || ''}`.toLowerCase();
+            return trx.includes('ops') || trx.includes('operasional') || trx.includes('kas bank') || trx.includes('petty cash') || trx.includes('non-pangan');
+        }
+
+        // Helper keterangan / catatan riil bahan dari rancang menu (bukan nama sub menu)
+        function resolveItemKeterangan(it) {
+            const candidates = [
+                it.keterangan,
+                it.catatan,
+                it.spesifikasi,
+                it.catatan_bahan,
+                it.notes,
+            ];
+            for (const val of candidates) {
+                if (!val) continue;
+                const str = String(val).trim();
+                if (str && str !== '-' && !str.toLowerCase().startsWith('sub menu') && !str.toLowerCase().startsWith('sub_menu')) {
+                    return str;
+                }
+            }
+            return '-';
+        }
+
+        const allItems = po.items || [];
+        const bbItems = allItems.filter(it => !isItemOps(it));
+        const opsItems = allItems.filter(it => isItemOps(it));
+
+        // Grouping items per supplier
+        function groupItemsBySupplier(items) {
+            const groups = new Map();
+            for (const it of items) {
+                const sup = it.supplier || po.supplier || {};
+                const supId = sup.id || null;
+                const namaUsaha = sup.nama_usaha || it.vendor || po.vendor || 'Rumah Tempe';
+                const namaPemilik = sup.nama_pemilik || (namaUsaha.toLowerCase().includes('tempe') ? 'Noer Hakim' : '-');
+                const alamat = sup.alamat_lengkap || sup.alamat || (namaUsaha.toLowerCase().includes('tempe') ? 'Jl. Pulau Sugara No. 31' : 'Jl. Raya Angling Darma, Sukasada');
+
+                const key = supId ? `id_${supId}` : `name_${namaUsaha}`;
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        supplier: {
+                            id: supId,
+                            namaUsaha,
+                            namaPemilik,
+                            alamat,
+                        },
+                        items: [],
+                    });
+                }
+                groups.get(key).items.push(it);
+            }
+            return Array.from(groups.values());
+        }
+
+        const bbSupplierGroups = groupItemsBySupplier(bbItems);
+        const opsSupplierGroups = groupItemsBySupplier(opsItems);
+
+        // Jika tidak ada supplier di item tapi ada supplier PO
+        if (bbSupplierGroups.length === 0 && bbItems.length > 0) {
+            const defSup = po.supplier || {};
+            bbSupplierGroups.push({
+                supplier: {
+                    id: defSup.id || null,
+                    namaUsaha: defSup.nama_usaha || po.vendor || 'Supplier Utama',
+                    namaPemilik: defSup.nama_pemilik || '-',
+                    alamat: defSup.alamat_lengkap || defSup.alamat || 'Jl. Raya Angling Darma, Sukasada',
+                },
+                items: bbItems,
+            });
+        }
+
+        // Shared Style Definition
+        const borderThinBlack = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } },
+        };
+        const headerGrayFill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFBFBFBF' },
+        };
+        const accountingNumFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"??_);_(@_)';
+
+        const existingSheetNames = new Set();
+
+        // =========================================================
+        // A. SHEET REKAP NOTA PESANAN (REKAP BB & REKAP OPS)
+        // =========================================================
+        function buildRekapSheet(classification) {
+            const isBB = classification === 'BB';
+            const sheetTitle = isBB ? 'Rekap BB' : 'Rekap OPS';
+            const docTitle = isBB ? 'REKAP NOTA PESANAN BAHAN BAKU' : 'REKAP NOTA PESANAN BARANG OPERASIONAL';
+            const currentItems = isBB ? bbItems : opsItems;
+
+            const finalSheetName = sanitizeExcelSheetName(sheetTitle, existingSheetNames);
+            const sheet = workbook.addWorksheet(finalSheetName, {
+                views: [{ showGridLines: true }],
+            });
+
+            // Column Widths (A - H, 8 Kolom) - dilebarkan agar teks tidak terpotong
+            sheet.columns = [
+                { width: 6 },   // A: No
+                { width: 36 },  // B: Uraian Pesanan
+                { width: 26 },  // C: Nama Supplier
+                { width: 11 },  // D: Kuantitas Jml
+                { width: 11 },  // E: Kuantitas Satuan
+                { width: 17 },  // F: Harga
+                { width: 20 },  // G: Jumlah
+                { width: 36 },  // H: Keterangan
+            ];
+
+            // Render Kop Surat
+            renderKopSuratExcel(sheet, 8, logoBgnId, logoYayasanId);
+
+            sheet.addRow([]); // Row 5 (gap)
+            sheet.getRow(5).height = 10;
+
+            // Row 6: Title
+            const rTitle = sheet.addRow([docTitle]);
+            sheet.mergeCells(`A${rTitle.number}:H${rTitle.number}`);
+            rTitle.getCell(1).font = { name: 'Arial', size: 11, bold: true };
+            rTitle.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rTitle.height = 20;
+
+            sheet.addRow([]); // Row 7 (gap)
+            sheet.getRow(7).height = 10;
+
+            // Rows 8 - 12: Metadata Kiri & Kotak Porsi Kanan
+            const porsiPk = Number(po.porsi_pk || 0);
+            const porsiPb = Number(po.porsi_pb || 0);
+            const totalPorsi = Number(po.total_porsi || (porsiPk + porsiPb) || 0);
+
+            // Pagu Anggaran
+            let paguNominal = 0;
+            if (isBB) {
+                const costPk = Number(po.cost_pk || 8000);
+                const costPb = Number(po.cost_pb || 10000);
+                paguNominal = Math.round((porsiPk * costPk) + (porsiPb * costPb));
+                if (paguNominal === 0 && po.total_nominal) {
+                    paguNominal = Math.round(Number(po.total_nominal));
+                }
+            }
+
+            const catatanRancangMenu = po.catatan_rancang_menu && po.catatan_rancang_menu !== '-'
+                ? po.catatan_rancang_menu
+                : '-';
+
+            const metaRows = [
+                { label: 'Nama SPPG', val: 'SPPG Buleleng Sukasada Tegallinggah', boxLabel: 'Jumlah Porsi Kecil', boxVal: porsiPk, boxFmt: '#,##0' },
+                { label: 'ID SPPG', val: 'QQCV0LUG', boxLabel: 'Jumlah Porsi Besar', boxVal: porsiPb, boxFmt: '#,##0' },
+                { label: 'Nama Yayasan', val: 'Yayasan Pesantren Miftahul Ulum', boxLabel: 'Total Porsi', boxVal: totalPorsi, boxFmt: '#,##0' },
+                { label: 'Hari/Tanggal Order', val: orderDateFormatted, boxLabel: 'Pagu Anggaran', boxVal: paguNominal, boxFmt: accountingNumFmt },
+                { label: 'Hari/Tanggal Kirim', val: kirimDateFormatted, boxLabel: 'Catatan', boxVal: catatanRancangMenu, boxFmt: '@' },
+            ];
+
+            metaRows.forEach((m) => {
+                // Merge A:B untuk label dan C:E untuk value agar label dan nilai tidak terpotong
+                const r = sheet.addRow([m.label, '', `:  ${m.val}`, '', '', m.boxLabel, '', m.boxVal]);
+                const rn = r.number;
+                sheet.mergeCells(`A${rn}:B${rn}`);
+                sheet.mergeCells(`C${rn}:E${rn}`);
+                sheet.mergeCells(`F${rn}:G${rn}`);
+
+                r.getCell(1).font = { name: 'Arial', size: 9.5 };
+                r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+                r.getCell(3).font = { name: 'Arial', size: 9.5 };
+                r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+
+                // Styling Kotak Kanan (Cols F, G, H)
+                r.getCell(6).font = { name: 'Arial', size: 9.5 };
+                r.getCell(6).border = borderThinBlack;
+                r.getCell(7).border = borderThinBlack;
+                r.getCell(6).alignment = { horizontal: 'left', vertical: 'middle' };
+
+                const cBoxVal = r.getCell(8);
+                cBoxVal.font = { name: 'Arial', size: 9.5 };
+                cBoxVal.border = borderThinBlack;
+                cBoxVal.alignment = { horizontal: m.boxFmt === '@' ? 'center' : 'right', vertical: 'middle', wrapText: true };
+                if (m.boxFmt !== '@') {
+                    cBoxVal.numFmt = m.boxFmt;
+                }
+                r.height = 18;
+            });
+
+            sheet.addRow([]); // Row 13 (gap)
+            sheet.getRow(13).height = 10;
+
+            // Row 14 & 15: Table Header
+            const rHead1 = sheet.addRow(['No', 'Uraian Pesanan', 'Nama Supplier', 'Kuantitas', '', 'Harga', 'Jumlah', 'Keterangan']);
+            const rHead2 = sheet.addRow(['', '', '', 'Jml', 'Satuan', '', '', '']);
+
+            const h1N = rHead1.number;
+            const h2N = rHead2.number;
+
+            sheet.mergeCells(`A${h1N}:A${h2N}`);
+            sheet.mergeCells(`B${h1N}:B${h2N}`);
+            sheet.mergeCells(`C${h1N}:C${h2N}`);
+            sheet.mergeCells(`D${h1N}:E${h1N}`);
+            sheet.mergeCells(`F${h1N}:F${h2N}`);
+            sheet.mergeCells(`G${h1N}:G${h2N}`);
+            sheet.mergeCells(`H${h1N}:H${h2N}`);
+
+            [rHead1, rHead2].forEach(r => {
+                r.height = 20;
+                r.font = { name: 'Arial', size: 9.5, bold: true };
+                for (let c = 1; c <= 8; c++) {
+                    const cell = r.getCell(c);
+                    cell.fill = headerGrayFill;
+                    cell.border = borderThinBlack;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                }
+            });
+
+            // Table Data Rows: Berapapun bahan yang masuk list, HANYA sejumlah bahan itu saja tanpa padding kosong
+            const rowCount = currentItems.length;
+            const startDataRow = sheet.rowCount + 1;
+
+            if (rowCount === 0) {
+                const rEmpty = sheet.addRow(['-', 'Tidak ada data transaksi', '-', 0, '-', 0, 0, '-']);
+                rEmpty.height = 19;
+                for (let c = 1; c <= 8; c++) {
+                    rEmpty.getCell(c).border = borderThinBlack;
+                    rEmpty.getCell(c).font = { name: 'Arial', size: 9 };
+                }
+                rEmpty.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            } else {
+                for (let i = 0; i < rowCount; i++) {
+                    const it = currentItems[i];
+                    const rNum = startDataRow + i;
+
+                    const gross = Number(it.gross_kg) || 0;
+                    const stok = Number(it.stok_digunakan_kg || 0);
+                    const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+                        ? Number(it.qty_beli_po_kg)
+                        : Math.max(0, gross - stok);
+                    const harga = Math.round(Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0)));
+                    const supplierName = it.supplier?.nama_usaha || po.supplier?.nama_usaha || it.vendor || po.vendor || 'CV. Citra Lestari Abadi';
+                    const satuan = it.satuan || 'kg';
+
+                    const ket = resolveItemKeterangan(it);
+
+                    const r = sheet.addRow([
+                        i + 1,
+                        it.nama || '',
+                        supplierName,
+                        qtyBeli,
+                        satuan,
+                        harga,
+                        { formula: `ROUND(D${rNum}*F${rNum}, 0)`, result: Math.round(qtyBeli * harga) },
+                        ket
+                    ]);
+
+                    r.height = 19;
+                    r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(4).alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    // Format angka rapi: tanpa titik desimal gantung jika bilangan bulat
+                    const isQtyInt = Math.abs(qtyBeli - Math.round(qtyBeli)) < 0.001;
+                    r.getCell(4).numFmt = isQtyInt ? '#,##0' : '#,##0.##';
+
+                    r.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(6).numFmt = accountingNumFmt;
+                    r.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(7).numFmt = accountingNumFmt;
+                    r.getCell(8).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+
+                    for (let c = 1; c <= 8; c++) {
+                        r.getCell(c).border = borderThinBlack;
+                        r.getCell(c).font = { name: 'Arial', size: 9 };
+                    }
+                }
+            }
+
+            const endDataRow = rowCount > 0 ? (startDataRow + rowCount - 1) : startDataRow;
+
+            // Summary Rows (3 Baris: Total Pengeluaran, Pagu Anggaran, Sisa Anggaran)
+            // 1. Total Pengeluaran
+            const rTot = sheet.addRow(['Total Pengeluaran', '', '', '', '', 'Rp', { formula: `SUM(G${startDataRow}:G${endDataRow})` }, '']);
+            const totN = rTot.number;
+            sheet.mergeCells(`A${totN}:E${totN}`);
+            rTot.height = 20;
+            rTot.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rTot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rTot.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rTot.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rTot.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rTot.getCell(c).border = borderThinBlack;
+
+            // 2. Pagu Anggaran
+            const rPagu = sheet.addRow(['Pagu Anggaran', '', '', '', '', 'Rp', paguNominal, '']);
+            const paguN = rPagu.number;
+            sheet.mergeCells(`A${paguN}:E${paguN}`);
+            rPagu.height = 20;
+            rPagu.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rPagu.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rPagu.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rPagu.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rPagu.getCell(c).border = borderThinBlack;
+
+            // 3. Sisa Anggaran
+            const rSisa = sheet.addRow(['Sisa Anggaran', '', '', '', '', 'Rp', { formula: `G${paguN}-G${totN}` }, '']);
+            const sisaN = rSisa.number;
+            sheet.mergeCells(`A${sisaN}:E${sisaN}`);
+            rSisa.height = 20;
+            rSisa.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSisa.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSisa.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSisa.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rSisa.getCell(c).border = borderThinBlack;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 14;
+
+            // 1. Tanggal Sukasada: Merge A:D, sejajar dan simetris tepat di atas blok tanda tangan kiri
+            const rDate = sheet.addRow([`Sukasada, ${orderDateFormatted}`, '', '', '']);
+            const dateN = rDate.number;
+            sheet.mergeCells(`A${dateN}:D${dateN}`);
+            rDate.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rDate.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rDate.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 10;
+
+            // 2. Tanda Tangan Baris 1: Pengawas Keuangan SPPG (A:D) dan PIC Yayasan (E:H)
+            const rSig1 = sheet.addRow(['Pengawas Keuangan SPPG Buleleng Sukasada Tegallinggah', '', '', '', 'PIC Yayasan Pesantren Miftahul Ulum', '', '', '']);
+            const sig1N = rSig1.number;
+            sheet.mergeCells(`A${sig1N}:D${sig1N}`);
+            sheet.mergeCells(`E${sig1N}:H${sig1N}`);
+            rSig1.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig1.getCell(5).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig1.height = 20;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // 3. Nama Penandatangan Baris 1: I Gusti Ayu Made Padmi Swari (A:D) dan Susianah (E:H)
+            const rSig2 = sheet.addRow(['I Gusti Ayu Made Padmi Swari, S.Ak.', '', '', '', 'Susianah', '', '', '']);
+            const sig2N = rSig2.number;
+            sheet.mergeCells(`A${sig2N}:D${sig2N}`);
+            sheet.mergeCells(`E${sig2N}:H${sig2N}`);
+            rSig2.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.getCell(5).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 12;
+
+            // 4. Baris Jabatan 2: Kepala SPPG di tengah bawah (merge A:H melintasi seluruh lebar tabel)
+            const rSig3 = sheet.addRow(['Kepala SPPG Buleleng Sukasada Tegallinggah', '', '', '', '', '', '', '']);
+            const sig3N = rSig3.number;
+            sheet.mergeCells(`A${sig3N}:H${sig3N}`);
+            rSig3.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig3.height = 20;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // 5. Nama Penandatangan Baris 2: I Gede Gelgel Abdiutama (Merge A:H)
+            const rSig4 = sheet.addRow(['I Gede Gelgel Abdiutama, S.Kom.', '', '', '', '', '', '', '']);
+            const sig4N = rSig4.number;
+            sheet.mergeCells(`A${sig4N}:H${sig4N}`);
+            rSig4.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig4.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig4.height = 18;
+        }
+
+        // =========================================================
+        // B. SHEET NOTA PESANAN PER SUPPLIER
+        // =========================================================
+        function buildSupplierSheet({ classification, poNumber, supplier, items }) {
+            const isBB = classification === 'BB';
+            const docTitle = isBB ? 'NOTA PESANAN BAHAN BAKU' : 'NOTA PESANAN BARANG OPERASIONAL';
+
+            // Nama sheet bersih
+            const prefix = isBB ? '' : 'OPS - ';
+            const rawSheetName = `${prefix}${supplier.namaUsaha || 'Supplier'}`;
+            const finalSheetName = sanitizeExcelSheetName(rawSheetName, existingSheetNames);
+
+            const sheet = workbook.addWorksheet(finalSheetName, {
+                views: [{ showGridLines: true }],
+            });
+
+            // Column Widths (A - G, 7 Kolom) - Seimbang simetris (A:D lebar 68, E:G lebar 70)
+            sheet.columns = [
+                { width: 6 },   // A: No
+                { width: 38 },  // B: Uraian Pesanan
+                { width: 12 },  // C: Kuantitas Jml
+                { width: 12 },  // D: Kuantitas Satuan
+                { width: 18 },  // E: Harga
+                { width: 20 },  // F: Jumlah
+                { width: 32 },  // G: Keterangan
+            ];
+
+            // Kop Surat
+            renderKopSuratExcel(sheet, 7, logoBgnId, logoYayasanId);
+
+            sheet.addRow([]); // Row 5 (gap)
+            sheet.getRow(5).height = 10;
+
+            // Row 6: Title
+            const rTitle = sheet.addRow([docTitle]);
+            sheet.mergeCells(`A${rTitle.number}:G${rTitle.number}`);
+            rTitle.getCell(1).font = { name: 'Arial', size: 11, bold: true };
+            rTitle.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rTitle.height = 20;
+
+            // Row 7: Subtitle No. PO
+            const rSub = sheet.addRow([`No. ${poNumber}`]);
+            sheet.mergeCells(`A${rSub.number}:G${rSub.number}`);
+            rSub.getCell(1).font = { name: 'Arial', size: 10, bold: true };
+            rSub.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSub.height = 18;
+
+            sheet.addRow([]); // Row 8 (gap)
+            sheet.getRow(8).height = 10;
+
+            // Metadata Supplier (Rows 9 - 16) - Merge A:B untuk label dan C:G untuk value
+            const metaRows = [
+                { label: 'Nama SPPG', val: 'SPPG Buleleng Sukasada Tegallinggah' },
+                { label: 'ID SPPG', val: 'QQCV0LUG' },
+                { label: 'Nama Yayasan', val: 'Yayasan Pesantren Miftahul Ulum' },
+                { label: 'Kepada Supplier', val: supplier.namaUsaha || 'Rumah Tempe' },
+                { label: 'Nama Pemilik Supplier', val: supplier.namaPemilik || 'Noer Hakim' },
+                { label: 'Alamat Usaha Supplier', val: supplier.alamat || 'Jl. Pulau Sugara No. 31' },
+                { label: 'Hari/Tanggal Order', val: orderDateFormatted },
+                { label: 'Hari/Tanggal Kirim', val: kirimDateFormatted },
+            ];
+
+            metaRows.forEach((m) => {
+                const r = sheet.addRow([m.label, '', `:  ${m.val}`]);
+                const rn = r.number;
+                sheet.mergeCells(`A${rn}:B${rn}`);
+                sheet.mergeCells(`C${rn}:G${rn}`);
+                r.getCell(1).font = { name: 'Arial', size: 9.5 };
+                r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+                r.getCell(3).font = { name: 'Arial', size: 9.5 };
+                r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+                r.height = 18;
+            });
+
+            sheet.addRow([]); // Row 17 (gap)
+            sheet.getRow(17).height = 10;
+
+            // Table Header (Rows 18 & 19)
+            const rHead1 = sheet.addRow(['No', 'Uraian Pesanan', 'Kuantitas', '', 'Harga', 'Jumlah', 'Keterangan']);
+            const rHead2 = sheet.addRow(['', '', 'Jml', 'Satuan', '', '', '']);
+
+            const h1N = rHead1.number;
+            const h2N = rHead2.number;
+
+            sheet.mergeCells(`A${h1N}:A${h2N}`);
+            sheet.mergeCells(`B${h1N}:B${h2N}`);
+            sheet.mergeCells(`C${h1N}:D${h1N}`);
+            sheet.mergeCells(`E${h1N}:E${h2N}`);
+            sheet.mergeCells(`F${h1N}:F${h2N}`);
+            sheet.mergeCells(`G${h1N}:G${h2N}`);
+
+            [rHead1, rHead2].forEach(r => {
+                r.height = 20;
+                r.font = { name: 'Arial', size: 9.5, bold: true };
+                for (let c = 1; c <= 7; c++) {
+                    const cell = r.getCell(c);
+                    cell.fill = headerGrayFill;
+                    cell.border = borderThinBlack;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                }
+            });
+
+            // Table Data Rows: Berapapun bahan yang masuk list, HANYA sejumlah bahan itu saja tanpa padding baris kosong
+            const rowCount = items.length;
+            const startDataRow = sheet.rowCount + 1;
+
+            if (rowCount === 0) {
+                const rEmpty = sheet.addRow(['-', 'Tidak ada data transaksi', 0, '-', 0, 0, '-']);
+                rEmpty.height = 19;
+                for (let c = 1; c <= 7; c++) {
+                    rEmpty.getCell(c).border = borderThinBlack;
+                    rEmpty.getCell(c).font = { name: 'Arial', size: 9 };
+                }
+                rEmpty.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            } else {
+                for (let i = 0; i < rowCount; i++) {
+                    const it = items[i];
+                    const rNum = startDataRow + i;
+
+                    const gross = Number(it.gross_kg) || 0;
+                    const stok = Number(it.stok_digunakan_kg || 0);
+                    const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+                        ? Number(it.qty_beli_po_kg)
+                        : Math.max(0, gross - stok);
+                    const harga = Math.round(Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0)));
+                    const satuan = it.satuan || 'kg';
+                    const ket = resolveItemKeterangan(it);
+
+                    const r = sheet.addRow([
+                        i + 1,
+                        it.nama || '',
+                        qtyBeli,
+                        satuan,
+                        harga,
+                        { formula: `ROUND(C${rNum}*E${rNum}, 0)`, result: Math.round(qtyBeli * harga) },
+                        ket
+                    ]);
+
+                    r.height = 19;
+                    r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+
+                    // Format angka rapi tanpa titik desimal gantung
+                    const isQtyInt = Math.abs(qtyBeli - Math.round(qtyBeli)) < 0.001;
+                    r.getCell(3).numFmt = isQtyInt ? '#,##0' : '#,##0.##';
+
+                    r.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(5).numFmt = accountingNumFmt;
+                    r.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(6).numFmt = accountingNumFmt;
+                    r.getCell(7).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+
+                    for (let c = 1; c <= 7; c++) {
+                        r.getCell(c).border = borderThinBlack;
+                        r.getCell(c).font = { name: 'Arial', size: 9 };
+                    }
+                }
+            }
+
+            const endDataRow = rowCount > 0 ? (startDataRow + rowCount - 1) : startDataRow;
+
+            // Total Row
+            const rTot = sheet.addRow(['Total', '', '', '', '', { formula: `SUM(F${startDataRow}:F${endDataRow})` }, '']);
+            const totN = rTot.number;
+            sheet.mergeCells(`A${totN}:E${totN}`);
+            rTot.height = 20;
+            rTot.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rTot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rTot.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(6).numFmt = accountingNumFmt;
+            for (let c = 1; c <= 7; c++) rTot.getCell(c).border = borderThinBlack;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 14;
+
+            // 1. Tanggal Sukasada: Merge A:D, sejajar dan simetris tepat di atas blok tanda tangan kiri
+            const rDate = sheet.addRow([`Sukasada, ${orderDateFormatted}`, '', '', '']);
+            const dateN = rDate.number;
+            sheet.mergeCells(`A${dateN}:D${dateN}`);
+            rDate.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rDate.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rDate.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 10;
+
+            // 2. Baris Jabatan 1:
+            // Blok Kiri (A:D lebar 68): Supplier [Nama Usaha]
+            // Blok Kanan (E:G lebar 70): Pengawas Keuangan SPPG Buleleng Sukasada Tegallinggah
+            const rSig1 = sheet.addRow([
+                `Supplier ${supplier.namaUsaha || 'Rumah Tempe'}`, '', '', '',
+                'Pengawas Keuangan\nSPPG Buleleng Sukasada Tegallinggah', '', ''
+            ]);
+            const s1N = rSig1.number;
+            sheet.mergeCells(`A${s1N}:D${s1N}`);
+            sheet.mergeCells(`E${s1N}:G${s1N}`);
+            rSig1.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            rSig1.getCell(5).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(5).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            rSig1.height = 26;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // 3. Baris Nama 1:
+            // Blok Kiri (A:D): Pemilik Supplier
+            // Blok Kanan (E:G): I Gusti Ayu Made Padmi Swari, S.Ak.
+            const rSig2 = sheet.addRow([
+                supplier.namaPemilik || 'Noer Hakim', '', '', '',
+                'I Gusti Ayu Made Padmi Swari, S.Ak.', '', ''
+            ]);
+            const s2N = rSig2.number;
+            sheet.mergeCells(`A${s2N}:D${s2N}`);
+            sheet.mergeCells(`E${s2N}:G${s2N}`);
+            rSig2.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.getCell(5).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 12;
+
+            // 4. Baris Jabatan 2:
+            // Blok Kiri (A:D): Kepala SPPG Buleleng Sukasada Tegallinggah
+            // Blok Kanan (E:G): PIC Yayasan Pesantren Miftahul Ulum
+            const rSig3 = sheet.addRow([
+                'Kepala SPPG Buleleng Sukasada Tegallinggah', '', '', '',
+                'PIC Yayasan Pesantren Miftahul Ulum', '', ''
+            ]);
+            const s3N = rSig3.number;
+            sheet.mergeCells(`A${s3N}:D${s3N}`);
+            sheet.mergeCells(`E${s3N}:G${s3N}`);
+            rSig3.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig3.getCell(5).font = { name: 'Arial', size: 9.5 };
+            rSig3.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig3.height = 20;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // 5. Baris Nama 2:
+            // Blok Kiri (A:D): I Gede Gelgel Abdiutama, S.Kom.
+            // Blok Kanan (E:G): Susianah
+            const rSig4 = sheet.addRow([
+                'I Gede Gelgel Abdiutama, S.Kom.', '', '', '',
+                'Susianah', '', ''
+            ]);
+            const s4N = rSig4.number;
+            sheet.mergeCells(`A${s4N}:D${s4N}`);
+            sheet.mergeCells(`E${s4N}:G${s4N}`);
+            rSig4.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig4.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig4.getCell(5).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig4.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig4.height = 18;
+        }
+
+        // =========================================================
+        // C. SHEET REKAP AKHIR (GABUNGAN BAHAN BAKU & OPERASIONAL)
+        // =========================================================
+        function buildRekapAkhirSheet() {
+            const sheetTitle = 'Rekap Akhir';
+            const docTitle = 'REKAPITULASI AKHIR NOTA PESANAN (BB & OPERASIONAL)';
+
+            const finalSheetName = sanitizeExcelSheetName(sheetTitle, existingSheetNames);
+            const sheet = workbook.addWorksheet(finalSheetName, {
+                views: [{ showGridLines: true }],
+            });
+
+            // Column Widths (A - H, 8 Kolom)
+            sheet.columns = [
+                { width: 6 },   // A: No
+                { width: 36 },  // B: Uraian Pesanan
+                { width: 26 },  // C: Nama Supplier
+                { width: 11 },  // D: Kuantitas Jml
+                { width: 11 },  // E: Kuantitas Satuan
+                { width: 17 },  // F: Harga
+                { width: 20 },  // G: Jumlah
+                { width: 30 },  // H: Keterangan
+            ];
+
+            // Render Kop Surat
+            renderKopSuratExcel(sheet, 8, logoBgnId, logoYayasanId);
+
+            sheet.addRow([]); // Row 5 (gap)
+            sheet.getRow(5).height = 10;
+
+            // Row 6: Title
+            const rTitle = sheet.addRow([docTitle]);
+            sheet.mergeCells(`A${rTitle.number}:H${rTitle.number}`);
+            rTitle.getCell(1).font = { name: 'Arial', size: 11, bold: true };
+            rTitle.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rTitle.height = 20;
+
+            sheet.addRow([]); // Row 7 (gap)
+            sheet.getRow(7).height = 10;
+
+            // Rows 8 - 12: Metadata Kiri & Kotak Porsi Kanan
+            const porsiPk = Number(po.porsi_pk || 0);
+            const porsiPb = Number(po.porsi_pb || 0);
+            const totalPorsi = Number(po.total_porsi || (porsiPk + porsiPb) || 0);
+
+            // Pagu Anggaran
+            const costPk = Number(po.cost_pk || 8000);
+            const costPb = Number(po.cost_pb || 10000);
+            let paguNominal = Math.round((porsiPk * costPk) + (porsiPb * costPb));
+            if (paguNominal === 0 && po.total_nominal) {
+                paguNominal = Math.round(Number(po.total_nominal));
+            }
+
+            const catatanRancangMenu = po.catatan_rancang_menu && po.catatan_rancang_menu !== '-'
+                ? po.catatan_rancang_menu
+                : '-';
+
+            const metaRows = [
+                { label: 'Nama SPPG', val: 'SPPG Buleleng Sukasada Tegallinggah', boxLabel: 'Jumlah Porsi Kecil', boxVal: porsiPk, boxFmt: '#,##0' },
+                { label: 'ID SPPG', val: 'QQCV0LUG', boxLabel: 'Jumlah Porsi Besar', boxVal: porsiPb, boxFmt: '#,##0' },
+                { label: 'Nama Yayasan', val: 'Yayasan Pesantren Miftahul Ulum', boxLabel: 'Total Porsi', boxVal: totalPorsi, boxFmt: '#,##0' },
+                { label: 'Hari/Tanggal Order', val: orderDateFormatted, boxLabel: 'Pagu Anggaran', boxVal: paguNominal, boxFmt: accountingNumFmt },
+                { label: 'Hari/Tanggal Kirim', val: kirimDateFormatted, boxLabel: 'Catatan', boxVal: catatanRancangMenu, boxFmt: '@' },
+            ];
+
+            metaRows.forEach((m) => {
+                const r = sheet.addRow([m.label, '', `:  ${m.val}`, '', '', m.boxLabel, '', m.boxVal]);
+                const rn = r.number;
+                sheet.mergeCells(`A${rn}:B${rn}`);
+                sheet.mergeCells(`C${rn}:E${rn}`);
+                sheet.mergeCells(`F${rn}:G${rn}`);
+
+                r.getCell(1).font = { name: 'Arial', size: 9.5 };
+                r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+                r.getCell(3).font = { name: 'Arial', size: 9.5 };
+                r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+
+                r.getCell(6).font = { name: 'Arial', size: 9.5 };
+                r.getCell(6).border = borderThinBlack;
+                r.getCell(7).border = borderThinBlack;
+                r.getCell(6).alignment = { horizontal: 'left', vertical: 'middle' };
+
+                const cBoxVal = r.getCell(8);
+                cBoxVal.font = { name: 'Arial', size: 9.5 };
+                cBoxVal.border = borderThinBlack;
+                cBoxVal.alignment = { horizontal: m.boxFmt === '@' ? 'center' : 'right', vertical: 'middle', wrapText: true };
+                if (m.boxFmt !== '@') {
+                    cBoxVal.numFmt = m.boxFmt;
+                }
+                r.height = 18;
+            });
+
+            sheet.addRow([]); // Row 13 (gap)
+            sheet.getRow(13).height = 10;
+
+            // Row 14 & 15: Table Header
+            const rHead1 = sheet.addRow(['No', 'Uraian Pesanan', 'Nama Supplier', 'Kuantitas', '', 'Harga', 'Jumlah', 'Keterangan']);
+            const rHead2 = sheet.addRow(['', '', '', 'Jml', 'Satuan', '', '', '']);
+
+            const h1N = rHead1.number;
+            const h2N = rHead2.number;
+
+            sheet.mergeCells(`A${h1N}:A${h2N}`);
+            sheet.mergeCells(`B${h1N}:B${h2N}`);
+            sheet.mergeCells(`C${h1N}:C${h2N}`);
+            sheet.mergeCells(`D${h1N}:E${h1N}`);
+            sheet.mergeCells(`F${h1N}:F${h2N}`);
+            sheet.mergeCells(`G${h1N}:G${h2N}`);
+            sheet.mergeCells(`H${h1N}:H${h2N}`);
+
+            [rHead1, rHead2].forEach(r => {
+                r.height = 20;
+                r.font = { name: 'Arial', size: 9.5, bold: true };
+                for (let c = 1; c <= 8; c++) {
+                    const cell = r.getCell(c);
+                    cell.fill = headerGrayFill;
+                    cell.border = borderThinBlack;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                }
+            });
+
+            // --- SECTION 1: BAHAN BAKU (BB) ---
+            const rSecBB = sheet.addRow(['I. REKAPITULASI KEBUTUHAN BAHAN BAKU (BB)', '', '', '', '', '', '', '']);
+            const secBbN = rSecBB.number;
+            sheet.mergeCells(`A${secBbN}:H${secBbN}`);
+            rSecBB.height = 20;
+            rSecBB.getCell(1).font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF0F5132' } };
+            rSecBB.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+            rSecBB.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+            for (let c = 1; c <= 8; c++) rSecBB.getCell(c).border = borderThinBlack;
+
+            const bbStartRow = sheet.rowCount + 1;
+            if (bbItems.length === 0) {
+                const rEmptyBB = sheet.addRow(['-', 'Tidak ada pengadaan bahan baku', '-', 0, '-', 0, 0, '-']);
+                rEmptyBB.height = 19;
+                for (let c = 1; c <= 8; c++) {
+                    rEmptyBB.getCell(c).border = borderThinBlack;
+                    rEmptyBB.getCell(c).font = { name: 'Arial', size: 9 };
+                }
+                rEmptyBB.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            } else {
+                for (let i = 0; i < bbItems.length; i++) {
+                    const it = bbItems[i];
+                    const rNum = bbStartRow + i;
+
+                    const gross = Number(it.gross_kg) || 0;
+                    const stok = Number(it.stok_digunakan_kg || 0);
+                    const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+                        ? Number(it.qty_beli_po_kg)
+                        : Math.max(0, gross - stok);
+                    const harga = Math.round(Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0)));
+                    const supplierName = it.supplier?.nama_usaha || po.supplier?.nama_usaha || it.vendor || po.vendor || 'CV. Citra Lestari Abadi';
+                    const satuan = it.satuan || 'kg';
+                    const ket = resolveItemKeterangan(it);
+
+                    const r = sheet.addRow([
+                        i + 1,
+                        it.nama || '',
+                        supplierName,
+                        qtyBeli,
+                        satuan,
+                        harga,
+                        { formula: `ROUND(D${rNum}*F${rNum}, 0)`, result: Math.round(qtyBeli * harga) },
+                        ket
+                    ]);
+
+                    r.height = 19;
+                    r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(4).alignment = { horizontal: 'right', vertical: 'middle' };
+                    const isQtyInt = Math.abs(qtyBeli - Math.round(qtyBeli)) < 0.001;
+                    r.getCell(4).numFmt = isQtyInt ? '#,##0' : '#,##0.##';
+                    r.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(6).numFmt = accountingNumFmt;
+                    r.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(7).numFmt = accountingNumFmt;
+                    r.getCell(8).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+                    for (let c = 1; c <= 8; c++) {
+                        r.getCell(c).border = borderThinBlack;
+                        r.getCell(c).font = { name: 'Arial', size: 9 };
+                    }
+                }
+            }
+            const bbEndRow = bbItems.length > 0 ? (bbStartRow + bbItems.length - 1) : bbStartRow;
+
+            // Subtotal Bahan Baku (BB) Row
+            const rSubBB = sheet.addRow(['Subtotal Bahan Baku (BB)', '', '', '', '', 'Rp', { formula: `SUM(G${bbStartRow}:G${bbEndRow})` }, '']);
+            const subBbN = rSubBB.number;
+            sheet.mergeCells(`A${subBbN}:E${subBbN}`);
+            rSubBB.height = 20;
+            rSubBB.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubBB.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSubBB.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubBB.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSubBB.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubBB.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSubBB.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rSubBB.getCell(c).border = borderThinBlack;
+
+            // --- SECTION 2: BARANG OPERASIONAL (OPS) ---
+            const rSecOPS = sheet.addRow(['II. REKAPITULASI KEBUTUHAN BARANG OPERASIONAL (OPS)', '', '', '', '', '', '', '']);
+            const secOpsN = rSecOPS.number;
+            sheet.mergeCells(`A${secOpsN}:H${secOpsN}`);
+            rSecOPS.height = 20;
+            rSecOPS.getCell(1).font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF5925DC' } };
+            rSecOPS.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+            rSecOPS.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F0FF' } };
+            for (let c = 1; c <= 8; c++) rSecOPS.getCell(c).border = borderThinBlack;
+
+            const opsStartRow = sheet.rowCount + 1;
+            if (opsItems.length === 0) {
+                const rEmptyOPS = sheet.addRow(['-', 'Tidak ada pengadaan barang operasional', '-', 0, '-', 0, 0, '-']);
+                rEmptyOPS.height = 19;
+                for (let c = 1; c <= 8; c++) {
+                    rEmptyOPS.getCell(c).border = borderThinBlack;
+                    rEmptyOPS.getCell(c).font = { name: 'Arial', size: 9 };
+                }
+                rEmptyOPS.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            } else {
+                for (let i = 0; i < opsItems.length; i++) {
+                    const it = opsItems[i];
+                    const rNum = opsStartRow + i;
+
+                    const gross = Number(it.gross_kg) || 0;
+                    const stok = Number(it.stok_digunakan_kg || 0);
+                    const qtyBeli = it.qty_beli_po_kg !== undefined && it.qty_beli_po_kg !== null
+                        ? Number(it.qty_beli_po_kg)
+                        : Math.max(0, gross - stok);
+                    const harga = Math.round(Number(it.harga_aktual !== undefined && it.harga_aktual !== null ? it.harga_aktual : (it.harga_master || 0)));
+                    const supplierName = it.supplier?.nama_usaha || po.supplier?.nama_usaha || it.vendor || po.vendor || 'CV. Citra Lestari Abadi';
+                    const satuan = it.satuan || 'Pcs';
+                    const ket = resolveItemKeterangan(it);
+
+                    const r = sheet.addRow([
+                        i + 1,
+                        it.nama || '',
+                        supplierName,
+                        qtyBeli,
+                        satuan,
+                        harga,
+                        { formula: `ROUND(D${rNum}*F${rNum}, 0)`, result: Math.round(qtyBeli * harga) },
+                        ket
+                    ]);
+
+                    r.height = 19;
+                    r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+                    r.getCell(4).alignment = { horizontal: 'right', vertical: 'middle' };
+                    const isQtyInt = Math.abs(qtyBeli - Math.round(qtyBeli)) < 0.001;
+                    r.getCell(4).numFmt = isQtyInt ? '#,##0' : '#,##0.##';
+                    r.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+                    r.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(6).numFmt = accountingNumFmt;
+                    r.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+                    r.getCell(7).numFmt = accountingNumFmt;
+                    r.getCell(8).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+                    for (let c = 1; c <= 8; c++) {
+                        r.getCell(c).border = borderThinBlack;
+                        r.getCell(c).font = { name: 'Arial', size: 9 };
+                    }
+                }
+            }
+            const opsEndRow = opsItems.length > 0 ? (opsStartRow + opsItems.length - 1) : opsStartRow;
+
+            // Subtotal OPS Row
+            const rSubOPS = sheet.addRow(['Subtotal Barang Operasional (OPS)', '', '', '', '', 'Rp', { formula: `SUM(G${opsStartRow}:G${opsEndRow})` }, '']);
+            const subOpsN = rSubOPS.number;
+            sheet.mergeCells(`A${subOpsN}:E${subOpsN}`);
+            rSubOPS.height = 20;
+            rSubOPS.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubOPS.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSubOPS.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubOPS.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSubOPS.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rSubOPS.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSubOPS.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rSubOPS.getCell(c).border = borderThinBlack;
+
+            // --- REKAPITULASI AKHIR TOTAL PENGELUARAN ---
+            // 1. Total Pengeluaran (BB + OPS)
+            const rTot = sheet.addRow(['Total Pengeluaran (BB + OPS)', '', '', '', '', 'Rp', { formula: `G${subBbN}+G${subOpsN}` }, '']);
+            const totN = rTot.number;
+            sheet.mergeCells(`A${totN}:E${totN}`);
+            rTot.height = 22;
+            rTot.getCell(1).font = { name: 'Arial', size: 10, bold: true };
+            rTot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(6).font = { name: 'Arial', size: 10, bold: true };
+            rTot.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rTot.getCell(7).font = { name: 'Arial', size: 10, bold: true };
+            rTot.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rTot.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rTot.getCell(c).border = borderThinBlack;
+
+            // 2. Pagu Anggaran
+            const rPagu = sheet.addRow(['Pagu Anggaran', '', '', '', '', 'Rp', paguNominal, '']);
+            const paguN = rPagu.number;
+            sheet.mergeCells(`A${paguN}:E${paguN}`);
+            rPagu.height = 20;
+            rPagu.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rPagu.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rPagu.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rPagu.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rPagu.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rPagu.getCell(c).border = borderThinBlack;
+
+            // 3. Sisa Anggaran
+            const rSisa = sheet.addRow(['Sisa Anggaran', '', '', '', '', 'Rp', { formula: `G${paguN}-G${totN}` }, '']);
+            const sisaN = rSisa.number;
+            sheet.mergeCells(`A${sisaN}:E${sisaN}`);
+            rSisa.height = 20;
+            rSisa.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSisa.getCell(6).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSisa.getCell(7).font = { name: 'Arial', size: 9.5, bold: true };
+            rSisa.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+            rSisa.getCell(7).numFmt = '#,##0;(#,##0);"-"';
+            for (let c = 1; c <= 8; c++) rSisa.getCell(c).border = borderThinBlack;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 14;
+
+            // Tanggal Sukasada
+            const rDate = sheet.addRow([`Sukasada, ${orderDateFormatted}`, '', '', '']);
+            const dateN = rDate.number;
+            sheet.mergeCells(`A${dateN}:D${dateN}`);
+            rDate.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rDate.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rDate.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 10;
+
+            // Tanda Tangan Baris 1: Pengawas Keuangan SPPG & PIC Yayasan
+            const rSig1 = sheet.addRow(['Pengawas Keuangan SPPG Buleleng Sukasada Tegallinggah', '', '', '', 'PIC Yayasan Pesantren Miftahul Ulum', '', '', '']);
+            const sig1N = rSig1.number;
+            sheet.mergeCells(`A${sig1N}:D${sig1N}`);
+            sheet.mergeCells(`E${sig1N}:H${sig1N}`);
+            rSig1.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig1.getCell(5).font = { name: 'Arial', size: 9.5 };
+            rSig1.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig1.height = 20;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // Nama Penandatangan Baris 1
+            const rSig2 = sheet.addRow(['I Gusti Ayu Made Padmi Swari, S.Ak.', '', '', '', 'Susianah', '', '', '']);
+            const sig2N = rSig2.number;
+            sheet.mergeCells(`A${sig2N}:D${sig2N}`);
+            sheet.mergeCells(`E${sig2N}:H${sig2N}`);
+            rSig2.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.getCell(5).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig2.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig2.height = 18;
+
+            sheet.addRow([]); // Gap row
+            sheet.getRow(sheet.rowCount).height = 12;
+
+            // Baris Jabatan 2: Kepala SPPG
+            const rSig3 = sheet.addRow(['Kepala SPPG Buleleng Sukasada Tegallinggah', '', '', '', '', '', '', '']);
+            const sig3N = rSig3.number;
+            sheet.mergeCells(`A${sig3N}:H${sig3N}`);
+            rSig3.getCell(1).font = { name: 'Arial', size: 9.5 };
+            rSig3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig3.height = 20;
+
+            // Space TTD
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+            sheet.addRow([]);
+            sheet.getRow(sheet.rowCount).height = 16;
+
+            // Nama Penandatangan Baris 2: Kepala SPPG
+            const rSig4 = sheet.addRow(['I Gede Gelgel Abdiutama, S.Kom.', '', '', '', '', '', '', '']);
+            const sig4N = rSig4.number;
+            sheet.mergeCells(`A${sig4N}:H${sig4N}`);
+            rSig4.getCell(1).font = { name: 'Arial', size: 9.5, bold: true };
+            rSig4.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            rSig4.height = 18;
+        }
+
+        // 4. Generate Rekap Sheets (Rekap BB, Rekap OPS, dan Rekap Akhir)
+        buildRekapSheet('BB');
+        buildRekapSheet('OPS');
+        buildRekapAkhirSheet();
+
+        // 5. Generate Supplier Sheets untuk Bahan Baku (BB)
+        // Penomoran urut start dari 001/PO/BB/DD/MM/YYYY
+        if (bbSupplierGroups.length > 0) {
+            bbSupplierGroups.forEach((grp, idx) => {
+                const seqStr = String(idx + 1).padStart(3, '0');
+                const poNumber = `${seqStr}/PO/BB/${orderDateSlash}`;
+                buildSupplierSheet({
+                    classification: 'BB',
+                    poNumber,
+                    supplier: grp.supplier,
+                    items: grp.items,
+                });
+            });
+        } else {
+            // Default blank supplier sheet for BB
+            const poNumber = `001/PO/BB/${orderDateSlash}`;
+            buildSupplierSheet({
+                classification: 'BB',
+                poNumber,
+                supplier: {
+                    namaUsaha: po.supplier?.nama_usaha || po.vendor || 'Rumah Tempe',
+                    namaPemilik: po.supplier?.nama_pemilik || 'Noer Hakim',
+                    alamat: po.supplier?.alamat_lengkap || 'Jl. Pulau Sugara No. 31',
+                },
+                items: [],
+            });
+        }
+
+        // 6. Generate Supplier Sheets untuk Operasional (OPS)
+        // Penomoran urut start dari 001/PO/OPS/DD/MM/YYYY
+        if (opsSupplierGroups.length > 0) {
+            opsSupplierGroups.forEach((grp, idx) => {
+                const seqStr = String(idx + 1).padStart(3, '0');
+                const poNumber = `${seqStr}/PO/OPS/${orderDateSlash}`;
+                buildSupplierSheet({
+                    classification: 'OPS',
+                    poNumber,
+                    supplier: grp.supplier,
+                    items: grp.items,
+                });
+            });
+        }
+
+        // 7. Write to Buffer & Trigger Download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        console.error('Error exporting multi-sheet PO Excel:', err);
+        alert('Terjadi kesalahan saat mengekspor laporan Excel PO: ' + err.message);
+    }
 }
 
 export function exportPoWord(po) {

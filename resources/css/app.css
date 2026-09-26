@@ -67,6 +67,37 @@
   background: rgba(100, 116, 139, 0.7);
 }
 
+/* High-visibility horizontal scrollbar for wide tables */
+.custom-horizontal-scrollbar,
+.table-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar,
+.table-scroll-container::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-track,
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb,
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover,
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 .leaflet-container {
   font-family: inherit;
   z-index: 10;

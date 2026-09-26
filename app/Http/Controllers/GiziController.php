@@ -246,23 +246,69 @@ class GiziController extends Controller
             );
 
             $po->items()->delete();
+            $groupedItems = [];
             foreach ($workOrder->items as $woItem) {
+                $rawName = $woItem->nama_po ?: $woItem->nama;
+                $normName = mb_strtolower(trim($rawName));
+                $normSatuan = mb_strtolower(trim($woItem->satuan ?? 'kg'));
+                $normJenis = mb_strtolower(trim($woItem->jenis ?? 'bahan_baku'));
+                $groupKey = $normName . '|' . $normSatuan . '|' . $normJenis;
+
+                if (!isset($groupedItems[$groupKey])) {
+                    $groupedItems[$groupKey] = [
+                        'work_order_item_id' => $woItem->id,
+                        'nama' => $rawName,
+                        'kategori' => $woItem->kategori,
+                        'satuan' => $woItem->satuan ?? 'Kg',
+                        'jenis' => $woItem->jenis ?? 'bahan_baku',
+                        'tipe' => $woItem->tipe_porsi === 'alergi' ? 'Alergi' : 'Normal',
+                        'gross_kg' => 0,
+                        'stok_digunakan_kg' => 0,
+                        'qty_beli_po_kg' => 0,
+                        'sumber_pengadaan' => 'Beli PO',
+                        'harga_master' => (float) $woItem->harga_master,
+                        'harga_aktual' => (float) $woItem->harga_master,
+                        'subtotal_aktual' => 0,
+                        'keterangan_list' => [],
+                    ];
+                }
+
+                $gross = (float) $woItem->total_gross_kg;
+                $groupedItems[$groupKey]['gross_kg'] += $gross;
+                $groupedItems[$groupKey]['qty_beli_po_kg'] += $gross;
+                if ($woItem->tipe_porsi === 'alergi') {
+                    $groupedItems[$groupKey]['tipe'] = 'Alergi';
+                }
+                if ($woItem->keterangan && $woItem->keterangan !== '-' && !in_array($woItem->keterangan, $groupedItems[$groupKey]['keterangan_list'])) {
+                    $groupedItems[$groupKey]['keterangan_list'][] = $woItem->keterangan;
+                }
+            }
+
+            foreach ($groupedItems as $gItem) {
+                $subtotal = round($gItem['qty_beli_po_kg'] * $gItem['harga_aktual']);
                 $po->items()->create([
-                    'work_order_item_id' => $woItem->id,
-                    'nama' => $woItem->nama_po ?: $woItem->nama,
-                    'kategori' => $woItem->kategori,
-                    'satuan' => $woItem->satuan ?? 'Kg',
-                    'tipe' => $woItem->tipe_porsi === 'alergi' ? 'Alergi' : 'Normal',
-                    'gross_kg' => $woItem->total_gross_kg,
+                    'work_order_item_id' => $gItem['work_order_item_id'],
+                    'nama' => $gItem['nama'],
+                    'kategori' => $gItem['kategori'],
+                    'satuan' => $gItem['satuan'],
+                    'jenis' => $gItem['jenis'],
+                    'tipe' => $gItem['tipe'],
+                    'gross_kg' => round($gItem['gross_kg'], 4),
                     'stok_digunakan_kg' => 0,
-                    'qty_beli_po_kg' => $woItem->total_gross_kg,
+                    'qty_beli_po_kg' => round($gItem['qty_beli_po_kg'], 4),
                     'sumber_pengadaan' => 'Beli PO',
-                    'harga_master' => $woItem->harga_master,
-                    'harga_aktual' => $woItem->harga_master,
-                    'subtotal_aktual' => $woItem->total_gross_kg * $woItem->harga_master,
-                    'keterangan' => $woItem->keterangan,
+                    'harga_master' => $gItem['harga_master'],
+                    'harga_aktual' => $gItem['harga_aktual'],
+                    'subtotal_aktual' => $subtotal,
+                    'keterangan' => !empty($gItem['keterangan_list']) ? implode('; ', $gItem['keterangan_list']) : null,
                 ]);
             }
+
+            $po->update([
+                'items_count' => count($groupedItems),
+                'total_nominal_master' => $po->items()->sum('subtotal_aktual'),
+                'total_nominal_aktual' => $po->items()->sum('subtotal_aktual'),
+            ]);
         });
 
         return redirect()->route('gizi.daftar-menu')->with('success', 'Rancangan menu berhasil disimpan ke database.');
@@ -346,10 +392,10 @@ class GiziController extends Controller
                     ->where(function ($q) use ($woQuery) {
                         if (is_numeric($woQuery)) {
                             $q->where('id', (int) $woQuery)
-                              ->orWhere('nomor_wo', $woQuery);
+                                ->orWhere('nomor_wo', $woQuery);
                         } else {
                             $q->where('uuid', $woQuery)
-                              ->orWhere('nomor_wo', $woQuery);
+                                ->orWhere('nomor_wo', $woQuery);
                         }
                     })
                     ->with(['items', 'kelompoks'])
@@ -372,8 +418,8 @@ class GiziController extends Controller
             return file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
         }) : [];
 
-        $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan)) 
-            ? $activeWorkOrder->database_pangan 
+        $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan))
+            ? $activeWorkOrder->database_pangan
             : 'csv';
 
         $initialTkpiList = ($defaultSource === 'csv' && !empty($csvData)) ? $csvData : (!empty($ftaData) ? $ftaData : $csvData);
@@ -470,7 +516,7 @@ class GiziController extends Controller
             $fiber = unpack('f', substr($rec, 230, 4))[1] ?? 0;
             $fiber = (!is_nan($fiber) && $fiber >= 0) ? round($fiber, 1) : 0;
 
-            $unpackFloat = function(int $offset) use ($rec): ?float {
+            $unpackFloat = function (int $offset) use ($rec): ?float {
                 $v = unpack('f', substr($rec, $offset, 4))[1] ?? null;
                 if ($v === null || is_nan($v) || $v < 0 || $v > 500000) {
                     return null;
@@ -717,7 +763,7 @@ class GiziController extends Controller
                 $catClean = preg_replace('/^\d+\.\d+\.\s*/', '', $catRaw);
                 $catClean = ucwords(strtolower(trim($catClean)));
 
-                $parseNum = function($val): ?float {
+                $parseNum = function ($val): ?float {
                     $v = trim((string) $val);
                     if ($v === '' || $v === '-' || !is_numeric($v)) {
                         return null;
