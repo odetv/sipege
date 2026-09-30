@@ -111,11 +111,12 @@ const props = defineProps({
         default: () => ({
             fta: [],
             csv: [],
+            tkpi2020: [],
         }),
     },
     selectedSource: {
         type: String,
-        default: "csv",
+        default: "tkpi2020",
     },
     initialStep: {
         type: String,
@@ -1311,7 +1312,7 @@ function selectTkpiItemForBlock(master, block) {
         harga_master: null,
         harga_aktual: null,
         alergen: master.alergen || "",
-        keterangan: "",
+        keterangan: "-",
         tkpi: master,
     });
 
@@ -1463,7 +1464,7 @@ function saveManualBahan() {
                 ? Number(manualBahanForm.value.harga_master)
                 : null,
         alergen: "",
-        keterangan: "",
+        keterangan: "-",
         is_custom: true,
         energi: energiNum,
         protein: proteinNum,
@@ -2005,6 +2006,9 @@ function validateStep2() {
     }
 
     selectedBahanList.value.forEach((b, i) => {
+        if (!b.keterangan || !b.keterangan.trim()) {
+            b.keterangan = "-";
+        }
         if (!b.nama_po || !b.nama_po.trim()) {
             errs["bahan_" + i + "_nama_po"] = "Nama di PO wajib diisi.";
         }
@@ -2970,7 +2974,7 @@ function syncGiziFromBahan() {
         bdd: b.bdd || 100,
         buffer: b.buffer || 0,
         harga_master: b.harga_master || 0,
-        keterangan: b.keterangan || "",
+        keterangan: (b.keterangan && b.keterangan.trim()) ? b.keterangan.trim() : "-",
         tkpi:
             b.tkpi ||
             (props.tkpiList || []).find(
@@ -3656,7 +3660,7 @@ function getPayload(statusStr, stepNumber = 3) {
         nama_menu: namaMenuAktif.value || "Menu MBG",
         siklus_ke: 1,
         status: statusStr,
-        database_pangan: props.selectedSource || "csv",
+        database_pangan: props.selectedSource || "tkpi2020",
         current_step: stepNumber,
         sub_menu_1: subMenuKomponen.value.sub_menu_1 || null,
         sub_menu_2: subMenuKomponen.value.sub_menu_2 || null,
@@ -3696,7 +3700,7 @@ function getPayload(statusStr, stepNumber = 3) {
             totalGrossKg: b.totalGrossKg || 0,
             harga_master: b.harga_master || 0,
             subtotalMaster: b.subtotalMaster || 0,
-            keterangan: b.keterangan || null,
+            keterangan: (b.keterangan && b.keterangan.trim()) ? b.keterangan.trim() : "-",
             nutrisiPK: b.nutrisiPK || null,
             nutrisiPB: b.nutrisiPB || null,
         })),
@@ -3946,7 +3950,7 @@ watch(
                                     it.harga_master !== ""
                                   ? Number(it.harga_master)
                                   : null,
-                        keterangan: it.keterangan || "",
+                        keterangan: (it.keterangan && it.keterangan.trim()) ? it.keterangan.trim() : "-",
                         tkpi: matchedTkpi,
                     };
                 });
@@ -6936,7 +6940,7 @@ watch(
                                                     : 'cursor-pointer',
                                             ]"
                                         >
-                                            Nutri Survey
+                                            NutriSurvey (indo.fta)
                                         </button>
                                         <button
                                             type="button"
@@ -6958,7 +6962,29 @@ watch(
                                                     : 'cursor-pointer',
                                             ]"
                                         >
-                                            Kemenkes
+                                            Kemenkes (tkpi2020.csv)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                selectedBahanList.length ===
+                                                    0 &&
+                                                emit('update-source', 'tkpi2020')
+                                            "
+                                            :disabled="
+                                                selectedBahanList.length > 0
+                                            "
+                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                            :class="[
+                                                selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                                    ? 'bg-white text-primary shadow-xs'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                                selectedBahanList.length > 0
+                                                    ? 'opacity-80 cursor-not-allowed'
+                                                    : 'cursor-pointer',
+                                            ]"
+                                        >
+                                            Modifikasi (tkpi2020.xlsx)
                                         </button>
                                     </div>
                                     <span
@@ -7487,6 +7513,10 @@ watch(
                                                 class="p-2.5 text-left min-w-[150px] border-r border-slate-200/80 whitespace-normal break-words leading-tight"
                                             >
                                                 Keterangan
+                                                <span
+                                                    class="text-rose-500 font-black"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th
                                                 rowspan="2"
@@ -7736,17 +7766,17 @@ watch(
                                                         )
                                                     "
                                                     :class="[
-                                                        'w-full px-2 py-1.5 text-xs font-bold rounded-lg border focus:outline-hidden transition cursor-pointer shadow-2xs text-center',
+                                                        'w-full px-2 py-1.5 text-xs font-bold rounded-lg border focus:outline-hidden transition cursor-pointer shadow-2xs text-center appearance-none [background-image:none]',
                                                         (selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional'
                                                             ? 'bg-amber-50 text-amber-800 border-amber-300 focus:border-amber-500'
                                                             : 'bg-emerald-50 text-emerald-800 border-emerald-300 focus:border-emerald-500'
                                                     ]"
                                                 >
                                                     <option value="bahan_baku">
-                                                        🥗 Bahan Baku
+                                                        Bahan Baku
                                                     </option>
                                                     <option value="operasional">
-                                                        📦 Operasional
+                                                        Operasional
                                                     </option>
                                                 </select>
                                                 <span
@@ -8182,7 +8212,21 @@ watch(
                                                             it.originalIndex
                                                         ].keterangan
                                                     "
-                                                    placeholder="Catatan / spesifikasi..."
+                                                    @blur="
+                                                        if (
+                                                            !selectedBahanList[
+                                                                it.originalIndex
+                                                            ]?.keterangan ||
+                                                            !selectedBahanList[
+                                                                it.originalIndex
+                                                            ]?.keterangan.trim()
+                                                        ) {
+                                                            selectedBahanList[
+                                                                it.originalIndex
+                                                            ].keterangan = '-';
+                                                        }
+                                                    "
+                                                    placeholder="Wajib diisi atau '-'..."
                                                     class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary text-slate-800 placeholder:text-slate-400 font-medium resize-y min-h-[42px] leading-snug break-words"
                                                 ></textarea>
                                             </td>
@@ -11394,10 +11438,12 @@ watch(
                                     class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 text-primary border border-primary/20"
                                 >
                                     {{
-                                        props.selectedSource === "csv" ||
-                                        props.selectedSource === "tkpi2020"
-                                            ? "Kemenkes"
-                                            : "Nutri Survey"
+                                        props.selectedSource === "tkpi2020" ||
+                                        props.selectedSource === "xlsx"
+                                            ? "Modifikasi (tkpi2020.xlsx)"
+                                            : (props.selectedSource === "csv"
+                                                ? "Kemenkes (tkpi2020.csv)"
+                                                : "NutriSurvey (indo.fta)")
                                     }}
                                 </span>
                             </div>

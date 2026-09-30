@@ -1412,10 +1412,12 @@ function getSubMenuLabelForBahan(it) {
                                     class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 text-primary border border-primary/20"
                                 >
                                     {{
-                                        databasePangan === "csv" ||
-                                        databasePangan === "tkpi2020"
-                                            ? "Kemenkes"
-                                            : "Nutri Survey"
+                                        databasePangan === "tkpi2020" ||
+                                        databasePangan === "xlsx"
+                                            ? "Modifikasi (tkpi2020.xlsx)"
+                                            : (databasePangan === "csv"
+                                                ? "Kemenkes (tkpi2020.csv)"
+                                                : "NutriSurvey (indo.fta)")
                                     }}
                                 </span>
                             </div>

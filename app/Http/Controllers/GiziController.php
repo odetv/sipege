@@ -147,7 +147,7 @@ class GiziController extends Controller
                     'nama_menu' => $validated['nama_menu'],
                     'siklus_ke' => $validated['siklus_ke'] ?? 1,
                     'status' => $validated['status'],
-                    'database_pangan' => $validated['database_pangan'] ?? 'fta',
+                    'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
                     'current_step' => $validated['current_step'] ?? 1,
                     'sub_menu_1' => $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
                     'sub_menu_2' => $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
@@ -418,11 +418,20 @@ class GiziController extends Controller
             return file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
         }) : [];
 
+        $xlsxData = $needsFullTkpi ? Cache::rememberForever('tkpi_xlsx_data_parsed', function () {
+            return file_exists(database_path('data/TKPI2020.xlsx')) ? $this->parseXlsxData(database_path('data/TKPI2020.xlsx')) : [];
+        }) : [];
+
         $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan))
             ? $activeWorkOrder->database_pangan
-            : 'csv';
+            : 'tkpi2020';
 
-        $initialTkpiList = ($defaultSource === 'csv' && !empty($csvData)) ? $csvData : (!empty($ftaData) ? $ftaData : $csvData);
+        $initialTkpiList = match ($defaultSource) {
+            'fta' => (!empty($ftaData) ? $ftaData : (!empty($xlsxData) ? $xlsxData : $csvData)),
+            'tkpi2020', 'xlsx' => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
+            'csv' => (!empty($csvData) ? $csvData : (!empty($xlsxData) ? $xlsxData : $ftaData)),
+            default => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
+        };
 
         return Inertia::render('Gizi/Index', [
             'user' => $user,
@@ -433,6 +442,8 @@ class GiziController extends Controller
             'tkpiDatasets' => [
                 'fta' => $ftaData,
                 'csv' => $csvData,
+                'tkpi2020' => $xlsxData,
+                'xlsx' => $xlsxData,
             ],
             'activeTab' => $activeTab,
             'initialStep' => $step,
@@ -466,6 +477,11 @@ class GiziController extends Controller
         $csvPath = database_path('data/tkpi2020.csv');
         if (file_exists($csvPath)) {
             return $this->parseCsvData($csvPath);
+        }
+
+        $xlsxPath = database_path('data/TKPI2020.xlsx');
+        if (file_exists($xlsxPath)) {
+            return $this->parseXlsxData($xlsxPath);
         }
 
         return [];
@@ -547,7 +563,7 @@ class GiziController extends Controller
                 'nama' => ucwords(strtolower($name)),
                 'kategori' => $kategori,
                 'kategori_raw' => $kategori,
-                'sumber' => 'Nutri Survey (.fta)',
+                'sumber' => 'NutriSurvey (indo.fta)',
                 'air' => null,
                 'energi' => $energy,
                 'protein' => $protein,
@@ -806,7 +822,7 @@ class GiziController extends Controller
                     'nama' => $name,
                     'kategori' => $catClean ?: 'Lainnya',
                     'kategori_raw' => $catRaw,
-                    'sumber' => $source ?: 'Kemenkes (.csv)',
+                    'sumber' => $source ? "Kemenkes (tkpi2020.csv) - $source" : 'Kemenkes (tkpi2020.csv)',
                     'air' => $air,
                     'energi' => $energy,
                     'protein' => $protein,
@@ -836,6 +852,201 @@ class GiziController extends Controller
                 ];
             }
             fclose($handle);
+        }
+
+        return $items;
+    }
+
+    /**
+     * Membaca dan mem-parsing data resmi TKPI dari database/data/TKPI2020.xlsx (Excel TKPI 2020).
+     *
+     * @param string $xlsxPath
+     * @return array<int, array<string, mixed>>
+     */
+    private function parseXlsxData(string $xlsxPath): array
+    {
+        if (!file_exists($xlsxPath)) {
+            return [];
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($xlsxPath) !== true) {
+            return [];
+        }
+
+        // 1. Baca shared strings
+        $sharedStrings = [];
+        $ssXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($ssXml) {
+            $xml = simplexml_load_string($ssXml);
+            if ($xml && isset($xml->si)) {
+                foreach ($xml->si as $si) {
+                    if (isset($si->t)) {
+                        $sharedStrings[] = (string) $si->t;
+                    } elseif (isset($si->r)) {
+                        $t = '';
+                        foreach ($si->r as $r) {
+                            $t .= (string) $r->t;
+                        }
+                        $sharedStrings[] = $t;
+                    } else {
+                        $sharedStrings[] = '';
+                    }
+                }
+            }
+        }
+
+        // 2. Baca sheet1.xml
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+
+        if (!$sheetXml) {
+            return [];
+        }
+
+        $xml = simplexml_load_string($sheetXml);
+        if (!$xml || !isset($xml->sheetData)) {
+            return [];
+        }
+
+        $categoryPrefixMap = [
+            'A' => ['Serealia & Hasil Olahannya', '4.1. SEREALIA DAN HASIL OLAHANNYA'],
+            'B' => ['Umbi-umbian & Olahannya', '4.2. UMBI BERPATI DAN HASIL OLAHANNYA'],
+            'C' => ['Kacang-kacangan & Olahannya', '4.3. KACANG, BIJI, BEAN DAN HASIL OLAHANNYA'],
+            'D' => ['Sayuran & Olahan Sayur', '4.4. SAYURAN DAN HASIL OLAHANNYA'],
+            'E' => ['Buah-buahan', '4.5. BUAH DAN HASIL OLAHANNYA'],
+            'F' => ['Daging & Unggas', '4.6. DAGING, UNGGAS DAN HASIL OLAHANNYA'],
+            'G' => ['Ikan & Hasil Laut', '4.7. IKAN, KERANG, UDANG DAN HASIL OLAHANNYA'],
+            'H' => ['Telur', '4.8. TELUR DAN HASIL OLAHANNYA'],
+            'J' => ['Susu & Olahannya', '4.9. SUSU DAN HASIL OLAHANNYA'],
+            'K' => ['Minyak & Lemak', '4.10. LEMAK DAN MINYAK'],
+            'M' => ['Gula & Manisan', '4.11. GULA, SIRUP DAN KONFEKSIONERI'],
+            'N' => ['Bumbu', '4.12. BUMBU'],
+            'Q' => ['Minuman & Olahan Lainnya', '4.13. MINUMAN'],
+        ];
+
+        $parseNum = function ($val): ?float {
+            if ($val === null || $val === '') {
+                return null;
+            }
+            $v = trim((string) $val);
+            if ($v === '' || $v === '-' || !is_numeric($v)) {
+                return null;
+            }
+            return round((float) $v, 2);
+        };
+
+        $items = [];
+        $isHeader = true;
+
+        foreach ($xml->sheetData->row as $row) {
+            if ($isHeader) {
+                $isHeader = false;
+                continue;
+            }
+
+            $rowCells = [];
+            foreach ($row->c as $cell) {
+                $cellRef = (string) $cell['r'];
+                if (!preg_match('/([A-Z]+)(\d+)/', $cellRef, $matches)) {
+                    continue;
+                }
+                $colLetters = $matches[1];
+                $colIdx = 0;
+                for ($i = 0; $i < strlen($colLetters); $i++) {
+                    $colIdx = $colIdx * 26 + (ord($colLetters[$i]) - ord('A') + 1);
+                }
+                $colIdx--;
+
+                $type = (string) $cell['t'];
+                $val = isset($cell->v) ? (string) $cell->v : '';
+                if ($type === 's') {
+                    $val = $sharedStrings[(int) $val] ?? '';
+                }
+                $rowCells[$colIdx] = $val;
+            }
+
+            $code = trim($rowCells[1] ?? '');
+            $name = trim($rowCells[2] ?? '');
+            if ($code === '' && $name === '') {
+                continue;
+            }
+
+            $source = trim($rowCells[3] ?? '');
+            $prefixChar = strtoupper(substr($code, 0, 1));
+            $nameLower = ' ' . strtolower($name) . ' ';
+
+            if (isset($categoryPrefixMap[$prefixChar])) {
+                $catClean = $categoryPrefixMap[$prefixChar][0];
+                $catRaw = $categoryPrefixMap[$prefixChar][1];
+            } else {
+                $catClean = $this->categorizeFtaFood($nameLower);
+                $catRaw = '4.14. ' . strtoupper($catClean);
+            }
+
+            $alergen = $this->detectFtaAllergen($nameLower);
+
+            $bddVal = $parseNum($rowCells[5] ?? null);
+            $bdd = ($bddVal !== null && $bddVal > 0) ? $bddVal : 100.0;
+
+            $air = $parseNum($rowCells[6] ?? null);
+            $energy = (float) ($parseNum($rowCells[7] ?? null) ?? 0);
+            $protein = (float) ($parseNum($rowCells[8] ?? null) ?? 0);
+            $fat = (float) ($parseNum($rowCells[9] ?? null) ?? 0);
+            $carb = (float) ($parseNum($rowCells[10] ?? null) ?? 0);
+            $fiber = $parseNum($rowCells[11] ?? null);
+            $ash = $parseNum($rowCells[12] ?? null);
+            $calcium = $parseNum($rowCells[13] ?? null);
+            $phosphorus = $parseNum($rowCells[14] ?? null);
+            $iron = $parseNum($rowCells[15] ?? null);
+            $sodium = $parseNum($rowCells[16] ?? null);
+            $potassium = $parseNum($rowCells[17] ?? null);
+            $copper = $parseNum($rowCells[18] ?? null);
+            $zinc = $parseNum($rowCells[19] ?? null);
+            $retinol = $parseNum($rowCells[20] ?? null);
+            $betaCarotene = $parseNum($rowCells[21] ?? null);
+            $caroteneTotal = $parseNum($rowCells[22] ?? null);
+            $thiamin = $parseNum($rowCells[23] ?? null);
+            $riboflavin = $parseNum($rowCells[24] ?? null);
+            $niacin = $parseNum($rowCells[25] ?? null);
+            $vitaminC = $parseNum($rowCells[26] ?? null);
+
+            $id = $code ?: ('TKPI-' . (count($items) + 1));
+
+            $items[] = [
+                'id' => $id,
+                'code' => $code,
+                'nama' => $name,
+                'kategori' => $catClean,
+                'kategori_raw' => $catRaw,
+                'sumber' => $source ? "Modifikasi (tkpi2020.xlsx) - $source" : 'Modifikasi (tkpi2020.xlsx)',
+                'air' => $air,
+                'energi' => $energy,
+                'protein' => $protein,
+                'lemak' => $fat,
+                'karbohidrat' => $carb,
+                'serat' => $fiber,
+                'abu' => $ash,
+                'kalsium' => $calcium,
+                'fosfor' => $phosphorus,
+                'besi' => $iron,
+                'natrium' => $sodium,
+                'kalium' => $potassium,
+                'tembaga' => $copper,
+                'seng' => $zinc,
+                'retinol' => $retinol,
+                'b_karoten' => $betaCarotene,
+                'karoten_total' => $caroteneTotal,
+                'tiamin' => $thiamin,
+                'riboflavin' => $riboflavin,
+                'niasin' => $niacin,
+                'vitamin_c' => $vitaminC,
+                'bdd' => $bdd,
+                'fmm' => 100,
+                'buffer' => 4,
+                'harga_master' => null,
+                'alergen' => $alergen,
+            ];
         }
 
         return $items;

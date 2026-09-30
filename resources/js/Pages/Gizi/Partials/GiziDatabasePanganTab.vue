@@ -24,11 +24,12 @@ const props = defineProps({
         default: () => ({
             fta: [],
             csv: [],
+            tkpi2020: [],
         }),
     },
     selectedSource: {
         type: String,
-        default: "fta",
+        default: "tkpi2020",
     },
 });
 
@@ -132,16 +133,17 @@ function formatVal(val) {
                             perencanaan & rancang formula menu:
                             <strong class="text-slate-800">{{
                                 selectedSource === "fta"
-                                    ? `Nutri Survey (.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
-                                    : `Kemenkes (.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`
-                            }}</strong
-                            >.
+                                    ? `NutriSurvey (indo.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
+                                    : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
+                                        ? `Modifikasi (tkpi2020.xlsx - ${tkpiDatasets.tkpi2020?.length || tkpiDatasets.xlsx?.length || (selectedSource === "tkpi2020" ? tkpiItems.length : 1158)} Bahan)`
+                                        : `Kemenkes (tkpi2020.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`)
+                            }}</strong>.
                         </CardDescription>
                     </div>
 
-                    <!-- Source Dataset Switcher -->
+                    <!-- Source Dataset Switcher (3 Pilihan Database Pangan) -->
                     <div
-                        class="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto"
+                        class="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto"
                     >
                         <button
                             type="button"
@@ -152,7 +154,7 @@ function formatVal(val) {
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database Nutri Survey (.fta)"
+                            title="Gunakan Database NutriSurvey (indo.fta)"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
@@ -162,7 +164,7 @@ function formatVal(val) {
                                         : 'bg-slate-300'
                                 "
                             ></span>
-                            <span>Nutri Survey (.fta)</span>
+                            <span>NutriSurvey (indo.fta)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="
@@ -189,7 +191,7 @@ function formatVal(val) {
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database Kemenkes (.csv)"
+                            title="Gunakan Database Kemenkes (tkpi2020.csv)"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
@@ -199,7 +201,7 @@ function formatVal(val) {
                                         : 'bg-slate-300'
                                 "
                             ></span>
-                            <span>Kemenkes (.csv)</span>
+                            <span>Kemenkes (tkpi2020.csv)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="
@@ -213,6 +215,44 @@ function formatVal(val) {
                                     (selectedSource === "csv"
                                         ? tkpiItems.length
                                         : 1066)
+                                }}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="emit('update-source', 'tkpi2020')"
+                            :class="[
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                    ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
+                                    : 'text-slate-600 hover:text-slate-900',
+                            ]"
+                            title="Gunakan Database Modifikasi (tkpi2020.xlsx)"
+                        >
+                            <span
+                                class="w-2 h-2 rounded-full"
+                                :class="
+                                    selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                        ? 'bg-primary'
+                                        : 'bg-slate-300'
+                                "
+                            ></span>
+                            <span>Modifikasi (tkpi2020.xlsx)</span>
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                                :class="
+                                    selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-slate-200 text-slate-600'
+                                "
+                            >
+                                {{
+                                    tkpiDatasets.tkpi2020?.length ||
+                                    tkpiDatasets.xlsx?.length ||
+                                    (selectedSource === "tkpi2020" || selectedSource === "xlsx"
+                                        ? tkpiItems.length
+                                        : 1158)
                                 }}
                             </span>
                         </button>
@@ -282,8 +322,10 @@ function formatVal(val) {
                         >
                             {{
                                 selectedSource === "fta"
-                                    ? "Nutri Survey (.fta)"
-                                    : "Kemenkes (.csv)"
+                                    ? "NutriSurvey (indo.fta)"
+                                    : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
+                                        ? "Modifikasi (tkpi2020.xlsx)"
+                                        : "Kemenkes (tkpi2020.csv)")
                             }}
                             <span class="text-xs font-medium text-slate-500"
                                 >({{ tkpiItems.length }} Bahan)</span

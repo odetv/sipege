@@ -64,13 +64,15 @@ export function buildWorkOrderFullExportData(wo) {
     const statusMenu = wo.status_wo || raw.status || 'Draft';
     
     let rawDb = raw.database_pangan || wo.database_pangan || '';
-    let dbPangan = 'Kemenkes';
+    let dbPangan = 'Kemenkes (tkpi2020.csv)';
     if (rawDb) {
         const s = String(rawDb).toLowerCase().trim();
-        if (s === 'csv' || s === 'tkpi2020' || s.includes('kemenkes')) {
-            dbPangan = 'Kemenkes';
+        if (s === 'tkpi2020' || s === 'xlsx' || s.includes('tkpi') || s.includes('modifikasi')) {
+            dbPangan = 'Modifikasi (tkpi2020.xlsx)';
+        } else if (s === 'csv' || s.includes('kemenkes')) {
+            dbPangan = 'Kemenkes (tkpi2020.csv)';
         } else if (s === 'fta' || s.includes('nutri')) {
-            dbPangan = 'Nutri Survey';
+            dbPangan = 'NutriSurvey (indo.fta)';
         } else {
             dbPangan = rawDb;
         }

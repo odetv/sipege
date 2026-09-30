@@ -66,10 +66,10 @@ const props = defineProps({
     },
 });
 
-// Sumber Dataset TKPI Aktif (Default: 'csv' Kemenkes atau dari Work Order yang diedit)
+// Sumber Dataset TKPI Aktif (Default: 'tkpi2020' Modifikasi atau dari Work Order yang diedit)
 const initialSource = (props.activeWorkOrder && props.activeWorkOrder.database_pangan)
     ? props.activeWorkOrder.database_pangan
-    : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "csv" : "csv"));
+    : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "tkpi2020" : "tkpi2020"));
 
 const selectedTkpiSource = ref(initialSource);
 
