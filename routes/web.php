@@ -54,6 +54,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/work-order', [GiziController::class, 'storeWorkOrder'])->name('work-order.store');
         Route::put('/work-order/{id}', [GiziController::class, 'updateWorkOrder'])->name('work-order.update');
         Route::delete('/work-order/{id}', [GiziController::class, 'destroyWorkOrder'])->name('work-order.destroy');
+
+        // FatSecret API Proxy & Search
+        Route::get('/api/fatsecret/search', [GiziController::class, 'searchFatSecret'])->name('fatsecret.search');
+        Route::get('/api/fatsecret/food/{id}', [GiziController::class, 'getFatSecretFood'])->name('fatsecret.food');
     });
 
     // Keuangan SPPG (12 Sub-menu Lengkap)

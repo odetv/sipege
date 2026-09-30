@@ -422,6 +422,9 @@ class GiziController extends Controller
             return file_exists(database_path('data/TKPI2020.xlsx')) ? $this->parseXlsxData(database_path('data/TKPI2020.xlsx')) : [];
         }) : [];
 
+        $fatsecretService = app(\App\Services\FatSecretService::class);
+        $fatsecretData = $needsFullTkpi ? $fatsecretService->getPopularFoods() : [];
+
         $defaultSource = ($activeWorkOrder && !empty($activeWorkOrder->database_pangan))
             ? $activeWorkOrder->database_pangan
             : 'tkpi2020';
@@ -430,6 +433,7 @@ class GiziController extends Controller
             'fta' => (!empty($ftaData) ? $ftaData : (!empty($xlsxData) ? $xlsxData : $csvData)),
             'tkpi2020', 'xlsx' => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
             'csv' => (!empty($csvData) ? $csvData : (!empty($xlsxData) ? $xlsxData : $ftaData)),
+            'fatsecret' => (!empty($fatsecretData) ? $fatsecretData : (!empty($xlsxData) ? $xlsxData : $csvData)),
             default => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
         };
 
@@ -444,6 +448,7 @@ class GiziController extends Controller
                 'csv' => $csvData,
                 'tkpi2020' => $xlsxData,
                 'xlsx' => $xlsxData,
+                'fatsecret' => $fatsecretData,
             ],
             'activeTab' => $activeTab,
             'initialStep' => $step,
@@ -1235,5 +1240,45 @@ class GiziController extends Controller
         if (preg_match('/\b(kacang tanah muda|kacang tanah kulit)\b/i', $name)) return 43;
 
         return 100;
+    }
+
+    /**
+     * Endpoint API AJAX untuk pencarian bahan pangan live via FatSecret API
+     */
+    public function searchFatSecret(\Illuminate\Http\Request $request, \App\Services\FatSecretService $fatSecretService)
+    {
+        $query = (string) $request->query('q', '');
+        $page = (int) $request->query('page', 0);
+
+        if (empty(trim($query))) {
+            $popular = $fatSecretService->getPopularFoods();
+            return response()->json([
+                'success' => true,
+                'data' => $popular,
+                'total' => count($popular),
+            ]);
+        }
+
+        $result = $fatSecretService->searchFoods($query, $page);
+        return response()->json($result);
+    }
+
+    /**
+     * Endpoint API AJAX untuk mengambil detail gizi bahan pangan FatSecret
+     */
+    public function getFatSecretFood(string $id, \App\Services\FatSecretService $fatSecretService)
+    {
+        $food = $fatSecretService->getFoodDetails($id);
+        if (!$food) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Detail bahan tidak ditemukan pada FatSecret API.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $food,
+        ]);
     }
 }

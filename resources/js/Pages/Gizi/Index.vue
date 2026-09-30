@@ -32,6 +32,8 @@ const props = defineProps({
         default: () => ({
             fta: [],
             csv: [],
+            tkpi2020: [],
+            fatsecret: [],
         }),
     },
     activeTab: {
@@ -52,7 +54,7 @@ const props = defineProps({
     },
     defaultSource: {
         type: String,
-        default: "csv",
+        default: "tkpi2020",
     },
     stats: {
         type: Object,

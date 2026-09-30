@@ -112,6 +112,7 @@ const props = defineProps({
             fta: [],
             csv: [],
             tkpi2020: [],
+            fatsecret: [],
         }),
     },
     selectedSource: {
@@ -1045,8 +1046,26 @@ const varianAlergiTelurBahan = computed(() => {
     return selectedBahanList.value.filter((b) => b.alergen !== "Telur");
 });
 
-// Database Master TKPI Aktif (NutriSurvey Indo .fta / Kemenkes .csv)
+// Database Master TKPI Aktif (NutriSurvey Indo .fta / Kemenkes .csv / FatSecret)
+const extraFatsecretItems = ref([]);
+
+function mergeFatsecretItems(newItems) {
+    if (!Array.isArray(newItems)) return;
+    const existingIds = new Set([
+        ...(props.tkpiDatasets?.fatsecret || []).map((x) => x.id),
+        ...extraFatsecretItems.value.map((x) => x.id),
+    ]);
+    const toAdd = newItems.filter((it) => it && it.id && !existingIds.has(it.id));
+    if (toAdd.length > 0) {
+        extraFatsecretItems.value = [...extraFatsecretItems.value, ...toAdd];
+    }
+}
+
 const tkpiItems = computed(() => {
+    if (props.selectedSource === "fatsecret") {
+        const base = props.tkpiDatasets?.fatsecret || props.tkpiList || [];
+        return [...base, ...extraFatsecretItems.value];
+    }
     if (
         props.tkpiDatasets &&
         props.tkpiDatasets[props.selectedSource] &&
@@ -1247,8 +1266,23 @@ function getSearchQueryForBlock(blockId) {
     return searchTkpiQueryPerBlock.value[blockId] || "";
 }
 
+const fatsecretComboboxTimers = {};
 function setSearchQueryForBlock(blockId, val) {
     searchTkpiQueryPerBlock.value[blockId] = val;
+    if (props.selectedSource === "fatsecret" && val && val.trim().length >= 2) {
+        clearTimeout(fatsecretComboboxTimers[blockId]);
+        fatsecretComboboxTimers[blockId] = setTimeout(async () => {
+            try {
+                const res = await fetch(`/gizi/api/fatsecret/search?q=${encodeURIComponent(val.trim())}`);
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                    mergeFatsecretItems(json.data);
+                }
+            } catch (e) {
+                console.error("FatSecret query error:", e);
+            }
+        }, 400);
+    }
 }
 
 function toggleComboboxForBlock(blockId) {
@@ -6986,6 +7020,28 @@ watch(
                                         >
                                             Modifikasi (tkpi2020.xlsx)
                                         </button>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                selectedBahanList.length ===
+                                                    0 &&
+                                                emit('update-source', 'fatsecret')
+                                            "
+                                            :disabled="
+                                                selectedBahanList.length > 0
+                                            "
+                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                                            :class="[
+                                                selectedSource === 'fatsecret'
+                                                    ? 'bg-white text-primary shadow-xs font-black'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                                selectedBahanList.length > 0
+                                                    ? 'opacity-80 cursor-not-allowed'
+                                                    : 'cursor-pointer',
+                                            ]"
+                                        >
+                                            FatSecret (fatsecret.com)
+                                        </button>
                                     </div>
                                     <span
                                         v-if="selectedBahanList.length > 0"
@@ -11438,12 +11494,13 @@ watch(
                                     class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 text-primary border border-primary/20"
                                 >
                                     {{
-                                        props.selectedSource === "tkpi2020" ||
-                                        props.selectedSource === "xlsx"
-                                            ? "Modifikasi (tkpi2020.xlsx)"
-                                            : (props.selectedSource === "csv"
-                                                ? "Kemenkes (tkpi2020.csv)"
-                                                : "NutriSurvey (indo.fta)")
+                                        props.selectedSource === "fatsecret"
+                                            ? "FatSecret (fatsecret.com)"
+                                            : (props.selectedSource === "tkpi2020" || props.selectedSource === "xlsx"
+                                                ? "Modifikasi (tkpi2020.xlsx)"
+                                                : (props.selectedSource === "csv"
+                                                    ? "Kemenkes (tkpi2020.csv)"
+                                                    : "NutriSurvey (indo.fta)"))
                                     }}
                                 </span>
                             </div>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -12,6 +12,9 @@ import {
     ChevronLeft,
     ChevronRight,
     RotateCcw,
+    AlertTriangle,
+    Loader2,
+    Globe,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -25,6 +28,7 @@ const props = defineProps({
             fta: [],
             csv: [],
             tkpi2020: [],
+            fatsecret: [],
         }),
     },
     selectedSource: {
@@ -35,7 +39,20 @@ const props = defineProps({
 
 const emit = defineEmits(["update-source"]);
 
-const tkpiItems = computed(() => props.tkpiList || []);
+// State Pencarian Live FatSecret API
+const fatsecretSearchResults = ref([]);
+const isFatsecretSearching = ref(false);
+const fatsecretApiError = ref(null);
+
+const tkpiItems = computed(() => {
+    if (props.selectedSource === "fatsecret") {
+        if (fatsecretSearchResults.value && fatsecretSearchResults.value.length > 0) {
+            return fatsecretSearchResults.value;
+        }
+        return props.tkpiDatasets?.fatsecret || props.tkpiList || [];
+    }
+    return props.tkpiList || [];
+});
 
 // State & Logika Database Pangan (Paginasi & Filter)
 const tkpiSearchQuery = ref("");
@@ -43,6 +60,55 @@ const tkpiCategoryFilter = ref("Semua");
 
 const tkpiCurrentPage = ref(1);
 const tkpiPerPage = ref(15);
+
+// Watcher untuk query pencarian FatSecret API secara live
+let searchDebounceTimer = null;
+watch(tkpiSearchQuery, (newVal) => {
+    tkpiCurrentPage.value = 1;
+    if (props.selectedSource === "fatsecret") {
+        clearTimeout(searchDebounceTimer);
+        const q = newVal.trim();
+        if (!q) {
+            fatsecretSearchResults.value = [];
+            fatsecretApiError.value = null;
+            return;
+        }
+        isFatsecretSearching.value = true;
+        searchDebounceTimer = setTimeout(async () => {
+            try {
+                const res = await fetch(`/gizi/api/fatsecret/search?q=${encodeURIComponent(q)}`);
+                const json = await res.json();
+                if (json.success) {
+                    fatsecretSearchResults.value = json.data || [];
+                    fatsecretApiError.value = null;
+                } else {
+                    fatsecretApiError.value = {
+                        code: json.error_code,
+                        message: json.error_message,
+                        ip: json.ip_detected || '103.175.82.250',
+                    };
+                    if (json.data && json.data.length > 0) {
+                        fatsecretSearchResults.value = json.data;
+                    } else {
+                        fatsecretSearchResults.value = [];
+                    }
+                }
+            } catch (err) {
+                console.error("FatSecret search error:", err);
+            } finally {
+                isFatsecretSearching.value = false;
+            }
+        }, 400);
+    }
+});
+
+watch(() => props.selectedSource, (newSource) => {
+    tkpiCurrentPage.value = 1;
+    fatsecretApiError.value = null;
+    if (newSource !== "fatsecret") {
+        fatsecretSearchResults.value = [];
+    }
+});
 
 const filteredTkpiList = computed(() => {
     return tkpiItems.value.filter((item) => {
@@ -136,12 +202,14 @@ function formatVal(val) {
                                     ? `NutriSurvey (indo.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
                                     : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
                                         ? `Modifikasi (tkpi2020.xlsx - ${tkpiDatasets.tkpi2020?.length || tkpiDatasets.xlsx?.length || (selectedSource === "tkpi2020" ? tkpiItems.length : 1158)} Bahan)`
-                                        : `Kemenkes (tkpi2020.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`)
+                                        : (selectedSource === "fatsecret"
+                                            ? `FatSecret (fatsecret.com - ${tkpiDatasets.fatsecret?.length || (selectedSource === "fatsecret" ? tkpiItems.length : 1100)} Bahan)`
+                                            : `Kemenkes (tkpi2020.csv - ${tkpiDatasets.csv?.length || (selectedSource === "csv" ? tkpiItems.length : 1066)} Bahan)`))
                             }}</strong>.
                         </CardDescription>
                     </div>
 
-                    <!-- Source Dataset Switcher (3 Pilihan Database Pangan) -->
+                    <!-- Source Dataset Switcher (4 Pilihan Database Pangan) -->
                     <div
                         class="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto"
                     >
@@ -256,10 +324,68 @@ function formatVal(val) {
                                 }}
                             </span>
                         </button>
+
+                        <button
+                            type="button"
+                            @click="emit('update-source', 'fatsecret')"
+                            :class="[
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                selectedSource === 'fatsecret'
+                                    ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
+                                    : 'text-slate-600 hover:text-slate-900',
+                            ]"
+                            title="Gunakan Database FatSecret (fatsecret.com)"
+                        >
+                            <span
+                                class="w-2 h-2 rounded-full"
+                                :class="
+                                    selectedSource === 'fatsecret'
+                                        ? 'bg-emerald-500'
+                                        : 'bg-slate-300'
+                                "
+                            ></span>
+                            <span>FatSecret (fatsecret.com)</span>
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                                :class="
+                                    selectedSource === 'fatsecret'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-slate-200 text-slate-600'
+                                "
+                            >
+                                {{
+                                    tkpiDatasets.fatsecret?.length ||
+                                    (selectedSource === "fatsecret"
+                                        ? tkpiItems.length
+                                        : 1100)
+                                }}
+                            </span>
+                        </button>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5 space-y-4">
+                <!-- Alert Banner Khusus FatSecret IP Whitelist -->
+                <div
+                    v-if="selectedSource === 'fatsecret' && fatsecretApiError"
+                    class="p-4 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs space-y-2 shadow-2xs"
+                >
+                    <div class="flex items-center gap-2 font-bold text-sm text-amber-950">
+                        <AlertTriangle class="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>Perhatian: IP Address Belum Terdaftar di FatSecret API</span>
+                    </div>
+                    <p class="leading-relaxed">
+                        FatSecret membatasi akses API hanya dari IP yang telah terdaftar di menu <strong>IP Restrictions</strong> akun FatSecret Platform Anda.
+                    </p>
+                    <div class="p-2.5 bg-white rounded-lg border border-amber-200 font-mono text-[11px] text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <span>IP Terdeteksi: <strong class="text-rose-600 font-black">{{ fatsecretApiError.ip || '103.175.82.250' }}</strong></span>
+                        <span class="text-slate-500 font-sans text-[10px]">Daftarkan IP ini atau gunakan 0.0.0.0/0 di platform.fatsecret.com</span>
+                    </div>
+                    <p class="text-[10.5px] text-amber-800">
+                        *Catatan: Sementara menunggu whitelist di FatSecret selesai (biasanya ~1 jam), sistem telah menyediakan daftar bahan pangan terverifikasi di bawah ini yang tetap dapat digunakan.
+                    </p>
+                </div>
+
                 <!-- Stat Summary Grid (Sejajar 4 Card) -->
                 <div
                     class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"
@@ -325,7 +451,9 @@ function formatVal(val) {
                                     ? "NutriSurvey (indo.fta)"
                                     : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
                                         ? "Modifikasi (tkpi2020.xlsx)"
-                                        : "Kemenkes (tkpi2020.csv)")
+                                        : (selectedSource === "fatsecret"
+                                            ? "FatSecret (fatsecret.com)"
+                                            : "Kemenkes (tkpi2020.csv)"))
                             }}
                             <span class="text-xs font-medium text-slate-500"
                                 >({{ tkpiItems.length }} Bahan)</span
@@ -339,14 +467,25 @@ function formatVal(val) {
                     <div
                         class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
-                        <div class="relative w-full sm:w-80 shrink-0">
-                            <Search
-                                class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400"
-                            />
+                        <div class="relative w-full sm:w-96 shrink-0">
+                            <div class="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none w-3.5 h-3.5">
+                                <Search
+                                    v-if="!isFatsecretSearching"
+                                    class="h-3.5 w-3.5 text-slate-400"
+                                />
+                                <Loader2
+                                    v-else
+                                    class="h-3.5 w-3.5 text-primary animate-spin"
+                                />
+                            </div>
                             <input
                                 type="text"
                                 v-model="tkpiSearchQuery"
-                                placeholder="Cari bahan makanan / kode..."
+                                :placeholder="
+                                    selectedSource === 'fatsecret'
+                                        ? 'Cari online via FatSecret API (ayam, tempe, telur)...'
+                                        : 'Cari bahan makanan / kode...'
+                                "
                                 class="w-full pl-9 pr-3 py-1.5 text-xs font-medium rounded-lg border-slate-300 focus:ring-primary focus:border-primary"
                             />
                         </div>

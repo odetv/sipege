@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'fatsecret' => [
+        'client_id' => env('FATSECRET_CLIENT_ID', '23aaa6c30de54f859ba35e602cb11561'),
+        'client_secret' => env('FATSECRET_CLIENT_SECRET', 'd70a526703bc4e4f8bcb46e771a932b6'),
+    ],
+
 ];
