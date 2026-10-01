@@ -19,6 +19,26 @@ export const SATUAN_LIST = [
 export const SATUAN_VALUES = SATUAN_LIST.map((s) => s.value);
 
 /**
+ * Normalisasi satuan ke format standar kanonikal (misal: "Liter", "L" -> "L", "Gram" -> "g", "Kilogram" -> "Kg")
+ */
+export function normalizeSatuan(satuan) {
+    if (!satuan) return "Kg";
+    const sTrim = String(satuan).trim();
+    const sLower = sTrim.toLowerCase();
+    if (sLower === "liter" || sLower === "l") return "L";
+    if (sLower === "kg" || sLower === "kilogram") return "Kg";
+    if (sLower === "g" || sLower === "gram") return "g";
+    if (sLower === "ml" || sLower === "mililiter") return "ml";
+    if (sLower === "pcs" || sLower === "pieces") return "pcs";
+    if (sLower === "bks" || sLower === "bungkus") return "bks";
+    if (sLower === "buah" || sLower === "bh") return "buah";
+    if (sLower === "lonjor") return "lonjor";
+    if (sLower === "ember") return "ember";
+    if (sLower === "jirigen") return "jirigen";
+    return satuan;
+}
+
+/**
  * Format kuantitas kotor sesuai satuan
  */
 export function formatGrossQty(qty, satuan = "Kg") {
@@ -72,14 +92,7 @@ export function getGroupedUnitList(items, qtyKey = "totalGrossKg") {
         const qty = Number(val || 0);
         if (qty <= 0) return;
 
-        let canonicalUnit = rawSatuan;
-        if (sLower === "kg" || sLower === "kilogram") canonicalUnit = "Kg";
-        else if (sLower === "g" || sLower === "gram") canonicalUnit = "g";
-        else if (sLower === "l" || sLower === "liter") canonicalUnit = "L";
-        else if (sLower === "ml") canonicalUnit = "ml";
-        else if (sLower === "pcs") canonicalUnit = "pcs";
-        else if (sLower === "bks" || sLower === "bungkus") canonicalUnit = "bks";
-        else if (sLower === "buah") canonicalUnit = "buah";
+        const canonicalUnit = normalizeSatuan(rawSatuan);
 
         unitGroups[canonicalUnit] = (unitGroups[canonicalUnit] || 0) + qty;
     });

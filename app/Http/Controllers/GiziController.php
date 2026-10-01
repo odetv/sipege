@@ -124,6 +124,7 @@ class GiziController extends Controller
             'total_anggaran_master' => ['nullable', 'numeric'],
             'items' => ['nullable', 'array'],
             'kelompoks' => ['nullable', 'array'],
+            'catatan' => ['nullable'],
         ]);
 
         // Validasi 1 Work Order per 1 Tanggal Distribusi dalam unit SPPG
@@ -165,6 +166,7 @@ class GiziController extends Controller
                     'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
                     'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
                     'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
+                    'catatan' => $validated['catatan'] ?? null,
                 ]
             );
 
@@ -312,6 +314,14 @@ class GiziController extends Controller
         });
 
         return redirect()->route('gizi.daftar-menu')->with('success', 'Rancangan menu berhasil disimpan ke database.');
+    }
+
+    /**
+     * Update Work Order (alias untuk storeWorkOrder).
+     */
+    public function updateWorkOrder(Request $request, $id): RedirectResponse
+    {
+        return $this->storeWorkOrder($request);
     }
 
     /**

@@ -47,6 +47,8 @@ import {
     X,
     Calendar,
     Layers,
+    ClipboardList,
+    ShoppingBag,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -647,6 +649,19 @@ const akgResultPBNormal = computed(() => {
         karbohidrat: Number(res.karbohidrat.toFixed(1)),
         serat: Number(res.serat.toFixed(1)),
     };
+});
+
+// Catatan Kerja Tim Produksi (Persiapan, Pengolahan, Pemorsian)
+const activeModalTimTab = ref("persiapan");
+const parsedCatatanTim = computed(() => {
+    const c = props.workOrder?.catatan || props.workOrder?.raw?.catatan;
+    if (!c) return null;
+    if (typeof c === "object") return c;
+    try {
+        return JSON.parse(c);
+    } catch {
+        return null;
+    }
 });
 
 // Seluruh Jenis Alergi yang Aktif
@@ -1536,6 +1551,195 @@ function getSubMenuLabelForBahan(it) {
                                         Tidak ada varian alergi
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- INSTRUKSI & CATATAN KERJA TIM PRODUKSI (Persiapan, Pengolahan, Pemorsian) -->
+                    <!-- ========================================================================= -->
+                    <div
+                        v-if="
+                            parsedCatatanTim &&
+                            (parsedCatatanTim.persiapan?.length ||
+                                parsedCatatanTim.pengolahan?.length ||
+                                parsedCatatanTim.pemorsian?.length ||
+                                parsedCatatanTim.catatan_global?.persiapan ||
+                                parsedCatatanTim.catatan_global?.pengolahan ||
+                                parsedCatatanTim.catatan_global?.pemorsian)
+                        "
+                        class="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4"
+                    >
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
+                            <div>
+                                <h4 class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                    <ClipboardList class="h-4 w-4 text-primary" />
+                                    <span>Instruksi & Catatan Kerja Tim Produksi</span>
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Arahan teknis operasional untuk Tim Persiapan, Tim Pengolahan, dan Tim Pemorsian di dapur SPPG.
+                                </p>
+                            </div>
+
+                            <!-- Tabs Switcher Modal -->
+                            <div class="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-xl">
+                                <button
+                                    type="button"
+                                    @click="activeModalTimTab = 'persiapan'"
+                                    :class="[
+                                        'px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer',
+                                        activeModalTimTab === 'persiapan'
+                                            ? 'bg-white text-amber-900 shadow-2xs'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                    ]"
+                                >
+                                    <Utensils class="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Persiapan ({{ parsedCatatanTim.persiapan?.length || 0 }})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="activeModalTimTab = 'pengolahan'"
+                                    :class="[
+                                        'px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer',
+                                        activeModalTimTab === 'pengolahan'
+                                            ? 'bg-white text-blue-900 shadow-2xs'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                    ]"
+                                >
+                                    <UtensilsCrossed class="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Pengolahan ({{ parsedCatatanTim.pengolahan?.length || 0 }})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="activeModalTimTab = 'pemorsian'"
+                                    :class="[
+                                        'px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer',
+                                        activeModalTimTab === 'pemorsian'
+                                            ? 'bg-white text-purple-900 shadow-2xs'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                    ]"
+                                >
+                                    <ShoppingBag class="w-3.5 h-3.5 text-purple-600" />
+                                    <span>Pemorsian ({{ parsedCatatanTim.pemorsian?.length || 0 }})</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tab Persiapan Modal -->
+                        <div v-if="activeModalTimTab === 'persiapan'" class="space-y-3">
+                            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="bg-amber-50/70 border-b border-amber-200 text-amber-950 text-[10.5px] uppercase font-black">
+                                            <th class="py-2.5 px-3 text-center w-12">No</th>
+                                            <th class="py-2.5 px-3 min-w-[130px]">Nama Menu</th>
+                                            <th class="py-2.5 px-3 min-w-[140px]">Bahan Baku</th>
+                                            <th class="py-2.5 px-3 text-center min-w-[90px]">Kuantitas</th>
+                                            <th class="py-2.5 px-3 text-center min-w-[120px]">Waktu</th>
+                                            <th class="py-2.5 px-3 min-w-[180px]">Perlakuan</th>
+                                            <th class="py-2.5 px-3 min-w-[130px]">Keterangan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(it, idx) in parsedCatatanTim.persiapan || []"
+                                            :key="idx"
+                                            class="hover:bg-amber-50/20"
+                                        >
+                                            <td class="py-2.5 px-3 text-center font-bold text-slate-500">{{ idx + 1 }}</td>
+                                            <td class="py-2.5 px-3 font-bold text-slate-900">{{ it.nama_menu }}</td>
+                                            <td class="py-2.5 px-3 text-slate-800 font-medium">{{ it.bahan_baku }}</td>
+                                            <td class="py-2.5 px-3 text-center font-bold text-amber-800">{{ it.kuantitas }}</td>
+                                            <td class="py-2.5 px-3 text-center text-[11px] text-slate-600 font-bold">
+                                                {{ it.waktu_mulai }} - {{ it.waktu_selesai }}
+                                            </td>
+                                            <td class="py-2.5 px-3 text-slate-700">{{ it.perlakuan }}</td>
+                                            <td class="py-2.5 px-3 text-slate-500 italic text-[11px]">{{ it.keterangan || "-" }}</td>
+                                        </tr>
+                                        <tr v-if="!parsedCatatanTim.persiapan || parsedCatatanTim.persiapan.length === 0">
+                                            <td colspan="7" class="py-4 text-center text-slate-400 italic">Tidak ada catatan item untuk Tim Persiapan.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-if="parsedCatatanTim.catatan_global?.persiapan" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950">
+                                <strong>Catatan Tambahan (Global):</strong> {{ parsedCatatanTim.catatan_global.persiapan }}
+                            </div>
+                        </div>
+
+                        <!-- Tab Pengolahan Modal -->
+                        <div v-if="activeModalTimTab === 'pengolahan'" class="space-y-3">
+                            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="bg-blue-50/70 border-b border-blue-200 text-blue-950 text-[10.5px] uppercase font-black">
+                                            <th class="py-2.5 px-3 text-center w-12">No</th>
+                                            <th class="py-2.5 px-3 min-w-[130px]">Nama Menu</th>
+                                            <th class="py-2.5 px-3 min-w-[140px]">Bahan Baku</th>
+                                            <th class="py-2.5 px-3 text-center min-w-[90px]">Kuantitas</th>
+                                            <th class="py-2.5 px-3 text-center min-w-[120px]">Waktu</th>
+                                            <th class="py-2.5 px-3 min-w-[180px]">Perlakuan</th>
+                                            <th class="py-2.5 px-3 min-w-[130px]">Keterangan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(it, idx) in parsedCatatanTim.pengolahan || []"
+                                            :key="idx"
+                                            class="hover:bg-blue-50/20"
+                                        >
+                                            <td class="py-2.5 px-3 text-center font-bold text-slate-500">{{ idx + 1 }}</td>
+                                            <td class="py-2.5 px-3 font-bold text-slate-900">{{ it.nama_menu }}</td>
+                                            <td class="py-2.5 px-3 text-slate-800 font-medium">{{ it.bahan_baku }}</td>
+                                            <td class="py-2.5 px-3 text-center font-bold text-blue-800">{{ it.kuantitas }}</td>
+                                            <td class="py-2.5 px-3 text-center text-[11px] text-slate-600 font-bold">
+                                                {{ it.waktu_mulai }} - {{ it.waktu_selesai }}
+                                            </td>
+                                            <td class="py-2.5 px-3 text-slate-700">{{ it.perlakuan }}</td>
+                                            <td class="py-2.5 px-3 text-slate-500 italic text-[11px]">{{ it.keterangan || "-" }}</td>
+                                        </tr>
+                                        <tr v-if="!parsedCatatanTim.pengolahan || parsedCatatanTim.pengolahan.length === 0">
+                                            <td colspan="7" class="py-4 text-center text-slate-400 italic">Tidak ada catatan item untuk Tim Pengolahan.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-if="parsedCatatanTim.catatan_global?.pengolahan" class="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950">
+                                <strong>Catatan Tambahan (Global):</strong> {{ parsedCatatanTim.catatan_global.pengolahan }}
+                            </div>
+                        </div>
+
+                        <!-- Tab Pemorsian Modal -->
+                        <div v-if="activeModalTimTab === 'pemorsian'" class="space-y-3">
+                            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="bg-purple-50/70 border-b border-purple-200 text-purple-950 text-[10.5px] uppercase font-black">
+                                            <th class="py-2.5 px-3 text-center w-12">No</th>
+                                            <th class="py-2.5 px-3 min-w-[150px]">Nama Menu</th>
+                                            <th class="py-2.5 px-3 min-w-[220px]">Perlakuan (Tata Letak & Standar Porsi)</th>
+                                            <th class="py-2.5 px-3 min-w-[150px]">Keterangan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(it, idx) in parsedCatatanTim.pemorsian || []"
+                                            :key="idx"
+                                            class="hover:bg-purple-50/20"
+                                        >
+                                            <td class="py-2.5 px-3 text-center font-bold text-slate-500">{{ idx + 1 }}</td>
+                                            <td class="py-2.5 px-3 font-bold text-slate-900">{{ it.nama_menu }}</td>
+                                            <td class="py-2.5 px-3 text-slate-700">{{ it.perlakuan }}</td>
+                                            <td class="py-2.5 px-3 text-slate-500 italic text-[11px]">{{ it.keterangan || "-" }}</td>
+                                        </tr>
+                                        <tr v-if="!parsedCatatanTim.pemorsian || parsedCatatanTim.pemorsian.length === 0">
+                                            <td colspan="4" class="py-4 text-center text-slate-400 italic">Tidak ada catatan item untuk Tim Pemorsian.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-if="parsedCatatanTim.catatan_global?.pemorsian" class="p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-950">
+                                <strong>Catatan Tambahan (Global):</strong> {{ parsedCatatanTim.catatan_global.pemorsian }}
                             </div>
                         </div>
                     </div>

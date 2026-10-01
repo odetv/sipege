@@ -12,6 +12,7 @@ import Modal from "@/Components/Modal.vue";
 import {
     SATUAN_LIST,
     SATUAN_VALUES,
+    normalizeSatuan,
     formatGrossQty,
     getGroupedUnitList,
     formatGroupedUnitSummary,
@@ -156,6 +157,16 @@ const normalizeStep = (step) => {
         step === "pre_order"
     )
         return "bahan_pangan";
+    if (
+        step === "catatan" ||
+        step === "catatan_resep" ||
+        step === "catatan-resep" ||
+        step === "catatan_tim" ||
+        step === "catatan-tim" ||
+        step === "catatan_kerja" ||
+        step === "catatan-kerja"
+    )
+        return "catatan_resep";
     if (
         step === "order" ||
         step === "review" ||
@@ -498,8 +509,13 @@ const buatMenuSubTabs = [
         icon: Package,
     },
     {
+        id: "catatan_resep",
+        label: "3. Catatan Kerja Tim",
+        icon: ClipboardList,
+    },
+    {
         id: "order",
-        label: "3. Review & Pengajuan",
+        label: "4. Review & Pengajuan",
         icon: ShieldCheck,
     },
 ];
@@ -1037,6 +1053,370 @@ function handleGunakanContoh() {
     clearError("sub_menu_5");
 }
 
+// Isi otomatis formula bahan makanan contoh untuk uji coba
+function handleGunakanContohFormula() {
+    // 1. Pastikan nama menu dan 5 sub-menu terisi (jika belum, gunakan contoh menu MBG)
+    if (!namaMenuAktif.value || !subMenuKomponen.value.sub_menu_1) {
+        handleGunakanContoh();
+    }
+
+    const blocks = step2SubMenuBlocks.value || [];
+    const b1 = blocks.find((b) => b.subKey === "sub_menu_1" && !b.isAlergi) || {
+        id: "sub_menu_1_normal",
+        subKey: "sub_menu_1",
+        namaMenu: subMenuKomponen.value.sub_menu_1 || "Nasi Putih",
+    };
+    const b2 = blocks.find((b) => b.subKey === "sub_menu_2" && !b.isAlergi) || {
+        id: "sub_menu_2_normal",
+        subKey: "sub_menu_2",
+        namaMenu: subMenuKomponen.value.sub_menu_2 || "Ayam Guling",
+    };
+    const b3 = blocks.find((b) => b.subKey === "sub_menu_3" && !b.isAlergi) || {
+        id: "sub_menu_3_normal",
+        subKey: "sub_menu_3",
+        namaMenu: subMenuKomponen.value.sub_menu_3 || "Tempe Goreng",
+    };
+    const b4 = blocks.find((b) => b.subKey === "sub_menu_4" && !b.isAlergi) || {
+        id: "sub_menu_4_normal",
+        subKey: "sub_menu_4",
+        namaMenu: subMenuKomponen.value.sub_menu_4 || "Sayur Bening Bayam",
+    };
+    const b5 = blocks.find((b) => b.subKey === "sub_menu_5" && !b.isAlergi) || {
+        id: "sub_menu_5_normal",
+        subKey: "sub_menu_5",
+        namaMenu: subMenuKomponen.value.sub_menu_5 || "Buah Jeruk",
+    };
+
+    const pool = tkpiItems.value || [];
+
+    // Helper cari item di master pool aktif atau fallback
+    const findMaster = (
+        keywords,
+        fallbackName,
+        fallbackKat,
+        fallbackBdd,
+        fallbackNutrisi,
+    ) => {
+        let found = null;
+        for (const kw of keywords) {
+            found = pool.find(
+                (it) =>
+                    it &&
+                    it.nama &&
+                    it.nama.toLowerCase().includes(kw.toLowerCase()),
+            );
+            if (found) break;
+        }
+        if (found) {
+            return {
+                id: found.id || found.code,
+                code: found.code || found.id,
+                tkpi_id: found.id || found.code,
+                nama: found.nama,
+                kategori: found.kategori || fallbackKat,
+                bdd: Number(found.bdd) || fallbackBdd,
+                satuan:
+                    found.satuan ||
+                    (found.nama &&
+                    found.nama.toLowerCase().includes("minyak")
+                        ? "L"
+                        : "Kg"),
+                tkpi: found,
+            };
+        }
+        return {
+            id: `contoh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            code: `EX-${Math.floor(100 + Math.random() * 900)}`,
+            tkpi_id: `EX-${Math.floor(100 + Math.random() * 900)}`,
+            nama: fallbackName,
+            kategori: fallbackKat,
+            bdd: fallbackBdd,
+            tkpi: {
+                nama: fallbackName,
+                kategori: fallbackKat,
+                bdd: fallbackBdd,
+                ...fallbackNutrisi,
+            },
+        };
+    };
+
+    const mBeras = findMaster(
+        ["beras giling", "beras putih", "beras"],
+        "Beras Giling Putih",
+        "Serealia",
+        100,
+        {
+            energi: 360,
+            protein: 6.8,
+            lemak: 0.7,
+            karbohidrat: 78.9,
+            serat: 0.8,
+        },
+    );
+    const mAyam = findMaster(
+        ["daging ayam ras", "daging ayam", "ayam"],
+        "Daging Ayam Broiler",
+        "Daging",
+        58,
+        {
+            energi: 298,
+            protein: 18.2,
+            lemak: 25.0,
+            karbohidrat: 0.0,
+            serat: 0.0,
+        },
+    );
+    const mTempe = findMaster(
+        ["tempe kedelai murni", "tempe kedele murni", "tempe"],
+        "Tempe Kedelai Murni",
+        "Kacang-kacangan",
+        100,
+        {
+            energi: 193,
+            protein: 20.8,
+            lemak: 8.8,
+            karbohidrat: 13.5,
+            serat: 1.4,
+        },
+    );
+    const mMinyak = findMaster(
+        ["minyak kelapa sawit", "minyak goreng", "minyak"],
+        "Minyak Goreng Sawit",
+        "Minyak & Lemak",
+        100,
+        {
+            energi: 884,
+            protein: 0.0,
+            lemak: 100.0,
+            karbohidrat: 0.0,
+            serat: 0.0,
+        },
+    );
+    const mBayam = findMaster(
+        ["bayam segar", "bayam"],
+        "Bayam Segar",
+        "Sayuran",
+        71,
+        {
+            energi: 23,
+            protein: 2.9,
+            lemak: 0.4,
+            karbohidrat: 3.6,
+            serat: 1.0,
+        },
+    );
+    const mJagung = findMaster(
+        ["jagung manis pipil", "jagung manis", "jagung"],
+        "Jagung Manis Pipil",
+        "Sayuran",
+        100,
+        {
+            energi: 96,
+            protein: 3.4,
+            lemak: 1.5,
+            karbohidrat: 21.0,
+            serat: 2.4,
+        },
+    );
+    const mJeruk = findMaster(
+        ["jeruk manis", "jeruk", "buah jeruk"],
+        "Jeruk Manis",
+        "Buah",
+        72,
+        {
+            energi: 45,
+            protein: 0.9,
+            lemak: 0.2,
+            karbohidrat: 11.2,
+            serat: 1.4,
+        },
+    );
+
+    selectedBahanList.value = [
+        // Sub Menu 1: Makanan Pokok
+        {
+            id: mBeras.id,
+            code: mBeras.code,
+            tkpi_id: mBeras.tkpi_id,
+            sub_menu_block_id: b1.id,
+            sub_menu_key: b1.subKey,
+            nama_sub_menu: b1.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mBeras.kategori,
+            satuan: "Kg",
+            nama: mBeras.nama,
+            nama_po: "Beras Premium IR64",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 100,
+            gram_pb: 150,
+            bdd: mBeras.bdd,
+            buffer: 5,
+            harga_master: 14500,
+            harga_aktual: 14500,
+            alergen: "",
+            keterangan: "Beras pulen standar MBG",
+            tkpi: mBeras.tkpi,
+        },
+        // Sub Menu 2: Protein Hewani
+        {
+            id: mAyam.id,
+            code: mAyam.code,
+            tkpi_id: mAyam.tkpi_id,
+            sub_menu_block_id: b2.id,
+            sub_menu_key: b2.subKey,
+            nama_sub_menu: b2.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mAyam.kategori,
+            satuan: "Kg",
+            nama: mAyam.nama,
+            nama_po: "Ayam Broiler Karkas Segar",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 60,
+            gram_pb: 75,
+            bdd: mAyam.bdd,
+            buffer: 5,
+            harga_master: 38000,
+            harga_aktual: 38000,
+            alergen: "",
+            keterangan: "Potong 10 bagian, karkas higienis",
+            tkpi: mAyam.tkpi,
+        },
+        // Sub Menu 3: Protein Nabati
+        {
+            id: mTempe.id,
+            code: mTempe.code,
+            tkpi_id: mTempe.tkpi_id,
+            sub_menu_block_id: b3.id,
+            sub_menu_key: b3.subKey,
+            nama_sub_menu: b3.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mTempe.kategori,
+            satuan: "Kg",
+            nama: mTempe.nama,
+            nama_po: "Tempe Kedelai Papan",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 35,
+            gram_pb: 50,
+            bdd: mTempe.bdd,
+            buffer: 3,
+            harga_master: 16000,
+            harga_aktual: 16000,
+            alergen: "Kedelai",
+            keterangan: "Tempe segar non-GMO",
+            tkpi: mTempe.tkpi,
+        },
+        {
+            id: mMinyak.id,
+            code: mMinyak.code,
+            tkpi_id: mMinyak.tkpi_id,
+            sub_menu_block_id: b3.id,
+            sub_menu_key: b3.subKey,
+            nama_sub_menu: b3.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mMinyak.kategori,
+            satuan: "L",
+            nama: mMinyak.nama,
+            nama_po: "Minyak Goreng Sawit Kemasan 2L",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 5,
+            gram_pb: 5,
+            bdd: mMinyak.bdd,
+            buffer: 0,
+            harga_master: 17500,
+            harga_aktual: 17500,
+            alergen: "",
+            keterangan: "Untuk menggoreng tempe",
+            tkpi: mMinyak.tkpi,
+        },
+        // Sub Menu 4: Sayuran
+        {
+            id: mBayam.id,
+            code: mBayam.code,
+            tkpi_id: mBayam.tkpi_id,
+            sub_menu_block_id: b4.id,
+            sub_menu_key: b4.subKey,
+            nama_sub_menu: b4.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mBayam.kategori,
+            satuan: "Kg",
+            nama: mBayam.nama,
+            nama_po: "Bayam Hijau Segar",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 50,
+            gram_pb: 75,
+            bdd: mBayam.bdd,
+            buffer: 5,
+            harga_master: 12000,
+            harga_aktual: 12000,
+            alergen: "",
+            keterangan: "Sayur segar baru petik",
+            tkpi: mBayam.tkpi,
+        },
+        {
+            id: mJagung.id,
+            code: mJagung.code,
+            tkpi_id: mJagung.tkpi_id,
+            sub_menu_block_id: b4.id,
+            sub_menu_key: b4.subKey,
+            nama_sub_menu: b4.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mJagung.kategori,
+            satuan: "Kg",
+            nama: mJagung.nama,
+            nama_po: "Jagung Manis Pipil",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 25,
+            gram_pb: 35,
+            bdd: mJagung.bdd,
+            buffer: 2,
+            harga_master: 18000,
+            harga_aktual: 18000,
+            alergen: "",
+            keterangan: "Campuran sayur bening bayam",
+            tkpi: mJagung.tkpi,
+        },
+        // Sub Menu 5: Buah
+        {
+            id: mJeruk.id,
+            code: mJeruk.code,
+            tkpi_id: mJeruk.tkpi_id,
+            sub_menu_block_id: b5.id,
+            sub_menu_key: b5.subKey,
+            nama_sub_menu: b5.namaMenu,
+            jenis: "bahan_baku",
+            kategori: mJeruk.kategori,
+            satuan: "Kg",
+            nama: mJeruk.nama,
+            nama_po: "Jeruk Manis Medan/Siam",
+            tipe_porsi: "normal",
+            jenis_alergi: "",
+            gram_pk: 75,
+            gram_pb: 100,
+            bdd: mJeruk.bdd,
+            buffer: 3,
+            harga_master: 22000,
+            harga_aktual: 22000,
+            alergen: "",
+            keterangan: "1 buah per porsi siswa",
+            tkpi: mJeruk.tkpi,
+        },
+    ];
+
+    if (validationErrors.value.selectedBahan) {
+        delete validationErrors.value.selectedBahan;
+    }
+
+    triggerSubmitSuccess(
+        "Contoh formula bahan makanan berhasil dimuat untuk uji coba!",
+    );
+}
+
 // Resep Bahan Baku Baku Terpilih dari Database Resmi Kemenkes (Default Kosong dari 0)
 const selectedBahanList = ref([]);
 
@@ -1055,7 +1435,9 @@ function mergeFatsecretItems(newItems) {
         ...(props.tkpiDatasets?.fatsecret || []).map((x) => x.id),
         ...extraFatsecretItems.value.map((x) => x.id),
     ]);
-    const toAdd = newItems.filter((it) => it && it.id && !existingIds.has(it.id));
+    const toAdd = newItems.filter(
+        (it) => it && it.id && !existingIds.has(it.id),
+    );
     if (toAdd.length > 0) {
         extraFatsecretItems.value = [...extraFatsecretItems.value, ...toAdd];
     }
@@ -1121,7 +1503,11 @@ function formatGram(gram, satuan = "Kg") {
     return formatPortionValue(gram, satuan);
 }
 
-function calculateNutritionFromNetGram(itemTkpi, netGram, jenis = "bahan_baku") {
+function calculateNutritionFromNetGram(
+    itemTkpi,
+    netGram,
+    jenis = "bahan_baku",
+) {
     if (jenis === "operasional" || !itemTkpi || !netGram) {
         return { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
     }
@@ -1143,7 +1529,14 @@ function calculateItemFoodCostPerPortion(
     satuan = "Kg",
     jenis = "bahan_baku",
 ) {
-    if (jenis === "operasional" || !netGram || !hargaPerSatuan || !bddPercent || bddPercent <= 0) return 0;
+    if (
+        jenis === "operasional" ||
+        !netGram ||
+        !hargaPerSatuan ||
+        !bddPercent ||
+        bddPercent <= 0
+    )
+        return 0;
     const bddFactor = (bddPercent || 100) / 100;
     const bufferFactor = 1 + (bufferPercent || 0) / 100;
     const grossPerPortion = (netGram / bddFactor) * bufferFactor;
@@ -1273,9 +1666,15 @@ function setSearchQueryForBlock(blockId, val) {
         clearTimeout(fatsecretComboboxTimers[blockId]);
         fatsecretComboboxTimers[blockId] = setTimeout(async () => {
             try {
-                const res = await fetch(`/gizi/api/fatsecret/search?q=${encodeURIComponent(val.trim())}`);
+                const res = await fetch(
+                    `/gizi/api/fatsecret/search?q=${encodeURIComponent(val.trim())}`,
+                );
                 const json = await res.json();
-                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                if (
+                    json.success &&
+                    Array.isArray(json.data) &&
+                    json.data.length > 0
+                ) {
                     mergeFatsecretItems(json.data);
                 }
             } catch (e) {
@@ -1334,7 +1733,13 @@ function selectTkpiItemForBlock(master, block) {
         nama_sub_menu: block.namaMenu,
         jenis: "bahan_baku",
         kategori: master.kategori || "Lainnya",
-        satuan: master.satuan || "Kg",
+        satuan: normalizeSatuan(
+            master.satuan ||
+                (master.nama &&
+                master.nama.toLowerCase().includes("minyak")
+                    ? "L"
+                    : "Kg"),
+        ),
         nama: master.nama,
         nama_po: "",
         tipe_porsi: block.isAlergi ? "alergi" : "normal",
@@ -1427,7 +1832,8 @@ function saveManualBahan() {
     }
 
     // Validasi Wajib Kandungan Gizi (Hanya jika Jenis = Bahan Baku)
-    const isBahanBaku = (manualBahanForm.value.jenis || "bahan_baku") === "bahan_baku";
+    const isBahanBaku =
+        (manualBahanForm.value.jenis || "bahan_baku") === "bahan_baku";
     if (isBahanBaku) {
         const giziList = [
             { key: "energi", label: "Energi" },
@@ -1444,9 +1850,11 @@ function saveManualBahan() {
                 val === "" ||
                 isNaN(Number(val))
             ) {
-                manualBahanErrors.value[g.key] = `${g.label} wajib diisi (minimal 0).`;
+                manualBahanErrors.value[g.key] =
+                    `${g.label} wajib diisi (minimal 0).`;
             } else if (Number(val) < 0) {
-                manualBahanErrors.value[g.key] = `${g.label} tidak boleh bernilai negatif.`;
+                manualBahanErrors.value[g.key] =
+                    `${g.label} tidak boleh bernilai negatif.`;
             }
         });
     }
@@ -1460,12 +1868,23 @@ function saveManualBahan() {
 
     const customId =
         "custom_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-    const isOperasionalItem = (manualBahanForm.value.jenis || "bahan_baku") === "operasional";
-    const energiNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.energi) || 0);
-    const proteinNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.protein) || 0);
-    const lemakNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.lemak) || 0);
-    const karbohidratNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.karbohidrat) || 0);
-    const seratNum = isOperasionalItem ? 0 : (Number(manualBahanForm.value.serat) || 0);
+    const isOperasionalItem =
+        (manualBahanForm.value.jenis || "bahan_baku") === "operasional";
+    const energiNum = isOperasionalItem
+        ? 0
+        : Number(manualBahanForm.value.energi) || 0;
+    const proteinNum = isOperasionalItem
+        ? 0
+        : Number(manualBahanForm.value.protein) || 0;
+    const lemakNum = isOperasionalItem
+        ? 0
+        : Number(manualBahanForm.value.lemak) || 0;
+    const karbohidratNum = isOperasionalItem
+        ? 0
+        : Number(manualBahanForm.value.karbohidrat) || 0;
+    const seratNum = isOperasionalItem
+        ? 0
+        : Number(manualBahanForm.value.serat) || 0;
 
     const customItem = {
         id: customId,
@@ -1638,14 +2057,21 @@ function handlePeruntukanPorsiChange(originalIndex, eventVal) {
 }
 
 // Handler perubahan satuan bahan dalam tabel dengan konversi harga otomatis
-function handleRowSatuanChange(originalIndex, newSatuan) {
+function handleRowSatuanChange(
+    originalIndex,
+    newSatuan,
+    oldSatuanOverride = null,
+) {
     const item = selectedBahanList.value[originalIndex];
     if (!item) return;
-    const oldSatuan = (item.satuan || "Kg").trim();
-    if (oldSatuan.toLowerCase() === (newSatuan || "").toLowerCase().trim()) return;
-
+    const oldSatuan = (oldSatuanOverride || item.satuan || "Kg").trim();
     const oldS = oldSatuan.toLowerCase();
     const newS = (newSatuan || "Kg").toLowerCase().trim();
+
+    if (oldS === newS) {
+        item.satuan = normalizeSatuan(newSatuan);
+        return;
+    }
 
     // Konversi Harga Master & Harga Aktual
     if (
@@ -1685,7 +2111,7 @@ function handleRowSatuanChange(originalIndex, newSatuan) {
         }
     }
 
-    item.satuan = newSatuan;
+    item.satuan = normalizeSatuan(newSatuan);
 }
 
 // Helper filter bahan calculations untuk satu blok tertentu
@@ -2123,6 +2549,25 @@ function handleSwitchSubTab(targetTab) {
     }
 
     if (
+        targetTab === "catatan" ||
+        targetTab === "catatan_resep" ||
+        targetTab === "catatan-resep" ||
+        targetTab === "catatan_tim" ||
+        targetTab === "catatan-tim" ||
+        targetTab === "catatan_kerja" ||
+        targetTab === "catatan-kerja"
+    ) {
+        if (!validateStep2()) {
+            buatMenuSubTab.value = "bahan_pangan";
+            scrollToTopSection();
+            return;
+        }
+        buatMenuSubTab.value = "catatan_resep";
+        scrollToTopSection();
+        return;
+    }
+
+    if (
         targetTab === "order" ||
         targetTab === "review" ||
         targetTab === "review_pengajuan" ||
@@ -2161,37 +2606,7 @@ function validateStep3() {
     if (!isStep1Valid) return false;
     const isStep2Valid = validateStep2();
     if (!isStep2Valid) return false;
-    const errs = { ...validationErrors.value };
-
-    if (
-        !selectedGiziBahanList.value ||
-        selectedGiziBahanList.value.length === 0
-    ) {
-        errs.selectedGiziBahan =
-            "Minimal pilih 1 bahan makanan untuk formulasi gizi siap santap.";
-    }
-
-    selectedGiziBahanList.value.forEach((b, i) => {
-        if (
-            b.tipe_porsi === "alergi" &&
-            (!b.jenis_alergi || !b.jenis_alergi.trim())
-        ) {
-            errs["gizi_bahan_" + i + "_alergi"] = "Jenis alergi wajib dipilih.";
-        }
-        const pkVal = Number(b.gram_pk) || 0;
-        const pbVal = Number(b.gram_pb) || 0;
-        if (pkVal <= 0 && pbVal <= 0) {
-            errs["gizi_bahan_" + i + "_gram"] =
-                "Wajib isi minimal salah satu (PK atau PB) > 0";
-        }
-    });
-
-    validationErrors.value = errs;
-    const isValid = Object.keys(errs).length === 0;
-    if (!isValid) {
-        scrollToFirstError();
-    }
-    return isValid;
+    return true;
 }
 
 function handleLanjutStep3() {
@@ -2203,7 +2618,7 @@ function handleLanjutStep3() {
     if (!validateStep2()) {
         return;
     }
-    buatMenuSubTab.value = "order";
+    buatMenuSubTab.value = "catatan_resep";
     scrollToTopSection();
 }
 
@@ -2216,9 +2631,6 @@ function handleLanjutStep4() {
     if (!validateStep2()) {
         buatMenuSubTab.value = "bahan_pangan";
         scrollToTopSection();
-        return;
-    }
-    if (!validateStep3()) {
         return;
     }
     buatMenuSubTab.value = "order";
@@ -2236,23 +2648,354 @@ function simpanDraftStep3() {
         scrollToTopSection();
         return;
     }
-    if (!validateStep3()) return;
     isSubmitting.value = true;
     statusPengajuanWo.value = "Draft";
-    const payload = getPayload("Draft", 4);
+    const payload = getPayload("Draft", 3);
 
     router.post("/gizi/work-order", payload, {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
             triggerSubmitSuccess(
-                "Draft Langkah 3 (Formula Gizi Siap Santap) berhasil disimpan!",
+                "Draft Catatan Kerja Tim Produksi (Langkah 3) berhasil disimpan!",
             );
         },
         onError: () => {
             isSubmitting.value = false;
         },
     });
+}
+
+// ==========================================
+// 3. STATE CATATAN KERJA TIM PRODUKSI (LANGKAH 3)
+// Tim Persiapan, Tim Pengolahan, Tim Pemorsian
+// ==========================================
+const catatanTim = ref({
+    persiapan: [],
+    pengolahan: [],
+    pemorsian: [],
+    catatan_global: {
+        persiapan: "",
+        pengolahan: "",
+        pemorsian: "",
+    },
+});
+
+// Active team tab dalam Langkah 3: 'persiapan' | 'pengolahan' | 'pemorsian'
+const activeTimTab = ref("persiapan");
+
+// Modal / Form state for Add/Edit Note
+const showCatatanModal = ref(false);
+const editingCatatanId = ref(null);
+const catatanForm = ref({
+    target_tim: "persiapan", // 'persiapan' | 'pengolahan' | 'pemorsian'
+    nama_menu: "",
+    bahan_baku: "",
+    kuantitas: "",
+    waktu_mulai: "05:00",
+    waktu_selesai: "06:00",
+    perlakuan: "",
+    keterangan: "",
+});
+
+// Opsi Menu dari Sub-Menu Step 1 & Alergi
+const menuOptionsList = computed(() => {
+    const list = [];
+    const smMap = [
+        { key: "sub_menu_1", label: "Sub Menu 1 (Karbohidrat)" },
+        { key: "sub_menu_2", label: "Sub Menu 2 (Protein Hewani)" },
+        { key: "sub_menu_3", label: "Sub Menu 3 (Protein Nabati)" },
+        { key: "sub_menu_4", label: "Sub Menu 4 (Sayuran)" },
+        { key: "sub_menu_5", label: "Sub Menu 5 (Buah / Penutup)" },
+    ];
+    smMap.forEach((sm) => {
+        const val = subMenuKomponen.value[sm.key];
+        if (val && val.trim()) {
+            list.push({
+                key: sm.key,
+                name: val.trim(),
+                label: `${sm.label}: ${val.trim()}`,
+            });
+        }
+    });
+
+    Object.keys(subMenuAlergi.value || {}).forEach((k) => {
+        const alArr = subMenuAlergi.value[k];
+        if (Array.isArray(alArr)) {
+            alArr.forEach((al) => {
+                if (al.nama && al.nama.trim()) {
+                    list.push({
+                        key: `${k}_alergi`,
+                        name: `${al.nama.trim()} (${al.alergi || "Alergi"})`,
+                        label: `Diet Alergi: ${al.nama.trim()}`,
+                    });
+                }
+            });
+        }
+    });
+
+    if (list.length === 0 && namaMenuAktif.value) {
+        list.push({
+            key: "main",
+            name: namaMenuAktif.value.trim(),
+            label: namaMenuAktif.value.trim(),
+        });
+    }
+    return list;
+});
+
+// Opsi Bahan Baku dari Formula Makanan Step 2
+const bahanBakuOptions = computed(() => {
+    const items = bahanCalculations.value || [];
+    return items.map((b) => ({
+        id: b.id || b.code || b.nama,
+        nama: b.nama,
+        nama_sub_menu: b.nama_sub_menu || "",
+        sub_menu_key: b.sub_menu_key || "",
+        totalGross: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
+        kategori: b.kategori,
+    }));
+});
+
+function handleBahanBakuSelect(bahanName) {
+    catatanForm.value.bahan_baku = bahanName;
+    const matched = bahanBakuOptions.value.find((b) => b.nama === bahanName);
+    if (matched) {
+        if (!catatanForm.value.kuantitas) {
+            catatanForm.value.kuantitas = matched.totalGross;
+        }
+        if (!catatanForm.value.nama_menu && matched.nama_sub_menu) {
+            catatanForm.value.nama_menu = matched.nama_sub_menu;
+        }
+    }
+}
+
+function openTambahCatatanModal(defaultTim = null) {
+    editingCatatanId.value = null;
+    const targetTim = defaultTim || activeTimTab.value || "persiapan";
+    const defaultMenu =
+        menuOptionsList.value.length > 0 ? menuOptionsList.value[0].name : "";
+    const defaultBahan =
+        bahanBakuOptions.value.length > 0 ? bahanBakuOptions.value[0] : null;
+
+    catatanForm.value = {
+        target_tim: targetTim,
+        nama_menu: defaultMenu,
+        bahan_baku: defaultBahan ? defaultBahan.nama : "",
+        kuantitas: defaultBahan ? defaultBahan.totalGross : "",
+        waktu_mulai:
+            targetTim === "persiapan"
+                ? "05:00"
+                : targetTim === "pengolahan"
+                  ? "06:00"
+                  : "07:30",
+        waktu_selesai:
+            targetTim === "persiapan"
+                ? "06:00"
+                : targetTim === "pengolahan"
+                  ? "07:30"
+                  : "08:30",
+        perlakuan: "",
+        keterangan: "",
+    };
+    showCatatanModal.value = true;
+}
+
+function openEditCatatanModal(item, tim) {
+    editingCatatanId.value = item.id;
+    catatanForm.value = {
+        target_tim: tim,
+        nama_menu: item.nama_menu || "",
+        bahan_baku: item.bahan_baku || "",
+        kuantitas: item.kuantitas || "",
+        waktu_mulai: item.waktu_mulai || "05:00",
+        waktu_selesai: item.waktu_selesai || "06:00",
+        perlakuan: item.perlakuan || "",
+        keterangan: item.keterangan || "",
+    };
+    showCatatanModal.value = true;
+}
+
+function saveCatatanForm() {
+    const tim = catatanForm.value.target_tim;
+    if (!catatanTim.value[tim]) {
+        catatanTim.value[tim] = [];
+    }
+
+    if (editingCatatanId.value) {
+        // Hapus dari list lama (jika target tim diubah)
+        ["persiapan", "pengolahan", "pemorsian"].forEach((t) => {
+            const idx = (catatanTim.value[t] || []).findIndex(
+                (x) => x.id === editingCatatanId.value,
+            );
+            if (idx !== -1) {
+                catatanTim.value[t].splice(idx, 1);
+            }
+        });
+
+        const updatedItem = {
+            id: editingCatatanId.value,
+            nama_menu: catatanForm.value.nama_menu,
+            perlakuan: catatanForm.value.perlakuan,
+            keterangan: catatanForm.value.keterangan,
+        };
+        if (tim !== "pemorsian") {
+            updatedItem.bahan_baku = catatanForm.value.bahan_baku;
+            updatedItem.kuantitas = catatanForm.value.kuantitas;
+            updatedItem.waktu_mulai = catatanForm.value.waktu_mulai;
+            updatedItem.waktu_selesai = catatanForm.value.waktu_selesai;
+        }
+        catatanTim.value[tim].push(updatedItem);
+    } else {
+        const newItem = {
+            id: `cat_${tim}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            nama_menu: catatanForm.value.nama_menu,
+            perlakuan: catatanForm.value.perlakuan,
+            keterangan: catatanForm.value.keterangan,
+        };
+        if (tim !== "pemorsian") {
+            newItem.bahan_baku = catatanForm.value.bahan_baku;
+            newItem.kuantitas = catatanForm.value.kuantitas;
+            newItem.waktu_mulai = catatanForm.value.waktu_mulai;
+            newItem.waktu_selesai = catatanForm.value.waktu_selesai;
+        }
+        catatanTim.value[tim].push(newItem);
+    }
+
+    showCatatanModal.value = false;
+}
+
+function hapusCatatanItem(id, tim) {
+    if (catatanTim.value[tim]) {
+        catatanTim.value[tim] = catatanTim.value[tim].filter(
+            (x) => x.id !== id,
+        );
+    }
+}
+
+// Generate otomatis catatan kerja dari formula Step 2
+function generateOtomatisCatatanTim() {
+    const rawItems = bahanCalculations.value || [];
+    if (rawItems.length === 0) {
+        alert(
+            "Belum ada bahan makanan yang dipilih di Langkah 2. Silakan tambahkan bahan terlebih dahulu.",
+        );
+        return;
+    }
+
+    // Generate Tim Persiapan
+    const newPersiapan = rawItems.map((b, idx) => {
+        let perlakuan = "Timbang dan periksa kesegaran bahan";
+        const kat = (b.kategori || "").toLowerCase();
+        if (kat.includes("sayur")) {
+            perlakuan = "Cuci bersih air mengalir, kupas/potong rapi, tiriskan";
+        } else if (
+            kat.includes("hewani") ||
+            kat.includes("daging") ||
+            kat.includes("ikan") ||
+            kat.includes("ayam")
+        ) {
+            perlakuan =
+                "Bersihkan, potong sesuai gramatur standar porsi, marinasi";
+        } else if (
+            kat.includes("nabati") ||
+            kat.includes("tahu") ||
+            kat.includes("tempe")
+        ) {
+            perlakuan = "Potong seragam, rendam bumbu perasa";
+        } else if (kat.includes("pokok") || kat.includes("beras")) {
+            perlakuan = "Cuci beras 3x hingga air jernih, tiriskan 10 menit";
+        } else if (kat.includes("buah")) {
+            perlakuan = "Cuci permukaan buah, lap kering, simpan tempat sejuk";
+        }
+
+        return {
+            id: `gen_p_${idx}_${Date.now()}`,
+            nama_menu: b.nama_sub_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama,
+            kuantitas: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
+            waktu_mulai: "05:00",
+            waktu_selesai: "06:15",
+            perlakuan: perlakuan,
+            keterangan: "Pisahkan wadah bahan mentah & matang (HACCP)",
+        };
+    });
+
+    // Generate Tim Pengolahan
+    const newPengolahan = rawItems.map((b, idx) => {
+        let perlakuan = "Masak sesuai metode dan SOP standar";
+        const kat = (b.kategori || "").toLowerCase();
+        if (kat.includes("sayur")) {
+            perlakuan =
+                "Tumis/rebus cepat (blanching) agar tekstur renyah dan vitamin terjaga";
+        } else if (
+            kat.includes("hewani") ||
+            kat.includes("daging") ||
+            kat.includes("ikan") ||
+            kat.includes("ayam")
+        ) {
+            perlakuan =
+                "Goreng/panggang/ungkep hingga matang sempurna (suhu internal >75°C)";
+        } else if (
+            kat.includes("nabati") ||
+            kat.includes("tahu") ||
+            kat.includes("tempe")
+        ) {
+            perlakuan = "Goreng atau bumbui hingga matang keemasan";
+        } else if (kat.includes("pokok") || kat.includes("beras")) {
+            perlakuan =
+                "Kukus/aron dengan rasio air tepat hingga pulen sempurna";
+        } else if (kat.includes("buah")) {
+            perlakuan =
+                "Potong siap saji menjelang waktu distribusi (hindari browning)";
+        }
+
+        return {
+            id: `gen_c_${idx}_${Date.now()}`,
+            nama_menu: b.nama_sub_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama,
+            kuantitas: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
+            waktu_mulai: "06:15",
+            waktu_selesai: "07:45",
+            perlakuan: perlakuan,
+            keterangan:
+                "Cek suhu masakan dan uji organoleptik sebelum diserahkan ke pemorsian",
+        };
+    });
+
+    // Generate Tim Pemorsian (berdasarkan sub-menu yang ada)
+    const menus = menuOptionsList.value;
+    const newPemorsian = menus.map((m, idx) => {
+        return {
+            id: `gen_s_${idx}_${Date.now()}`,
+            nama_menu: m.name,
+            perlakuan:
+                "Porsikan ke wadah sekat kotak MBG sesuai standar gramatur AKG (PK & PB)",
+            keterangan:
+                "Wajib menggunakan sarung tangan plastik higienis & masker penutup",
+        };
+    });
+
+    catatanTim.value.persiapan = newPersiapan;
+    catatanTim.value.pengolahan = newPengolahan;
+    catatanTim.value.pemorsian = newPemorsian;
+
+    if (!catatanTim.value.catatan_global.persiapan) {
+        catatanTim.value.catatan_global.persiapan =
+            "Wajib sterilisasi pisau dan talenan sebelum digunakan. Pisahkan talenan sayur (hijau) dan daging (merah).";
+    }
+    if (!catatanTim.value.catatan_global.pengolahan) {
+        catatanTim.value.catatan_global.pengolahan =
+            "Pastikan api dan suhu penggorengan stabil. Simpan sampel makanan (food testing) 50g per menu untuk arsip quality control.";
+    }
+    if (!catatanTim.value.catatan_global.pemorsian) {
+        catatanTim.value.catatan_global.pemorsian =
+            "Lakukan penimbangan porsi sampel setiap 50 kotak. Pastikan kotak tertutup rapat sebelum dimasukkan ke thermal box pengantaran.";
+    }
+
+    triggerSubmitSuccess(
+        "Catatan kerja untuk Tim Persiapan, Pengolahan, dan Pemorsian berhasil di-generate otomatis!",
+    );
 }
 
 function handleAjukanDraftPo() {
@@ -2691,12 +3434,14 @@ const bahanCalculations = computed(() => {
             const isGramOrMl = ["gram", "g", "ml"].includes(
                 (b.satuan || "Kg").toLowerCase().trim(),
             );
-            const netKgPK = (isKgOrL || isGramOrMl)
-                ? ((Number(b.gram_pk) || 0) * targetPKCount) / 1000
-                : (Number(b.gram_pk) || 0) * targetPKCount;
-            const netKgPB = (isKgOrL || isGramOrMl)
-                ? ((Number(b.gram_pb) || 0) * targetPBCount) / 1000
-                : (Number(b.gram_pb) || 0) * targetPBCount;
+            const netKgPK =
+                isKgOrL || isGramOrMl
+                    ? ((Number(b.gram_pk) || 0) * targetPKCount) / 1000
+                    : (Number(b.gram_pk) || 0) * targetPKCount;
+            const netKgPB =
+                isKgOrL || isGramOrMl
+                    ? ((Number(b.gram_pb) || 0) * targetPBCount) / 1000
+                    : (Number(b.gram_pb) || 0) * targetPBCount;
             const totalNetKg = netKgPK + netKgPB;
 
             // Biaya PO
@@ -2835,8 +3580,10 @@ const selisihPaguMaster = computed(() => {
 
 // Persentase Penyerapan / Penggunaan Pagu Anggaran
 const persentasePenggunaanPaguMaster = computed(() => {
-    if (!totalBatasPaguMaster.value || totalBatasPaguMaster.value <= 0) return 0;
-    const pct = (grandTotalDraftMaster.value / totalBatasPaguMaster.value) * 100;
+    if (!totalBatasPaguMaster.value || totalBatasPaguMaster.value <= 0)
+        return 0;
+    const pct =
+        (grandTotalDraftMaster.value / totalBatasPaguMaster.value) * 100;
     return Number.isInteger(pct) ? pct : parseFloat(pct.toFixed(1));
 });
 
@@ -2857,7 +3604,8 @@ const statusEvaluasiPaguMaster = computed(() => {
             selisihFormatted: "Rp 0",
             selisihLabel: "Selisih Pagu",
             sublabel: "Tentukan sasaran penerima manfaat terlebih dahulu",
-            keterangan: "Pagu dihitung dari total porsi sasaran PM (PK × Rp 8.000 + PB × Rp 10.000).",
+            keterangan:
+                "Pagu dihitung dari total porsi sasaran PM (PK × Rp 8.000 + PB × Rp 10.000).",
         };
     }
 
@@ -2870,7 +3618,8 @@ const statusEvaluasiPaguMaster = computed(() => {
         return {
             status: "over",
             label: "Melebihi Pagu (Over Budget)",
-            badgeClass: "bg-rose-100 text-rose-800 border-rose-300 shadow-2xs font-extrabold",
+            badgeClass:
+                "bg-rose-100 text-rose-800 border-rose-300 shadow-2xs font-extrabold",
             cardClass: "border-rose-300 bg-rose-50/60 text-rose-950",
             barClass: "bg-rose-500",
             percent: Math.min(pct, 100),
@@ -2886,7 +3635,8 @@ const statusEvaluasiPaguMaster = computed(() => {
         return {
             status: "exact",
             label: "Pas Sesuai Pagu (100%)",
-            badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs font-extrabold",
+            badgeClass:
+                "bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs font-extrabold",
             cardClass: "border-emerald-300 bg-emerald-50/60 text-emerald-950",
             barClass: "bg-emerald-500",
             percent: 100,
@@ -2894,7 +3644,8 @@ const statusEvaluasiPaguMaster = computed(() => {
             selisihFormatted: "Rp 0 (Pas)",
             selisihLabel: "Sesuai Pagu",
             sublabel: "Anggaran belanja PO tepat 100% dari batas pagu",
-            keterangan: "Penggunaan anggaran belanja PO tepat 100% dari batas pagu anggaran yang dialokasikan.",
+            keterangan:
+                "Penggunaan anggaran belanja PO tepat 100% dari batas pagu anggaran yang dialokasikan.",
         };
     }
 
@@ -2902,7 +3653,8 @@ const statusEvaluasiPaguMaster = computed(() => {
         return {
             status: "optimal",
             label: "Optimal / Mendekati Pagu",
-            badgeClass: "bg-teal-100 text-teal-800 border-teal-300 shadow-2xs font-extrabold",
+            badgeClass:
+                "bg-teal-100 text-teal-800 border-teal-300 shadow-2xs font-extrabold",
             cardClass: "border-teal-300 bg-teal-50/60 text-teal-950",
             barClass: "bg-teal-500",
             percent: pct,
@@ -2917,7 +3669,8 @@ const statusEvaluasiPaguMaster = computed(() => {
     return {
         status: "under",
         label: "Di Bawah Pagu (Hemat)",
-        badgeClass: "bg-amber-100 text-amber-900 border-amber-300 shadow-2xs font-extrabold",
+        badgeClass:
+            "bg-amber-100 text-amber-900 border-amber-300 shadow-2xs font-extrabold",
         cardClass: "border-amber-300 bg-amber-50/60 text-amber-950",
         barClass: "bg-amber-500",
         percent: pct,
@@ -2928,7 +3681,6 @@ const statusEvaluasiPaguMaster = computed(() => {
         keterangan: `Belanja PO di bawah pagu dengan penghematan anggaran sebesar ${formatRupiah(selisih)} (${percentFormatted} dari pagu).`,
     };
 });
-
 
 // ==========================================
 // STATE & DATA FORMULA GIZI SIAP SANTAP (LANGKAH 3)
@@ -3008,7 +3760,8 @@ function syncGiziFromBahan() {
         bdd: b.bdd || 100,
         buffer: b.buffer || 0,
         harga_master: b.harga_master || 0,
-        keterangan: (b.keterangan && b.keterangan.trim()) ? b.keterangan.trim() : "-",
+        keterangan:
+            b.keterangan && b.keterangan.trim() ? b.keterangan.trim() : "-",
         tkpi:
             b.tkpi ||
             (props.tkpiList || []).find(
@@ -3052,10 +3805,18 @@ const giziCalculations = computed(() => {
 
         const nutrisiPK = isOperasional
             ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
-            : calculateNutritionFromNetGram(tkpi, b.gram_pk, b.jenis || "bahan_baku");
+            : calculateNutritionFromNetGram(
+                  tkpi,
+                  b.gram_pk,
+                  b.jenis || "bahan_baku",
+              );
         const nutrisiPB = isOperasional
             ? { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 }
-            : calculateNutritionFromNetGram(tkpi, b.gram_pb, b.jenis || "bahan_baku");
+            : calculateNutritionFromNetGram(
+                  tkpi,
+                  b.gram_pb,
+                  b.jenis || "bahan_baku",
+              );
 
         return {
             ...b,
@@ -3712,6 +4473,7 @@ function getPayload(statusStr, stepNumber = 3) {
         food_cost_pk: totalFoodCostPKNormal.value,
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
+        catatan: catatanTim.value,
         items: (bahanCalculations.value || []).map((b) => ({
             sub_menu_key: b.sub_menu_key || null,
             sub_menu_block_id: b.sub_menu_block_id || null,
@@ -3734,7 +4496,8 @@ function getPayload(statusStr, stepNumber = 3) {
             totalGrossKg: b.totalGrossKg || 0,
             harga_master: b.harga_master || 0,
             subtotalMaster: b.subtotalMaster || 0,
-            keterangan: (b.keterangan && b.keterangan.trim()) ? b.keterangan.trim() : "-",
+            keterangan:
+                b.keterangan && b.keterangan.trim() ? b.keterangan.trim() : "-",
             nutrisiPK: b.nutrisiPK || null,
             nutrisiPB: b.nutrisiPB || null,
         })),
@@ -3984,7 +4747,10 @@ watch(
                                     it.harga_master !== ""
                                   ? Number(it.harga_master)
                                   : null,
-                        keterangan: (it.keterangan && it.keterangan.trim()) ? it.keterangan.trim() : "-",
+                        keterangan:
+                            it.keterangan && it.keterangan.trim()
+                                ? it.keterangan.trim()
+                                : "-",
                         tkpi: matchedTkpi,
                     };
                 });
@@ -4033,6 +4799,37 @@ watch(
                         return norm;
                     },
                 );
+            }
+
+            // 3. Populate catatanTim from saved work order notes
+            if (wo.catatan) {
+                let parsedCatatan = wo.catatan;
+                if (typeof parsedCatatan === "string") {
+                    try {
+                        parsedCatatan = JSON.parse(parsedCatatan);
+                    } catch (e) {}
+                }
+                if (parsedCatatan && typeof parsedCatatan === "object") {
+                    catatanTim.value = {
+                        persiapan: Array.isArray(parsedCatatan.persiapan)
+                            ? parsedCatatan.persiapan
+                            : [],
+                        pengolahan: Array.isArray(parsedCatatan.pengolahan)
+                            ? parsedCatatan.pengolahan
+                            : [],
+                        pemorsian: Array.isArray(parsedCatatan.pemorsian)
+                            ? parsedCatatan.pemorsian
+                            : [],
+                        catatan_global: {
+                            persiapan:
+                                parsedCatatan.catatan_global?.persiapan || "",
+                            pengolahan:
+                                parsedCatatan.catatan_global?.pengolahan || "",
+                            pemorsian:
+                                parsedCatatan.catatan_global?.pemorsian || "",
+                        },
+                    };
+                }
             }
         }
     },
@@ -4421,12 +5218,14 @@ watch(
                                     type="button"
                                     @click="handleGunakanContoh"
                                     class="text-[10.5px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 truncate max-w-[150px]"
-                                    title="Gunakan Contoh Menu: Ayam Guling Khas Bali"
+                                    title="Gunakan Contoh"
                                 >
                                     <Sparkles
                                         class="h-3 w-3 shrink-0 text-amber-500"
                                     />
-                                    <span class="truncate">Gunakan Contoh</span>
+                                    <span class="truncate"
+                                        >Gunakan Contoh</span
+                                    >
                                 </button>
                             </div>
                             <input
@@ -6926,6 +7725,28 @@ watch(
                                 estimasi biaya belanja (Food Cost).
                             </CardDescription>
                         </div>
+                        <!-- <div class="flex items-center gap-2 shrink-0">
+                            <Button
+                                type="button"
+                                @click="handleGunakanContohFormula"
+                                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold px-3.5 h-9 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs transition"
+                                title="Muat contoh formula bahan baku untuk uji coba cepat"
+                            >
+                                <Sparkles class="h-4 w-4 text-amber-600" />
+                                <span>Gunakan Contoh</span>
+                            </Button>
+                        </div> -->
+                        <button
+                            type="button"
+                            @click="handleGunakanContohFormula"
+                            class="text-[10.5px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 truncate max-w-[150px]"
+                            title="Gunakan Contoh"
+                        >
+                            <Sparkles class="h-3 w-3 shrink-0 text-amber-500" />
+                            <span class="truncate"
+                                >Gunakan Contoh</span
+                            >
+                        </button>
                     </div>
                 </CardHeader>
                 <CardContent class="p-4 sm:p-6 space-y-6">
@@ -7003,14 +7824,18 @@ watch(
                                             @click="
                                                 selectedBahanList.length ===
                                                     0 &&
-                                                emit('update-source', 'tkpi2020')
+                                                emit(
+                                                    'update-source',
+                                                    'tkpi2020',
+                                                )
                                             "
                                             :disabled="
                                                 selectedBahanList.length > 0
                                             "
                                             class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
                                             :class="[
-                                                selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                                selectedSource === 'tkpi2020' ||
+                                                selectedSource === 'xlsx'
                                                     ? 'bg-white text-primary shadow-xs'
                                                     : 'text-slate-600 hover:text-slate-900',
                                                 selectedBahanList.length > 0
@@ -7025,7 +7850,10 @@ watch(
                                             @click="
                                                 selectedBahanList.length ===
                                                     0 &&
-                                                emit('update-source', 'fatsecret')
+                                                emit(
+                                                    'update-source',
+                                                    'fatsecret',
+                                                )
                                             "
                                             :disabled="
                                                 selectedBahanList.length > 0
@@ -7071,29 +7899,62 @@ watch(
                             <div
                                 class="p-2.5 bg-white rounded-lg border border-amber-200 space-y-1"
                             >
-                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
-                                    ><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>1. Berat Bersih (Net):</strong
+                                <strong
+                                    class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span
+                                        class="w-2 h-2 rounded-full bg-amber-500 inline-block"
+                                    ></span
+                                    >1. Berat Bersih (Net):</strong
                                 >
-                                <code class="block font-mono text-[10.5px] bg-slate-50 p-1 rounded border border-slate-200 text-slate-800">(Gram Bersih × Target PM) ÷ 1.000</code>
-                                <span class="text-[10px] text-slate-500 block leading-tight">Khusus bahan baku pangan. Operasional diisi sesuai kebutuhan unit.</span>
+                                <code
+                                    class="block font-mono text-[10.5px] bg-slate-50 p-1 rounded border border-slate-200 text-slate-800"
+                                    >(Gram Bersih × Target PM) ÷ 1.000</code
+                                >
+                                <span
+                                    class="text-[10px] text-slate-500 block leading-tight"
+                                    >Khusus bahan baku pangan. Operasional diisi
+                                    sesuai kebutuhan unit.</span
+                                >
                             </div>
                             <div
                                 class="p-2.5 bg-white rounded-lg border border-blue-200 space-y-1"
                             >
-                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
-                                    ><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>2. Pengadaan PO (Gross):</strong
+                                <strong
+                                    class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span
+                                        class="w-2 h-2 rounded-full bg-blue-500 inline-block"
+                                    ></span
+                                    >2. Pengadaan PO (Gross):</strong
                                 >
-                                <code class="block font-mono text-[10.5px] bg-blue-50/50 p-1 rounded border border-blue-200 text-slate-800">[Net ÷ (BDD%/100)] × (1 + Buffer%)</code>
-                                <span class="text-[10px] text-slate-500 block leading-tight">Faktor BDD% & Buffer% (Bahan Baku & Kebutuhan Operasional).</span>
+                                <code
+                                    class="block font-mono text-[10.5px] bg-blue-50/50 p-1 rounded border border-blue-200 text-slate-800"
+                                    >[Net ÷ (BDD%/100)] × (1 + Buffer%)</code
+                                >
+                                <span
+                                    class="text-[10px] text-slate-500 block leading-tight"
+                                    >Faktor BDD% & Buffer% (Bahan Baku &
+                                    Kebutuhan Operasional).</span
+                                >
                             </div>
                             <div
                                 class="p-2.5 bg-white rounded-lg border border-emerald-200 space-y-1"
                             >
-                                <strong class="text-slate-900 font-bold block flex items-center gap-1.5"
-                                    ><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>3. Estimasi Anggaran PO:</strong
+                                <strong
+                                    class="text-slate-900 font-bold block flex items-center gap-1.5"
+                                    ><span
+                                        class="w-2 h-2 rounded-full bg-emerald-500 inline-block"
+                                    ></span
+                                    >3. Estimasi Anggaran PO:</strong
                                 >
-                                <code class="block font-mono text-[10.5px] bg-emerald-50/50 p-1 rounded border border-emerald-200 text-slate-800">Gross × Harga Satuan (Rp)</code>
-                                <span class="text-[10px] text-slate-500 block leading-tight">Total anggaran pengadaan PO (Bahan Baku + Operasional).</span>
+                                <code
+                                    class="block font-mono text-[10.5px] bg-emerald-50/50 p-1 rounded border border-emerald-200 text-slate-800"
+                                    >Gross × Harga Satuan (Rp)</code
+                                >
+                                <span
+                                    class="text-[10px] text-slate-500 block leading-tight"
+                                    >Total anggaran pengadaan PO (Bahan Baku +
+                                    Operasional).</span
+                                >
                             </div>
                         </div>
                     </div>
@@ -7101,10 +7962,22 @@ watch(
                     <!-- Error Alert jika belum ada bahan sama sekali -->
                     <div
                         v-if="validationErrors.selectedBahan"
-                        class="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center gap-2 font-bold"
+                        class="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center justify-between gap-3 font-bold"
                     >
-                        <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
-                        <span>{{ validationErrors.selectedBahan }}</span>
+                        <div class="flex items-center gap-2">
+                            <AlertTriangle
+                                class="h-4 w-4 text-rose-600 shrink-0"
+                            />
+                            <span>{{ validationErrors.selectedBahan }}</span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="handleGunakanContohFormula"
+                            class="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-black cursor-pointer flex items-center gap-1.5 transition shrink-0 shadow-2xs"
+                        >
+                            <Sparkles class="h-3.5 w-3.5 text-amber-500" />
+                            <span>Gunakan Contoh Uji Coba</span>
+                        </button>
                     </div>
 
                     <!-- ========================================================================= -->
@@ -7243,9 +8116,14 @@ watch(
                                         {{ getBlockSummary(block.id).count }}
                                         Bahan
                                     </span>
-                                    <div class="flex items-center gap-1 flex-wrap">
+                                    <div
+                                        class="flex items-center gap-1 flex-wrap"
+                                    >
                                         <span
-                                            v-for="(grp, gIdx) in getBlockSummary(block.id).groupedList"
+                                            v-for="(
+                                                grp, gIdx
+                                            ) in getBlockSummary(block.id)
+                                                .groupedList"
                                             :key="gIdx"
                                             class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-black text-[11px] shadow-2xs"
                                         >
@@ -7783,15 +8661,21 @@ watch(
                                                 class="p-3 align-top pt-3 border-r border-slate-100 min-w-[95px] text-center"
                                             >
                                                 <select
-                                                    :value="
+                                                    v-if="
                                                         selectedBahanList[
                                                             it.originalIndex
-                                                        ]?.satuan || 'Kg'
+                                                        ]
+                                                    "
+                                                    v-model="
+                                                        selectedBahanList[
+                                                            it.originalIndex
+                                                        ].satuan
                                                     "
                                                     @change="
                                                         handleRowSatuanChange(
                                                             it.originalIndex,
                                                             $event.target.value,
+                                                            it.satuan,
                                                         )
                                                     "
                                                     class="w-full px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:border-primary font-bold text-slate-800 text-center cursor-pointer shadow-2xs hover:border-slate-300"
@@ -7823,9 +8707,13 @@ watch(
                                                     "
                                                     :class="[
                                                         'w-full px-2 py-1.5 text-xs font-bold rounded-lg border focus:outline-hidden transition cursor-pointer shadow-2xs text-center appearance-none [background-image:none]',
-                                                        (selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional'
+                                                        (selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.jenis ||
+                                                            'bahan_baku') ===
+                                                        'operasional'
                                                             ? 'bg-amber-50 text-amber-800 border-amber-300 focus:border-amber-500'
-                                                            : 'bg-emerald-50 text-emerald-800 border-emerald-300 focus:border-emerald-500'
+                                                            : 'bg-emerald-50 text-emerald-800 border-emerald-300 focus:border-emerald-500',
                                                     ]"
                                                 >
                                                     <option value="bahan_baku">
@@ -7837,9 +8725,25 @@ watch(
                                                 </select>
                                                 <span
                                                     class="block text-[9px] font-bold mt-1"
-                                                    :class="(selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional' ? 'text-amber-700' : 'text-emerald-700'"
+                                                    :class="
+                                                        (selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.jenis ||
+                                                            'bahan_baku') ===
+                                                        'operasional'
+                                                            ? 'text-amber-700'
+                                                            : 'text-emerald-700'
+                                                    "
                                                 >
-                                                    {{ (selectedBahanList[it.originalIndex]?.jenis || 'bahan_baku') === 'operasional' ? 'Non-Gizi & Cost' : 'Gizi & Food Cost' }}
+                                                    {{
+                                                        (selectedBahanList[
+                                                            it.originalIndex
+                                                        ]?.jenis ||
+                                                            "bahan_baku") ===
+                                                        "operasional"
+                                                            ? "Non-Gizi & Cost"
+                                                            : "Gizi & Food Cost"
+                                                    }}
                                                 </span>
                                             </td>
                                             <!-- 3. Peruntukan Porsi (Wrap & Full Display) -->
@@ -7912,10 +8816,12 @@ watch(
                                                         step="0.1"
                                                         v-model.number="
                                                             selectedBahanList[
-                                                                 it.originalIndex
+                                                                it.originalIndex
                                                             ].gram_pk
                                                         "
-                                                        @keydown="handleDecimalKeydown"
+                                                        @keydown="
+                                                            handleDecimalKeydown
+                                                        "
                                                         placeholder="0"
                                                         :class="[
                                                             'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
@@ -8008,7 +8914,9 @@ watch(
                                                                 it.originalIndex
                                                             ].gram_pb
                                                         "
-                                                        @keydown="handleDecimalKeydown"
+                                                        @keydown="
+                                                            handleDecimalKeydown
+                                                        "
                                                         placeholder="0"
                                                         :class="[
                                                             'w-16 text-center px-1.5 py-1 text-xs font-bold border rounded-lg focus:outline-hidden mx-auto transition-colors',
@@ -8126,7 +9034,9 @@ watch(
                                                             it.originalIndex
                                                         ].buffer
                                                     "
-                                                    @keydown="handleDecimalKeydown"
+                                                    @keydown="
+                                                        handleDecimalKeydown
+                                                    "
                                                     @input="
                                                         handleBufferInput(
                                                             it.originalIndex,
@@ -8323,13 +9233,21 @@ watch(
                                             <td
                                                 class="p-2.5 text-right font-black text-blue-950 bg-blue-100/30 whitespace-nowrap border-r border-slate-200/80 align-middle"
                                             >
-                                                <div class="flex flex-col items-end justify-center gap-1">
+                                                <div
+                                                    class="flex flex-col items-end justify-center gap-1"
+                                                >
                                                     <div
-                                                        v-for="(grp, gIdx) in getBlockSummary(block.id).groupedList"
+                                                        v-for="(
+                                                            grp, gIdx
+                                                        ) in getBlockSummary(
+                                                            block.id,
+                                                        ).groupedList"
                                                         :key="gIdx"
                                                         class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-blue-200 text-blue-950 text-xs font-black shadow-2xs"
                                                     >
-                                                        <span>{{ grp.label }}</span>
+                                                        <span>{{
+                                                            grp.label
+                                                        }}</span>
                                                     </div>
                                                 </div>
                                             </td>
@@ -8807,9 +9725,7 @@ watch(
                                         <td
                                             class="p-3 text-right text-slate-700 align-middle whitespace-nowrap font-medium border-r border-slate-100"
                                         >
-                                            {{
-                                                formatRupiah(it.harga_master)
-                                            }}
+                                            {{ formatRupiah(it.harga_master) }}
                                             / {{ it.satuan || "Kg" }}
                                         </td>
                                         <!-- Subtotal PO -->
@@ -8842,9 +9758,15 @@ watch(
                                         <td
                                             class="p-3.5 text-right font-black text-blue-950 bg-white whitespace-nowrap align-middle"
                                         >
-                                            <div class="flex flex-col items-end justify-center gap-1">
+                                            <div
+                                                class="flex flex-col items-end justify-center gap-1"
+                                            >
                                                 <div
-                                                    v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
+                                                    v-for="(
+                                                        grp, gIdx
+                                                    ) in getGroupedUnitList(
+                                                        bahanCalculations,
+                                                    )"
                                                     :key="gIdx"
                                                     class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-900 text-xs font-black"
                                                 >
@@ -8947,12 +9869,14 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-white p-2 rounded-lg border border-amber-200 text-center font-bold"
                                     >
-                                        Net = &sum; [ (Gram &times; PM) &divide; 1.000 ]
+                                        Net = &sum; [ (Gram &times; PM) &divide;
+                                        1.000 ]
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Total berat porsi konsumsi bersih seluruh PM (Porsi Kecil + Porsi Besar).
+                                        Total berat porsi konsumsi bersih
+                                        seluruh PM (Porsi Kecil + Porsi Besar).
                                     </p>
                                 </div>
                                 <div
@@ -8969,12 +9893,14 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-blue-50/80 p-2 rounded-lg border border-blue-200 text-center font-bold"
                                     >
-                                        Gross = [ Net &divide; BDD% ] &times; (1 + Buffer%)
+                                        Gross = [ Net &divide; BDD% ] &times; (1
+                                        + Buffer%)
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Faktor BDD% bagian termakan + Buffer% toleransi susut/masak.
+                                        Faktor BDD% bagian termakan + Buffer%
+                                        toleransi susut/masak.
                                     </p>
                                 </div>
                                 <div
@@ -8991,12 +9917,14 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-800 font-mono bg-purple-50/80 p-2 rounded-lg border border-purple-200 text-center font-bold"
                                     >
-                                        Pagu = (PK &times; 8.000) + (PB &times; 10.000)
+                                        Pagu = (PK &times; 8.000) + (PB &times;
+                                        10.000)
                                     </p>
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Alokasi pagu standar BGN untuk seluruh porsi sasaran harian.
+                                        Alokasi pagu standar BGN untuk seluruh
+                                        porsi sasaran harian.
                                     </p>
                                 </div>
                                 <div
@@ -9018,7 +9946,9 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-500 leading-snug"
                                     >
-                                        Indikator status: Kurang (Hemat), Pas (100%), Optimal (85-99%), atau Lebih (Over).
+                                        Indikator status: Kurang (Hemat), Pas
+                                        (100%), Optimal (85-99%), atau Lebih
+                                        (Over).
                                     </p>
                                 </div>
                             </div>
@@ -9033,10 +9963,14 @@ watch(
                                     <span
                                         class="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5"
                                     >
-                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-amber-500"
+                                        ></span>
                                         Total Berat Bersih (Net)
                                     </span>
-                                    <span class="text-[10.5px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                    <span
+                                        class="text-[10.5px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md"
+                                    >
                                         Porsi Konsumsi
                                     </span>
                                 </div>
@@ -9054,7 +9988,9 @@ watch(
                                     }}
                                 </div>
                                 <p class="text-[11px] text-slate-500">
-                                    Total berat bersih siap santap untuk {{ totalPM.toLocaleString("id-ID") }} porsi PM
+                                    Total berat bersih siap santap untuk
+                                    {{ totalPM.toLocaleString("id-ID") }} porsi
+                                    PM
                                 </p>
                             </div>
 
@@ -9065,16 +10001,26 @@ watch(
                                     <span
                                         class="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5"
                                     >
-                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-blue-500"
+                                        ></span>
                                         Total Kebutuhan Pengadaan (Gross)
                                     </span>
-                                    <span class="text-[10.5px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                                    <span
+                                        class="text-[10.5px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md"
+                                    >
                                         Termasuk BDD & Margin
                                     </span>
                                 </div>
-                                <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                <div
+                                    class="flex flex-wrap items-center gap-1.5 pt-0.5"
+                                >
                                     <span
-                                        v-for="(grp, gIdx) in getGroupedUnitList(bahanCalculations)"
+                                        v-for="(
+                                            grp, gIdx
+                                        ) in getGroupedUnitList(
+                                            bahanCalculations,
+                                        )"
                                         :key="gIdx"
                                         class="px-3 py-1 rounded-xl bg-white border border-blue-200 text-blue-950 text-sm font-black shadow-2xs"
                                     >
@@ -9082,7 +10028,8 @@ watch(
                                     </span>
                                 </div>
                                 <p class="text-[11px] text-blue-700/80">
-                                    Total volume belanja mentah diajukan ke logistik SPPG
+                                    Total volume belanja mentah diajukan ke
+                                    logistik SPPG
                                 </p>
                             </div>
                         </div>
@@ -9094,14 +10041,20 @@ watch(
                                 class="p-4 rounded-2xl bg-slate-50/90 border border-slate-300 text-slate-900 shadow-2xs space-y-2 flex flex-col justify-between"
                             >
                                 <div>
-                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                    <div
+                                        class="flex items-center justify-between gap-1 mb-1"
+                                    >
                                         <span
                                             class="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5"
                                         >
-                                            <Coins class="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            <Coins
+                                                class="h-3.5 w-3.5 text-slate-500 shrink-0"
+                                            />
                                             Batas Total Pagu Anggaran
                                         </span>
-                                        <span class="text-[10.5px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                                        <span
+                                            class="text-[10.5px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md"
+                                        >
                                             Standar BGN
                                         </span>
                                     </div>
@@ -9111,14 +10064,34 @@ watch(
                                         {{ formatRupiah(totalBatasPaguMaster) }}
                                     </div>
                                 </div>
-                                <div class="space-y-1 pt-1 border-t border-slate-200/80 text-[11px] text-slate-600">
-                                    <div class="flex justify-between items-center">
-                                        <span>PK ({{ totalPK.toLocaleString("id-ID") }} &times; Rp 8.000):</span>
-                                        <strong class="text-slate-800">{{ formatRupiah(totalPK * 8000) }}</strong>
+                                <div
+                                    class="space-y-1 pt-1 border-t border-slate-200/80 text-[11px] text-slate-600"
+                                >
+                                    <div
+                                        class="flex justify-between items-center"
+                                    >
+                                        <span
+                                            >PK ({{
+                                                totalPK.toLocaleString("id-ID")
+                                            }}
+                                            &times; Rp 8.000):</span
+                                        >
+                                        <strong class="text-slate-800">{{
+                                            formatRupiah(totalPK * 8000)
+                                        }}</strong>
                                     </div>
-                                    <div class="flex justify-between items-center">
-                                        <span>PB ({{ totalPB.toLocaleString("id-ID") }} &times; Rp 10.000):</span>
-                                        <strong class="text-slate-800">{{ formatRupiah(totalPB * 10000) }}</strong>
+                                    <div
+                                        class="flex justify-between items-center"
+                                    >
+                                        <span
+                                            >PB ({{
+                                                totalPB.toLocaleString("id-ID")
+                                            }}
+                                            &times; Rp 10.000):</span
+                                        >
+                                        <strong class="text-slate-800">{{
+                                            formatRupiah(totalPB * 10000)
+                                        }}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -9128,26 +10101,38 @@ watch(
                                 class="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-300 text-emerald-950 shadow-2xs space-y-2 flex flex-col justify-between"
                             >
                                 <div>
-                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                    <div
+                                        class="flex items-center justify-between gap-1 mb-1"
+                                    >
                                         <span
                                             class="text-[11px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5"
                                         >
-                                            <ShoppingBag class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                            <ShoppingBag
+                                                class="h-3.5 w-3.5 text-emerald-600 shrink-0"
+                                            />
                                             Grand Total Belanja (PO)
                                         </span>
-                                        <span class="text-[10.5px] font-bold text-emerald-800 bg-white border border-emerald-200 px-2 py-0.5 rounded-md">
+                                        <span
+                                            class="text-[10.5px] font-bold text-emerald-800 bg-white border border-emerald-200 px-2 py-0.5 rounded-md"
+                                        >
                                             {{ selectedBahanList.length }} Item
                                         </span>
                                     </div>
                                     <div
                                         class="text-xl sm:text-2xl font-black text-emerald-900"
                                     >
-                                        {{ formatRupiah(grandTotalDraftMaster) }}
+                                        {{
+                                            formatRupiah(grandTotalDraftMaster)
+                                        }}
                                     </div>
                                 </div>
-                                <div class="pt-1 border-t border-emerald-200/80 text-[11px] text-emerald-800 flex justify-between items-center">
+                                <div
+                                    class="pt-1 border-t border-emerald-200/80 text-[11px] text-emerald-800 flex justify-between items-center"
+                                >
                                     <span>Estimasi Bahan PO:</span>
-                                    <strong>{{ formatRupiah(grandTotalDraftMaster) }}</strong>
+                                    <strong>{{
+                                        formatRupiah(grandTotalDraftMaster)
+                                    }}</strong>
                                 </div>
                             </div>
 
@@ -9157,45 +10142,70 @@ watch(
                                 :class="statusEvaluasiPaguMaster.cardClass"
                             >
                                 <div>
-                                    <div class="flex items-center justify-between gap-1 mb-1">
+                                    <div
+                                        class="flex items-center justify-between gap-1 mb-1"
+                                    >
                                         <span
                                             class="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5"
                                         >
-                                            <Activity class="h-3.5 w-3.5 shrink-0" />
+                                            <Activity
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
                                             Selisih & Evaluasi Pagu
                                         </span>
                                         <span
                                             class="text-[10.5px] px-2 py-0.5 rounded-lg border font-black"
-                                            :class="statusEvaluasiPaguMaster.badgeClass"
+                                            :class="
+                                                statusEvaluasiPaguMaster.badgeClass
+                                            "
                                         >
                                             {{ statusEvaluasiPaguMaster.label }}
                                         </span>
                                     </div>
-                                    <div class="flex items-baseline justify-between gap-2">
+                                    <div
+                                        class="flex items-baseline justify-between gap-2"
+                                    >
                                         <div
                                             class="text-xl sm:text-2xl font-black"
                                         >
-                                            {{ statusEvaluasiPaguMaster.selisihFormatted }}
+                                            {{
+                                                statusEvaluasiPaguMaster.selisihFormatted
+                                            }}
                                         </div>
-                                        <span class="text-xs font-bold text-slate-600">
-                                            {{ statusEvaluasiPaguMaster.percentFormatted }} pagu
+                                        <span
+                                            class="text-xs font-bold text-slate-600"
+                                        >
+                                            {{
+                                                statusEvaluasiPaguMaster.percentFormatted
+                                            }}
+                                            pagu
                                         </span>
                                     </div>
                                 </div>
 
-                                <div class="space-y-1.5 pt-1 border-t border-slate-200/60">
+                                <div
+                                    class="space-y-1.5 pt-1 border-t border-slate-200/60"
+                                >
                                     <!-- Progress Bar Penyerapan Pagu -->
-                                    <div class="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                                    <div
+                                        class="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden"
+                                    >
                                         <div
                                             class="h-full transition-all rounded-full"
-                                            :class="statusEvaluasiPaguMaster.barClass"
+                                            :class="
+                                                statusEvaluasiPaguMaster.barClass
+                                            "
                                             :style="{
                                                 width: `${Math.min(statusEvaluasiPaguMaster.percent, 100)}%`,
                                             }"
                                         ></div>
                                     </div>
-                                    <p class="text-[11px] leading-snug text-slate-700 font-medium">
-                                        {{ statusEvaluasiPaguMaster.keterangan }}
+                                    <p
+                                        class="text-[11px] leading-snug text-slate-700 font-medium"
+                                    >
+                                        {{
+                                            statusEvaluasiPaguMaster.keterangan
+                                        }}
                                     </p>
                                 </div>
                             </div>
@@ -9239,7 +10249,8 @@ watch(
                             >
                                 <Info class="h-4 w-4 text-blue-600 shrink-0" />
                                 <span
-                                    >Metode Perhitungan Food Cost per Porsi (Normal & Varian Alergi)</span
+                                    >Metode Perhitungan Food Cost per Porsi
+                                    (Normal & Varian Alergi)</span
                                 >
                             </div>
                             <div
@@ -9250,16 +10261,35 @@ watch(
                                 >
                                     <strong
                                         class="text-blue-950 font-bold block flex items-center gap-1.5"
-                                        ><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>1. Rumus Food Cost per Bahan Baku:</strong
+                                        ><span
+                                            class="w-2 h-2 rounded-full bg-blue-500 inline-block"
+                                        ></span
+                                        >1. Rumus Food Cost per Bahan
+                                        Baku:</strong
                                     >
                                     <p
                                         class="text-[11px] text-slate-700 font-mono bg-slate-50 p-2 rounded-lg border border-slate-200 font-semibold"
                                     >
-                                        Cost/Porsi = [ (Gram Bersih ÷ BDD%) × (1 + Buffer%) ] × Harga per Satuan
+                                        Cost/Porsi = [ (Gram Bersih ÷ BDD%) × (1
+                                        + Buffer%) ] × Harga per Satuan
                                     </p>
-                                    <p class="text-[11px] text-slate-500 leading-snug">
-                                        &bull; <strong>Penyesuaian Jenis:</strong> Hanya item berjenis <strong>🥗 Bahan Baku (Pangan)</strong> yang dihitung ke dalam Food Cost per porsi. Item berjenis <strong>📦 Operasional (Non-Gizi)</strong> dikecualikan (Rp 0/porsi) karena masuk beban belanja PO logistik.<br/>
-                                        &bull; Untuk satuan Kg/Liter, formula otomatis membagi 1.000 terhadap harga per Kg/L.
+                                    <p
+                                        class="text-[11px] text-slate-500 leading-snug"
+                                    >
+                                        &bull;
+                                        <strong>Penyesuaian Jenis:</strong>
+                                        Hanya item berjenis
+                                        <strong>🥗 Bahan Baku (Pangan)</strong>
+                                        yang dihitung ke dalam Food Cost per
+                                        porsi. Item berjenis
+                                        <strong
+                                            >📦 Operasional (Non-Gizi)</strong
+                                        >
+                                        dikecualikan (Rp 0/porsi) karena masuk
+                                        beban belanja PO logistik.<br />
+                                        &bull; Untuk satuan Kg/Liter, formula
+                                        otomatis membagi 1.000 terhadap harga
+                                        per Kg/L.
                                     </p>
                                 </div>
                                 <div
@@ -9267,19 +10297,33 @@ watch(
                                 >
                                     <strong
                                         class="text-blue-950 font-bold block flex items-center gap-1.5"
-                                        ><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>2. Klasifikasi Porsi Normal vs Varian Alergi:</strong
+                                        ><span
+                                            class="w-2 h-2 rounded-full bg-emerald-500 inline-block"
+                                        ></span
+                                        >2. Klasifikasi Porsi Normal vs Varian
+                                        Alergi:</strong
                                     >
                                     <ul
                                         class="text-[11px] text-slate-600 space-y-1.5 list-disc list-inside leading-snug"
                                     >
                                         <li>
-                                            <strong>Porsi Normal:</strong> Akumulasi bahan baku pangan porsi normal untuk seluruh PM non-alergi.
+                                            <strong>Porsi Normal:</strong>
+                                            Akumulasi bahan baku pangan porsi
+                                            normal untuk seluruh PM non-alergi.
                                         </li>
                                         <li>
-                                            <strong>Porsi Alergi:</strong> (Bahan Baku Normal Aman / Bebas Alergen) + (Bahan Baku Substitusi Alergi). Bahan baku ber-alergen otomatis dieliminasi.
+                                            <strong>Porsi Alergi:</strong>
+                                            (Bahan Baku Normal Aman / Bebas
+                                            Alergen) + (Bahan Baku Substitusi
+                                            Alergi). Bahan baku ber-alergen
+                                            otomatis dieliminasi.
                                         </li>
                                         <li>
-                                            <strong>Pagu Standar BGN:</strong> Porsi Kecil (PK) pagu <strong>Rp 8.000</strong>, Porsi Besar (PB) pagu <strong>Rp 10.000</strong>.
+                                            <strong>Pagu Standar BGN:</strong>
+                                            Porsi Kecil (PK) pagu
+                                            <strong>Rp 8.000</strong>, Porsi
+                                            Besar (PB) pagu
+                                            <strong>Rp 10.000</strong>.
                                         </li>
                                     </ul>
                                 </div>
@@ -9300,7 +10344,12 @@ watch(
                                     <span
                                         class="text-xs font-black uppercase tracking-wider text-slate-800"
                                     >
-                                        {{ (activeAlergiList && activeAlergiList.length > 0) ? 'A. Menu Utama (Porsi Normal)' : 'Menu Utama (Porsi Normal)' }}
+                                        {{
+                                            activeAlergiList &&
+                                            activeAlergiList.length > 0
+                                                ? "A. Menu Utama (Porsi Normal)"
+                                                : "Menu Utama (Porsi Normal)"
+                                        }}
                                     </span>
                                 </div>
                                 <span
@@ -9600,7 +10649,21 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
+                                                                    :class="
+                                                                        getPortionCostBarColor(
+                                                                            smCost.percent_pk,
+                                                                        )
+                                                                    "
+                                                                    class="h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            Math.min(
+                                                                                smCost.percent_pk ||
+                                                                                    0,
+                                                                                100,
+                                                                            ) +
+                                                                            '%',
+                                                                    }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -9615,7 +10678,21 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
+                                                                    :class="
+                                                                        getPortionCostBarColor(
+                                                                            smCost.percent_pb,
+                                                                        )
+                                                                    "
+                                                                    class="h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            Math.min(
+                                                                                smCost.percent_pb ||
+                                                                                    0,
+                                                                                100,
+                                                                            ) +
+                                                                            '%',
+                                                                    }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -9661,27 +10738,51 @@ watch(
                                         </tfoot>
                                     </table>
                                 </div>
-                            <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
-                            <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
-                                <div class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
-                                    <span>📊</span>
-                                    <span>Keterangan Indikator Porsi Biaya (PK / PB):</span>
+                                <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
+                                <div
+                                    class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5"
+                                >
+                                    <div
+                                        class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]"
+                                    >
+                                        <span>📊</span>
+                                        <span
+                                            >Keterangan Indikator Porsi Biaya
+                                            (PK / PB):</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex items-center gap-4 text-[11px] font-medium flex-wrap"
+                                    >
+                                        <div class="flex items-center gap-1.5">
+                                            <span
+                                                class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"
+                                            ></span>
+                                            <span
+                                                ><strong>Hijau:</strong> Rendah
+                                                (&le; 25%)</span
+                                            >
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span
+                                                class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"
+                                            ></span>
+                                            <span
+                                                ><strong>Kuning:</strong> Sedang
+                                                (26% - 50%)</span
+                                            >
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span
+                                                class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"
+                                            ></span>
+                                            <span
+                                                ><strong>Merah:</strong> Dominan
+                                                / Tinggi (&gt; 50%)</span
+                                            >
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-4 text-[11px] font-medium flex-wrap">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                                        <span><strong>Hijau:</strong> Rendah (&le; 25%)</span>
-                                    </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                                        <span><strong>Kuning:</strong> Sedang (26% - 50%)</span>
-                                    </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                                        <span><strong>Merah:</strong> Dominan / Tinggi (&gt; 50%)</span>
-                                    </div>
-                                </div>
-                            </div>
                             </div>
                         </div>
 
@@ -10097,10 +11198,18 @@ watch(
                                                                 >
                                                                     <div
                                                                         class="h-full rounded-full transition-all"
-                                                                        :class="getPortionCostBarColor(smCost.percent_pk)"
+                                                                        :class="
+                                                                            getPortionCostBarColor(
+                                                                                smCost.percent_pk,
+                                                                            )
+                                                                        "
                                                                         :style="{
                                                                             width:
-                                                                                Math.min(smCost.percent_pk || 0, 100) +
+                                                                                Math.min(
+                                                                                    smCost.percent_pk ||
+                                                                                        0,
+                                                                                    100,
+                                                                                ) +
                                                                                 '%',
                                                                         }"
                                                                     ></div>
@@ -10118,10 +11227,18 @@ watch(
                                                                 >
                                                                     <div
                                                                         class="h-full rounded-full transition-all"
-                                                                        :class="getPortionCostBarColor(smCost.percent_pb)"
+                                                                        :class="
+                                                                            getPortionCostBarColor(
+                                                                                smCost.percent_pb,
+                                                                            )
+                                                                        "
                                                                         :style="{
                                                                             width:
-                                                                                Math.min(smCost.percent_pb || 0, 100) +
+                                                                                Math.min(
+                                                                                    smCost.percent_pb ||
+                                                                                        0,
+                                                                                    100,
+                                                                                ) +
                                                                                 '%',
                                                                         }"
                                                                     ></div>
@@ -10249,7 +11366,23 @@ watch(
                                         <p
                                             class="text-[11px] text-slate-500 leading-snug"
                                         >
-                                            Kandungan zat gizi (Energi, Protein, Lemak, Karbohidrat, Serat) dihitung otomatis berdasarkan porsi berat bersih (<em>edible weight</em>) bahan masakan terhadap database TKPI. <strong>Catatan:</strong> Hanya item berjenis <strong>🥗 Bahan Baku (Pangan)</strong> yang menyumbang nilai gizi. Item <strong>📦 Operasional (Non-Gizi)</strong> otomatis dinilai 0 zat gizi.
+                                            Kandungan zat gizi (Energi, Protein,
+                                            Lemak, Karbohidrat, Serat) dihitung
+                                            otomatis berdasarkan porsi berat
+                                            bersih (<em>edible weight</em>)
+                                            bahan masakan terhadap database
+                                            TKPI.
+                                            <strong>Catatan:</strong> Hanya item
+                                            berjenis
+                                            <strong
+                                                >🥗 Bahan Baku (Pangan)</strong
+                                            >
+                                            yang menyumbang nilai gizi. Item
+                                            <strong
+                                                >📦 Operasional
+                                                (Non-Gizi)</strong
+                                            >
+                                            otomatis dinilai 0 zat gizi.
                                         </p>
                                     </div>
                                     <div
@@ -10411,7 +11544,12 @@ watch(
                                         <span
                                             class="text-xs font-black uppercase tracking-wider text-slate-800"
                                         >
-                                            {{ (activeAlergiAkgList && activeAlergiAkgList.length > 0) ? 'A. Menu Utama (Porsi Normal)' : 'Menu Utama (Porsi Normal)' }}
+                                            {{
+                                                activeAlergiAkgList &&
+                                                activeAlergiAkgList.length > 0
+                                                    ? "A. Menu Utama (Porsi Normal)"
+                                                    : "Menu Utama (Porsi Normal)"
+                                            }}
                                         </span>
                                     </div>
                                     <span
@@ -10464,18 +11602,38 @@ watch(
                                         >
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPKNormal.energi,
+                                                        330,
+                                                        413,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Energi</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPKNormal.energi, 330, 413).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.energi,
+                                                                330,
+                                                                413,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPKNormal.energi, 330, 413).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.energi,
+                                                                330,
+                                                                413,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10488,23 +11646,44 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 330 - 413 kkal</span
+                                                    >Target: 330 - 413
+                                                    kkal</span
                                                 >
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPKNormal.protein,
+                                                        8.0,
+                                                        10.0,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Protein</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.protein,
+                                                                8.0,
+                                                                10.0,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPKNormal.protein, 8.0, 10.0).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.protein,
+                                                                8.0,
+                                                                10.0,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10522,18 +11701,38 @@ watch(
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPKNormal.lemak,
+                                                        11.0,
+                                                        13.8,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Lemak</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.lemak,
+                                                                11.0,
+                                                                13.8,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPKNormal.lemak, 11.0, 13.8).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.lemak,
+                                                                11.0,
+                                                                13.8,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10555,18 +11754,38 @@ watch(
                                         >
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPKNormal.karbohidrat,
+                                                        50.0,
+                                                        62.5,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Karbohidrat</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.karbohidrat,
+                                                                50.0,
+                                                                62.5,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPKNormal.karbohidrat, 50.0, 62.5).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.karbohidrat,
+                                                                50.0,
+                                                                62.5,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10584,18 +11803,38 @@ watch(
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPKNormal.serat,
+                                                        4.0,
+                                                        7.0,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Serat</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.serat,
+                                                                4.0,
+                                                                7.0,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPKNormal.serat, 4.0, 7.0).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPKNormal.serat,
+                                                                4.0,
+                                                                7.0,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10651,18 +11890,38 @@ watch(
                                         >
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPBNormal.energi,
+                                                        585,
+                                                        831,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Energi</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPBNormal.energi, 585, 831).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.energi,
+                                                                585,
+                                                                831,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPBNormal.energi, 585, 831).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.energi,
+                                                                585,
+                                                                831,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10675,23 +11934,44 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 585 - 831 kkal</span
+                                                    >Target: 585 - 831
+                                                    kkal</span
                                                 >
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPBNormal.protein,
+                                                        15.8,
+                                                        24.5,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Protein</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.protein,
+                                                                15.8,
+                                                                24.5,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPBNormal.protein, 15.8, 24.5).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.protein,
+                                                                15.8,
+                                                                24.5,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10709,18 +11989,38 @@ watch(
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPBNormal.lemak,
+                                                        19.5,
+                                                        26.3,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Lemak</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.lemak,
+                                                                19.5,
+                                                                26.3,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPBNormal.lemak, 19.5, 26.3).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.lemak,
+                                                                19.5,
+                                                                26.3,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10742,18 +12042,38 @@ watch(
                                         >
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPBNormal.karbohidrat,
+                                                        87.0,
+                                                        122.5,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Karbohidrat</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.karbohidrat,
+                                                                87.0,
+                                                                122.5,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPBNormal.karbohidrat, 87.0, 122.5).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.karbohidrat,
+                                                                87.0,
+                                                                122.5,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10766,23 +12086,44 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 87.0 - 122.5 g</span
+                                                    >Target: 87.0 - 122.5
+                                                    g</span
                                                 >
                                             </div>
                                             <div
                                                 class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).borderClass"
+                                                :class="
+                                                    getNutrientStatus(
+                                                        akgResultPBNormal.serat,
+                                                        6.0,
+                                                        10.0,
+                                                    ).borderClass
+                                                "
                                             >
-                                                <div class="flex items-center justify-between">
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
                                                     <span
                                                         class="text-slate-500 text-[10px] uppercase font-bold"
                                                         >Serat</span
                                                     >
                                                     <span
                                                         class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).badgeClass"
+                                                        :class="
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.serat,
+                                                                6.0,
+                                                                10.0,
+                                                            ).badgeClass
+                                                        "
                                                     >
-                                                        {{ getNutrientStatus(akgResultPBNormal.serat, 6.0, 10.0).label }}
+                                                        {{
+                                                            getNutrientStatus(
+                                                                akgResultPBNormal.serat,
+                                                                6.0,
+                                                                10.0,
+                                                            ).label
+                                                        }}
                                                     </span>
                                                 </div>
                                                 <div
@@ -10884,18 +12225,40 @@ watch(
                                             >
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pk.energi, 330, 413).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pk.energi,
+                                                            330,
+                                                            413,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Energi</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pk.energi, 330, 413).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .energi,
+                                                                    330,
+                                                                    413,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pk.energi, 330, 413).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .energi,
+                                                                    330,
+                                                                    413,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -10906,23 +12269,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 330 - 413 kkal</span
+                                                        >Target: 330 - 413
+                                                        kkal</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pk.protein,
+                                                            8.0,
+                                                            10.0,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Protein</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pk.protein, 8.0, 10.0).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .protein,
+                                                                    8.0,
+                                                                    10.0,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pk.protein, 8.0, 10.0).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .protein,
+                                                                    8.0,
+                                                                    10.0,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -10932,23 +12318,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 8.0 - 10.0 g</span
+                                                        >Target: 8.0 - 10.0
+                                                        g</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pk.lemak,
+                                                            11.0,
+                                                            13.8,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Lemak</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .lemak,
+                                                                    11.0,
+                                                                    13.8,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pk.lemak, 11.0, 13.8).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .lemak,
+                                                                    11.0,
+                                                                    13.8,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -10958,7 +12367,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 11.0 - 13.8 g</span
+                                                        >Target: 11.0 - 13.8
+                                                        g</span
                                                     >
                                                 </div>
                                             </div>
@@ -10967,18 +12377,41 @@ watch(
                                             >
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pk
+                                                                .karbohidrat,
+                                                            50.0,
+                                                            62.5,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Karbohidrat</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .karbohidrat,
+                                                                    50.0,
+                                                                    62.5,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pk.karbohidrat, 50.0, 62.5).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .karbohidrat,
+                                                                    50.0,
+                                                                    62.5,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -10991,23 +12424,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 50.0 - 62.5 g</span
+                                                        >Target: 50.0 - 62.5
+                                                        g</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pk.serat,
+                                                            4.0,
+                                                            7.0,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Serat</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pk.serat, 4.0, 7.0).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .serat,
+                                                                    4.0,
+                                                                    7.0,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pk.serat, 4.0, 7.0).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pk
+                                                                        .serat,
+                                                                    4.0,
+                                                                    7.0,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11017,7 +12473,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 4.0 - 7.0 g</span
+                                                        >Target: 4.0 - 7.0
+                                                        g</span
                                                     >
                                                 </div>
                                             </div>
@@ -11066,18 +12523,40 @@ watch(
                                             >
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pb.energi, 585, 831).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pb.energi,
+                                                            585,
+                                                            831,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Energi</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pb.energi, 585, 831).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .energi,
+                                                                    585,
+                                                                    831,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pb.energi, 585, 831).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .energi,
+                                                                    585,
+                                                                    831,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11088,23 +12567,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 585 - 831 kkal</span
+                                                        >Target: 585 - 831
+                                                        kkal</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pb.protein,
+                                                            15.8,
+                                                            24.5,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Protein</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pb.protein, 15.8, 24.5).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .protein,
+                                                                    15.8,
+                                                                    24.5,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pb.protein, 15.8, 24.5).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .protein,
+                                                                    15.8,
+                                                                    24.5,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11114,23 +12616,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 15.8 - 24.5 g</span
+                                                        >Target: 15.8 - 24.5
+                                                        g</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pb.lemak,
+                                                            19.5,
+                                                            26.3,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Lemak</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .lemak,
+                                                                    19.5,
+                                                                    26.3,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pb.lemak, 19.5, 26.3).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .lemak,
+                                                                    19.5,
+                                                                    26.3,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11140,7 +12665,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 19.5 - 26.3 g</span
+                                                        >Target: 19.5 - 26.3
+                                                        g</span
                                                     >
                                                 </div>
                                             </div>
@@ -11149,18 +12675,41 @@ watch(
                                             >
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pb
+                                                                .karbohidrat,
+                                                            87.0,
+                                                            122.5,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Karbohidrat</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .karbohidrat,
+                                                                    87.0,
+                                                                    122.5,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pb.karbohidrat, 87.0, 122.5).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .karbohidrat,
+                                                                    87.0,
+                                                                    122.5,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11173,23 +12722,46 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 87.0 - 122.5 g</span
+                                                        >Target: 87.0 - 122.5
+                                                        g</span
                                                     >
                                                 </div>
                                                 <div
                                                     class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
-                                                    :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).borderClass"
+                                                    :class="
+                                                        getNutrientStatus(
+                                                            alRes.pb.serat,
+                                                            6.0,
+                                                            10.0,
+                                                        ).borderClass
+                                                    "
                                                 >
-                                                    <div class="flex items-center justify-between">
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
                                                         <span
                                                             class="text-slate-500 text-[10px] uppercase font-bold"
                                                             >Serat</span
                                                         >
                                                         <span
                                                             class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="getNutrientStatus(alRes.pb.serat, 6.0, 10.0).badgeClass"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .serat,
+                                                                    6.0,
+                                                                    10.0,
+                                                                ).badgeClass
+                                                            "
                                                         >
-                                                            {{ getNutrientStatus(alRes.pb.serat, 6.0, 10.0).label }}
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    alRes.pb
+                                                                        .serat,
+                                                                    6.0,
+                                                                    10.0,
+                                                                ).label
+                                                            }}
                                                         </span>
                                                     </div>
                                                     <div
@@ -11199,7 +12771,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 6.0 - 10.0 g</span
+                                                        >Target: 6.0 - 10.0
+                                                        g</span
                                                     >
                                                 </div>
                                             </div>
@@ -11256,18 +12829,1029 @@ watch(
                         @click="handleLanjutStep3"
                         className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
                     >
-                        <Send class="h-4 w-4 shrink-0" />
-                        <span>Lanjut ke Review & Pengajuan (Langkah 3)</span>
+                        <ArrowRight class="h-4 w-4 shrink-0" />
+                        <span>Lanjut ke Catatan Tim Produksi (Langkah 3)</span>
                     </Button>
                 </div>
             </div>
         </div>
 
         <!-- ========================================================================================= -->
-        <!-- Bagian 3: Review & Pengajuan Lengkap Work Order (Step 3) -->
+        <!-- Bagian 3: Catatan Kerja Tim Produksi (Step 3: Persiapan, Pengolahan, Pemorsian) -->
+        <!-- ========================================================================================= -->
+        <div
+            v-if="buatMenuSubTab === 'catatan_resep'"
+            class="space-y-6 animate-in fade-in duration-200"
+        >
+            <!-- Header Langkah 3: Catatan Kerja Tim -->
+            <Card className="bg-white border-slate-200 shadow-xs">
+                <CardHeader
+                    className="p-4 sm:p-5 border-b border-slate-100 bg-white flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                >
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2.5">
+                            <div
+                                class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-sm"
+                            >
+                                3
+                            </div>
+                            <CardTitle
+                                class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
+                            >
+                                <ClipboardList class="h-5 w-5 text-primary" />
+                                <span
+                                    >Catatan Kerja & Instruksi Operasional Tim
+                                    Produksi</span
+                                >
+                            </CardTitle>
+                        </div>
+                        <CardDescription class="text-xs text-slate-500 pl-10.5">
+                            Instruksi operasional spesifik per sub-menu untuk
+                            <strong>Tim Persiapan</strong>,
+                            <strong>Tim Pengolahan</strong>, dan
+                            <strong>Tim Pemorsian</strong> berdasarkan formula
+                            makanan yang telah disusun.
+                        </CardDescription>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex items-center gap-2.5 flex-wrap shrink-0">
+                        <Button
+                            type="button"
+                            @click="generateOtomatisCatatanTim"
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-3.5 h-9.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs transition"
+                            title="Generate instruksi otomatis dari bahan yang dipilih di Langkah 2"
+                        >
+                            <Sparkles class="h-4 w-4 text-amber-600" />
+                            <span>Generate Otomatis dari Formula</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            @click="openTambahCatatanModal(activeTimTab)"
+                            className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-4 h-9.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition"
+                        >
+                            <Plus class="h-4 w-4" />
+                            <span>Tambah Catatan Baru</span>
+                        </Button>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="p-4 sm:p-6 space-y-6">
+                    <!-- Tab Switcher Tim: Persiapan | Pengolahan | Pemorsian -->
+                    <div
+                        class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80"
+                    >
+                        <div class="flex items-center gap-1.5 p-1 flex-1">
+                            <!-- Tab Tim Persiapan -->
+                            <button
+                                type="button"
+                                @click="activeTimTab = 'persiapan'"
+                                :class="[
+                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    activeTimTab === 'persiapan'
+                                        ? 'bg-white text-amber-900 shadow-xs border border-amber-200/80 ring-2 ring-amber-500/20'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                ]"
+                            >
+                                <Utensils class="h-4 w-4 text-amber-600" />
+                                <span>Tim Persiapan</span>
+                                <Badge
+                                    :className="[
+                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        activeTimTab === 'persiapan'
+                                            ? 'bg-amber-500 text-white border-amber-600'
+                                            : 'bg-slate-200 text-slate-700 border-slate-300',
+                                    ]"
+                                >
+                                    {{ catatanTim.persiapan?.length || 0 }}
+                                </Badge>
+                            </button>
+
+                            <!-- Tab Tim Pengolahan -->
+                            <button
+                                type="button"
+                                @click="activeTimTab = 'pengolahan'"
+                                :class="[
+                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    activeTimTab === 'pengolahan'
+                                        ? 'bg-white text-blue-900 shadow-xs border border-blue-200/80 ring-2 ring-blue-500/20'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                ]"
+                            >
+                                <UtensilsCrossed
+                                    class="h-4 w-4 text-blue-600"
+                                />
+                                <span>Tim Pengolahan</span>
+                                <Badge
+                                    :className="[
+                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        activeTimTab === 'pengolahan'
+                                            ? 'bg-blue-600 text-white border-blue-700'
+                                            : 'bg-slate-200 text-slate-700 border-slate-300',
+                                    ]"
+                                >
+                                    {{ catatanTim.pengolahan?.length || 0 }}
+                                </Badge>
+                            </button>
+
+                            <!-- Tab Tim Pemorsian -->
+                            <button
+                                type="button"
+                                @click="activeTimTab = 'pemorsian'"
+                                :class="[
+                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    activeTimTab === 'pemorsian'
+                                        ? 'bg-white text-purple-900 shadow-xs border border-purple-200/80 ring-2 ring-purple-500/20'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+                                ]"
+                            >
+                                <ShoppingBag class="h-4 w-4 text-purple-600" />
+                                <span>Tim Pemorsian</span>
+                                <Badge
+                                    :className="[
+                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        activeTimTab === 'pemorsian'
+                                            ? 'bg-purple-600 text-white border-purple-700'
+                                            : 'bg-slate-200 text-slate-700 border-slate-300',
+                                    ]"
+                                >
+                                    {{ catatanTim.pemorsian?.length || 0 }}
+                                </Badge>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- TAB 1: TIM PERSIAPAN -->
+                    <!-- ========================================== -->
+                    <div
+                        v-if="activeTimTab === 'persiapan'"
+                        class="space-y-5 animate-in fade-in duration-150"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs"
+                                >
+                                    <Utensils class="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4
+                                        class="text-xs sm:text-sm font-black text-amber-950"
+                                    >
+                                        Instruksi Kerja Tim Persiapan
+                                    </h4>
+                                    <p class="text-[11px] text-amber-800">
+                                        Fokus pada penerimaan bahan,
+                                        penimbangan, pencucian, pemotongan, dan
+                                        pra-olah (marinasi).
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                @click="openTambahCatatanModal('persiapan')"
+                                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                <span>Tambah Catatan Persiapan</span>
+                            </Button>
+                        </div>
+
+                        <!-- Tabel Tim Persiapan -->
+                        <div
+                            class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                        >
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full text-left text-xs border-collapse"
+                                >
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50 border-b border-slate-200 text-slate-700 text-[11px] uppercase tracking-wider font-black"
+                                        >
+                                            <th
+                                                class="py-3 px-3 text-center w-12"
+                                            >
+                                                No
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[140px]">
+                                                Nama Menu
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[150px]">
+                                                Bahan Baku
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[100px] text-center"
+                                            >
+                                                Kuantitas
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[130px] text-center"
+                                            >
+                                                Waktu Eksekusi
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[200px]">
+                                                Perlakuan
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[150px]">
+                                                Keterangan
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 text-center w-24"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(
+                                                item, pIdx
+                                            ) in catatanTim.persiapan"
+                                            :key="item.id || pIdx"
+                                            class="hover:bg-amber-50/30 transition group"
+                                        >
+                                            <td
+                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                            >
+                                                {{ pIdx + 1 }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 font-black text-slate-900"
+                                            >
+                                                {{ item.nama_menu || "-" }}
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <div
+                                                    class="font-bold text-slate-800"
+                                                >
+                                                    {{ item.bahan_baku || "-" }}
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <span
+                                                    class="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 font-black text-[11px]"
+                                                >
+                                                    {{ item.kuantitas || "-" }}
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <div
+                                                    class="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-100 text-slate-800 font-bold text-[11px]"
+                                                >
+                                                    <Clock
+                                                        class="w-3.5 h-3.5 text-amber-600"
+                                                    />
+                                                    <span
+                                                        >{{
+                                                            item.waktu_mulai ||
+                                                            "--:--"
+                                                        }}
+                                                        -
+                                                        {{
+                                                            item.waktu_selesai ||
+                                                            "--:--"
+                                                        }}</span
+                                                    >
+                                                </div>
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
+                                            >
+                                                {{ item.perlakuan || "-" }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
+                                            >
+                                                {{ item.keterangan || "-" }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            openEditCatatanModal(
+                                                                item,
+                                                                'persiapan',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-100 transition cursor-pointer"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit3
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            hapusCatatanItem(
+                                                                item.id,
+                                                                'persiapan',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        title="Hapus"
+                                                    >
+                                                        <Trash2
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Empty State -->
+                                        <tr
+                                            v-if="
+                                                !catatanTim.persiapan ||
+                                                catatanTim.persiapan.length ===
+                                                    0
+                                            "
+                                        >
+                                            <td
+                                                colspan="8"
+                                                class="py-8 text-center text-slate-400"
+                                            >
+                                                <div
+                                                    class="flex flex-col items-center justify-center gap-2"
+                                                >
+                                                    <div
+                                                        class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center"
+                                                    >
+                                                        <Utensils
+                                                            class="w-5 h-5"
+                                                        />
+                                                    </div>
+                                                    <p
+                                                        class="font-bold text-xs text-slate-600"
+                                                    >
+                                                        Belum ada catatan untuk
+                                                        Tim Persiapan
+                                                    </p>
+                                                    <p
+                                                        class="text-[11px] text-slate-400 max-w-sm"
+                                                    >
+                                                        Klik tombol di bawah
+                                                        untuk menambah manual
+                                                        atau generate otomatis
+                                                        dari formula Step 2.
+                                                    </p>
+                                                    <div
+                                                        class="flex items-center gap-2 mt-2"
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                openTambahCatatanModal(
+                                                                    'persiapan',
+                                                                )
+                                                            "
+                                                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
+                                                        >
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
+                                                            Tambah Catatan
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                generateOtomatisCatatanTim
+                                                            "
+                                                            className="bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
+                                                        >
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-amber-600"
+                                                            />
+                                                            Generate Otomatis
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Catatan Tambahan (Global) Tim Persiapan -->
+                        <div
+                            class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
+                        >
+                            <div class="flex items-center justify-between">
+                                <label
+                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                >
+                                    <ClipboardList
+                                        class="w-4 h-4 text-amber-600"
+                                    />
+                                    <span
+                                        >Catatan Tambahan (Global) Tim
+                                        Persiapan</span
+                                    >
+                                </label>
+                                <span
+                                    class="text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full"
+                                >
+                                    SOP & Instruksi Umum
+                                </span>
+                            </div>
+                            <textarea
+                                v-model="catatanTim.catatan_global.persiapan"
+                                rows="3"
+                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Persiapan (misal: sanitasi talenan, pemisahan pisau sayur & daging, pemantauan chiller, standar APD)..."
+                                class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-hidden transition resize-y"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- TAB 2: TIM PENGOLAHAN -->
+                    <!-- ========================================== -->
+                    <div
+                        v-if="activeTimTab === 'pengolahan'"
+                        class="space-y-5 animate-in fade-in duration-150"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                                >
+                                    <UtensilsCrossed class="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4
+                                        class="text-xs sm:text-sm font-black text-blue-950"
+                                    >
+                                        Instruksi Kerja Tim Pengolahan (Cooking)
+                                    </h4>
+                                    <p class="text-[11px] text-blue-800">
+                                        Fokus pada teknik memasak (tumis, kukus,
+                                        goreng, rebus), suhu minyak/api, durasi
+                                        matang, dan uji rasa.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                @click="openTambahCatatanModal('pengolahan')"
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                <span>Tambah Catatan Pengolahan</span>
+                            </Button>
+                        </div>
+
+                        <!-- Tabel Tim Pengolahan -->
+                        <div
+                            class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                        >
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full text-left text-xs border-collapse"
+                                >
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50 border-b border-slate-200 text-slate-700 text-[11px] uppercase tracking-wider font-black"
+                                        >
+                                            <th
+                                                class="py-3 px-3 text-center w-12"
+                                            >
+                                                No
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[140px]">
+                                                Nama Menu
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[150px]">
+                                                Bahan Baku
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[100px] text-center"
+                                            >
+                                                Kuantitas
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[130px] text-center"
+                                            >
+                                                Waktu Eksekusi
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[200px]">
+                                                Perlakuan
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[150px]">
+                                                Keterangan
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 text-center w-24"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(
+                                                item, cIdx
+                                            ) in catatanTim.pengolahan"
+                                            :key="item.id || cIdx"
+                                            class="hover:bg-blue-50/30 transition group"
+                                        >
+                                            <td
+                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                            >
+                                                {{ cIdx + 1 }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 font-black text-slate-900"
+                                            >
+                                                {{ item.nama_menu || "-" }}
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <div
+                                                    class="font-bold text-slate-800"
+                                                >
+                                                    {{ item.bahan_baku || "-" }}
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <span
+                                                    class="inline-block px-2 py-0.5 rounded-lg bg-blue-100 text-blue-900 font-black text-[11px]"
+                                                >
+                                                    {{ item.kuantitas || "-" }}
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <div
+                                                    class="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-100 text-slate-800 font-bold text-[11px]"
+                                                >
+                                                    <Clock
+                                                        class="w-3.5 h-3.5 text-blue-600"
+                                                    />
+                                                    <span
+                                                        >{{
+                                                            item.waktu_mulai ||
+                                                            "--:--"
+                                                        }}
+                                                        -
+                                                        {{
+                                                            item.waktu_selesai ||
+                                                            "--:--"
+                                                        }}</span
+                                                    >
+                                                </div>
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
+                                            >
+                                                {{ item.perlakuan || "-" }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
+                                            >
+                                                {{ item.keterangan || "-" }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            openEditCatatanModal(
+                                                                item,
+                                                                'pengolahan',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-blue-700 hover:bg-blue-100 transition cursor-pointer"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit3
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            hapusCatatanItem(
+                                                                item.id,
+                                                                'pengolahan',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        title="Hapus"
+                                                    >
+                                                        <Trash2
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Empty State -->
+                                        <tr
+                                            v-if="
+                                                !catatanTim.pengolahan ||
+                                                catatanTim.pengolahan.length ===
+                                                    0
+                                            "
+                                        >
+                                            <td
+                                                colspan="8"
+                                                class="py-8 text-center text-slate-400"
+                                            >
+                                                <div
+                                                    class="flex flex-col items-center justify-center gap-2"
+                                                >
+                                                    <div
+                                                        class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center"
+                                                    >
+                                                        <UtensilsCrossed
+                                                            class="w-5 h-5"
+                                                        />
+                                                    </div>
+                                                    <p
+                                                        class="font-bold text-xs text-slate-600"
+                                                    >
+                                                        Belum ada catatan untuk
+                                                        Tim Pengolahan
+                                                    </p>
+                                                    <p
+                                                        class="text-[11px] text-slate-400 max-w-sm"
+                                                    >
+                                                        Tambahkan catatan
+                                                        pengolahan atau gunakan
+                                                        tombol Generate Otomatis
+                                                        dari Formula.
+                                                    </p>
+                                                    <div
+                                                        class="flex items-center gap-2 mt-2"
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                openTambahCatatanModal(
+                                                                    'pengolahan',
+                                                                )
+                                                            "
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
+                                                        >
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
+                                                            Tambah Catatan
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                generateOtomatisCatatanTim
+                                                            "
+                                                            className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
+                                                        >
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-blue-600"
+                                                            />
+                                                            Generate Otomatis
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Catatan Tambahan (Global) Tim Pengolahan -->
+                        <div
+                            class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
+                        >
+                            <div class="flex items-center justify-between">
+                                <label
+                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                >
+                                    <ClipboardList
+                                        class="w-4 h-4 text-blue-600"
+                                    />
+                                    <span
+                                        >Catatan Tambahan (Global) Tim
+                                        Pengolahan</span
+                                    >
+                                </label>
+                                <span
+                                    class="text-[10.5px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full"
+                                >
+                                    SOP & Instruksi Umum
+                                </span>
+                            </div>
+                            <textarea
+                                v-model="catatanTim.catatan_global.pengolahan"
+                                rows="3"
+                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Pengolahan (misal: suhu minimal masakan saat selesai olah, batas waktu pemakaian minyak goreng, uji organoleptik sampel)..."
+                                class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-hidden transition resize-y"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- TAB 3: TIM PEMORSIAN -->
+                    <!-- ========================================== -->
+                    <div
+                        v-if="activeTimTab === 'pemorsian'"
+                        class="space-y-5 animate-in fade-in duration-150"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                                >
+                                    <ShoppingBag class="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4
+                                        class="text-xs sm:text-sm font-black text-purple-950"
+                                    >
+                                        Instruksi Kerja Tim Pemorsian (Plating &
+                                        Packing)
+                                    </h4>
+                                    <p class="text-[11px] text-purple-800">
+                                        Fokus pada tata letak sekat kotak
+                                        makanan, gramatur per porsi (PK vs PB),
+                                        kontrol higienitas, dan packing kotak
+                                        thermal.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                @click="openTambahCatatanModal('pemorsian')"
+                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                <span>Tambah Catatan Pemorsian</span>
+                            </Button>
+                        </div>
+
+                        <!-- Tabel Tim Pemorsian -->
+                        <div
+                            class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
+                        >
+                            <div class="overflow-x-auto">
+                                <table
+                                    class="w-full text-left text-xs border-collapse"
+                                >
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50 border-b border-slate-200 text-slate-700 text-[11px] uppercase tracking-wider font-black"
+                                        >
+                                            <th
+                                                class="py-3 px-3 text-center w-12"
+                                            >
+                                                No
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[180px]">
+                                                Nama Menu
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[260px]">
+                                                Perlakuan (Tata Letak & Standar
+                                                Porsi)
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[200px]">
+                                                Keterangan
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 text-center w-24"
+                                            >
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr
+                                            v-for="(
+                                                item, sIdx
+                                            ) in catatanTim.pemorsian"
+                                            :key="item.id || sIdx"
+                                            class="hover:bg-purple-50/30 transition group"
+                                        >
+                                            <td
+                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                            >
+                                                {{ sIdx + 1 }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 font-black text-slate-900"
+                                            >
+                                                {{ item.nama_menu || "-" }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
+                                            >
+                                                {{ item.perlakuan || "-" }}
+                                            </td>
+                                            <td
+                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
+                                            >
+                                                {{ item.keterangan || "-" }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center">
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            openEditCatatanModal(
+                                                                item,
+                                                                'pemorsian',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-100 transition cursor-pointer"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit3
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="
+                                                            hapusCatatanItem(
+                                                                item.id,
+                                                                'pemorsian',
+                                                            )
+                                                        "
+                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        title="Hapus"
+                                                    >
+                                                        <Trash2
+                                                            class="w-3.5 h-3.5"
+                                                        />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Empty State -->
+                                        <tr
+                                            v-if="
+                                                !catatanTim.pemorsian ||
+                                                catatanTim.pemorsian.length ===
+                                                    0
+                                            "
+                                        >
+                                            <td
+                                                colspan="5"
+                                                class="py-8 text-center text-slate-400"
+                                            >
+                                                <div
+                                                    class="flex flex-col items-center justify-center gap-2"
+                                                >
+                                                    <div
+                                                        class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center"
+                                                    >
+                                                        <ShoppingBag
+                                                            class="w-5 h-5"
+                                                        />
+                                                    </div>
+                                                    <p
+                                                        class="font-bold text-xs text-slate-600"
+                                                    >
+                                                        Belum ada catatan untuk
+                                                        Tim Pemorsian
+                                                    </p>
+                                                    <p
+                                                        class="text-[11px] text-slate-400 max-w-sm"
+                                                    >
+                                                        Tambahkan catatan tata
+                                                        letak sekat porsi atau
+                                                        gunakan tombol Generate
+                                                        Otomatis.
+                                                    </p>
+                                                    <div
+                                                        class="flex items-center gap-2 mt-2"
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                openTambahCatatanModal(
+                                                                    'pemorsian',
+                                                                )
+                                                            "
+                                                            className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
+                                                        >
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
+                                                            Tambah Catatan
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            @click="
+                                                                generateOtomatisCatatanTim
+                                                            "
+                                                            className="bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
+                                                        >
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-purple-600"
+                                                            />
+                                                            Generate Otomatis
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Catatan Tambahan (Global) Tim Pemorsian -->
+                        <div
+                            class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
+                        >
+                            <div class="flex items-center justify-between">
+                                <label
+                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                >
+                                    <ClipboardList
+                                        class="w-4 h-4 text-purple-600"
+                                    />
+                                    <span
+                                        >Catatan Tambahan (Global) Tim
+                                        Pemorsian</span
+                                    >
+                                </label>
+                                <span
+                                    class="text-[10.5px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full"
+                                >
+                                    SOP & Instruksi Umum
+                                </span>
+                            </div>
+                            <textarea
+                                v-model="catatanTim.catatan_global.pemorsian"
+                                rows="3"
+                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Pemorsian (misal: kewajiban APD steril, kalibrasi timbangan berkala, penempelan label stiker diet alergi, pengecekan tutup kotak sebelum masuk box thermal)..."
+                                class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-hidden transition resize-y"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Nav Bar Step 3 -->
+                    <div
+                        class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+                    >
+                        <Button
+                            type="button"
+                            @click="handleSwitchSubTab('bahan_pangan')"
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                            <span>Kembali ke Formula Makanan (Langkah 2)</span>
+                        </Button>
+
+                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                            <Button
+                                type="button"
+                                @click="simpanDraftStep3"
+                                :disabled="isSubmitting"
+                                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-5 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
+                            >
+                                <FileText class="h-4 w-4 text-slate-600" />
+                                <span>Simpan Draft (Langkah 3)</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                @click="handleLanjutStep4"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2"
+                            >
+                                <span
+                                    >Lanjut ke Review & Pengajuan (Langkah
+                                    4)</span
+                                >
+                                <ArrowRight class="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+
+        <!-- ========================================================================================= -->
+        <!-- Bagian 4: Review & Pengajuan Lengkap Work Order (Step 4) -->
         <!-- ========================================================================================= -->
         <div v-if="buatMenuSubTab === 'order'" class="space-y-6">
-            <!-- Header Langkah 3: Review & Pengajuan -->
+            <!-- Header Langkah 4: Review & Pengajuan -->
             <Card className="bg-white border-slate-200 shadow-xs">
                 <CardHeader
                     className="p-4 sm:p-5 border-b border-slate-100 bg-white flex flex-col md:flex-row md:items-center md:justify-between gap-4"
@@ -11432,7 +14016,8 @@ watch(
                                 {{ formatRupiah(totalBatasPaguMaster) }}
                             </p>
                             <p class="text-[10px] text-slate-500 mt-0.5">
-                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB: {{ totalPB.toLocaleString("id-ID") }}
+                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB:
+                                {{ totalPB.toLocaleString("id-ID") }}
                             </p>
                         </div>
 
@@ -11454,13 +14039,15 @@ watch(
                                     {{ statusEvaluasiPaguMaster.label }}
                                 </span>
                             </div>
-                            <p
-                                class="text-sm sm:text-base font-black mt-1"
-                            >
+                            <p class="text-sm sm:text-base font-black mt-1">
                                 {{ formatRupiah(grandTotalDraftMaster) }}
                             </p>
                             <p class="text-[10.5px] font-semibold mt-0.5">
-                                Selisih: {{ statusEvaluasiPaguMaster.selisihFormatted }} ({{ statusEvaluasiPaguMaster.percentFormatted }})
+                                Selisih:
+                                {{ statusEvaluasiPaguMaster.selisihFormatted }}
+                                ({{
+                                    statusEvaluasiPaguMaster.percentFormatted
+                                }})
                             </p>
                         </div>
                     </div>
@@ -11496,11 +14083,13 @@ watch(
                                     {{
                                         props.selectedSource === "fatsecret"
                                             ? "FatSecret (fatsecret.com)"
-                                            : (props.selectedSource === "tkpi2020" || props.selectedSource === "xlsx"
-                                                ? "Modifikasi (tkpi2020.xlsx)"
-                                                : (props.selectedSource === "csv"
-                                                    ? "Kemenkes (tkpi2020.csv)"
-                                                    : "NutriSurvey (indo.fta)"))
+                                            : props.selectedSource ===
+                                                    "tkpi2020" ||
+                                                props.selectedSource === "xlsx"
+                                              ? "Modifikasi (tkpi2020.xlsx)"
+                                              : props.selectedSource === "csv"
+                                                ? "Kemenkes (tkpi2020.csv)"
+                                                : "NutriSurvey (indo.fta)"
                                     }}
                                 </span>
                             </div>
@@ -12142,7 +14731,12 @@ watch(
                                 <h5
                                     class="text-xs font-black text-slate-800 uppercase tracking-wider"
                                 >
-                                    {{ (activeAlergiAkgList && activeAlergiAkgList.length > 0) ? 'A. Standar AKG Porsi Normal (PK & PB)' : 'Standar AKG Porsi Normal (PK & PB)' }}
+                                    {{
+                                        activeAlergiAkgList &&
+                                        activeAlergiAkgList.length > 0
+                                            ? "A. Standar AKG Porsi Normal (PK & PB)"
+                                            : "Standar AKG Porsi Normal (PK & PB)"
+                                    }}
                                 </h5>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -13130,7 +15724,20 @@ watch(
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
+                                                                :class="
+                                                                    getPortionCostBarColor(
+                                                                        smCost.percent_pk,
+                                                                    )
+                                                                "
+                                                                class="h-full rounded-full transition-all"
+                                                                :style="{
+                                                                    width:
+                                                                        Math.min(
+                                                                            smCost.percent_pk ||
+                                                                                0,
+                                                                            100,
+                                                                        ) + '%',
+                                                                }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -13145,7 +15752,20 @@ watch(
                                                             class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                         >
                                                             <div
-                                                                :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
+                                                                :class="
+                                                                    getPortionCostBarColor(
+                                                                        smCost.percent_pb,
+                                                                    )
+                                                                "
+                                                                class="h-full rounded-full transition-all"
+                                                                :style="{
+                                                                    width:
+                                                                        Math.min(
+                                                                            smCost.percent_pb ||
+                                                                                0,
+                                                                            100,
+                                                                        ) + '%',
+                                                                }"
                                                             ></div>
                                                         </div>
                                                     </div>
@@ -13192,23 +15812,47 @@ watch(
                             </div>
 
                             <!-- Keterangan Simbol Warna / Legenda Porsi Biaya -->
-                            <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
-                                <div class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                            <div
+                                class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]"
+                                >
                                     <span>📊</span>
-                                    <span>Keterangan Indikator Porsi Biaya (PK / PB):</span>
+                                    <span
+                                        >Keterangan Indikator Porsi Biaya (PK /
+                                        PB):</span
+                                    >
                                 </div>
-                                <div class="flex items-center gap-4 text-[11px] font-medium flex-wrap">
+                                <div
+                                    class="flex items-center gap-4 text-[11px] font-medium flex-wrap"
+                                >
                                     <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                                        <span><strong>Hijau:</strong> Rendah (&le; 25%)</span>
+                                        <span
+                                            class="w-3.5 h-2 rounded-full bg-emerald-500 shrink-0"
+                                        ></span>
+                                        <span
+                                            ><strong>Hijau:</strong> Rendah
+                                            (&le; 25%)</span
+                                        >
                                     </div>
                                     <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                                        <span><strong>Kuning:</strong> Sedang (26% - 50%)</span>
+                                        <span
+                                            class="w-3.5 h-2 rounded-full bg-amber-500 shrink-0"
+                                        ></span>
+                                        <span
+                                            ><strong>Kuning:</strong> Sedang
+                                            (26% - 50%)</span
+                                        >
                                     </div>
                                     <div class="flex items-center gap-1.5">
-                                        <span class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                                        <span><strong>Merah:</strong> Dominan / Tinggi (&gt; 50%)</span>
+                                        <span
+                                            class="w-3.5 h-2 rounded-full bg-rose-500 shrink-0"
+                                        ></span>
+                                        <span
+                                            ><strong>Merah:</strong> Dominan /
+                                            Tinggi (&gt; 50%)</span
+                                        >
                                     </div>
                                 </div>
                             </div>
@@ -13456,7 +16100,21 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    :class="getPortionCostBarColor(smCost.percent_pk)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pk || 0, 100) + '%' }"
+                                                                    :class="
+                                                                        getPortionCostBarColor(
+                                                                            smCost.percent_pk,
+                                                                        )
+                                                                    "
+                                                                    class="h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            Math.min(
+                                                                                smCost.percent_pk ||
+                                                                                    0,
+                                                                                100,
+                                                                            ) +
+                                                                            '%',
+                                                                    }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -13471,7 +16129,21 @@ watch(
                                                                 class="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"
                                                             >
                                                                 <div
-                                                                    :class="getPortionCostBarColor(smCost.percent_pb)" class="h-full rounded-full transition-all" :style="{ width: Math.min(smCost.percent_pb || 0, 100) + '%' }"
+                                                                    :class="
+                                                                        getPortionCostBarColor(
+                                                                            smCost.percent_pb,
+                                                                        )
+                                                                    "
+                                                                    class="h-full rounded-full transition-all"
+                                                                    :style="{
+                                                                        width:
+                                                                            Math.min(
+                                                                                smCost.percent_pb ||
+                                                                                    0,
+                                                                                100,
+                                                                            ) +
+                                                                            '%',
+                                                                    }"
                                                                 ></div>
                                                             </div>
                                                         </div>
@@ -13806,17 +16478,261 @@ watch(
                         </div>
                     </div>
 
+                    <!-- Ringkasan Catatan Kerja Tim Produksi di Review Step 4 -->
+                    <div
+                        class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4"
+                    >
+                        <div
+                            class="flex items-center justify-between flex-wrap gap-2"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center"
+                                >
+                                    <ClipboardList class="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h4
+                                        class="text-xs sm:text-sm font-black text-slate-900"
+                                    >
+                                        Instruksi & Catatan Kerja Tim Produksi
+                                    </h4>
+                                    <p class="text-[11px] text-slate-500">
+                                        Ringkasan arahan teknis operasional
+                                        untuk Tim Persiapan, Pengolahan, dan
+                                        Pemorsian.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                @click="handleSwitchSubTab('catatan_resep')"
+                                className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                            >
+                                <Edit3 class="w-3.5 h-3.5 text-primary" />
+                                <span>Edit Catatan Tim</span>
+                            </Button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <!-- Tim Persiapan Summary -->
+                            <div
+                                class="p-3.5 rounded-xl bg-white border border-amber-200/80 space-y-2"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <span
+                                        class="text-xs font-black text-amber-950 flex items-center gap-1.5"
+                                    >
+                                        <Utensils
+                                            class="w-3.5 h-3.5 text-amber-600"
+                                        />
+                                        Tim Persiapan
+                                    </span>
+                                    <span
+                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900"
+                                    >
+                                        {{ catatanTim.persiapan?.length || 0 }}
+                                        Item
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="
+                                        catatanTim.persiapan &&
+                                        catatanTim.persiapan.length > 0
+                                    "
+                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
+                                >
+                                    <div
+                                        v-for="(
+                                            it, iIdx
+                                        ) in catatanTim.persiapan"
+                                        :key="iIdx"
+                                        class="p-2 rounded-lg bg-amber-50/50 border border-amber-100 text-[11px] space-y-0.5"
+                                    >
+                                        <div
+                                            class="font-black text-slate-900 flex items-center justify-between"
+                                        >
+                                            <span>{{ it.nama_menu }}</span>
+                                            <span
+                                                class="text-[10px] text-amber-800 font-bold"
+                                                >{{ it.kuantitas }}</span
+                                            >
+                                        </div>
+                                        <p class="text-slate-600 line-clamp-1">
+                                            {{ it.bahan_baku }}:
+                                            {{ it.perlakuan }}
+                                        </p>
+                                        <p
+                                            v-if="it.waktu_mulai"
+                                            class="text-[10px] text-slate-400"
+                                        >
+                                            ⏰ {{ it.waktu_mulai }} -
+                                            {{ it.waktu_selesai }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p
+                                    v-else
+                                    class="text-[11px] text-slate-400 italic"
+                                >
+                                    Belum ada catatan item.
+                                </p>
+                                <div
+                                    v-if="catatanTim.catatan_global?.persiapan"
+                                    class="pt-1.5 border-t border-amber-100 text-[10.5px] text-amber-900 bg-amber-50/30 p-1.5 rounded-lg"
+                                >
+                                    <strong>Global:</strong>
+                                    {{ catatanTim.catatan_global.persiapan }}
+                                </div>
+                            </div>
+
+                            <!-- Tim Pengolahan Summary -->
+                            <div
+                                class="p-3.5 rounded-xl bg-white border border-blue-200/80 space-y-2"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <span
+                                        class="text-xs font-black text-blue-950 flex items-center gap-1.5"
+                                    >
+                                        <UtensilsCrossed
+                                            class="w-3.5 h-3.5 text-blue-600"
+                                        />
+                                        Tim Pengolahan
+                                    </span>
+                                    <span
+                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900"
+                                    >
+                                        {{ catatanTim.pengolahan?.length || 0 }}
+                                        Item
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="
+                                        catatanTim.pengolahan &&
+                                        catatanTim.pengolahan.length > 0
+                                    "
+                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
+                                >
+                                    <div
+                                        v-for="(
+                                            it, iIdx
+                                        ) in catatanTim.pengolahan"
+                                        :key="iIdx"
+                                        class="p-2 rounded-lg bg-blue-50/50 border border-blue-100 text-[11px] space-y-0.5"
+                                    >
+                                        <div
+                                            class="font-black text-slate-900 flex items-center justify-between"
+                                        >
+                                            <span>{{ it.nama_menu }}</span>
+                                            <span
+                                                class="text-[10px] text-blue-800 font-bold"
+                                                >{{ it.kuantitas }}</span
+                                            >
+                                        </div>
+                                        <p class="text-slate-600 line-clamp-1">
+                                            {{ it.bahan_baku }}:
+                                            {{ it.perlakuan }}
+                                        </p>
+                                        <p
+                                            v-if="it.waktu_mulai"
+                                            class="text-[10px] text-slate-400"
+                                        >
+                                            ⏰ {{ it.waktu_mulai }} -
+                                            {{ it.waktu_selesai }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p
+                                    v-else
+                                    class="text-[11px] text-slate-400 italic"
+                                >
+                                    Belum ada catatan item.
+                                </p>
+                                <div
+                                    v-if="catatanTim.catatan_global?.pengolahan"
+                                    class="pt-1.5 border-t border-blue-100 text-[10.5px] text-blue-900 bg-blue-50/30 p-1.5 rounded-lg"
+                                >
+                                    <strong>Global:</strong>
+                                    {{ catatanTim.catatan_global.pengolahan }}
+                                </div>
+                            </div>
+
+                            <!-- Tim Pemorsian Summary -->
+                            <div
+                                class="p-3.5 rounded-xl bg-white border border-purple-200/80 space-y-2"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <span
+                                        class="text-xs font-black text-purple-950 flex items-center gap-1.5"
+                                    >
+                                        <ShoppingBag
+                                            class="w-3.5 h-3.5 text-purple-600"
+                                        />
+                                        Tim Pemorsian
+                                    </span>
+                                    <span
+                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900"
+                                    >
+                                        {{ catatanTim.pemorsian?.length || 0 }}
+                                        Item
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="
+                                        catatanTim.pemorsian &&
+                                        catatanTim.pemorsian.length > 0
+                                    "
+                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
+                                >
+                                    <div
+                                        v-for="(
+                                            it, iIdx
+                                        ) in catatanTim.pemorsian"
+                                        :key="iIdx"
+                                        class="p-2 rounded-lg bg-purple-50/50 border border-purple-100 text-[11px] space-y-0.5"
+                                    >
+                                        <div class="font-black text-slate-900">
+                                            {{ it.nama_menu }}
+                                        </div>
+                                        <p class="text-slate-600 line-clamp-1">
+                                            {{ it.perlakuan }}
+                                        </p>
+                                        <p
+                                            v-if="it.keterangan"
+                                            class="text-[10px] text-slate-400 italic"
+                                        >
+                                            {{ it.keterangan }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p
+                                    v-else
+                                    class="text-[11px] text-slate-400 italic"
+                                >
+                                    Belum ada catatan item.
+                                </p>
+                                <div
+                                    v-if="catatanTim.catatan_global?.pemorsian"
+                                    class="pt-1.5 border-t border-purple-100 text-[10.5px] text-purple-900 bg-purple-50/30 p-1.5 rounded-lg"
+                                >
+                                    <strong>Global:</strong>
+                                    {{ catatanTim.catatan_global.pemorsian }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Baris Tombol Aksi Simpan & Ajukan -->
                     <div
                         class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3"
                     >
                         <Button
                             type="button"
-                            @click="handleSwitchSubTab('bahan_pangan')"
+                            @click="handleSwitchSubTab('catatan_resep')"
                             className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
                         >
                             <ChevronLeft class="h-4 w-4" />
-                            <span>Kembali ke Formula Makanan (Langkah 2)</span>
+                            <span>Kembali ke Catatan Tim (Langkah 3)</span>
                         </Button>
 
                         <div class="flex items-center gap-2.5 w-full sm:w-auto">
@@ -14250,7 +17166,9 @@ watch(
                 <div class="space-y-4">
                     <!-- Opsi Jenis: Bahan Baku vs Operasional -->
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1.5">
+                        <label
+                            class="block text-xs font-bold text-slate-700 mb-1.5"
+                        >
                             Jenis Kebutuhan <span class="text-rose-500">*</span>
                         </label>
                         <div class="grid grid-cols-2 gap-2.5">
@@ -14259,21 +17177,34 @@ watch(
                                 @click="manualBahanForm.jenis = 'bahan_baku'"
                                 :class="[
                                     'px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition cursor-pointer',
-                                    (manualBahanForm.jenis || 'bahan_baku') === 'bahan_baku'
+                                    (manualBahanForm.jenis || 'bahan_baku') ===
+                                    'bahan_baku'
                                         ? 'bg-emerald-50 text-emerald-900 border-emerald-400 ring-2 ring-emerald-200'
-                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50',
                                 ]"
                             >
                                 <span>🥗 Bahan Baku (Pangan)</span>
                             </button>
                             <button
                                 type="button"
-                                @click="manualBahanForm.jenis = 'operasional'; manualBahanForm.energi = 0; manualBahanForm.protein = 0; manualBahanForm.lemak = 0; manualBahanForm.karbohidrat = 0; manualBahanForm.serat = 0; delete manualBahanErrors.energi; delete manualBahanErrors.protein; delete manualBahanErrors.lemak; delete manualBahanErrors.karbohidrat; delete manualBahanErrors.serat;"
+                                @click="
+                                    manualBahanForm.jenis = 'operasional';
+                                    manualBahanForm.energi = 0;
+                                    manualBahanForm.protein = 0;
+                                    manualBahanForm.lemak = 0;
+                                    manualBahanForm.karbohidrat = 0;
+                                    manualBahanForm.serat = 0;
+                                    delete manualBahanErrors.energi;
+                                    delete manualBahanErrors.protein;
+                                    delete manualBahanErrors.lemak;
+                                    delete manualBahanErrors.karbohidrat;
+                                    delete manualBahanErrors.serat;
+                                "
                                 :class="[
                                     'px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition cursor-pointer',
                                     manualBahanForm.jenis === 'operasional'
                                         ? 'bg-amber-50 text-amber-900 border-amber-400 ring-2 ring-amber-200'
-                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50',
                                 ]"
                             >
                                 <span>📦 Operasional (Non-Gizi)</span>
@@ -14436,7 +17367,9 @@ watch(
                             <label
                                 class="block text-xs font-bold text-slate-700 mb-1"
                             >
-                                Harga (Rp / {{ manualBahanForm.satuan || 'Satuan' }}) <span class="text-rose-500">*</span>
+                                Harga (Rp /
+                                {{ manualBahanForm.satuan || "Satuan" }})
+                                <span class="text-rose-500">*</span>
                             </label>
                             <div class="relative">
                                 <span
@@ -14446,8 +17379,12 @@ watch(
                                 <input
                                     type="number"
                                     min="0"
-                                    v-model.number="manualBahanForm.harga_master"
-                                    @input="delete manualBahanErrors.harga_master"
+                                    v-model.number="
+                                        manualBahanForm.harga_master
+                                    "
+                                    @input="
+                                        delete manualBahanErrors.harga_master
+                                    "
                                     placeholder="0"
                                     :class="[
                                         'w-full pl-9 pr-3 py-2 text-xs bg-white rounded-xl border font-bold text-slate-900 transition focus:outline-hidden',
@@ -14462,7 +17399,9 @@ watch(
                                 class="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1"
                             >
                                 <AlertCircle class="w-3.5 h-3.5 shrink-0" />
-                                <span>{{ manualBahanErrors.harga_master }}</span>
+                                <span>{{
+                                    manualBahanErrors.harga_master
+                                }}</span>
                             </p>
                         </div>
                     </div>
@@ -14470,31 +17409,67 @@ watch(
                     <!-- Row 3: Kandungan Gizi per 100g (Wajib Diisi untuk Bahan Baku, Disabled untuk Operasional) -->
                     <div
                         class="p-3.5 rounded-2xl border space-y-2.5 transition-colors"
-                        :class="manualBahanForm.jenis === 'operasional' ? 'bg-slate-50/80 border-slate-200' : 'bg-white border-slate-200'"
+                        :class="
+                            manualBahanForm.jenis === 'operasional'
+                                ? 'bg-slate-50/80 border-slate-200'
+                                : 'bg-white border-slate-200'
+                        "
                     >
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <label class="block text-xs font-black text-slate-800 flex items-center gap-1.5">
-                                <span>📊 Kandungan Nutrisi (per 100g bahan)</span>
-                                <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                        <div
+                            class="flex items-center justify-between gap-2 flex-wrap"
+                        >
+                            <label
+                                class="block text-xs font-black text-slate-800 flex items-center gap-1.5"
+                            >
+                                <span
+                                    >📊 Kandungan Nutrisi (per 100g bahan)</span
+                                >
+                                <span
+                                    v-if="
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-rose-500"
+                                    >*</span
+                                >
                             </label>
                             <span
                                 class="text-[10px] font-bold px-2 py-0.5 rounded-md"
-                                :class="manualBahanForm.jenis === 'operasional' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+                                :class="
+                                    manualBahanForm.jenis === 'operasional'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-slate-100 text-slate-600'
+                                "
                             >
-                                {{ manualBahanForm.jenis === 'operasional' ? '🚫 Dinonaktifkan untuk Operasional' : 'Wajib diisi untuk kalkulasi AKG' }}
+                                {{
+                                    manualBahanForm.jenis === "operasional"
+                                        ? "🚫 Dinonaktifkan untuk Operasional"
+                                        : "Wajib diisi untuk kalkulasi AKG"
+                                }}
                             </span>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                             <!-- Energi -->
                             <div>
-                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Energi (kkal) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                                <label
+                                    class="block text-[10.5px] font-bold text-slate-600 mb-1"
+                                >
+                                    Energi (kkal)
+                                    <span
+                                        v-if="
+                                            manualBahanForm.jenis !==
+                                            'operasional'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    :disabled="manualBahanForm.jenis === 'operasional'"
+                                    :disabled="
+                                        manualBahanForm.jenis === 'operasional'
+                                    "
                                     v-model.number="manualBahanForm.energi"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.energi"
@@ -14508,20 +17483,38 @@ watch(
                                               : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.energi && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p
+                                    v-if="
+                                        manualBahanErrors.energi &&
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight"
+                                >
                                     {{ manualBahanErrors.energi }}
                                 </p>
                             </div>
                             <!-- Protein -->
                             <div>
-                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Protein (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                                <label
+                                    class="block text-[10.5px] font-bold text-slate-600 mb-1"
+                                >
+                                    Protein (g)
+                                    <span
+                                        v-if="
+                                            manualBahanForm.jenis !==
+                                            'operasional'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    :disabled="manualBahanForm.jenis === 'operasional'"
+                                    :disabled="
+                                        manualBahanForm.jenis === 'operasional'
+                                    "
                                     v-model.number="manualBahanForm.protein"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.protein"
@@ -14535,20 +17528,38 @@ watch(
                                               : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.protein && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p
+                                    v-if="
+                                        manualBahanErrors.protein &&
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight"
+                                >
                                     {{ manualBahanErrors.protein }}
                                 </p>
                             </div>
                             <!-- Lemak -->
                             <div>
-                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Lemak (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                                <label
+                                    class="block text-[10.5px] font-bold text-slate-600 mb-1"
+                                >
+                                    Lemak (g)
+                                    <span
+                                        v-if="
+                                            manualBahanForm.jenis !==
+                                            'operasional'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    :disabled="manualBahanForm.jenis === 'operasional'"
+                                    :disabled="
+                                        manualBahanForm.jenis === 'operasional'
+                                    "
                                     v-model.number="manualBahanForm.lemak"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.lemak"
@@ -14562,23 +17573,43 @@ watch(
                                               : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.lemak && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p
+                                    v-if="
+                                        manualBahanErrors.lemak &&
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight"
+                                >
                                     {{ manualBahanErrors.lemak }}
                                 </p>
                             </div>
                             <!-- Karbohidrat -->
                             <div>
-                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Karbohidrat (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                                <label
+                                    class="block text-[10.5px] font-bold text-slate-600 mb-1"
+                                >
+                                    Karbohidrat (g)
+                                    <span
+                                        v-if="
+                                            manualBahanForm.jenis !==
+                                            'operasional'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    :disabled="manualBahanForm.jenis === 'operasional'"
+                                    :disabled="
+                                        manualBahanForm.jenis === 'operasional'
+                                    "
                                     v-model.number="manualBahanForm.karbohidrat"
                                     @keydown="handleDecimalKeydown"
-                                    @input="delete manualBahanErrors.karbohidrat"
+                                    @input="
+                                        delete manualBahanErrors.karbohidrat
+                                    "
                                     placeholder="0"
                                     :class="[
                                         'w-full px-2.5 py-1.5 text-xs rounded-xl border font-bold transition focus:outline-hidden text-center',
@@ -14589,20 +17620,38 @@ watch(
                                               : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.karbohidrat && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p
+                                    v-if="
+                                        manualBahanErrors.karbohidrat &&
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight"
+                                >
                                     {{ manualBahanErrors.karbohidrat }}
                                 </p>
                             </div>
                             <!-- Serat -->
                             <div>
-                                <label class="block text-[10.5px] font-bold text-slate-600 mb-1">
-                                    Serat (g) <span v-if="manualBahanForm.jenis !== 'operasional'" class="text-rose-500">*</span>
+                                <label
+                                    class="block text-[10.5px] font-bold text-slate-600 mb-1"
+                                >
+                                    Serat (g)
+                                    <span
+                                        v-if="
+                                            manualBahanForm.jenis !==
+                                            'operasional'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    :disabled="manualBahanForm.jenis === 'operasional'"
+                                    :disabled="
+                                        manualBahanForm.jenis === 'operasional'
+                                    "
                                     v-model.number="manualBahanForm.serat"
                                     @keydown="handleDecimalKeydown"
                                     @input="delete manualBahanErrors.serat"
@@ -14616,7 +17665,13 @@ watch(
                                               : 'bg-white border-slate-200 focus:border-primary text-slate-900',
                                     ]"
                                 />
-                                <p v-if="manualBahanErrors.serat && manualBahanForm.jenis !== 'operasional'" class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight">
+                                <p
+                                    v-if="
+                                        manualBahanErrors.serat &&
+                                        manualBahanForm.jenis !== 'operasional'
+                                    "
+                                    class="text-[9.5px] font-semibold text-rose-600 mt-1 leading-tight"
+                                >
                                     {{ manualBahanErrors.serat }}
                                 </p>
                             </div>
@@ -14647,6 +17702,303 @@ watch(
                                 manualBahanTargetBlock?.subLabel || "Sub Menu"
                             }}</span
                         >
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================== -->
+        <!-- MODAL TAMBAH / EDIT CATATAN TIM PRODUKSI   -->
+        <!-- ========================================== -->
+        <Modal
+            :show="showCatatanModal"
+            @close="showCatatanModal = false"
+            maxWidth="2xl"
+        >
+            <div class="p-5 sm:p-6 space-y-5">
+                <!-- Header Modal -->
+                <div
+                    class="flex items-start justify-between gap-3 border-b border-slate-100 pb-4"
+                >
+                    <div class="flex items-center gap-3">
+                        <div
+                            :class="[
+                                'p-2.5 rounded-2xl border shadow-xs shrink-0',
+                                catatanForm.target_tim === 'persiapan'
+                                    ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                    : catatanForm.target_tim === 'pengolahan'
+                                      ? 'bg-blue-50 text-blue-600 border-blue-200'
+                                      : 'bg-purple-50 text-purple-600 border-purple-200',
+                            ]"
+                        >
+                            <ClipboardList class="w-6 h-6 stroke-[2]" />
+                        </div>
+                        <div>
+                            <h3
+                                class="text-sm sm:text-base font-black text-slate-900"
+                            >
+                                {{
+                                    editingCatatanId
+                                        ? "Edit Catatan Tim"
+                                        : "Tambah Catatan Tim Produksi"
+                                }}
+                            </h3>
+                            <p class="text-xs text-slate-500">
+                                Isi instruksi teknis spesifik untuk tim
+                                operasional dapur MBG.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showCatatanModal = false"
+                        class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Form Body -->
+                <div class="space-y-4">
+                    <!-- Selector Diperuntukkan Kepada -->
+                    <div>
+                        <label
+                            class="block text-xs font-bold text-slate-700 mb-1.5"
+                        >
+                            Diperuntukkan Kepada (Pilih Tim Sasaran)
+                            <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <button
+                                type="button"
+                                @click="catatanForm.target_tim = 'persiapan'"
+                                :class="[
+                                    'p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer',
+                                    catatanForm.target_tim === 'persiapan'
+                                        ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
+                                ]"
+                            >
+                                <Utensils class="w-4 h-4" />
+                                <span>Tim Persiapan</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="catatanForm.target_tim = 'pengolahan'"
+                                :class="[
+                                    'p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer',
+                                    catatanForm.target_tim === 'pengolahan'
+                                        ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+                                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
+                                ]"
+                            >
+                                <UtensilsCrossed class="w-4 h-4" />
+                                <span>Tim Pengolahan</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="catatanForm.target_tim = 'pemorsian'"
+                                :class="[
+                                    'p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer',
+                                    catatanForm.target_tim === 'pemorsian'
+                                        ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
+                                ]"
+                            >
+                                <ShoppingBag class="w-4 h-4" />
+                                <span>Tim Pemorsian</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Nama Menu -->
+                    <div>
+                        <label
+                            class="block text-xs font-bold text-slate-700 mb-1.5"
+                        >
+                            Nama Menu (Isian Sub Menu)
+                            <span class="text-rose-500">*</span>
+                        </label>
+                        <select
+                            v-model="catatanForm.nama_menu"
+                            class="w-full text-xs font-bold rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                        >
+                            <option value="" disabled>
+                                -- Pilih Sub Menu yang Tersedia --
+                            </option>
+                            <option
+                                v-for="(m, mIdx) in menuOptionsList"
+                                :key="mIdx"
+                                :value="m.name"
+                            >
+                                {{ m.label }}
+                            </option>
+                        </select>
+                        <input
+                            type="text"
+                            v-model="catatanForm.nama_menu"
+                            placeholder="Atau ketik nama menu kustom..."
+                            class="mt-1.5 w-full text-xs font-medium rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                        />
+                    </div>
+
+                    <!-- Fields untuk Tim Persiapan & Tim Pengolahan: Bahan Baku, Kuantitas, Waktu Eksekusi -->
+                    <template
+                        v-if="
+                            catatanForm.target_tim === 'persiapan' ||
+                            catatanForm.target_tim === 'pengolahan'
+                        "
+                    >
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label
+                                    class="block text-xs font-bold text-slate-700 mb-1.5"
+                                >
+                                    Bahan Baku (Dari Perencanaan)
+                                    <span class="text-rose-500">*</span>
+                                </label>
+                                <select
+                                    @change="
+                                        handleBahanBakuSelect(
+                                            $event.target.value,
+                                        )
+                                    "
+                                    class="w-full text-xs font-bold rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                                >
+                                    <option value="">
+                                        -- Pilih dari Bahan Baku Formula --
+                                    </option>
+                                    <option
+                                        v-for="(b, bIdx) in bahanBakuOptions"
+                                        :key="bIdx"
+                                        :value="b.nama"
+                                        :selected="
+                                            catatanForm.bahan_baku === b.nama
+                                        "
+                                    >
+                                        {{ b.nama }} ({{ b.totalGross }})
+                                    </option>
+                                </select>
+                                <input
+                                    type="text"
+                                    v-model="catatanForm.bahan_baku"
+                                    placeholder="Atau ketik nama bahan baku kustom..."
+                                    class="mt-1.5 w-full text-xs font-medium rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    class="block text-xs font-bold text-slate-700 mb-1.5"
+                                >
+                                    Kuantitas
+                                    <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    v-model="catatanForm.kuantitas"
+                                    placeholder="Contoh: 12.5 Kg / 50 Ikat / 100 Butir"
+                                    class="w-full text-xs font-bold rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                                />
+                                <p class="text-[10px] text-slate-400 mt-1">
+                                    Disesuaikan dengan berat kotor/bersih bahan.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Waktu Mulai & Waktu Selesai Eksekusi -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label
+                                    class="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5"
+                                >
+                                    <Clock class="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Waktu Mulai Eksekusi</span>
+                                </label>
+                                <input
+                                    type="time"
+                                    v-model="catatanForm.waktu_mulai"
+                                    class="w-full text-xs font-bold rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5"
+                                >
+                                    <Clock class="w-3.5 h-3.5 text-blue-500" />
+                                    <span>Waktu Selesai Eksekusi</span>
+                                </label>
+                                <input
+                                    type="time"
+                                    v-model="catatanForm.waktu_selesai"
+                                    class="w-full text-xs font-bold rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                                />
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Perlakuan -->
+                    <div>
+                        <label
+                            class="block text-xs font-bold text-slate-700 mb-1.5"
+                        >
+                            Perlakuan <span class="text-rose-500">*</span>
+                        </label>
+                        <textarea
+                            v-model="catatanForm.perlakuan"
+                            rows="2"
+                            :placeholder="
+                                catatanForm.target_tim === 'persiapan'
+                                    ? 'Contoh: Cuci bersih dengan air mengalir, kupas dan potong dadu 2x2 cm, marinasi dengan bumbu kuning...'
+                                    : catatanForm.target_tim === 'pengolahan'
+                                      ? 'Contoh: Tumis bumbu hingga harum, goreng deep fry 160°C selama 15 menit, rebus kuah sup kaldu...'
+                                      : 'Contoh: Porsikan 1 potong ayam (±75g) per kotak, 1 centong nasi pulen (150g), tata di sekat kanan atas...'
+                            "
+                            class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden resize-none"
+                        ></textarea>
+                    </div>
+
+                    <!-- Keterangan -->
+                    <div>
+                        <label
+                            class="block text-xs font-bold text-slate-700 mb-1.5"
+                        >
+                            Keterangan
+                        </label>
+                        <input
+                            type="text"
+                            v-model="catatanForm.keterangan"
+                            placeholder="Contoh: Pisahkan talenan khusus daging, tiriskan minyak, cek suhu matang internal..."
+                            class="w-full text-xs font-medium rounded-xl border border-slate-200 px-3 py-2.5 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-hidden"
+                        />
+                    </div>
+                </div>
+
+                <!-- Footer Modal -->
+                <div
+                    class="flex items-center justify-between pt-3 border-t border-slate-100"
+                >
+                    <button
+                        type="button"
+                        @click="showCatatanModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="saveCatatanForm"
+                        :disabled="
+                            !catatanForm.nama_menu || !catatanForm.perlakuan
+                        "
+                        class="px-5 py-2.5 text-xs font-black text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <Check class="w-4 h-4 stroke-[2.5]" />
+                        <span>{{
+                            editingCatatanId
+                                ? "Perbarui Catatan"
+                                : "Simpan Catatan"
+                        }}</span>
                     </button>
                 </div>
             </div>
