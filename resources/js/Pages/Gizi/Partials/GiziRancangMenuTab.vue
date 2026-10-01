@@ -523,7 +523,250 @@ const buatMenuSubTabs = [
 // ==========================================
 // 1. STATE WORK ORDER & PRE-ORDER (AHLI GIZI)
 // ==========================================
+// Map seluruh Work Order yang sudah ada per tanggal (termasuk status Draft).
+// Aturan mutlak: 1 tanggal HANYA boleh ada 1 Work Order.
+const existingWoDatesMap = computed(() => {
+    const map = {};
+    const currentWoId = props.activeWorkOrder?.id;
+    const currentWoNomor = props.activeWorkOrder?.nomor_wo;
+
+    (props.workOrdersList || []).forEach((w) => {
+        if (!w || !w.tanggal_distribusi) return;
+        const tgl =
+            typeof w.tanggal_distribusi === "string"
+                ? w.tanggal_distribusi.substring(0, 10)
+                : new Date(w.tanggal_distribusi).toISOString().substring(0, 10);
+
+        // Jika sedang edit WO aktif ini, jangan anggap dirinya sendiri sebagai duplikat
+        const isSelf =
+            (currentWoId && w.id === currentWoId) ||
+            (currentWoNomor && w.nomor_wo === currentWoNomor);
+        if (isSelf) return;
+
+        map[tgl] = {
+            id: w.id,
+            nomor_wo: w.nomor_wo,
+            nama_menu: w.nama_menu || "Menu MBG",
+            status: w.status || "Draft",
+            tanggal: tgl,
+        };
+    });
+    return map;
+});
+
+function isDateTaken(dateStr) {
+    if (!dateStr) return false;
+    return !!existingWoDatesMap.value[dateStr];
+}
+
+function getTakenWoInfo(dateStr) {
+    if (!dateStr) return null;
+    return existingWoDatesMap.value[dateStr] || null;
+}
+
+// Cari tanggal terdekat yang belum pernah dipakai untuk inisialisasi awal
+function getInitialAvailableDate() {
+    const today = new Date();
+    for (let offset = 0; offset <= 60; offset++) {
+        const target = new Date();
+        target.setDate(today.getDate() + offset);
+        const y = target.getFullYear();
+        const m = String(target.getMonth() + 1).padStart(2, "0");
+        const d = String(target.getDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        if (!isDateTaken(dateStr)) {
+            return dateStr;
+        }
+    }
+    return today.toISOString().split("T")[0];
+}
+
 const tanggalRencana = ref(new Date().toISOString().split("T")[0]);
+const currentDateConflict = computed(() => getTakenWoInfo(tanggalRencana.value));
+
+const todayStr = computed(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+});
+
+const tomorrowStr = computed(() => {
+    const tom = new Date();
+    tom.setDate(tom.getDate() + 1);
+    const y = tom.getFullYear();
+    const m = String(tom.getMonth() + 1).padStart(2, "0");
+    const d = String(tom.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+});
+
+const isTodayTaken = computed(() => isDateTaken(todayStr.value));
+const isTomorrowTaken = computed(() => isDateTaken(tomorrowStr.value));
+
+// Popover Kalender Picker Interaktif dengan Indikator WO
+const showDatePickerPopover = ref(false);
+const datePickerContainerRef = ref(null);
+const pickerCalendarYear = ref(new Date().getFullYear());
+const pickerCalendarMonth = ref(new Date().getMonth());
+
+const NAMA_BULAN_PICKER = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+const pickerMonthLabel = computed(() => {
+    return `${NAMA_BULAN_PICKER[pickerCalendarMonth.value]} ${pickerCalendarYear.value}`;
+});
+
+function syncPickerMonthWithSelected() {
+    if (tanggalRencana.value) {
+        const parts = tanggalRencana.value.split("-").map(Number);
+        if (parts[0] && parts[1]) {
+            pickerCalendarYear.value = parts[0];
+            pickerCalendarMonth.value = parts[1] - 1;
+        }
+    }
+}
+
+function toggleDatePickerPopover() {
+    showDatePickerPopover.value = !showDatePickerPopover.value;
+    if (showDatePickerPopover.value) {
+        syncPickerMonthWithSelected();
+    }
+}
+
+function prevPickerMonth() {
+    if (pickerCalendarMonth.value === 0) {
+        pickerCalendarMonth.value = 11;
+        pickerCalendarYear.value -= 1;
+    } else {
+        pickerCalendarMonth.value -= 1;
+    }
+}
+
+function nextPickerMonth() {
+    if (pickerCalendarMonth.value === 11) {
+        pickerCalendarMonth.value = 0;
+        pickerCalendarYear.value += 1;
+    } else {
+        pickerCalendarMonth.value += 1;
+    }
+}
+
+const pickerCalendarDays = computed(() => {
+    const year = pickerCalendarYear.value;
+    const month = pickerCalendarMonth.value;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Monday index 0, Sunday index 6
+    let startDayOfWeek = firstDay.getDay() - 1;
+    if (startDayOfWeek === -1) startDayOfWeek = 6;
+
+    const days = [];
+    const today = todayStr.value;
+
+    // Previous month padding
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevMonthLastDay - i;
+        const prevDate = new Date(year, month - 1, dayNum);
+        const y = prevDate.getFullYear();
+        const m = String(prevDate.getMonth() + 1).padStart(2, "0");
+        const d = String(dayNum).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: dayNum,
+            isCurrentMonth: false,
+            isToday: dateStr === today,
+            isSelected: dateStr === tanggalRencana.value,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    // Current month days
+    const totalDays = lastDay.getDate();
+    for (let dayNum = 1; dayNum <= totalDays; dayNum++) {
+        const y = year;
+        const m = String(month + 1).padStart(2, "0");
+        const d = String(dayNum).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: dayNum,
+            isCurrentMonth: true,
+            isToday: dateStr === today,
+            isSelected: dateStr === tanggalRencana.value,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    // Next month padding to complete grid
+    const remaining = (7 - (days.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+        const nextDate = new Date(year, month + 1, i);
+        const y = nextDate.getFullYear();
+        const m = String(nextDate.getMonth() + 1).padStart(2, "0");
+        const d = String(i).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: i,
+            isCurrentMonth: false,
+            isToday: dateStr === today,
+            isSelected: dateStr === tanggalRencana.value,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    return days;
+});
+
+function handleSelectPickerDate(day) {
+    if (day.isTaken) {
+        triggerSubmitError(
+            `Tanggal ${formatTanggalIndo(day.dateStr)} sudah memiliki Work Order: "${day.takenInfo.nama_menu}" (${day.takenInfo.nomor_wo} • Status: ${day.takenInfo.status}). 1 tanggal hanya diperbolehkan 1 Work Order.`,
+        );
+        return;
+    }
+    tanggalRencana.value = day.dateStr;
+    clearError("tanggalRencana");
+    showDatePickerPopover.value = false;
+}
+
+function onNativeDateChange() {
+    clearError("tanggalRencana");
+    if (isDateTaken(tanggalRencana.value)) {
+        const info = getTakenWoInfo(tanggalRencana.value);
+        validationErrors.value.tanggalRencana = `Tanggal ${formatTanggalIndo(tanggalRencana.value)} sudah memiliki Work Order ("${info.nama_menu}"). 1 tanggal hanya boleh 1 Work Order.`;
+    }
+}
+
+// Watcher untuk inisialisasi tanggal pertama kali agar tidak bentrok dengan WO yang sudah ada
+watch(
+    () => props.workOrdersList,
+    (list) => {
+        if (!props.activeWorkOrder && list && list.length > 0) {
+            if (isDateTaken(tanggalRencana.value)) {
+                tanggalRencana.value = getInitialAvailableDate();
+            }
+        }
+    },
+    { immediate: true },
+);
+
 const woNo = computed(() => {
     return (
         "WO-MBG-" +
@@ -1018,21 +1261,26 @@ function formatTanggalIndo(dateStr) {
 }
 
 function setTanggalHariIni() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    tanggalRencana.value = `${year}-${month}-${day}`;
+    if (isTodayTaken.value) {
+        const info = getTakenWoInfo(todayStr.value);
+        triggerSubmitError(
+            `Tanggal hari ini (${formatTanggalIndo(todayStr.value)}) sudah memiliki Work Order: "${info.nama_menu}" (${info.nomor_wo} • Status: ${info.status}). 1 tanggal hanya diperbolehkan 1 Work Order.`,
+        );
+        return;
+    }
+    tanggalRencana.value = todayStr.value;
     clearError("tanggalRencana");
 }
 
 function setTanggalBesok() {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const year = tomorrow.getFullYear();
-    const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
-    const day = String(tomorrow.getDate()).padStart(2, "0");
-    tanggalRencana.value = `${year}-${month}-${day}`;
+    if (isTomorrowTaken.value) {
+        const info = getTakenWoInfo(tomorrowStr.value);
+        triggerSubmitError(
+            `Tanggal besok (${formatTanggalIndo(tomorrowStr.value)}) sudah memiliki Work Order: "${info.nama_menu}" (${info.nomor_wo} • Status: ${info.status}). 1 tanggal hanya diperbolehkan 1 Work Order.`,
+        );
+        return;
+    }
+    tanggalRencana.value = tomorrowStr.value;
     clearError("tanggalRencana");
 }
 
@@ -1044,6 +1292,30 @@ function handleGunakanContoh() {
     subMenuKomponen.value.sub_menu_3 = "Tempe Goreng";
     subMenuKomponen.value.sub_menu_4 = "Sayur Bening Bayam";
     subMenuKomponen.value.sub_menu_5 = "Buah Jeruk";
+
+    // 2 Contoh Varian Diet Alergi untuk Sub Menu Hewani & Nabati
+    subMenuAlergi.value.sub_menu_2 = [
+        {
+            jenis_alergi: "Alergi Ayam",
+            menu_pengganti: "Ikan Bakar Bumbu Bali",
+        },
+    ];
+    subMenuAlergi.value.sub_menu_3 = [
+        {
+            jenis_alergi: "Alergi Kedelai",
+            menu_pengganti: "Telur Rebus Balado",
+        },
+    ];
+
+    // Berikan contoh data PM alergi pada kelompok penerima manfaat pertama
+    if (woKelompokList.value && woKelompokList.value.length > 0) {
+        woKelompokList.value[0].keterangan_alergi = [
+            { jenis_alergi: "Alergi Ayam", porsi_kecil: 8, porsi_besar: 10 },
+            { jenis_alergi: "Alergi Kedelai", porsi_kecil: 5, porsi_besar: 6 },
+        ];
+        woKelompokList.value[0].alergi_porsi_kecil = 13;
+        woKelompokList.value[0].alergi_porsi_besar = 16;
+    }
 
     clearError("namaMenuAktif");
     clearError("sub_menu_1");
@@ -1231,6 +1503,32 @@ function handleGunakanContohFormula() {
             serat: 1.4,
         },
     );
+    const mIkan = findMaster(
+        ["ikan gurame", "gurame", "ikan segar", "ikan"],
+        "Ikan Gurame Segar",
+        "Lauk Hewani",
+        80,
+        {
+            energi: 128,
+            protein: 17.5,
+            lemak: 5.3,
+            karbohidrat: 0,
+            serat: 0,
+        },
+    );
+    const mTelur = findMaster(
+        ["telur ayam", "telur"],
+        "Telur Ayam Segar",
+        "Lauk Hewani",
+        90,
+        {
+            energi: 154,
+            protein: 12.4,
+            lemak: 10.8,
+            karbohidrat: 0.7,
+            serat: 0,
+        },
+    );
 
     selectedBahanList.value = [
         // Sub Menu 1: Makanan Pokok
@@ -1248,10 +1546,10 @@ function handleGunakanContohFormula() {
             nama_po: "Beras Premium IR64",
             tipe_porsi: "normal",
             jenis_alergi: "",
-            gram_pk: 100,
-            gram_pb: 150,
+            gram_pk: 80,
+            gram_pb: 120,
             bdd: mBeras.bdd,
-            buffer: 5,
+            buffer: 3,
             harga_master: 14500,
             harga_aktual: 14500,
             alergen: "",
@@ -1273,15 +1571,40 @@ function handleGunakanContohFormula() {
             nama_po: "Ayam Broiler Karkas Segar",
             tipe_porsi: "normal",
             jenis_alergi: "",
-            gram_pk: 60,
-            gram_pb: 75,
-            bdd: mAyam.bdd,
-            buffer: 5,
-            harga_master: 38000,
-            harga_aktual: 38000,
+            gram_pk: 50,
+            gram_pb: 65,
+            bdd: 68,
+            buffer: 3,
+            harga_master: 35000,
+            harga_aktual: 35000,
             alergen: "",
-            keterangan: "Potong 10 bagian, karkas higienis",
+            keterangan: "Potong karkas bersih siap olah",
             tkpi: mAyam.tkpi,
+        },
+        // Pengganti Alergi Ayam (Sub Menu 2)
+        {
+            id: mIkan.id,
+            code: mIkan.code,
+            tkpi_id: mIkan.tkpi_id,
+            sub_menu_block_id: "sub_menu_2_alergi_0",
+            sub_menu_key: "sub_menu_2",
+            nama_sub_menu: "Ikan Bakar Bumbu Bali",
+            jenis: "bahan_baku",
+            kategori: mIkan.kategori,
+            satuan: "Kg",
+            nama: mIkan.nama,
+            nama_po: "Ikan Gurame Segar",
+            tipe_porsi: "alergi",
+            jenis_alergi: "Alergi Ayam",
+            gram_pk: 50,
+            gram_pb: 65,
+            bdd: 80,
+            buffer: 3,
+            harga_master: 36000,
+            harga_aktual: 36000,
+            alergen: "Ikan",
+            keterangan: "Khusus diet siswa yang alergi ayam",
+            tkpi: mIkan.tkpi,
         },
         // Sub Menu 3: Protein Nabati
         {
@@ -1299,14 +1622,39 @@ function handleGunakanContohFormula() {
             tipe_porsi: "normal",
             jenis_alergi: "",
             gram_pk: 35,
-            gram_pb: 50,
+            gram_pb: 45,
             bdd: mTempe.bdd,
-            buffer: 3,
-            harga_master: 16000,
-            harga_aktual: 16000,
+            buffer: 2,
+            harga_master: 15000,
+            harga_aktual: 15000,
             alergen: "Kedelai",
             keterangan: "Tempe segar non-GMO",
             tkpi: mTempe.tkpi,
+        },
+        // Pengganti Alergi Kedelai (Sub Menu 3)
+        {
+            id: mTelur.id,
+            code: mTelur.code,
+            tkpi_id: mTelur.tkpi_id,
+            sub_menu_block_id: "sub_menu_3_alergi_0",
+            sub_menu_key: "sub_menu_3",
+            nama_sub_menu: "Telur Rebus Balado",
+            jenis: "bahan_baku",
+            kategori: mTelur.kategori,
+            satuan: "Kg",
+            nama: mTelur.nama,
+            nama_po: "Telur Ayam Negeri",
+            tipe_porsi: "alergi",
+            jenis_alergi: "Alergi Kedelai",
+            gram_pk: 40,
+            gram_pb: 45,
+            bdd: 90,
+            buffer: 2,
+            harga_master: 26000,
+            harga_aktual: 26000,
+            alergen: "Telur",
+            keterangan: "Khusus diet siswa yang alergi tempe/kedelai",
+            tkpi: mTelur.tkpi,
         },
         {
             id: mMinyak.id,
@@ -1326,8 +1674,8 @@ function handleGunakanContohFormula() {
             gram_pb: 5,
             bdd: mMinyak.bdd,
             buffer: 0,
-            harga_master: 17500,
-            harga_aktual: 17500,
+            harga_master: 16500,
+            harga_aktual: 16500,
             alergen: "",
             keterangan: "Untuk menggoreng tempe",
             tkpi: mMinyak.tkpi,
@@ -1347,12 +1695,12 @@ function handleGunakanContohFormula() {
             nama_po: "Bayam Hijau Segar",
             tipe_porsi: "normal",
             jenis_alergi: "",
-            gram_pk: 50,
-            gram_pb: 75,
-            bdd: mBayam.bdd,
-            buffer: 5,
-            harga_master: 12000,
-            harga_aktual: 12000,
+            gram_pk: 45,
+            gram_pb: 60,
+            bdd: 75,
+            buffer: 3,
+            harga_master: 10000,
+            harga_aktual: 10000,
             alergen: "",
             keterangan: "Sayur segar baru petik",
             tkpi: mBayam.tkpi,
@@ -1372,11 +1720,11 @@ function handleGunakanContohFormula() {
             tipe_porsi: "normal",
             jenis_alergi: "",
             gram_pk: 25,
-            gram_pb: 35,
+            gram_pb: 30,
             bdd: mJagung.bdd,
             buffer: 2,
-            harga_master: 18000,
-            harga_aktual: 18000,
+            harga_master: 16000,
+            harga_aktual: 16000,
             alergen: "",
             keterangan: "Campuran sayur bening bayam",
             tkpi: mJagung.tkpi,
@@ -1396,12 +1744,12 @@ function handleGunakanContohFormula() {
             nama_po: "Jeruk Manis Medan/Siam",
             tipe_porsi: "normal",
             jenis_alergi: "",
-            gram_pk: 75,
-            gram_pb: 100,
-            bdd: mJeruk.bdd,
-            buffer: 3,
-            harga_master: 22000,
-            harga_aktual: 22000,
+            gram_pk: 65,
+            gram_pb: 80,
+            bdd: 75,
+            buffer: 2,
+            harga_master: 18000,
+            harga_aktual: 18000,
             alergen: "",
             keterangan: "1 buah per porsi siswa",
             tkpi: mJeruk.tkpi,
@@ -1411,6 +1759,10 @@ function handleGunakanContohFormula() {
     if (validationErrors.value.selectedBahan) {
         delete validationErrors.value.selectedBahan;
     }
+
+    nextTick(() => {
+        generateOtomatisCatatanTim(false);
+    });
 
     triggerSubmitSuccess(
         "Contoh formula bahan makanan berhasil dimuat untuk uji coba!",
@@ -2212,9 +2564,16 @@ function scrollToRekapitulasi() {
     });
 }
 
-function onGlobalWindowClick() {
+function onGlobalWindowClick(e) {
     activeComboboxBlockId.value = null;
     isComboboxGiziOpen.value = false;
+    if (
+        showDatePickerPopover.value &&
+        datePickerContainerRef.value &&
+        !datePickerContainerRef.value.contains(e.target)
+    ) {
+        showDatePickerPopover.value = false;
+    }
 }
 
 onMounted(() => {
@@ -2316,6 +2675,36 @@ function scrollToTopSection() {
 watch(buatMenuSubTab, (newVal, oldVal) => {
     if (newVal !== oldVal) {
         scrollToTopSection();
+        if (newVal === "catatan_resep") {
+            const hasPersiapan =
+                catatanTim.value?.persiapan &&
+                catatanTim.value.persiapan.length > 0;
+            const hasPengolahan =
+                catatanTim.value?.pengolahan &&
+                catatanTim.value.pengolahan.length > 0;
+            const hasPemorsian =
+                catatanTim.value?.pemorsian &&
+                catatanTim.value.pemorsian.length > 0;
+            if (!hasPersiapan && !hasPengolahan && !hasPemorsian) {
+                generateOtomatisCatatanTim(false);
+            } else if (hasPemorsian) {
+                // Sinkronisasi target porsi agar alergi hanya muncul di menu yang berkaitan/kena dampak saja
+                catatanTim.value.pemorsian.forEach((pRow) => {
+                    const matchedMenu = menuOptionsList.value.find(
+                        (m) =>
+                            (m.name || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase() ||
+                            (m.label || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase(),
+                    );
+                    if (matchedMenu) {
+                        pRow.isAlergi = matchedMenu.isAlergi || false;
+                        pRow.jenis_alergi = matchedMenu.jenis_alergi || "";
+                        pRow.kuantitas = getPemorsianTargetPorsi(matchedMenu);
+                    } else {
+                        pRow.kuantitas = getPemorsianTargetPorsi(pRow);
+                    }
+                });
+            }
+        }
     }
 });
 
@@ -2355,21 +2744,11 @@ function validateStep1() {
     if (!tanggalRencana.value) {
         errs.tanggalRencana = "Tanggal rencana masak & distribusi wajib diisi.";
     } else {
-        // Cek duplikasi tanggal (hanya boleh 1 WO per tanggal)
-        const duplicateDateWo = (props.workOrdersList || []).find((w) => {
-            const wTgl =
-                typeof w.tanggal_distribusi === "string"
-                    ? w.tanggal_distribusi.substring(0, 10)
-                    : "";
-            const isSameDate = wTgl === tanggalRencana.value;
-            const isDifferentWo =
-                w.nomor_wo !== woNo.value &&
-                w.uuid !== props.activeWorkOrder?.uuid &&
-                w.id !== props.activeWorkOrder?.id;
-            return isSameDate && isDifferentWo;
-        });
+        // Cek duplikasi tanggal (hanya boleh 1 WO per tanggal, termasuk status Draft)
+        const duplicateDateWo = getTakenWoInfo(tanggalRencana.value);
         if (duplicateDateWo) {
-            errs.tanggalRencana = `Tanggal ini sudah memiliki Work Order ("${duplicateDateWo.nama_menu}"). Hanya boleh 1 menu per tanggal.`;
+            errs.tanggalRencana = `Tanggal ${formatTanggalIndo(tanggalRencana.value)} sudah memiliki Work Order: "${duplicateDateWo.nama_menu}" (${duplicateDateWo.nomor_wo} • Status: ${duplicateDateWo.status}). Hanya diperbolehkan 1 Work Order per tanggal (termasuk status Draft).`;
+            triggerSubmitError(errs.tanggalRencana);
         }
     }
     if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
@@ -2574,9 +2953,18 @@ function handleSwitchSubTab(targetTab) {
         targetTab === "pembelian_bahan" ||
         targetTab === "pembelian-bahan"
     ) {
+        if (!validateStep1()) {
+            buatMenuSubTab.value = "work_order";
+            scrollToTopSection();
+            return;
+        }
         if (!validateStep2()) {
             buatMenuSubTab.value = "bahan_pangan";
             scrollToTopSection();
+            return;
+        }
+        if (!validateStep3()) {
+            buatMenuSubTab.value = "catatan_resep";
             return;
         }
         buatMenuSubTab.value = "order";
@@ -2601,11 +2989,99 @@ function handleRemoveBahan(index) {
     delete validationErrors.value.selectedBahan;
 }
 
+// Arahkan fokus dan scroll langsung ke input yang masih kosong
+function focusInvalidField(tim, index, fieldName) {
+    activeTimTab.value = tim;
+    nextTick(() => {
+        const elId = `catatan_${tim}_${index}_${fieldName}`;
+        const el = document.getElementById(elId);
+        if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("ring-2", "ring-rose-500", "border-rose-500", "bg-rose-50");
+            setTimeout(() => {
+                el.classList.remove("ring-2", "ring-rose-500");
+            }, 3000);
+        }
+    });
+}
+
+// Berpindah antar tab tim (Persiapan | Pengolahan | Pemorsian) secara bebas
+function handleSwitchTimTab(targetTim) {
+    activeTimTab.value = targetTim;
+}
+
 function validateStep3() {
     const isStep1Valid = validateStep1();
-    if (!isStep1Valid) return false;
+    if (!isStep1Valid) {
+        buatMenuSubTab.value = "work_order";
+        scrollToTopSection();
+        return false;
+    }
     const isStep2Valid = validateStep2();
-    if (!isStep2Valid) return false;
+    if (!isStep2Valid) {
+        buatMenuSubTab.value = "bahan_pangan";
+        scrollToTopSection();
+        return false;
+    }
+
+    const tims = [
+        { key: "persiapan", label: "Tim Persiapan" },
+        { key: "pengolahan", label: "Tim Pengolahan" },
+        { key: "pemorsian", label: "Tim Pemorsian" },
+    ];
+
+    for (const t of tims) {
+        const rows = catatanTim.value[t.key] || [];
+        if (rows.length === 0) {
+            triggerSubmitError(
+                `Catatan untuk ${t.label} belum memiliki baris instruksi kerja. Silakan gunakan tombol 'Gunakan Contoh' atau tambahkan baris manual.`,
+            );
+            activeTimTab.value = t.key;
+            return false;
+        }
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const no = i + 1;
+            if (!row.waktu_mulai) {
+                triggerSubmitError(
+                    `Kolom 'Waktu Mulai' pada ${t.label} baris #${no} wajib diisi.`,
+                );
+                focusInvalidField(t.key, i, "waktu_mulai");
+                return false;
+            }
+            if (!row.waktu_selesai) {
+                triggerSubmitError(
+                    `Kolom 'Waktu Selesai' pada ${t.label} baris #${no} wajib diisi.`,
+                );
+                focusInvalidField(t.key, i, "waktu_selesai");
+                return false;
+            }
+            if (!row.perlakuan || !row.perlakuan.trim()) {
+                triggerSubmitError(
+                    `Kolom 'Perlakuan & Standar Olah' pada ${t.label} baris #${no} wajib diisi.`,
+                );
+                focusInvalidField(t.key, i, "perlakuan");
+                return false;
+            }
+            if (!row.keterangan || !row.keterangan.trim()) {
+                triggerSubmitError(
+                    `Kolom 'Keterangan' pada ${t.label} baris #${no} wajib diisi.`,
+                );
+                focusInvalidField(t.key, i, "keterangan");
+                return false;
+            }
+            if (t.key === "pemorsian" && (!row.kuantitas || !row.kuantitas.trim())) {
+                triggerSubmitError(
+                    `Kolom 'Target Porsi / Kuantitas' pada ${t.label} baris #${no} wajib diisi.`,
+                );
+                focusInvalidField(t.key, i, "kuantitas");
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -2617,6 +3093,31 @@ function handleLanjutStep3() {
     }
     if (!validateStep2()) {
         return;
+    }
+    const hasPersiapan =
+        catatanTim.value?.persiapan && catatanTim.value.persiapan.length > 0;
+    const hasPengolahan =
+        catatanTim.value?.pengolahan && catatanTim.value.pengolahan.length > 0;
+    const hasPemorsian =
+        catatanTim.value?.pemorsian && catatanTim.value.pemorsian.length > 0;
+    if (!hasPersiapan && !hasPengolahan && !hasPemorsian) {
+        generateOtomatisCatatanTim(false);
+    } else if (catatanTim.value?.pemorsian) {
+        // Sinkronisasi target porsi agar alergi hanya muncul di menu yang berkaitan/kena dampak saja
+        catatanTim.value.pemorsian.forEach((pRow) => {
+            const matchedMenu = menuOptionsList.value.find(
+                (m) =>
+                    (m.name || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase() ||
+                    (m.label || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase(),
+            );
+            if (matchedMenu) {
+                pRow.isAlergi = matchedMenu.isAlergi || false;
+                pRow.jenis_alergi = matchedMenu.jenis_alergi || "";
+                pRow.kuantitas = getPemorsianTargetPorsi(matchedMenu);
+            } else {
+                pRow.kuantitas = getPemorsianTargetPorsi(pRow);
+            }
+        });
     }
     buatMenuSubTab.value = "catatan_resep";
     scrollToTopSection();
@@ -2631,6 +3132,9 @@ function handleLanjutStep4() {
     if (!validateStep2()) {
         buatMenuSubTab.value = "bahan_pangan";
         scrollToTopSection();
+        return;
+    }
+    if (!validateStep3()) {
         return;
     }
     buatMenuSubTab.value = "order";
@@ -2723,11 +3227,15 @@ const menuOptionsList = computed(() => {
         const alArr = subMenuAlergi.value[k];
         if (Array.isArray(alArr)) {
             alArr.forEach((al) => {
-                if (al.nama && al.nama.trim()) {
+                const name = al.menu_pengganti || al.nama;
+                if (name && name.trim()) {
                     list.push({
-                        key: `${k}_alergi`,
-                        name: `${al.nama.trim()} (${al.alergi || "Alergi"})`,
-                        label: `Diet Alergi: ${al.nama.trim()}`,
+                        key: `${k}_alergi_${al.jenis_alergi || al.alergi || ""}`,
+                        name: `${name.trim()} (${al.jenis_alergi || al.alergi || "Alergi"})`,
+                        label: `Diet Alergi: ${name.trim()} (${al.jenis_alergi || al.alergi || "Alergi"})`,
+                        isAlergi: true,
+                        jenis_alergi: al.jenis_alergi || al.alergi || "",
+                        menu_pengganti: name.trim(),
                     });
                 }
             });
@@ -2744,18 +3252,125 @@ const menuOptionsList = computed(() => {
     return list;
 });
 
-// Opsi Bahan Baku dari Formula Makanan Step 2
+// Agregasi Bahan Baku dari Formula Makanan Step 2
+// 1. Menggunakan nama_po (Nama Bahan Baku PO) BUKAN nama database mentah TKPI.
+// 2. Menggabungkan bahan yang sama jika berasal dari item database pangan yang sama / nama PO sama
+//    sehingga tidak ganda di tabel catatan, menjumlahkan totalnya (Kg / L) dan menggabungkan sub-menunya.
+const aggregatedBahanList = computed(() => {
+    const rawItems = bahanCalculations.value || [];
+    const map = new Map();
+
+    rawItems.forEach((b) => {
+        const poName = (b.nama_po && b.nama_po.trim())
+            ? b.nama_po.trim()
+            : (b.nama || "").trim();
+        if (!poName) return;
+
+        // Grouping key: bila item database pangan sama (tkpi_id / code / id) atau nama raw database sama dan satuan sama
+        const dbId = b.tkpi_id || b.code || b.id;
+        const dbName = (b.nama || "").trim().toLowerCase();
+        const satuanStr = (b.satuan || "Kg").trim();
+        const groupKey = dbId
+            ? `db_${dbId}_${satuanStr.toLowerCase()}`
+            : `name_${dbName}_${satuanStr.toLowerCase()}`;
+
+        const menuName = b.nama_sub_menu || namaMenuAktif.value || "Menu Utama";
+        const grossKg = Number(b.totalGrossKg) || 0;
+
+        if (!map.has(groupKey)) {
+            map.set(groupKey, {
+                id: groupKey,
+                key: groupKey,
+                nama_po: poName,
+                nama_db: b.nama || "",
+                menus: menuName ? [menuName] : [],
+                jumlah: grossKg,
+                satuan: satuanStr || "Kg",
+                kategori: b.kategori || "",
+            });
+        } else {
+            const existing = map.get(groupKey);
+            if (b.nama_po && b.nama_po.trim() && (!existing.nama_po || existing.nama_po === existing.nama_db)) {
+                existing.nama_po = b.nama_po.trim();
+            }
+            if (menuName && !existing.menus.includes(menuName)) {
+                existing.menus.push(menuName);
+            }
+            existing.jumlah += grossKg;
+        }
+    });
+
+    return Array.from(map.values()).map((item) => {
+        const roundedJumlah = Number((Math.round(item.jumlah * 10) / 10).toFixed(1));
+        return {
+            ...item,
+            nama_menu: item.menus.join(", "),
+            jumlah: roundedJumlah,
+            kuantitas: `${roundedJumlah} ${item.satuan}`,
+        };
+    });
+});
+
+// Opsi Bahan Baku untuk modal / fallback
 const bahanBakuOptions = computed(() => {
-    const items = bahanCalculations.value || [];
-    return items.map((b) => ({
-        id: b.id || b.code || b.nama,
-        nama: b.nama,
-        nama_sub_menu: b.nama_sub_menu || "",
-        sub_menu_key: b.sub_menu_key || "",
-        totalGross: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
+    return aggregatedBahanList.value.map((b) => ({
+        id: b.id || b.key,
+        nama: b.nama_po,
+        nama_sub_menu: b.nama_menu,
+        totalGross: b.kuantitas,
+        jumlah: b.jumlah,
+        satuan: b.satuan,
         kategori: b.kategori,
     }));
 });
+
+// Mendapatkan opsi bahan baku yang belum dibuatkan catatan di tim tertentu (+ bahan milik baris saat ini)
+function getAvailableBahanOptions(tim, currentItem) {
+    const rows = catatanTim.value[tim] || [];
+    const usedNames = new Set();
+    rows.forEach((r) => {
+        if (r !== currentItem && r.bahan_baku) {
+            usedNames.add(r.bahan_baku.trim().toLowerCase());
+        }
+    });
+
+    return aggregatedBahanList.value.filter((b) => {
+        const bName = (b.nama_po || "").trim().toLowerCase();
+        const currentName = (currentItem?.bahan_baku || "").trim().toLowerCase();
+        return bName === currentName || !usedNames.has(bName);
+    });
+}
+
+// Mengecek apakah masih ada bahan formula yang belum dibuatkan catatan sama sekali di tim ini
+function hasUnassignedBahan(tim) {
+    const rows = catatanTim.value[tim] || [];
+    const usedNames = new Set(
+        rows.map((r) => (r.bahan_baku || "").trim().toLowerCase()).filter(Boolean),
+    );
+    return aggregatedBahanList.value.some(
+        (b) => !usedNames.has((b.nama_po || "").trim().toLowerCase()),
+    );
+}
+
+// Event handler saat memilih bahan baku dari dropdown tabel inline
+function onBahanBakuSelect(item, tim) {
+    if (!item.bahan_baku) return;
+    const targetName = item.bahan_baku.trim().toLowerCase();
+    const matched = aggregatedBahanList.value.find(
+        (b) =>
+            (b.nama_po || "").trim().toLowerCase() === targetName ||
+            (b.nama_db || "").trim().toLowerCase() === targetName,
+    );
+    if (matched) {
+        item.bahan_baku = matched.nama_po;
+        if (!item.nama_menu || item.nama_menu === "Menu Utama") {
+            item.nama_menu = matched.nama_menu;
+        }
+        item.jumlah = matched.jumlah;
+        item.satuan = matched.satuan;
+        item.kuantitas = `${matched.jumlah} ${matched.satuan}`;
+    }
+}
 
 function handleBahanBakuSelect(bahanName) {
     catatanForm.value.bahan_baku = bahanName;
@@ -2783,18 +3398,8 @@ function openTambahCatatanModal(defaultTim = null) {
         nama_menu: defaultMenu,
         bahan_baku: defaultBahan ? defaultBahan.nama : "",
         kuantitas: defaultBahan ? defaultBahan.totalGross : "",
-        waktu_mulai:
-            targetTim === "persiapan"
-                ? "05:00"
-                : targetTim === "pengolahan"
-                  ? "06:00"
-                  : "07:30",
-        waktu_selesai:
-            targetTim === "persiapan"
-                ? "06:00"
-                : targetTim === "pengolahan"
-                  ? "07:30"
-                  : "08:30",
+        waktu_mulai: targetTim === "persiapan" ? "05:00" : "",
+        waktu_selesai: targetTim === "persiapan" ? "06:00" : "",
         perlakuan: "",
         keterangan: "",
     };
@@ -2808,8 +3413,8 @@ function openEditCatatanModal(item, tim) {
         nama_menu: item.nama_menu || "",
         bahan_baku: item.bahan_baku || "",
         kuantitas: item.kuantitas || "",
-        waktu_mulai: item.waktu_mulai || "05:00",
-        waktu_selesai: item.waktu_selesai || "06:00",
+        waktu_mulai: item.waktu_mulai || "",
+        waktu_selesai: item.waktu_selesai || "",
         perlakuan: item.perlakuan || "",
         keterangan: item.keterangan || "",
     };
@@ -2873,106 +3478,154 @@ function hapusCatatanItem(id, tim) {
     }
 }
 
-// Generate otomatis catatan kerja dari formula Step 2
-function generateOtomatisCatatanTim() {
-    const rawItems = bahanCalculations.value || [];
-    if (rawItems.length === 0) {
-        alert(
-            "Belum ada bahan makanan yang dipilih di Langkah 2. Silakan tambahkan bahan terlebih dahulu.",
-        );
+// Daftar alergi yang dipilih / terpengaruh di Work Order / Menu ini saja
+const affectedAlergiTypesInWO = computed(() => {
+    const list = [];
+    const seen = new Set();
+    Object.keys(subMenuAlergi.value || {}).forEach((k) => {
+        const arr = subMenuAlergi.value[k];
+        if (Array.isArray(arr)) {
+            arr.forEach((al) => {
+                const j = al.jenis_alergi || al.alergi;
+                if (j && j.trim()) {
+                    const clean = j.trim();
+                    const cleanKey = clean.toLowerCase();
+                    if (!seen.has(cleanKey)) {
+                        seen.add(cleanKey);
+                        const detail = findAlergiDetail(clean);
+                        list.push({
+                            jenis_alergi: clean,
+                            total: detail ? detail.total : 0,
+                            porsi_kecil: detail ? detail.porsi_kecil : 0,
+                            porsi_besar: detail ? detail.porsi_besar : 0,
+                        });
+                    }
+                }
+            });
+        }
+    });
+    return list;
+});
+
+// Helper untuk menyusun string Target Porsi pada Tim Pemorsian
+function getPemorsianTargetPorsi(m) {
+    if (!m) return `PK: ${totalPK.value || 0} porsi • PB: ${totalPB.value || 0} porsi`;
+
+    // Ambil metadata dari menuOptionsList jika m hanya berupa objek baris catatan ({ nama_menu })
+    const targetMenuName = (m.nama_menu || m.name || "").trim();
+    const matchedOpt = menuOptionsList.value.find(
+        (opt) =>
+            opt.name.trim().toLowerCase() === targetMenuName.toLowerCase() ||
+            opt.label.trim().toLowerCase() === targetMenuName.toLowerCase(),
+    );
+
+    const isAlergi = m.isAlergi || matchedOpt?.isAlergi || false;
+    const jenisAlergi = m.jenis_alergi || matchedOpt?.jenis_alergi || "";
+
+    // 1. Jika ini adalah menu pengganti diet khusus (alergi)
+    if (isAlergi && jenisAlergi) {
+        const alDetail = findAlergiDetail(jenisAlergi);
+        if (alDetail && alDetail.total > 0) {
+            return `PK: ${alDetail.porsi_kecil} porsi • PB: ${alDetail.porsi_besar} porsi (Diet Khusus ${jenisAlergi}: ${alDetail.total} porsi)`;
+        }
+        return `Diet Khusus: ${jenisAlergi}`;
+    }
+
+    // 2. Jika menu normal, cari apakah sub-menu ini memiliki varian alergi pengganti di WO
+    let subMenuKey = m.key || matchedOpt?.key;
+    if (!subMenuKey) {
+        // Coba deteksi sub_menu_key dari nama komponen
+        const smMap = ["sub_menu_1", "sub_menu_2", "sub_menu_3", "sub_menu_4", "sub_menu_5"];
+        for (const k of smMap) {
+            if (
+                subMenuKomponen.value[k] &&
+                subMenuKomponen.value[k].trim().toLowerCase() === targetMenuName.toLowerCase()
+            ) {
+                subMenuKey = k;
+                break;
+            }
+        }
+    }
+
+    const smAlergis = (subMenuKey && subMenuAlergi.value?.[subMenuKey]) || [];
+    const validAllergiesForThisSubMenu = [];
+
+    smAlergis.forEach((al) => {
+        const j = al.jenis_alergi || al.alergi;
+        if (j && j.trim()) {
+            const detail = findAlergiDetail(j.trim());
+            if (detail && detail.total > 0) {
+                validAllergiesForThisSubMenu.push(`${detail.jenis_alergi}: ${detail.total}`);
+            } else {
+                validAllergiesForThisSubMenu.push(j.trim());
+            }
+        }
+    });
+
+    let kuantitasText = `PK: ${totalPK.value || 0} porsi • PB: ${totalPB.value || 0} porsi`;
+    if (validAllergiesForThisSubMenu.length > 0) {
+        kuantitasText += ` • Alergi (${validAllergiesForThisSubMenu.join(", ")})`;
+    }
+    return kuantitasText;
+}
+
+// Generate otomatis catatan kerja dari formula Step 2 (jam dan perlakuan dikosongkan secara default)
+function generateOtomatisCatatanTim(showToast = false) {
+    const aggItems = aggregatedBahanList.value || [];
+    if (aggItems.length === 0) {
+        if (showToast) {
+            triggerSubmitError(
+                "Belum ada bahan makanan yang dipilih di Langkah 2. Silakan tambahkan bahan terlebih dahulu.",
+            );
+        }
         return;
     }
 
-    // Generate Tim Persiapan
-    const newPersiapan = rawItems.map((b, idx) => {
-        let perlakuan = "Timbang dan periksa kesegaran bahan";
-        const kat = (b.kategori || "").toLowerCase();
-        if (kat.includes("sayur")) {
-            perlakuan = "Cuci bersih air mengalir, kupas/potong rapi, tiriskan";
-        } else if (
-            kat.includes("hewani") ||
-            kat.includes("daging") ||
-            kat.includes("ikan") ||
-            kat.includes("ayam")
-        ) {
-            perlakuan =
-                "Bersihkan, potong sesuai gramatur standar porsi, marinasi";
-        } else if (
-            kat.includes("nabati") ||
-            kat.includes("tahu") ||
-            kat.includes("tempe")
-        ) {
-            perlakuan = "Potong seragam, rendam bumbu perasa";
-        } else if (kat.includes("pokok") || kat.includes("beras")) {
-            perlakuan = "Cuci beras 3x hingga air jernih, tiriskan 10 menit";
-        } else if (kat.includes("buah")) {
-            perlakuan = "Cuci permukaan buah, lap kering, simpan tempat sejuk";
-        }
-
+    // Generate Tim Persiapan (jam dikosongkan diawal, perlakuan & keterangan kosong tapi wajib diisi sebelum lanjut)
+    const newPersiapan = aggItems.map((b, idx) => {
         return {
-            id: `gen_p_${idx}_${Date.now()}`,
-            nama_menu: b.nama_sub_menu || namaMenuAktif.value || "Menu Utama",
-            bahan_baku: b.nama,
-            kuantitas: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
-            waktu_mulai: "05:00",
-            waktu_selesai: "06:15",
-            perlakuan: perlakuan,
-            keterangan: "Pisahkan wadah bahan mentah & matang (HACCP)",
+            id: `gen_p_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+            nama_menu: b.nama_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama_po,
+            jumlah: b.jumlah,
+            satuan: b.satuan,
+            kuantitas: `${b.jumlah} ${b.satuan}`,
+            waktu_mulai: "",
+            waktu_selesai: "",
+            perlakuan: "",
+            keterangan: "",
         };
     });
 
-    // Generate Tim Pengolahan
-    const newPengolahan = rawItems.map((b, idx) => {
-        let perlakuan = "Masak sesuai metode dan SOP standar";
-        const kat = (b.kategori || "").toLowerCase();
-        if (kat.includes("sayur")) {
-            perlakuan =
-                "Tumis/rebus cepat (blanching) agar tekstur renyah dan vitamin terjaga";
-        } else if (
-            kat.includes("hewani") ||
-            kat.includes("daging") ||
-            kat.includes("ikan") ||
-            kat.includes("ayam")
-        ) {
-            perlakuan =
-                "Goreng/panggang/ungkep hingga matang sempurna (suhu internal >75°C)";
-        } else if (
-            kat.includes("nabati") ||
-            kat.includes("tahu") ||
-            kat.includes("tempe")
-        ) {
-            perlakuan = "Goreng atau bumbui hingga matang keemasan";
-        } else if (kat.includes("pokok") || kat.includes("beras")) {
-            perlakuan =
-                "Kukus/aron dengan rasio air tepat hingga pulen sempurna";
-        } else if (kat.includes("buah")) {
-            perlakuan =
-                "Potong siap saji menjelang waktu distribusi (hindari browning)";
-        }
-
+    // Generate Tim Pengolahan (jam dikosongkan diawal, perlakuan & keterangan kosong tapi wajib diisi sebelum lanjut)
+    const newPengolahan = aggItems.map((b, idx) => {
         return {
-            id: `gen_c_${idx}_${Date.now()}`,
-            nama_menu: b.nama_sub_menu || namaMenuAktif.value || "Menu Utama",
-            bahan_baku: b.nama,
-            kuantitas: `${b.totalGrossKg || 0} ${b.satuan || "Kg"}`,
-            waktu_mulai: "06:15",
-            waktu_selesai: "07:45",
-            perlakuan: perlakuan,
-            keterangan:
-                "Cek suhu masakan dan uji organoleptik sebelum diserahkan ke pemorsian",
+            id: `gen_c_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+            nama_menu: b.nama_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama_po,
+            jumlah: b.jumlah,
+            satuan: b.satuan,
+            kuantitas: `${b.jumlah} ${b.satuan}`,
+            waktu_mulai: "",
+            waktu_selesai: "",
+            perlakuan: "",
+            keterangan: "",
         };
     });
 
-    // Generate Tim Pemorsian (berdasarkan sub-menu yang ada)
+    // Generate Tim Pemorsian (berdasarkan sub-menu yang ada dan hanya alergi yang dipilih di WO)
     const menus = menuOptionsList.value;
     const newPemorsian = menus.map((m, idx) => {
         return {
-            id: `gen_s_${idx}_${Date.now()}`,
+            id: `gen_s_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
             nama_menu: m.name,
-            perlakuan:
-                "Porsikan ke wadah sekat kotak MBG sesuai standar gramatur AKG (PK & PB)",
-            keterangan:
-                "Wajib menggunakan sarung tangan plastik higienis & masker penutup",
+            isAlergi: m.isAlergi || false,
+            jenis_alergi: m.jenis_alergi || "",
+            kuantitas: getPemorsianTargetPorsi(m),
+            waktu_mulai: "",
+            waktu_selesai: "",
+            perlakuan: "",
+            keterangan: "",
         };
     });
 
@@ -2980,22 +3633,211 @@ function generateOtomatisCatatanTim() {
     catatanTim.value.pengolahan = newPengolahan;
     catatanTim.value.pemorsian = newPemorsian;
 
-    if (!catatanTim.value.catatan_global.persiapan) {
-        catatanTim.value.catatan_global.persiapan =
-            "Wajib sterilisasi pisau dan talenan sebelum digunakan. Pisahkan talenan sayur (hijau) dan daging (merah).";
-    }
-    if (!catatanTim.value.catatan_global.pengolahan) {
-        catatanTim.value.catatan_global.pengolahan =
-            "Pastikan api dan suhu penggorengan stabil. Simpan sampel makanan (food testing) 50g per menu untuk arsip quality control.";
-    }
-    if (!catatanTim.value.catatan_global.pemorsian) {
-        catatanTim.value.catatan_global.pemorsian =
-            "Lakukan penimbangan porsi sampel setiap 50 kotak. Pastikan kotak tertutup rapat sebelum dimasukkan ke thermal box pengantaran.";
+    if (!catatanTim.value.catatan_global) {
+        catatanTim.value.catatan_global = {
+            persiapan: "",
+            pengolahan: "",
+            pemorsian: "",
+        };
     }
 
+    if (showToast) {
+        triggerSubmitSuccess(
+            "Tabel instruksi kerja tim produksi berhasil dimuat dari formula!",
+        );
+    }
+}
+
+// Gunakan Contoh Catatan Kerja Tim Produksi (Mengisi seluruh field secara otomatis)
+function handleGunakanContohCatatan() {
+    const aggItems = aggregatedBahanList.value || [];
+    if (aggItems.length === 0) {
+        triggerSubmitError(
+            "Belum ada bahan makanan yang dipilih di Langkah 2. Silakan tambahkan bahan terlebih dahulu.",
+        );
+        return;
+    }
+
+    // 1. Tim Persiapan dengan jam, perlakuan, dan keterangan terisi contoh lengkap
+    catatanTim.value.persiapan = aggItems.map((b, idx) => {
+        let perlakuan = "Timbang dan periksa kesegaran bahan";
+        const kat = (b.kategori || "").toLowerCase();
+        if (kat.includes("sayur")) {
+            perlakuan = "Cuci bersih air mengalir, kupas & potong rapi, tiriskan";
+        } else if (
+            kat.includes("hewani") ||
+            kat.includes("daging") ||
+            kat.includes("ikan") ||
+            kat.includes("ayam")
+        ) {
+            perlakuan = "Bersihkan, potong sesuai gramatur standar porsi, marinasi";
+        } else if (
+            kat.includes("nabati") ||
+            kat.includes("tahu") ||
+            kat.includes("tempe")
+        ) {
+            perlakuan = "Potong dadu/seragam, rendam bumbu perasa";
+        } else if (kat.includes("pokok") || kat.includes("beras")) {
+            perlakuan = "Cuci beras 3x hingga air jernih, tiriskan 10 menit";
+        } else if (kat.includes("buah")) {
+            perlakuan = "Cuci permukaan buah, lap kering, simpan tempat sejuk";
+        }
+
+        return {
+            id: `gen_p_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+            nama_menu: b.nama_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama_po,
+            jumlah: b.jumlah,
+            satuan: b.satuan,
+            kuantitas: `${b.jumlah} ${b.satuan}`,
+            waktu_mulai: "05:00",
+            waktu_selesai: "06:15",
+            perlakuan: perlakuan,
+            keterangan: "Pisahkan wadah bahan mentah & matang (HACCP)",
+        };
+    });
+
+    // 2. Tim Pengolahan dengan jam, perlakuan, dan keterangan terisi contoh lengkap
+    catatanTim.value.pengolahan = aggItems.map((b, idx) => {
+        let perlakuan = "Masak sesuai metode dan SOP standar olah";
+        const kat = (b.kategori || "").toLowerCase();
+        if (kat.includes("sayur")) {
+            perlakuan = "Tumis/rebus cepat (blanching) agar tekstur renyah dan gizi terjaga";
+        } else if (
+            kat.includes("hewani") ||
+            kat.includes("daging") ||
+            kat.includes("ikan") ||
+            kat.includes("ayam")
+        ) {
+            perlakuan = "Goreng/panggang/ungkep hingga matang sempurna (suhu internal >75°C)";
+        } else if (
+            kat.includes("nabati") ||
+            kat.includes("tahu") ||
+            kat.includes("tempe")
+        ) {
+            perlakuan = "Goreng atau bumbui hingga matang keemasan";
+        } else if (kat.includes("pokok") || kat.includes("beras")) {
+            perlakuan = "Kukus/aron dengan rasio air tepat hingga pulen sempurna";
+        } else if (kat.includes("buah")) {
+            perlakuan = "Potong siap saji menjelang waktu distribusi (hindari browning)";
+        }
+
+        return {
+            id: `gen_c_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+            nama_menu: b.nama_menu || namaMenuAktif.value || "Menu Utama",
+            bahan_baku: b.nama_po,
+            jumlah: b.jumlah,
+            satuan: b.satuan,
+            kuantitas: `${b.jumlah} ${b.satuan}`,
+            waktu_mulai: "06:15",
+            waktu_selesai: "07:45",
+            perlakuan: perlakuan,
+            keterangan: "Cek suhu masakan dan uji organoleptik sebelum diserahkan ke pemorsian",
+        };
+    });
+
+    // 3. Tim Pemorsian dengan jam, target porsi, perlakuan, dan keterangan terisi contoh lengkap
+    const menus = menuOptionsList.value;
+    catatanTim.value.pemorsian = menus.map((m, idx) => {
+        return {
+            id: `gen_s_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+            nama_menu: m.name,
+            isAlergi: m.isAlergi || false,
+            jenis_alergi: m.jenis_alergi || "",
+            kuantitas: getPemorsianTargetPorsi(m),
+            waktu_mulai: "07:45",
+            waktu_selesai: "09:00",
+            perlakuan: "Porsikan ke wadah sekat kotak MBG sesuai standar gramatur AKG (PK & PB)",
+            keterangan: "Wajib menggunakan sarung tangan plastik higienis & masker penutup",
+        };
+    });
+
+    // Catatan tambahan (global) contoh
+    catatanTim.value.catatan_global = {
+        persiapan: "Wajib sterilisasi pisau dan talenan sebelum digunakan. Pisahkan talenan sayur (hijau) dan daging (merah).",
+        pengolahan: "Pastikan api dan suhu penggorengan stabil. Simpan sampel makanan (food testing) 50g per menu untuk arsip quality control.",
+        pemorsian: "Lakukan penimbangan porsi sampel setiap 50 kotak. Pastikan kotak tertutup rapat sebelum dimasukkan ke thermal box pengantaran.",
+    };
+
     triggerSubmitSuccess(
-        "Catatan kerja untuk Tim Persiapan, Pengolahan, dan Pemorsian berhasil di-generate otomatis!",
+        "Contoh catatan instruksi operasional untuk Tim Persiapan, Pengolahan, dan Pemorsian berhasil diterapkan!",
     );
+}
+
+// Tambah baris baru secara langsung di tabel catatan tim aktif
+function tambahBarisCatatan(tim = null) {
+    const targetTim = tim || activeTimTab.value || "persiapan";
+    if (!catatanTim.value[targetTim]) {
+        catatanTim.value[targetTim] = [];
+    }
+
+    if (targetTim === "pemorsian") {
+        const defaultMenu =
+            menuOptionsList.value.length > 0
+                ? menuOptionsList.value[0]
+                : { name: namaMenuAktif.value || "Menu Utama", key: "sub_menu_1" };
+
+        catatanTim.value.pemorsian.push({
+            id: `cat_pemorsian_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            nama_menu: defaultMenu.name,
+            isAlergi: defaultMenu.isAlergi || false,
+            jenis_alergi: defaultMenu.jenis_alergi || "",
+            kuantitas: getPemorsianTargetPorsi(defaultMenu),
+            waktu_mulai: "",
+            waktu_selesai: "",
+            perlakuan: "",
+            keterangan: "",
+        });
+        return;
+    }
+
+    // Untuk Persiapan & Pengolahan: cegah duplikasi bila semua bahan sudah dibuatkan catatan
+    if (["persiapan", "pengolahan"].includes(targetTim) && !hasUnassignedBahan(targetTim)) {
+        triggerSubmitError(
+            `Semua bahan formula sudah dibuatkan catatan untuk Tim ${targetTim === "persiapan" ? "Persiapan" : "Pengolahan"}. Tidak ada bahan tersisa untuk ditambahkan.`,
+        );
+        return;
+    }
+
+    const available = getAvailableBahanOptions(targetTim, null);
+    const chosenBahan = available.length > 0 ? available[0] : null;
+
+    catatanTim.value[targetTim].push({
+        id: `cat_${targetTim}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        nama_menu: chosenBahan ? chosenBahan.nama_menu : (namaMenuAktif.value || "Menu Utama"),
+        bahan_baku: chosenBahan ? chosenBahan.nama_po : "",
+        jumlah: chosenBahan ? chosenBahan.jumlah : 0,
+        satuan: chosenBahan ? chosenBahan.satuan : "Kg",
+        kuantitas: chosenBahan ? `${chosenBahan.jumlah} ${chosenBahan.satuan}` : "0 Kg",
+        waktu_mulai: "",
+        waktu_selesai: "",
+        perlakuan: "",
+        keterangan: "",
+    });
+}
+
+function onBahanBakuCellChange(item) {
+    if (!item.bahan_baku) return;
+    const trimmed = item.bahan_baku.trim().toLowerCase();
+    const matched = aggregatedBahanList.value.find(
+        (b) =>
+            (b.nama_po || "").trim().toLowerCase() === trimmed ||
+            (b.nama_db || "").trim().toLowerCase() === trimmed,
+    );
+    if (matched) {
+        item.bahan_baku = matched.nama_po;
+        if (!item.jumlah) {
+            item.jumlah = matched.jumlah;
+            item.satuan = matched.satuan;
+            item.kuantitas = `${matched.jumlah} ${matched.satuan}`;
+        }
+        if (
+            (!item.nama_menu || item.nama_menu === "Menu Utama") &&
+            matched.nama_menu
+        ) {
+            item.nama_menu = matched.nama_menu;
+        }
+    }
 }
 
 function handleAjukanDraftPo() {
@@ -5148,7 +5990,7 @@ watch(
                         </div>
 
                         <!-- Kolom 2: Tanggal Distribusi Menu -->
-                        <div class="space-y-1.5">
+                        <div class="space-y-1.5" ref="datePickerContainerRef">
                             <div
                                 class="flex items-center justify-between gap-1"
                             >
@@ -5159,13 +6001,13 @@ watch(
                                     <span class="text-rose-500">*</span>
                                 </label>
                                 <div
-                                    class="flex items-center gap-1.5 shrink-0 text-[10.5px] font-bold text-primary"
+                                    class="flex items-center gap-1.5 shrink-0 text-[10.5px] font-bold"
                                 >
                                     <button
                                         type="button"
                                         @click="setTanggalHariIni"
-                                        class="hover:underline cursor-pointer"
-                                        title="Pilih Tanggal Hari Ini"
+                                        :class="isTodayTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-primary hover:underline cursor-pointer'"
+                                        :title="isTodayTaken ? `Hari ini sudah ada WO: ${getTakenWoInfo(todayStr)?.nama_menu}` : 'Pilih Tanggal Hari Ini'"
                                     >
                                         Hari Ini
                                     </button>
@@ -5173,33 +6015,195 @@ watch(
                                     <button
                                         type="button"
                                         @click="setTanggalBesok"
-                                        class="hover:underline cursor-pointer"
-                                        title="Pilih Tanggal Besok"
+                                        :class="isTomorrowTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-primary hover:underline cursor-pointer'"
+                                        :title="isTomorrowTaken ? `Besok sudah ada WO: ${getTakenWoInfo(tomorrowStr)?.nama_menu}` : 'Pilih Tanggal Besok'"
                                     >
                                         Besok
                                     </button>
                                 </div>
                             </div>
-                            <input
-                                type="date"
-                                v-model="tanggalRencana"
-                                @change="clearError('tanggalRencana')"
-                                required
-                                :class="[
-                                    'w-full text-xs font-bold rounded-lg border p-2.5 bg-white',
-                                    validationErrors.tanggalRencana
-                                        ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                        : 'border-slate-300 focus:ring-primary focus:border-primary',
-                                ]"
-                            />
+
+                            <!-- Input Trigger & Kalender Dropdown Popover -->
+                            <div class="relative">
+                                <div
+                                    @click="toggleDatePickerPopover"
+                                    class="w-full flex items-center justify-between gap-2 text-xs font-bold rounded-xl border p-2.5 bg-white cursor-pointer transition select-none shadow-2xs hover:border-primary/60"
+                                    :class="[
+                                        validationErrors.tanggalRencana || currentDateConflict
+                                            ? 'border-rose-400 ring-2 ring-rose-200 bg-rose-50/20 text-rose-950'
+                                            : 'border-slate-300 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 text-slate-800'
+                                    ]"
+                                    title="Klik untuk membuka kalender pemilihan tanggal"
+                                >
+                                    <div class="flex items-center gap-2 truncate">
+                                        <Calendar class="h-4 w-4 shrink-0" :class="currentDateConflict ? 'text-rose-500' : 'text-primary'" />
+                                        <span class="font-extrabold truncate">
+                                            {{ formatTanggalIndo(tanggalRencana) }}
+                                        </span>
+                                        <span class="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                                            ({{ tanggalRencana }})
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <span
+                                            v-if="currentDateConflict"
+                                            class="text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300"
+                                        >
+                                            Sudah Ada WO
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="text-[9.5px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                        >
+                                            Tersedia
+                                        </span>
+                                        <ChevronDown class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="showDatePickerPopover ? 'rotate-180 text-primary' : ''" />
+                                    </div>
+                                </div>
+
+                                <!-- Native date input fallback (hidden or for browser forms/date picking) -->
+                                <input
+                                    type="date"
+                                    v-model="tanggalRencana"
+                                    @change="onNativeDateChange"
+                                    class="sr-only"
+                                    tabindex="-1"
+                                    aria-hidden="true"
+                                />
+
+                                <!-- POPOVER KALENDER INTERAKTIF DENGAN TANDA WO -->
+                                <div
+                                    v-if="showDatePickerPopover"
+                                    class="absolute z-50 top-full left-0 mt-2 w-[320px] sm:w-[350px] bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
+                                >
+                                    <!-- Header Bulan & Navigasi -->
+                                    <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                                        <button
+                                            type="button"
+                                            @click.stop="prevPickerMonth"
+                                            class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                                            title="Bulan Sebelumnya"
+                                        >
+                                            <ChevronLeft class="h-4 w-4" />
+                                        </button>
+                                        <div class="text-xs font-black text-slate-800 tracking-wide">
+                                            {{ pickerMonthLabel }}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            @click.stop="nextPickerMonth"
+                                            class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                                            title="Bulan Berikutnya"
+                                        >
+                                            <ChevronRight class="h-4 w-4" />
+                                        </button>
+                                    </div>
+
+                                    <!-- Nama Hari (Sen - Min) -->
+                                    <div class="grid grid-cols-7 gap-1 text-center text-[10.5px] font-bold text-slate-500 uppercase">
+                                        <span class="py-1">Sen</span>
+                                        <span class="py-1">Sel</span>
+                                        <span class="py-1">Rab</span>
+                                        <span class="py-1">Kam</span>
+                                        <span class="py-1">Jum</span>
+                                        <span class="py-1 text-amber-600">Sab</span>
+                                        <span class="py-1 text-rose-600">Min</span>
+                                    </div>
+
+                                    <!-- Grid Tanggal -->
+                                    <div class="grid grid-cols-7 gap-1 text-center">
+                                        <button
+                                            v-for="(day, dIdx) in pickerCalendarDays"
+                                            :key="'picker-day-' + dIdx + '-' + day.dateStr"
+                                            type="button"
+                                            @click.stop="handleSelectPickerDate(day)"
+                                            :disabled="day.isTaken"
+                                            :title="day.isTaken ? `SUDAH ADA WO: ${day.takenInfo.nama_menu} (${day.takenInfo.nomor_wo} - Status: ${day.takenInfo.status})` : `Pilih tanggal ${day.dateStr}`"
+                                            class="h-9 relative rounded-xl text-xs font-bold transition flex flex-col items-center justify-center select-none"
+                                            :class="[
+                                                day.isTaken
+                                                    ? 'bg-rose-50/90 border border-rose-300 text-rose-600 cursor-not-allowed opacity-80'
+                                                    : day.isSelected
+                                                      ? 'bg-primary text-white font-extrabold shadow-md ring-2 ring-primary/40'
+                                                      : day.isToday
+                                                        ? 'border border-primary text-primary hover:bg-primary/10 cursor-pointer'
+                                                        : day.isCurrentMonth
+                                                          ? 'text-slate-800 hover:bg-slate-100 cursor-pointer'
+                                                          : 'text-slate-300 hover:bg-slate-50 cursor-pointer'
+                                            ]"
+                                        >
+                                            <span :class="day.isTaken ? 'line-through text-rose-500 text-[11px]' : ''">
+                                                {{ day.dayNumber }}
+                                            </span>
+
+                                            <!-- Indikator Tag Jika Sudah Ada WO -->
+                                            <span
+                                                v-if="day.isTaken"
+                                                class="text-[7.5px] font-black text-rose-700 leading-none tracking-tighter"
+                                            >
+                                                WO ADA
+                                            </span>
+                                            <!-- Dot jika hari ini dan belum dipilih -->
+                                            <span
+                                                v-else-if="day.isToday && !day.isSelected"
+                                                class="h-1 w-1 rounded-full bg-primary mt-0.5"
+                                            ></span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Legenda & Keterangan Popover -->
+                                    <div class="pt-2.5 border-t border-slate-100 space-y-2">
+                                        <div class="flex items-center justify-between text-[10px] text-slate-500 font-semibold px-0.5">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-2.5 w-2.5 rounded bg-rose-100 border border-rose-400"></span>
+                                                <span>Sudah Ada WO (Terkunci)</span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-2.5 w-2.5 rounded bg-primary"></span>
+                                                <span>Terpilih</span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="h-2.5 w-2.5 rounded bg-white border border-slate-300"></span>
+                                                <span>Tersedia</span>
+                                            </div>
+                                        </div>
+                                        <p class="text-[9.5px] text-slate-400 leading-tight">
+                                            * 1 tanggal hanya diperbolehkan 1 Work Order (termasuk status Draft).
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pesan Peringatan Jika Tanggal Sudah Dipakai (Conflict Alert) -->
+                            <div
+                                v-if="currentDateConflict"
+                                class="p-2.5 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 space-y-1 mt-1.5 shadow-2xs"
+                            >
+                                <div class="font-extrabold flex items-center gap-1.5 text-rose-900">
+                                    <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
+                                    <span>Tanggal Ini Sudah Memiliki Work Order!</span>
+                                </div>
+                                <p class="text-[11px] leading-relaxed text-rose-700">
+                                    Tanggal <strong>{{ formatTanggalIndo(tanggalRencana) }}</strong> sudah digunakan untuk menu <strong>"{{ currentDateConflict.nama_menu }}"</strong> (Nomor: {{ currentDateConflict.nomor_wo }} • Status: <span class="uppercase font-bold">{{ currentDateConflict.status }}</span>). <strong>Hanya boleh 1 Work Order per tanggal (termasuk status Draft).</strong> Silakan pilih tanggal lain yang masih tersedia.
+                                </p>
+                            </div>
+
+                            <!-- Status Hijau Jika Tanggal Bersih / Tersedia -->
+                            <div
+                                v-else-if="tanggalRencana && !validationErrors.tanggalRencana"
+                                class="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold bg-emerald-50/80 border border-emerald-200 px-2.5 py-1.5 rounded-lg mt-1.5"
+                            >
+                                <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <span>Tanggal {{ formatTanggalIndo(tanggalRencana) }} tersedia (belum ada Work Order).</span>
+                            </div>
+
+                            <!-- Error Message jika ada validation error lain -->
                             <p
-                                v-if="validationErrors.tanggalRencana"
+                                v-if="validationErrors.tanggalRencana && !currentDateConflict"
                                 class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1"
                             >
                                 <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                <span>{{
-                                    validationErrors.tanggalRencana
-                                }}</span>
+                                <span>{{ validationErrors.tanggalRencana }}</span>
                             </p>
                         </div>
 
@@ -12878,20 +13882,27 @@ watch(
                     <div class="flex items-center gap-2.5 flex-wrap shrink-0">
                         <Button
                             type="button"
-                            @click="generateOtomatisCatatanTim"
+                            @click="handleGunakanContohCatatan()"
                             className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-3.5 h-9.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs transition"
-                            title="Generate instruksi otomatis dari bahan yang dipilih di Langkah 2"
+                            title="Gunakan contoh catatan instruksi operasional untuk Tim Persiapan, Pengolahan, dan Pemorsian"
                         >
                             <Sparkles class="h-4 w-4 text-amber-600" />
-                            <span>Generate Otomatis dari Formula</span>
+                            <span>Gunakan Contoh</span>
                         </Button>
                         <Button
                             type="button"
-                            @click="openTambahCatatanModal(activeTimTab)"
-                            className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-4 h-9.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition"
+                            @click="tambahBarisCatatan(activeTimTab)"
+                            :disabled="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)"
+                            :className="[
+                                'text-xs font-bold px-4 h-9.5 rounded-xl flex items-center gap-1.5 shadow-xs transition',
+                                ['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)
+                                    ? 'bg-slate-300 opacity-60 cursor-not-allowed text-slate-600'
+                                    : 'bg-primary hover:bg-primary/90 text-white cursor-pointer'
+                            ]"
+                            :title="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab) ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Catatan'"
                         >
                             <Plus class="h-4 w-4" />
-                            <span>Tambah Catatan Baru</span>
+                            <span>Tambah Baris Catatan</span>
                         </Button>
                     </div>
                 </CardHeader>
@@ -12905,7 +13916,7 @@ watch(
                             <!-- Tab Tim Persiapan -->
                             <button
                                 type="button"
-                                @click="activeTimTab = 'persiapan'"
+                                @click="handleSwitchTimTab('persiapan')"
                                 :class="[
                                     'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
                                     activeTimTab === 'persiapan'
@@ -12930,7 +13941,7 @@ watch(
                             <!-- Tab Tim Pengolahan -->
                             <button
                                 type="button"
-                                @click="activeTimTab = 'pengolahan'"
+                                @click="handleSwitchTimTab('pengolahan')"
                                 :class="[
                                     'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
                                     activeTimTab === 'pengolahan'
@@ -12957,7 +13968,7 @@ watch(
                             <!-- Tab Tim Pemorsian -->
                             <button
                                 type="button"
-                                @click="activeTimTab = 'pemorsian'"
+                                @click="handleSwitchTimTab('pemorsian')"
                                 :class="[
                                     'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
                                     activeTimTab === 'pemorsian'
@@ -12980,6 +13991,27 @@ watch(
                             </button>
                         </div>
                     </div>
+
+                    <!-- Datalist Options for Sub-Menu & Bahan Baku Table Inline Autocomplete -->
+                    <datalist id="catatanMenuOptionsDatalist">
+                        <option
+                            v-for="opt in menuOptionsList"
+                            :key="opt.key"
+                            :value="opt.name"
+                        >
+                            {{ opt.label }}
+                        </option>
+                    </datalist>
+
+                    <datalist id="catatanBahanBakuDatalist">
+                        <option
+                            v-for="b in bahanBakuOptions"
+                            :key="b.id"
+                            :value="b.nama"
+                        >
+                            {{ b.nama }} ({{ b.totalGross }})
+                        </option>
+                    </datalist>
 
                     <!-- ========================================== -->
                     <!-- TAB 1: TIM PERSIAPAN -->
@@ -13006,21 +14038,28 @@ watch(
                                     <p class="text-[11px] text-amber-800">
                                         Fokus pada penerimaan bahan,
                                         penimbangan, pencucian, pemotongan, dan
-                                        pra-olah (marinasi).
+                                        pra-olah (marinasi). Langsung edit tabel di bawah ini.
                                     </p>
                                 </div>
                             </div>
                             <Button
                                 type="button"
-                                @click="openTambahCatatanModal('persiapan')"
-                                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                                @click="tambahBarisCatatan('persiapan')"
+                                :disabled="!hasUnassignedBahan('persiapan')"
+                                :className="[
+                                    'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shrink-0 shadow-2xs transition',
+                                    !hasUnassignedBahan('persiapan')
+                                        ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
+                                        : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                                ]"
+                                :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Persiapan'"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                <span>Tambah Catatan Persiapan</span>
+                                <span>Tambah Baris Persiapan</span>
                             </Button>
                         </div>
 
-                        <!-- Tabel Tim Persiapan -->
+                        <!-- Tabel Inline Editable Tim Persiapan -->
                         <div
                             class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
                         >
@@ -13037,30 +14076,35 @@ watch(
                                             >
                                                 No
                                             </th>
-                                            <th class="py-3 px-3 min-w-[140px]">
-                                                Nama Menu
+                                            <th class="py-3 px-3 min-w-[170px]">
+                                                Nama Menu (Sub-Menu)
                                             </th>
-                                            <th class="py-3 px-3 min-w-[150px]">
+                                            <th class="py-3 px-3 min-w-[190px]">
                                                 Bahan Baku
                                             </th>
                                             <th
-                                                class="py-3 px-3 min-w-[100px] text-center"
+                                                class="py-3 px-3 min-w-[95px] text-center"
                                             >
-                                                Kuantitas
+                                                Jumlah
                                             </th>
                                             <th
-                                                class="py-3 px-3 min-w-[130px] text-center"
+                                                class="py-3 px-3 min-w-[80px] text-center"
+                                            >
+                                                Satuan
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[210px] text-center"
                                             >
                                                 Waktu Eksekusi
                                             </th>
-                                            <th class="py-3 px-3 min-w-[200px]">
-                                                Perlakuan
+                                            <th class="py-3 px-3 min-w-[230px]">
+                                                Perlakuan & Standar Olah <span class="text-rose-500">*</span>
                                             </th>
-                                            <th class="py-3 px-3 min-w-[150px]">
-                                                Keterangan
+                                            <th class="py-3 px-3 min-w-[180px]">
+                                                Keterangan (HACCP/QC) <span class="text-rose-500">*</span>
                                             </th>
                                             <th
-                                                class="py-3 px-3 text-center w-24"
+                                                class="py-3 px-3 text-center w-14"
                                             >
                                                 Aksi
                                             </th>
@@ -13072,97 +14116,128 @@ watch(
                                                 item, pIdx
                                             ) in catatanTim.persiapan"
                                             :key="item.id || pIdx"
-                                            class="hover:bg-amber-50/30 transition group"
+                                            class="hover:bg-amber-50/20 transition group"
                                         >
                                             <td
-                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                                class="py-2.5 px-3 text-center font-black text-slate-500"
                                             >
                                                 {{ pIdx + 1 }}
                                             </td>
-                                            <td
-                                                class="py-3 px-3 font-black text-slate-900"
-                                            >
-                                                {{ item.nama_menu || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <input
+                                                    type="text"
+                                                    :value="item.nama_menu"
+                                                    disabled
+                                                    readonly
+                                                    placeholder="Nama menu..."
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
+                                                />
                                             </td>
-                                            <td class="py-3 px-3">
+                                            <td class="py-2.5 px-3">
+                                                <select
+                                                    v-model="item.bahan_baku"
+                                                    @change="onBahanBakuSelect(item, 'persiapan')"
+                                                    :disabled="!hasUnassignedBahan('persiapan') && (item.bahan_baku ? getAvailableBahanOptions('persiapan', item).length <= 1 : true)"
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    class="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition disabled:bg-slate-100/80 disabled:text-slate-900 disabled:opacity-100 disabled:border-slate-200 disabled:cursor-default"
+                                                    :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Pilih bahan baku formula'"
+                                                >
+                                                    <option value="" disabled>-- Pilih Bahan PO --</option>
+                                                    <option
+                                                        v-for="b in getAvailableBahanOptions('persiapan', item)"
+                                                        :key="b.key"
+                                                        :value="b.nama_po"
+                                                    >
+                                                        {{ b.nama_po }} ({{ b.jumlah }} {{ b.satuan }})
+                                                    </option>
+                                                    <option
+                                                        v-if="item.bahan_baku && !getAvailableBahanOptions('persiapan', item).some(b => b.nama_po === item.bahan_baku)"
+                                                        :value="item.bahan_baku"
+                                                    >
+                                                        {{ item.bahan_baku }}
+                                                    </option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    v-model.number="item.jumlah"
+                                                    @input="item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`"
+                                                    placeholder="0.0"
+                                                    class="w-full text-center text-xs font-black text-amber-900 bg-amber-50/60 border border-amber-200/90 rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                                                />
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
+                                                <input
+                                                    type="text"
+                                                    :value="item.satuan"
+                                                    disabled
+                                                    readonly
+                                                    placeholder="Kg"
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #334155; color: #334155;"
+                                                    class="w-full text-center text-xs font-bold text-slate-700 bg-slate-100/90 border border-slate-200 rounded-lg px-2 py-1.5 cursor-not-allowed outline-none disabled:opacity-100 disabled:text-slate-700"
+                                                />
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
                                                 <div
-                                                    class="font-bold text-slate-800"
+                                                    class="flex items-center justify-center gap-1.5 min-w-[195px]"
                                                 >
-                                                    {{ item.bahan_baku || "-" }}
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <span
-                                                    class="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 font-black text-[11px]"
-                                                >
-                                                    {{ item.kuantitas || "-" }}
-                                                </span>
-                                            </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <div
-                                                    class="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-100 text-slate-800 font-bold text-[11px]"
-                                                >
-                                                    <Clock
-                                                        class="w-3.5 h-3.5 text-amber-600"
+                                                    <input
+                                                        :id="`catatan_persiapan_${pIdx}_waktu_mulai`"
+                                                        type="time"
+                                                        v-model="item.waktu_mulai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Mulai"
                                                     />
-                                                    <span
-                                                        >{{
-                                                            item.waktu_mulai ||
-                                                            "--:--"
-                                                        }}
-                                                        -
-                                                        {{
-                                                            item.waktu_selesai ||
-                                                            "--:--"
-                                                        }}</span
-                                                    >
+                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <input
+                                                        :id="`catatan_persiapan_${pIdx}_waktu_selesai`"
+                                                        type="time"
+                                                        v-model="item.waktu_selesai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Selesai"
+                                                    />
                                                 </div>
+                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
-                                            >
-                                                {{ item.perlakuan || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_persiapan_${pIdx}_perlakuan`"
+                                                    v-model="item.perlakuan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Instruksi perlakuan..."
+                                                    class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
-                                            >
-                                                {{ item.keterangan || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_persiapan_${pIdx}_keterangan`"
+                                                    v-model="item.keterangan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Catatan HACCP/suhu..."
+                                                    class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
                                             </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <div
-                                                    class="flex items-center justify-center gap-1"
+                                            <td class="py-2.5 px-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    @click="hapusCatatanItem(item.id, 'persiapan')"
+                                                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                    title="Hapus baris"
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            openEditCatatanModal(
-                                                                item,
-                                                                'persiapan',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-100 transition cursor-pointer"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit3
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            hapusCatatanItem(
-                                                                item.id,
-                                                                'persiapan',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                        title="Hapus"
-                                                    >
-                                                        <Trash2
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
-                                                </div>
+                                                    <Trash2 class="w-4 h-4" />
+                                                </button>
                                             </td>
                                         </tr>
 
@@ -13170,12 +14245,11 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.persiapan ||
-                                                catatanTim.persiapan.length ===
-                                                    0
+                                                catatanTim.persiapan.length === 0
                                             "
                                         >
                                             <td
-                                                colspan="8"
+                                                colspan="9"
                                                 class="py-8 text-center text-slate-400"
                                             >
                                                 <div
@@ -13184,52 +14258,43 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center"
                                                     >
-                                                        <Utensils
-                                                            class="w-5 h-5"
-                                                        />
+                                                        <Utensils class="w-5 h-5" />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk
-                                                        Tim Persiapan
+                                                        Belum ada catatan untuk Tim Persiapan
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Klik tombol di bawah
-                                                        untuk menambah manual
-                                                        atau generate otomatis
-                                                        dari formula Step 2.
+                                                        Klik tombol di bawah untuk menambah baris manual atau gunakan contoh untuk mengisi otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                openTambahCatatanModal(
-                                                                    'persiapan',
-                                                                )
-                                                            "
-                                                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
+                                                            @click="tambahBarisCatatan('persiapan')"
+                                                            :disabled="!hasUnassignedBahan('persiapan')"
+                                                            :className="[
+                                                                'text-xs font-bold px-3.5 h-8 rounded-xl shadow-xs transition',
+                                                                !hasUnassignedBahan('persiapan')
+                                                                    ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
+                                                                    : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                                                            ]"
+                                                            :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Baru'"
                                                         >
-                                                            <Plus
-                                                                class="w-3.5 h-3.5 mr-1"
-                                                            />
-                                                            Tambah Catatan
+                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                generateOtomatisCatatanTim
-                                                            "
+                                                            @click="handleGunakanContohCatatan()"
                                                             className="bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles
-                                                                class="w-3.5 h-3.5 mr-1 text-amber-600"
-                                                            />
-                                                            Generate Otomatis
+                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-amber-600" />
+                                                            Gunakan Contoh
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -13237,6 +14302,30 @@ watch(
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <!-- Footer Bar Tim Persiapan -->
+                            <div
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                            >
+                                <span class="text-xs text-slate-500 font-medium">
+                                    Total: <strong class="text-slate-800">{{ catatanTim.persiapan?.length || 0 }}</strong> instruksi persiapan
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="tambahBarisCatatan('persiapan')"
+                                    :disabled="!hasUnassignedBahan('persiapan')"
+                                    :class="[
+                                        'text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition',
+                                        !hasUnassignedBahan('persiapan')
+                                            ? 'text-slate-400 opacity-50 cursor-not-allowed'
+                                            : 'text-amber-800 hover:text-amber-900 hover:bg-amber-100/80 cursor-pointer'
+                                    ]"
+                                    :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah baris baru'"
+                                >
+                                    <Plus class="w-3.5 h-3.5" />
+                                    <span>Tambah Baris Baru</span>
+                                </button>
                             </div>
                         </div>
 
@@ -13255,6 +14344,7 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Persiapan</span
                                     >
+                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
                                     class="text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full"
@@ -13265,7 +14355,7 @@ watch(
                             <textarea
                                 v-model="catatanTim.catatan_global.persiapan"
                                 rows="3"
-                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Persiapan (misal: sanitasi talenan, pemisahan pisau sayur & daging, pemantauan chiller, standar APD)..."
+                                placeholder="Tulis catatan atau instruksi umum tambahan khusus untuk Tim Persiapan jika ada (opsional)..."
                                 class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-hidden transition resize-y"
                             ></textarea>
                         </div>
@@ -13296,21 +14386,28 @@ watch(
                                     <p class="text-[11px] text-blue-800">
                                         Fokus pada teknik memasak (tumis, kukus,
                                         goreng, rebus), suhu minyak/api, durasi
-                                        matang, dan uji rasa.
+                                        matang, dan uji rasa. Langsung edit tabel di bawah ini.
                                     </p>
                                 </div>
                             </div>
                             <Button
                                 type="button"
-                                @click="openTambahCatatanModal('pengolahan')"
-                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                                @click="tambahBarisCatatan('pengolahan')"
+                                :disabled="!hasUnassignedBahan('pengolahan')"
+                                :className="[
+                                    'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shrink-0 shadow-2xs transition',
+                                    !hasUnassignedBahan('pengolahan')
+                                        ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                ]"
+                                :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Pengolahan'"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                <span>Tambah Catatan Pengolahan</span>
+                                <span>Tambah Baris Pengolahan</span>
                             </Button>
                         </div>
 
-                        <!-- Tabel Tim Pengolahan -->
+                        <!-- Tabel Inline Editable Tim Pengolahan -->
                         <div
                             class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
                         >
@@ -13327,30 +14424,35 @@ watch(
                                             >
                                                 No
                                             </th>
-                                            <th class="py-3 px-3 min-w-[140px]">
-                                                Nama Menu
+                                            <th class="py-3 px-3 min-w-[170px]">
+                                                Nama Menu (Sub-Menu)
                                             </th>
-                                            <th class="py-3 px-3 min-w-[150px]">
+                                            <th class="py-3 px-3 min-w-[190px]">
                                                 Bahan Baku
                                             </th>
                                             <th
-                                                class="py-3 px-3 min-w-[100px] text-center"
+                                                class="py-3 px-3 min-w-[95px] text-center"
                                             >
-                                                Kuantitas
+                                                Jumlah
                                             </th>
                                             <th
-                                                class="py-3 px-3 min-w-[130px] text-center"
+                                                class="py-3 px-3 min-w-[80px] text-center"
+                                            >
+                                                Satuan
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[210px] text-center"
                                             >
                                                 Waktu Eksekusi
                                             </th>
-                                            <th class="py-3 px-3 min-w-[200px]">
-                                                Perlakuan
+                                            <th class="py-3 px-3 min-w-[230px]">
+                                                Perlakuan & Standar Olah <span class="text-rose-500">*</span>
                                             </th>
-                                            <th class="py-3 px-3 min-w-[150px]">
-                                                Keterangan
+                                            <th class="py-3 px-3 min-w-[180px]">
+                                                Keterangan (HACCP/QC) <span class="text-rose-500">*</span>
                                             </th>
                                             <th
-                                                class="py-3 px-3 text-center w-24"
+                                                class="py-3 px-3 text-center w-14"
                                             >
                                                 Aksi
                                             </th>
@@ -13362,97 +14464,128 @@ watch(
                                                 item, cIdx
                                             ) in catatanTim.pengolahan"
                                             :key="item.id || cIdx"
-                                            class="hover:bg-blue-50/30 transition group"
+                                            class="hover:bg-blue-50/20 transition group"
                                         >
                                             <td
-                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                                class="py-2.5 px-3 text-center font-black text-slate-500"
                                             >
                                                 {{ cIdx + 1 }}
                                             </td>
-                                            <td
-                                                class="py-3 px-3 font-black text-slate-900"
-                                            >
-                                                {{ item.nama_menu || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <input
+                                                    type="text"
+                                                    :value="item.nama_menu"
+                                                    disabled
+                                                    readonly
+                                                    placeholder="Nama menu..."
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
+                                                />
                                             </td>
-                                            <td class="py-3 px-3">
+                                            <td class="py-2.5 px-3">
+                                                <select
+                                                    v-model="item.bahan_baku"
+                                                    @change="onBahanBakuSelect(item, 'pengolahan')"
+                                                    :disabled="!hasUnassignedBahan('pengolahan') && (item.bahan_baku ? getAvailableBahanOptions('pengolahan', item).length <= 1 : true)"
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    class="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition disabled:bg-slate-100/80 disabled:text-slate-900 disabled:opacity-100 disabled:border-slate-200 disabled:cursor-default"
+                                                    :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Pilih bahan baku formula'"
+                                                >
+                                                    <option value="" disabled>-- Pilih Bahan PO --</option>
+                                                    <option
+                                                        v-for="b in getAvailableBahanOptions('pengolahan', item)"
+                                                        :key="b.key"
+                                                        :value="b.nama_po"
+                                                    >
+                                                        {{ b.nama_po }} ({{ b.jumlah }} {{ b.satuan }})
+                                                    </option>
+                                                    <option
+                                                        v-if="item.bahan_baku && !getAvailableBahanOptions('pengolahan', item).some(b => b.nama_po === item.bahan_baku)"
+                                                        :value="item.bahan_baku"
+                                                    >
+                                                        {{ item.bahan_baku }}
+                                                    </option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    v-model.number="item.jumlah"
+                                                    @input="item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`"
+                                                    placeholder="0.0"
+                                                    class="w-full text-center text-xs font-black text-blue-900 bg-blue-50/60 border border-blue-200/90 rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
+                                                />
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
+                                                <input
+                                                    type="text"
+                                                    :value="item.satuan"
+                                                    disabled
+                                                    readonly
+                                                    placeholder="Kg"
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #334155; color: #334155;"
+                                                    class="w-full text-center text-xs font-bold text-slate-700 bg-slate-100/90 border border-slate-200 rounded-lg px-2 py-1.5 cursor-not-allowed outline-none disabled:opacity-100 disabled:text-slate-700"
+                                                />
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
                                                 <div
-                                                    class="font-bold text-slate-800"
+                                                    class="flex items-center justify-center gap-1.5 min-w-[195px]"
                                                 >
-                                                    {{ item.bahan_baku || "-" }}
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <span
-                                                    class="inline-block px-2 py-0.5 rounded-lg bg-blue-100 text-blue-900 font-black text-[11px]"
-                                                >
-                                                    {{ item.kuantitas || "-" }}
-                                                </span>
-                                            </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <div
-                                                    class="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-100 text-slate-800 font-bold text-[11px]"
-                                                >
-                                                    <Clock
-                                                        class="w-3.5 h-3.5 text-blue-600"
+                                                    <input
+                                                        :id="`catatan_pengolahan_${cIdx}_waktu_mulai`"
+                                                        type="time"
+                                                        v-model="item.waktu_mulai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
+                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Mulai"
                                                     />
-                                                    <span
-                                                        >{{
-                                                            item.waktu_mulai ||
-                                                            "--:--"
-                                                        }}
-                                                        -
-                                                        {{
-                                                            item.waktu_selesai ||
-                                                            "--:--"
-                                                        }}</span
-                                                    >
+                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <input
+                                                        :id="`catatan_pengolahan_${cIdx}_waktu_selesai`"
+                                                        type="time"
+                                                        v-model="item.waktu_selesai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
+                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Selesai"
+                                                    />
                                                 </div>
+                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
-                                            >
-                                                {{ item.perlakuan || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_pengolahan_${cIdx}_perlakuan`"
+                                                    v-model="item.perlakuan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Teknik masak & standar olah..."
+                                                    class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
-                                            >
-                                                {{ item.keterangan || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_pengolahan_${cIdx}_keterangan`"
+                                                    v-model="item.keterangan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Catatan QC/suhu..."
+                                                    class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
                                             </td>
-                                            <td class="py-3 px-3 text-center">
-                                                <div
-                                                    class="flex items-center justify-center gap-1"
+                                            <td class="py-2.5 px-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    @click="hapusCatatanItem(item.id, 'pengolahan')"
+                                                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                    title="Hapus baris"
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            openEditCatatanModal(
-                                                                item,
-                                                                'pengolahan',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-blue-700 hover:bg-blue-100 transition cursor-pointer"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit3
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            hapusCatatanItem(
-                                                                item.id,
-                                                                'pengolahan',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                        title="Hapus"
-                                                    >
-                                                        <Trash2
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
-                                                </div>
+                                                    <Trash2 class="w-4 h-4" />
+                                                </button>
                                             </td>
                                         </tr>
 
@@ -13460,12 +14593,11 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.pengolahan ||
-                                                catatanTim.pengolahan.length ===
-                                                    0
+                                                catatanTim.pengolahan.length === 0
                                             "
                                         >
                                             <td
-                                                colspan="8"
+                                                colspan="9"
                                                 class="py-8 text-center text-slate-400"
                                             >
                                                 <div
@@ -13474,52 +14606,43 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center"
                                                     >
-                                                        <UtensilsCrossed
-                                                            class="w-5 h-5"
-                                                        />
+                                                        <UtensilsCrossed class="w-5 h-5" />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk
-                                                        Tim Pengolahan
+                                                        Belum ada catatan untuk Tim Pengolahan
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Tambahkan catatan
-                                                        pengolahan atau gunakan
-                                                        tombol Generate Otomatis
-                                                        dari Formula.
+                                                        Tambahkan catatan pengolahan manual atau gunakan contoh untuk mengisi otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                openTambahCatatanModal(
-                                                                    'pengolahan',
-                                                                )
-                                                            "
-                                                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
+                                                            @click="tambahBarisCatatan('pengolahan')"
+                                                            :disabled="!hasUnassignedBahan('pengolahan')"
+                                                            :className="[
+                                                                'text-xs font-bold px-3.5 h-8 rounded-xl shadow-xs transition',
+                                                                !hasUnassignedBahan('pengolahan')
+                                                                    ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
+                                                                    : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                                            ]"
+                                                            :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Baru'"
                                                         >
-                                                            <Plus
-                                                                class="w-3.5 h-3.5 mr-1"
-                                                            />
-                                                            Tambah Catatan
+                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                generateOtomatisCatatanTim
-                                                            "
+                                                            @click="handleGunakanContohCatatan()"
                                                             className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles
-                                                                class="w-3.5 h-3.5 mr-1 text-blue-600"
-                                                            />
-                                                            Generate Otomatis
+                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-blue-600" />
+                                                            Gunakan Contoh
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -13527,6 +14650,30 @@ watch(
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <!-- Footer Bar Tim Pengolahan -->
+                            <div
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                            >
+                                <span class="text-xs text-slate-500 font-medium">
+                                    Total: <strong class="text-slate-800">{{ catatanTim.pengolahan?.length || 0 }}</strong> instruksi pengolahan
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="tambahBarisCatatan('pengolahan')"
+                                    :disabled="!hasUnassignedBahan('pengolahan')"
+                                    :class="[
+                                        'text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition',
+                                        !hasUnassignedBahan('pengolahan')
+                                            ? 'text-slate-400 opacity-50 cursor-not-allowed'
+                                            : 'text-blue-800 hover:text-blue-900 hover:bg-blue-100/80 cursor-pointer'
+                                    ]"
+                                    :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah baris baru'"
+                                >
+                                    <Plus class="w-3.5 h-3.5" />
+                                    <span>Tambah Baris Baru</span>
+                                </button>
                             </div>
                         </div>
 
@@ -13545,6 +14692,7 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Pengolahan</span
                                     >
+                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
                                     class="text-[10.5px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full"
@@ -13555,7 +14703,7 @@ watch(
                             <textarea
                                 v-model="catatanTim.catatan_global.pengolahan"
                                 rows="3"
-                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Pengolahan (misal: suhu minimal masakan saat selesai olah, batas waktu pemakaian minyak goreng, uji organoleptik sampel)..."
+                                placeholder="Tulis catatan atau instruksi umum tambahan khusus untuk Tim Pengolahan jika ada (opsional)..."
                                 class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-hidden transition resize-y"
                             ></textarea>
                         </div>
@@ -13581,28 +14729,24 @@ watch(
                                     <h4
                                         class="text-xs sm:text-sm font-black text-purple-950"
                                     >
-                                        Instruksi Kerja Tim Pemorsian (Plating &
-                                        Packing)
+                                        Instruksi Kerja Tim Pemorsian (Plating & Packing)
                                     </h4>
                                     <p class="text-[11px] text-purple-800">
-                                        Fokus pada tata letak sekat kotak
-                                        makanan, gramatur per porsi (PK vs PB),
-                                        kontrol higienitas, dan packing kotak
-                                        thermal.
+                                        Fokus pada tata letak sekat kotak makanan, gramatur per porsi (PK vs PB), kontrol higienitas, dan packing kotak thermal. Langsung edit tabel di bawah ini.
                                     </p>
                                 </div>
                             </div>
                             <Button
                                 type="button"
-                                @click="openTambahCatatanModal('pemorsian')"
+                                @click="tambahBarisCatatan('pemorsian')"
                                 className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 h-8.5 rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                <span>Tambah Catatan Pemorsian</span>
+                                <span>Tambah Baris Pemorsian</span>
                             </Button>
                         </div>
 
-                        <!-- Tabel Tim Pemorsian -->
+                        <!-- Tabel Inline Editable Tim Pemorsian -->
                         <div
                             class="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs"
                         >
@@ -13620,17 +14764,26 @@ watch(
                                                 No
                                             </th>
                                             <th class="py-3 px-3 min-w-[180px]">
-                                                Nama Menu
-                                            </th>
-                                            <th class="py-3 px-3 min-w-[260px]">
-                                                Perlakuan (Tata Letak & Standar
-                                                Porsi)
-                                            </th>
-                                            <th class="py-3 px-3 min-w-[200px]">
-                                                Keterangan
+                                                Nama Menu (Sub-Menu)
                                             </th>
                                             <th
-                                                class="py-3 px-3 text-center w-24"
+                                                class="py-3 px-3 min-w-[280px] text-center"
+                                            >
+                                                Target Porsi / Kuantitas
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 min-w-[210px] text-center"
+                                            >
+                                                Waktu Eksekusi
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[240px]">
+                                                Tata Letak Sekat & Standar Porsi <span class="text-rose-500">*</span>
+                                            </th>
+                                            <th class="py-3 px-3 min-w-[180px]">
+                                                Keterangan (Hygienitas / QC) <span class="text-rose-500">*</span>
+                                            </th>
+                                            <th
+                                                class="py-3 px-3 text-center w-14"
                                             >
                                                 Aksi
                                             </th>
@@ -13642,63 +14795,97 @@ watch(
                                                 item, sIdx
                                             ) in catatanTim.pemorsian"
                                             :key="item.id || sIdx"
-                                            class="hover:bg-purple-50/30 transition group"
+                                            class="hover:bg-purple-50/20 transition group"
                                         >
                                             <td
-                                                class="py-3 px-3 text-center font-black text-slate-500"
+                                                class="py-2.5 px-3 text-center font-black text-slate-500"
                                             >
                                                 {{ sIdx + 1 }}
                                             </td>
-                                            <td
-                                                class="py-3 px-3 font-black text-slate-900"
-                                            >
-                                                {{ item.nama_menu || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <input
+                                                    type="text"
+                                                    :value="item.nama_menu"
+                                                    disabled
+                                                    readonly
+                                                    placeholder="Nama menu..."
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
+                                                />
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-700 leading-relaxed font-medium"
-                                            >
-                                                {{ item.perlakuan || "-" }}
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_pemorsian_${sIdx}_kuantitas`"
+                                                    :value="item.kuantitas"
+                                                    readonly
+                                                    disabled
+                                                    rows="2"
+                                                    tabindex="-1"
+                                                    placeholder="Target porsi dihitung dari WO..."
+                                                    title="Target porsi dihitung otomatis dari Work Order (tidak dapat diedit manual)"
+                                                    style="opacity: 1 !important; -webkit-text-fill-color: #581c87; color: #581c87;"
+                                                    class="w-full text-center text-xs font-bold text-purple-900 bg-purple-50/80 border rounded-lg p-2 outline-none cursor-not-allowed select-text resize-none leading-relaxed transition disabled:opacity-100 disabled:text-purple-900"
+                                                    :class="!item.kuantitas || !item.kuantitas.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-purple-200/90'"
+                                                ></textarea>
+                                                <span v-if="!item.kuantitas || !item.kuantitas.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
                                             </td>
-                                            <td
-                                                class="py-3 px-3 text-slate-500 italic text-[11px]"
-                                            >
-                                                {{ item.keterangan || "-" }}
-                                            </td>
-                                            <td class="py-3 px-3 text-center">
+                                            <td class="py-2.5 px-3 text-center">
                                                 <div
-                                                    class="flex items-center justify-center gap-1"
+                                                    class="flex items-center justify-center gap-1.5 min-w-[195px]"
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            openEditCatatanModal(
-                                                                item,
-                                                                'pemorsian',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-100 transition cursor-pointer"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit3
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        @click="
-                                                            hapusCatatanItem(
-                                                                item.id,
-                                                                'pemorsian',
-                                                            )
-                                                        "
-                                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                        title="Hapus"
-                                                    >
-                                                        <Trash2
-                                                            class="w-3.5 h-3.5"
-                                                        />
-                                                    </button>
+                                                    <input
+                                                        :id="`catatan_pemorsian_${sIdx}_waktu_mulai`"
+                                                        type="time"
+                                                        v-model="item.waktu_mulai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
+                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Mulai"
+                                                    />
+                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <input
+                                                        :id="`catatan_pemorsian_${sIdx}_waktu_selesai`"
+                                                        type="time"
+                                                        v-model="item.waktu_selesai"
+                                                        class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
+                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        title="Waktu Selesai"
+                                                    />
                                                 </div>
+                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
+                                            </td>
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_pemorsian_${sIdx}_perlakuan`"
+                                                    v-model="item.perlakuan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Tata letak sekat porsi..."
+                                                    class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                            </td>
+                                            <td class="py-2.5 px-3">
+                                                <textarea
+                                                    :id="`catatan_pemorsian_${sIdx}_keterangan`"
+                                                    v-model="item.keterangan"
+                                                    rows="2"
+                                                    required
+                                                    placeholder="Catatan QC/higienitas..."
+                                                    class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition resize-y leading-snug"
+                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                ></textarea>
+                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    @click="hapusCatatanItem(item.id, 'pemorsian')"
+                                                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                    title="Hapus baris"
+                                                >
+                                                    <Trash2 class="w-4 h-4" />
+                                                </button>
                                             </td>
                                         </tr>
 
@@ -13706,12 +14893,11 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.pemorsian ||
-                                                catatanTim.pemorsian.length ===
-                                                    0
+                                                catatanTim.pemorsian.length === 0
                                             "
                                         >
                                             <td
-                                                colspan="5"
+                                                colspan="7"
                                                 class="py-8 text-center text-slate-400"
                                             >
                                                 <div
@@ -13720,52 +14906,36 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center"
                                                     >
-                                                        <ShoppingBag
-                                                            class="w-5 h-5"
-                                                        />
+                                                        <ShoppingBag class="w-5 h-5" />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk
-                                                        Tim Pemorsian
+                                                        Belum ada catatan untuk Tim Pemorsian
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Tambahkan catatan tata
-                                                        letak sekat porsi atau
-                                                        gunakan tombol Generate
-                                                        Otomatis.
+                                                        Tambahkan catatan pemorsian manual atau gunakan contoh untuk mengisi otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                openTambahCatatanModal(
-                                                                    'pemorsian',
-                                                                )
-                                                            "
+                                                            @click="tambahBarisCatatan('pemorsian')"
                                                             className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
                                                         >
-                                                            <Plus
-                                                                class="w-3.5 h-3.5 mr-1"
-                                                            />
-                                                            Tambah Catatan
+                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="
-                                                                generateOtomatisCatatanTim
-                                                            "
+                                                            @click="handleGunakanContohCatatan()"
                                                             className="bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles
-                                                                class="w-3.5 h-3.5 mr-1 text-purple-600"
-                                                            />
-                                                            Generate Otomatis
+                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-purple-600" />
+                                                            Gunakan Contoh
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -13773,6 +14943,23 @@ watch(
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <!-- Footer Bar Tim Pemorsian -->
+                            <div
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                            >
+                                <span class="text-xs text-slate-500 font-medium">
+                                    Total: <strong class="text-slate-800">{{ catatanTim.pemorsian?.length || 0 }}</strong> instruksi pemorsian
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="tambahBarisCatatan('pemorsian')"
+                                    class="text-xs font-bold text-purple-800 hover:text-purple-900 hover:bg-purple-100/80 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                                >
+                                    <Plus class="w-3.5 h-3.5" />
+                                    <span>Tambah Baris Baru</span>
+                                </button>
                             </div>
                         </div>
 
@@ -13791,6 +14978,7 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Pemorsian</span
                                     >
+                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
                                     class="text-[10.5px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full"
@@ -13801,7 +14989,7 @@ watch(
                             <textarea
                                 v-model="catatanTim.catatan_global.pemorsian"
                                 rows="3"
-                                placeholder="Tulis catatan atau instruksi umum khusus untuk Tim Pemorsian (misal: kewajiban APD steril, kalibrasi timbangan berkala, penempelan label stiker diet alergi, pengecekan tutup kotak sebelum masuk box thermal)..."
+                                placeholder="Tulis catatan atau instruksi umum tambahan khusus untuk Tim Pemorsian jika ada (opsional)..."
                                 class="w-full text-xs font-medium rounded-xl border border-slate-200 p-3 bg-slate-50/70 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-hidden transition resize-y"
                             ></textarea>
                         </div>
