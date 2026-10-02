@@ -38,6 +38,7 @@ import {
     Plus,
     Trash2,
     Edit3,
+    Eye,
     Sparkles,
     ShieldAlert,
     Clock,
@@ -61,12 +62,14 @@ import {
     ShieldCheck,
     FileText,
     ArrowRight,
+    ArrowLeft,
     UserCheck,
     UserX,
     X,
     Info,
     HelpCircle,
     ExternalLink,
+    Zap,
 } from "lucide-vue-next";
 import {
     ALERGI_OPTIONS,
@@ -186,6 +189,39 @@ watch(
         if (step) buatMenuSubTab.value = normalizeStep(step);
     },
 );
+
+// State Status Pengajuan Work Order & Global Alerts (Sukses / Error)
+const statusPengajuanWo = ref("Draft");
+const showSubmitSuccessAlert = ref(false);
+const submitAlertMessage = ref("");
+const showSubmitErrorAlert = ref(false);
+const submitErrorMessage = ref("");
+let submitErrorTimer = null;
+let submitSuccessTimer = null;
+
+function triggerSubmitSuccess(msg) {
+    submitAlertMessage.value = msg;
+    showSubmitSuccessAlert.value = true;
+    showSubmitErrorAlert.value = false;
+    if (submitSuccessTimer) clearTimeout(submitSuccessTimer);
+    submitSuccessTimer = setTimeout(() => {
+        showSubmitSuccessAlert.value = false;
+    }, 4500);
+}
+
+function triggerSubmitError(msg) {
+    submitErrorMessage.value = msg;
+    showSubmitErrorAlert.value = true;
+    showSubmitSuccessAlert.value = false;
+    if (submitErrorTimer) clearTimeout(submitErrorTimer);
+    submitErrorTimer = setTimeout(() => {
+        showSubmitErrorAlert.value = false;
+    }, 6000);
+    const topEl = document.getElementById("rancang-menu-top-anchor");
+    if (topEl) {
+        topEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
 
 // State & Data Kalender Siklus Menu MBG
 const kalenderBulan = ref("Agustus 2026");
@@ -501,21 +537,25 @@ const buatMenuSubTabs = [
     {
         id: "work_order",
         label: "1. Perencanaan Produksi",
+        shortLabel: "1. Perencanaan",
         icon: FileSpreadsheet,
     },
     {
         id: "bahan_pangan",
         label: "2. Formula Makanan",
+        shortLabel: "2. Formula",
         icon: Package,
     },
     {
         id: "catatan_resep",
         label: "3. Catatan Kerja Tim",
+        shortLabel: "3. Catatan Tim",
         icon: ClipboardList,
     },
     {
         id: "order",
         label: "4. Review & Pengajuan",
+        shortLabel: "4. Review",
         icon: ShieldCheck,
     },
 ];
@@ -908,6 +948,15 @@ function addPenggantiAlergiWithPreset(subKey, jenisAlergiDefault = "") {
             menu_pengganti: "",
         });
     }
+}
+
+function formatAllergenDisplay(allergen) {
+    if (!allergen) return "Alergi";
+    const str = String(allergen).trim();
+    if (str.toLowerCase().startsWith("alergi")) {
+        return str;
+    }
+    return `Alergi ${str}`;
 }
 
 // Ringkasan semua alergi yang terdeteksi secara real-time di Step 1
@@ -2576,12 +2625,255 @@ function onGlobalWindowClick(e) {
     }
 }
 
+// =========================================================================
+// FITUR PERINGATAN / KONFIRMASI PERUBAHAN BELUM DISIMPAN (DIRTY CHECKING)
+// =========================================================================
+const isSubmitting = ref(false);
+const initialFormSnapshot = ref("");
+const isNavigationConfirmed = ref(false);
+const showLeaveConfirmModal = ref(false);
+const pendingNavigation = ref(null);
+
+function takeFormSnapshot() {
+    try {
+        return JSON.stringify({
+            tgl: tanggalRencana.value || "",
+            menu: (namaMenuAktif.value || "").trim(),
+            sub: {
+                s1: (subMenuKomponen.value?.sub_menu_1 || "").trim(),
+                s2: (subMenuKomponen.value?.sub_menu_2 || "").trim(),
+                s3: (subMenuKomponen.value?.sub_menu_3 || "").trim(),
+                s4: (subMenuKomponen.value?.sub_menu_4 || "").trim(),
+                s5: (subMenuKomponen.value?.sub_menu_5 || "").trim(),
+            },
+            alergi: subMenuAlergi.value || {},
+            kelompok: (woKelompokList.value || []).map((k) => ({
+                id: k.id,
+                status: k.status_menerima !== false,
+            })),
+            bahan: (selectedBahanList.value || []).map((b) => ({
+                id: b.id,
+                po: b.nama_po || b.nama,
+                pk: Number(b.gram_pk) || 0,
+                pb: Number(b.gram_pb) || 0,
+                bdd: Number(b.bdd) || 0,
+                buf: Number(b.buffer) || 0,
+                ha: Number(b.harga_aktual) || 0,
+                hm: Number(b.harga_master) || 0,
+                tip: b.tipe_porsi || "normal",
+                al: b.jenis_alergi || "",
+                blk: b.sub_menu_block_id || "",
+            })),
+            catatan: {
+                persiapan: (catatanTim.value?.persiapan || []).map((c) => ({
+                    m: c.nama_menu,
+                    b: c.bahan_baku,
+                    j: c.jumlah,
+                    s: c.satuan,
+                    wm: c.waktu_mulai,
+                    ws: c.waktu_selesai,
+                    p: c.perlakuan,
+                    k: c.keterangan,
+                })),
+                pengolahan: (catatanTim.value?.pengolahan || []).map((c) => ({
+                    m: c.nama_menu,
+                    b: c.bahan_baku,
+                    j: c.jumlah,
+                    s: c.satuan,
+                    wm: c.waktu_mulai,
+                    ws: c.waktu_selesai,
+                    p: c.perlakuan,
+                    k: c.keterangan,
+                })),
+                pemorsian: (catatanTim.value?.pemorsian || []).map((c) => ({
+                    m: c.nama_menu,
+                    q: c.kuantitas,
+                    wm: c.waktu_mulai,
+                    ws: c.waktu_selesai,
+                    p: c.perlakuan,
+                    k: c.keterangan,
+                })),
+                global: catatanTim.value?.catatan_global || {},
+            },
+        });
+    } catch (e) {
+        return "";
+    }
+}
+
+const isFormDirty = computed(() => {
+    if (isSubmitting.value || isNavigationConfirmed.value) {
+        return false;
+    }
+    if (!initialFormSnapshot.value) {
+        return false;
+    }
+    return takeFormSnapshot() !== initialFormSnapshot.value;
+});
+
+let hasHistoryTrap = false;
+
+// Pasang trap history saat form kotor agar tombol browser Back memicu popstate di halaman ini
+watch(isFormDirty, (dirty) => {
+    if (dirty && !hasHistoryTrap && typeof window !== "undefined") {
+        try {
+            window.history.pushState({ rancangMenuTrap: true }, document.title, window.location.href);
+            hasHistoryTrap = true;
+        } catch (e) {}
+    } else if (!dirty) {
+        hasHistoryTrap = false;
+    }
+});
+
+function handlePopState(e) {
+    if (isSubmitting.value || isNavigationConfirmed.value) {
+        return;
+    }
+
+    if (isFormDirty.value) {
+        // Tahan pengguna tetap di halaman ini dengan mendorong kembali state trap
+        try {
+            window.history.pushState({ rancangMenuTrap: true }, document.title, window.location.href);
+        } catch (err) {}
+
+        pendingNavigation.value = { type: "history_back" };
+        showLeaveConfirmModal.value = true;
+    }
+}
+
+function handleKeyDown(e) {
+    if (isSubmitting.value || isNavigationConfirmed.value || !isFormDirty.value) {
+        return;
+    }
+
+    // 1. Intersep Refresh / Reload via keyboard: F5 atau Ctrl+R / Cmd+R
+    const isReloadKey =
+        e.key === "F5" ||
+        ((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R"));
+
+    if (isReloadKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        pendingNavigation.value = { type: "reload" };
+        showLeaveConfirmModal.value = true;
+        return;
+    }
+
+    // 2. Intersep Shortcut Browser Back via keyboard: Alt + ArrowLeft
+    const isBackKey = e.altKey && e.key === "ArrowLeft";
+    if (isBackKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        pendingNavigation.value = { type: "history_back" };
+        showLeaveConfirmModal.value = true;
+        return;
+    }
+}
+
+function handleBeforeUnload(e) {
+    if (isFormDirty.value && !isSubmitting.value && !isNavigationConfirmed.value) {
+        pendingNavigation.value = { type: "reload" };
+        showLeaveConfirmModal.value = true;
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+    }
+}
+
+function handleConfirmLeave() {
+    showLeaveConfirmModal.value = false;
+    isNavigationConfirmed.value = true;
+
+    if (pendingNavigation.value) {
+        const nav = pendingNavigation.value;
+        pendingNavigation.value = null;
+
+        if (nav.type === "reload") {
+            window.location.reload();
+            return;
+        }
+
+        if (nav.type === "history_back") {
+            if (typeof window !== "undefined" && window.history.length > 2) {
+                window.history.go(-2);
+            } else {
+                router.visit("/gizi/daftar-menu");
+            }
+            return;
+        }
+
+        if (nav.url) {
+            router.visit(nav.url, {
+                method: nav.method || "get",
+                data: nav.data || {},
+                replace: nav.replace || false,
+                preserveScroll: nav.preserveScroll || false,
+                preserveState: nav.preserveState || false,
+            });
+            return;
+        }
+    }
+
+    router.visit("/gizi/daftar-menu");
+}
+
+function handleCancelLeave() {
+    showLeaveConfirmModal.value = false;
+    pendingNavigation.value = null;
+}
+
+function handleNavigasiKembali() {
+    if (isFormDirty.value) {
+        pendingNavigation.value = { url: "/gizi/daftar-menu", method: "get" };
+        showLeaveConfirmModal.value = true;
+    } else {
+        router.visit("/gizi/daftar-menu");
+    }
+}
+
+let removeRouterBeforeHook = null;
+
 onMounted(() => {
     window.addEventListener("click", onGlobalWindowClick);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("popstate", handlePopState);
+
+    // Tangkap navigasi keluar dari halaman Rancang Menu via Inertia (sidebar, link, browser back)
+    removeRouterBeforeHook = router.on("before", (event) => {
+        if (isSubmitting.value || isNavigationConfirmed.value) {
+            return;
+        }
+
+        if (isFormDirty.value) {
+            event.preventDefault();
+            pendingNavigation.value = {
+                url: event.detail.visit.url,
+                method: event.detail.visit.method,
+                data: event.detail.visit.data,
+                replace: event.detail.visit.replace,
+                preserveScroll: event.detail.visit.preserveScroll,
+                preserveState: event.detail.visit.preserveState,
+            };
+            showLeaveConfirmModal.value = true;
+        }
+    });
+
+    nextTick(() => {
+        if (!initialFormSnapshot.value) {
+            initialFormSnapshot.value = takeFormSnapshot();
+        }
+    });
 });
 
 onUnmounted(() => {
     window.removeEventListener("click", onGlobalWindowClick);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.removeEventListener("keydown", handleKeyDown);
+    window.removeEventListener("popstate", handlePopState);
+    if (typeof removeRouterBeforeHook === "function") {
+        removeRouterBeforeHook();
+    }
 });
 
 const validationErrors = ref({});
@@ -2840,8 +3132,22 @@ function validateStep2() {
     const errs = { ...validationErrors.value };
 
     if (!selectedBahanList.value || selectedBahanList.value.length === 0) {
-        errs.selectedBahan =
-            "Wajib memilih dan menambahkan minimal 1 bahan pangan dari Database.";
+        nextTick(() => {
+            const firstBlock =
+                document.getElementById("card-block-sub_menu_1") ||
+                document.querySelector("[id^='card-block-']");
+            if (firstBlock) {
+                firstBlock.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+                firstBlock.classList.add("ring-2", "ring-rose-400");
+                setTimeout(() => {
+                    firstBlock.classList.remove("ring-2", "ring-rose-400");
+                }, 2500);
+            }
+        });
+        return false;
     }
 
     selectedBahanList.value.forEach((b, i) => {
@@ -3034,48 +3340,39 @@ function validateStep3() {
     for (const t of tims) {
         const rows = catatanTim.value[t.key] || [];
         if (rows.length === 0) {
-            triggerSubmitError(
-                `Catatan untuk ${t.label} belum memiliki baris instruksi kerja. Silakan gunakan tombol 'Gunakan Contoh' atau tambahkan baris manual.`,
-            );
             activeTimTab.value = t.key;
+            nextTick(() => {
+                const addBtn =
+                    document.querySelector("button[title*='Tambah Baris Catatan']") ||
+                    document.querySelector("#catatan_tambah_baris");
+                if (addBtn) {
+                    addBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+                    addBtn.classList.add("ring-2", "ring-rose-400");
+                    setTimeout(() => addBtn.classList.remove("ring-2", "ring-rose-400"), 2500);
+                }
+            });
             return false;
         }
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const no = i + 1;
             if (!row.waktu_mulai) {
-                triggerSubmitError(
-                    `Kolom 'Waktu Mulai' pada ${t.label} baris #${no} wajib diisi.`,
-                );
                 focusInvalidField(t.key, i, "waktu_mulai");
                 return false;
             }
             if (!row.waktu_selesai) {
-                triggerSubmitError(
-                    `Kolom 'Waktu Selesai' pada ${t.label} baris #${no} wajib diisi.`,
-                );
                 focusInvalidField(t.key, i, "waktu_selesai");
                 return false;
             }
             if (!row.perlakuan || !row.perlakuan.trim()) {
-                triggerSubmitError(
-                    `Kolom 'Perlakuan & Standar Olah' pada ${t.label} baris #${no} wajib diisi.`,
-                );
                 focusInvalidField(t.key, i, "perlakuan");
                 return false;
             }
             if (!row.keterangan || !row.keterangan.trim()) {
-                triggerSubmitError(
-                    `Kolom 'Keterangan' pada ${t.label} baris #${no} wajib diisi.`,
-                );
                 focusInvalidField(t.key, i, "keterangan");
                 return false;
             }
             if (t.key === "pemorsian" && (!row.kuantitas || !row.kuantitas.trim())) {
-                triggerSubmitError(
-                    `Kolom 'Target Porsi / Kuantitas' pada ${t.label} baris #${no} wajib diisi.`,
-                );
                 focusInvalidField(t.key, i, "kuantitas");
                 return false;
             }
@@ -3160,6 +3457,7 @@ function simpanDraftStep3() {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
+            initialFormSnapshot.value = takeFormSnapshot();
             triggerSubmitSuccess(
                 "Draft Catatan Kerja Tim Produksi (Langkah 3) berhasil disimpan!",
             );
@@ -3187,6 +3485,15 @@ const catatanTim = ref({
 
 // Active team tab dalam Langkah 3: 'persiapan' | 'pengolahan' | 'pemorsian'
 const activeTimTab = ref("persiapan");
+
+// Modal state untuk melihat Detail Catatan Kerja Tim Produksi pada Review
+const showDetailCatatanModal = ref(false);
+const modalActiveTimTab = ref("persiapan");
+
+function openModalDetailCatatan(tim = "persiapan") {
+    modalActiveTimTab.value = tim;
+    showDetailCatatanModal.value = true;
+}
 
 // Modal / Form state for Add/Edit Note
 const showCatatanModal = ref(false);
@@ -5275,21 +5582,6 @@ function handlePrintPo() {
     window.print();
 }
 
-// State Status Pengajuan Work Order
-const statusPengajuanWo = ref("Draft");
-const showSubmitSuccessAlert = ref(false);
-const submitAlertMessage = ref("");
-
-const isSubmitting = ref(false);
-
-function triggerSubmitSuccess(msg) {
-    submitAlertMessage.value = msg;
-    showSubmitSuccessAlert.value = true;
-    setTimeout(() => {
-        showSubmitSuccessAlert.value = false;
-    }, 4000);
-}
-
 function getPayload(statusStr, stepNumber = 3) {
     return {
         nomor_wo: woNo.value,
@@ -5382,6 +5674,7 @@ function simpanDraftStep1() {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
+            initialFormSnapshot.value = takeFormSnapshot();
             triggerSubmitSuccess(
                 "Draft Langkah 1 (Perencanaan Produksi) berhasil disimpan ke Database!",
             );
@@ -5407,6 +5700,7 @@ function simpanDraftStep2() {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
+            initialFormSnapshot.value = takeFormSnapshot();
             triggerSubmitSuccess(
                 "Draft Langkah 2 (Bahan Pangan) berhasil disimpan ke Database!",
             );
@@ -5431,6 +5725,8 @@ function simpanSebagaiDraft() {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
+            isNavigationConfirmed.value = true;
+            initialFormSnapshot.value = takeFormSnapshot();
             router.visit("/gizi/daftar-menu");
         },
         onError: () => {
@@ -5458,6 +5754,8 @@ function ajukanKeKeuangan() {
         preserveScroll: true,
         onSuccess: () => {
             isSubmitting.value = false;
+            isNavigationConfirmed.value = true;
+            initialFormSnapshot.value = takeFormSnapshot();
             router.visit("/gizi/daftar-menu");
         },
         onError: () => {
@@ -5673,6 +5971,9 @@ watch(
                     };
                 }
             }
+            nextTick(() => {
+                initialFormSnapshot.value = takeFormSnapshot();
+            });
         }
     },
     { immediate: true },
@@ -5716,25 +6017,130 @@ watch(
             </button>
         </div>
 
-        <!-- Sub-tab pill bar for Rancang Menu -->
+        <!-- Global Alert Feedback Peringatan Validasi / Error Form -->
         <div
-            class="bg-white rounded-2xl border border-slate-200/90 p-2 shadow-xs flex flex-wrap items-center gap-2 print:hidden"
+            v-if="showSubmitErrorAlert"
+            class="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-900 animate-in fade-in slide-in-from-top-2 duration-200 shadow-xs"
         >
+            <div class="flex items-center gap-3">
+                <div
+                    class="h-9 w-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                >
+                    <AlertCircle class="h-5 w-5" />
+                </div>
+                <div>
+                    <h4 class="text-xs sm:text-sm font-black">
+                        {{ submitErrorMessage }}
+                    </h4>
+                    <p class="text-[11px] text-rose-700 mt-0.5">
+                        Harap periksa dan lengkapi kolom tabel yang ditandai merah sebelum melanjutkan.
+                    </p>
+                </div>
+            </div>
             <button
-                v-for="sub in buatMenuSubTabs"
-                :key="sub.id"
                 type="button"
-                @click="handleSwitchSubTab(sub.id)"
-                :class="[
-                    'px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer border',
-                    buatMenuSubTab === sub.id
-                        ? 'bg-primary text-white border-primary shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200/70 hover:bg-slate-100 hover:text-slate-900',
-                ]"
+                @click="showSubmitErrorAlert = false"
+                class="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
             >
-                <component :is="sub.icon" class="h-3.5 w-3.5 shrink-0" />
-                <span>{{ sub.label }}</span>
+                <X class="h-4 w-4" />
             </button>
+        </div>
+
+        <!-- Sub-tab pill bar for Rancang Menu + Indikator Perubahan & Tombol Kembali -->
+        <div
+            class="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 print:hidden"
+        >
+            <!-- Top Mobile Bar: Tombol Kembali ke Daftar Menu & Badge Status (Tampil Khusus Mobile < lg) -->
+            <div class="flex items-center justify-between gap-2 lg:hidden pb-1 border-b border-slate-100">
+                <button
+                    type="button"
+                    @click="handleNavigasiKembali"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-2xs"
+                    title="Beralih ke Daftar Menu"
+                >
+                    <ArrowLeft class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span>Daftar Menu</span>
+                </button>
+
+                <!-- Badge Indikator Perubahan Belum Disimpan (Mobile) -->
+                <transition
+                    enter-active-class="transition duration-200 ease-out"
+                    enter-from-class="opacity-0 scale-95"
+                    enter-to-class="opacity-100 scale-100"
+                    leave-active-class="transition duration-150 ease-in"
+                    leave-from-class="opacity-100 scale-100"
+                    leave-to-class="opacity-0 scale-95"
+                >
+                    <div
+                        v-if="isFormDirty"
+                        class="text-[11px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-2xs select-none"
+                        title="Ada perubahan data yang belum disimpan ke database"
+                    >
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <span>Belum Disimpan</span>
+                    </div>
+                </transition>
+            </div>
+
+            <!-- Steps Tabs: 2x2 Grid di HP / Layar Kecil (< sm), Rapi Menyamping di Layar Lebih Besar (>= sm) -->
+            <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
+                <button
+                    v-for="sub in buatMenuSubTabs"
+                    :key="sub.id"
+                    type="button"
+                    @click="handleSwitchSubTab(sub.id)"
+                    :class="[
+                        'py-2.5 px-2.5 sm:px-4 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 cursor-pointer border text-center',
+                        buatMenuSubTab === sub.id
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200/70 hover:bg-slate-100 hover:text-slate-900',
+                    ]"
+                >
+                    <component :is="sub.icon" class="h-3.5 w-3.5 shrink-0" />
+                    <!-- Teks Ringkas di Layar Kecil, Teks Lengkap di Layar Lebih Lebar -->
+                    <span class="hidden sm:inline">{{ sub.label }}</span>
+                    <span class="sm:hidden truncate">{{ sub.shortLabel || sub.label }}</span>
+                </button>
+            </div>
+
+            <!-- Desktop Action Bar: Badge & Tombol Kembali (Tampil hanya di Desktop >= lg) -->
+            <div class="hidden lg:flex items-center gap-2.5 shrink-0">
+                <!-- Badge Indikator Perubahan Belum Disimpan -->
+                <transition
+                    enter-active-class="transition duration-200 ease-out"
+                    enter-from-class="opacity-0 scale-95"
+                    enter-to-class="opacity-100 scale-100"
+                    leave-active-class="transition duration-150 ease-in"
+                    leave-from-class="opacity-100 scale-100"
+                    leave-to-class="opacity-0 scale-95"
+                >
+                    <div
+                        v-if="isFormDirty"
+                        class="text-[11px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-2xs select-none"
+                        title="Ada perubahan data yang belum disimpan ke database"
+                    >
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <span>Perubahan Belum Disimpan</span>
+                    </div>
+                </transition>
+
+                <!-- Tombol Navigasi Keluar / Kembali ke Daftar Menu -->
+                <button
+                    type="button"
+                    @click="handleNavigasiKembali"
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-2xs"
+                    title="Beralih ke Daftar Menu"
+                >
+                    <ArrowLeft class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span>Daftar Menu</span>
+                </button>
+            </div>
         </div>
 
         <!-- Sticky / Summary Banner Work Order (Tampil di Step 2, 3, 4, 5) -->
@@ -6306,10 +6712,10 @@ watch(
                         <!-- Banner Real-time Deteksi Alergi PM (Muncul otomatis saat ada kata kunci alergen terketik) -->
                         <div
                             v-if="realTimeAllergyAlerts.length > 0"
-                            class="p-3 rounded-xl bg-white border border-slate-200 text-slate-800 space-y-2 text-xs shadow-2xs transition-all duration-300"
+                            class="p-3 sm:p-3.5 rounded-xl bg-white border border-slate-200 text-slate-800 space-y-2.5 text-xs shadow-2xs transition-all duration-300"
                         >
                             <div
-                                class="flex items-center justify-between flex-wrap gap-1"
+                                class="flex items-center justify-between flex-wrap gap-2"
                             >
                                 <div
                                     class="flex items-center gap-1.5 font-black text-slate-800 text-xs"
@@ -6324,55 +6730,61 @@ watch(
                                     >
                                 </div>
                                 <span
-                                    class="text-[10px] font-bold text-slate-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200"
+                                    class="text-[10px] font-bold text-slate-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 shrink-0"
                                 >
                                     ⚡ Realtime Deteksi Alergi
                                 </span>
                             </div>
-                            <div class="flex flex-wrap gap-2 text-[11px]">
+                            <div class="space-y-2">
                                 <div
                                     v-for="(al, alIdx) in realTimeAllergyAlerts"
                                     :key="alIdx"
-                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-white shadow-2xs"
+                                    class="p-2.5 sm:px-3 sm:py-2 rounded-xl border bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all"
                                     :class="
                                         al.hasReplacement
-                                            ? 'border-emerald-300 text-emerald-900'
-                                            : 'border-rose-300 text-rose-900'
+                                            ? 'border-emerald-300 bg-emerald-50/20'
+                                            : 'border-rose-300 bg-rose-50/20'
                                     "
                                 >
-                                    <span class="font-extrabold text-slate-900"
-                                        >{{ al.subLabel }}:</span
-                                    >
-                                    <span class="font-bold text-slate-700"
-                                        >"{{ al.menuName }}"</span
-                                    >
-                                    <span class="text-slate-500">➔</span>
-                                    <span class="font-bold text-rose-700"
-                                        >Alergi {{ al.allergen }} ({{
-                                            al.totalPm
-                                        }}
-                                        PM)</span
-                                    >
-                                    <span
-                                        v-if="al.hasReplacement"
-                                        class="inline-flex items-center gap-0.5 text-emerald-700 font-extrabold text-[10px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200"
-                                    >
-                                        ✓ Pengganti: {{ al.replacementName }}
-                                    </span>
-                                    <button
-                                        v-else
-                                        type="button"
-                                        @click="
-                                            addPenggantiAlergiWithPreset(
-                                                al.subKey,
-                                                al.allergen,
-                                            )
-                                        "
-                                        class="inline-flex items-center gap-0.5 text-rose-700 hover:text-rose-900 font-extrabold text-[10px] bg-rose-50 hover:bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 cursor-pointer"
-                                        title="Tambahkan menu pengganti sekarang"
-                                    >
-                                        + Pengganti
-                                    </button>
+                                    <!-- Bagian Kiri/Atas: Sub Menu & Menu & Alergi -->
+                                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] min-w-0">
+                                        <span class="font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-[10px] shrink-0">
+                                            {{ al.subLabel }}
+                                        </span>
+                                        <span class="font-extrabold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none">
+                                            "{{ al.menuName }}"
+                                        </span>
+                                        <span class="text-slate-400 font-bold shrink-0">➔</span>
+                                        <span class="font-extrabold text-rose-700 bg-rose-100/70 border border-rose-200 px-2 py-0.5 rounded-md text-[10.5px] shrink-0">
+                                            {{ formatAllergenDisplay(al.allergen) }} ({{ al.totalPm }} PM)
+                                        </span>
+                                    </div>
+
+                                    <!-- Bagian Kanan/Bawah: Menu Pengganti -->
+                                    <div class="flex items-center justify-end shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                                        <span
+                                            v-if="al.hasReplacement"
+                                            class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-emerald-800 font-extrabold text-[10.5px] bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 shadow-2xs"
+                                        >
+                                            <Check class="h-3 w-3 text-emerald-600 shrink-0" />
+                                            <span>Pengganti: <strong>{{ al.replacementName }}</strong></span>
+                                        </span>
+                                        <button
+                                            v-else
+                                            type="button"
+                                            @click="
+                                                addPenggantiAlergiWithPreset(
+                                                    al.subKey,
+                                                    al.allergen,
+                                                )
+                                            "
+                                            class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-rose-700 hover:text-white font-extrabold text-[11px] bg-white hover:bg-rose-600 px-3 py-1.5 rounded-lg border border-rose-300 hover:border-rose-600 shadow-2xs cursor-pointer transition-colors"
+                                            title="Tambahkan menu pengganti sekarang"
+                                        >
+                                            <Plus class="h-3.5 w-3.5 shrink-0" />
+                                            <span>+ Menu Pengganti</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -8317,7 +8729,7 @@ watch(
                             Pastikan tanggal, nama menu, dan status penerima
                             sasaran sudah sesuai sebelum melanjutkan.
                         </div>
-                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                             <Button
                                 type="button"
                                 @click="simpanDraftStep1"
@@ -8330,7 +8742,7 @@ watch(
                             <Button
                                 type="button"
                                 @click="handleMulaiFormulasiWo"
-                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto shrink-0 text-center"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
                             >
                                 <span
                                     >Lanjut ke Formula Makanan (Langkah 2)</span
@@ -8756,137 +9168,151 @@ watch(
                 <CardContent class="p-4 sm:p-6 space-y-6">
                     <!-- Panduan / Rumus Kebutuhan Bahan Mentah (Toggleable) -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-white p-3.5 text-xs space-y-2"
+                        class="rounded-xl border border-slate-200 bg-white p-3 sm:p-3.5 text-xs space-y-2.5 shadow-2xs"
                     >
-                        <div class="flex items-center justify-between">
-                            <span
-                                class="font-bold text-slate-700 flex items-center gap-1.5 text-xs"
-                            >
-                                <HelpCircle class="h-3.5 w-3.5 text-primary" />
-                                Panduan Rumus Perhitungan Kebutuhan Bahan Baku
-                                Mentah
-                            </span>
-                            <div class="flex items-center gap-3">
-                                <div
-                                    class="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium"
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                            <div class="flex items-center justify-between gap-2 w-full md:w-auto">
+                                <span
+                                    class="font-bold text-slate-800 flex items-center gap-1.5 text-xs"
                                 >
-                                    <span>Database:</span>
-                                    <div
-                                        class="inline-flex rounded-lg bg-slate-200/70 p-0.5 border border-slate-300/60"
-                                        :title="
-                                            selectedBahanList.length > 0
-                                                ? 'Database terkunci karena sudah ada bahan pangan yang dipilih. Hapus/reset semua bahan terlebih dahulu jika ingin mengganti database.'
-                                                : 'Pilih Database Acuan'
-                                        "
-                                    >
-                                        <button
-                                            type="button"
-                                            @click="
-                                                selectedBahanList.length ===
-                                                    0 &&
-                                                emit('update-source', 'fta')
-                                            "
-                                            :disabled="
-                                                selectedBahanList.length > 0
-                                            "
-                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
-                                            :class="[
-                                                selectedSource === 'fta'
-                                                    ? 'bg-white text-primary shadow-xs'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                                selectedBahanList.length > 0
-                                                    ? 'opacity-80 cursor-not-allowed'
-                                                    : 'cursor-pointer',
-                                            ]"
+                                    <HelpCircle class="h-4 w-4 text-primary shrink-0" />
+                                    <span>Panduan Rumus Perhitungan Bahan Mentah</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="showRumusBahan = !showRumusBahan"
+                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer shrink-0 md:hidden"
+                                >
+                                    {{
+                                        showRumusBahan
+                                            ? "Sembunyikan"
+                                            : "Lihat Rumus"
+                                    }}
+                                </button>
+                            </div>
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                                <div
+                                    class="flex items-center justify-between sm:justify-start gap-1.5 text-[11px] text-slate-500 font-medium"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-bold text-slate-600">Database:</span>
+                                        <span
+                                            v-if="selectedBahanList.length > 0"
+                                            class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold inline-flex items-center gap-1"
+                                            title="Database terkunci karena sudah ada bahan dipilih"
                                         >
-                                            NutriSurvey (indo.fta)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="
-                                                selectedBahanList.length ===
-                                                    0 &&
-                                                emit('update-source', 'csv')
-                                            "
-                                            :disabled="
-                                                selectedBahanList.length > 0
-                                            "
-                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
-                                            :class="[
-                                                selectedSource === 'csv'
-                                                    ? 'bg-white text-primary shadow-xs'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                                selectedBahanList.length > 0
-                                                    ? 'opacity-80 cursor-not-allowed'
-                                                    : 'cursor-pointer',
-                                            ]"
-                                        >
-                                            Kemenkes (tkpi2020.csv)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="
-                                                selectedBahanList.length ===
-                                                    0 &&
-                                                emit(
-                                                    'update-source',
-                                                    'tkpi2020',
-                                                )
-                                            "
-                                            :disabled="
-                                                selectedBahanList.length > 0
-                                            "
-                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
-                                            :class="[
-                                                selectedSource === 'tkpi2020' ||
-                                                selectedSource === 'xlsx'
-                                                    ? 'bg-white text-primary shadow-xs'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                                selectedBahanList.length > 0
-                                                    ? 'opacity-80 cursor-not-allowed'
-                                                    : 'cursor-pointer',
-                                            ]"
-                                        >
-                                            Modifikasi (tkpi2020.xlsx)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="
-                                                selectedBahanList.length ===
-                                                    0 &&
-                                                emit(
-                                                    'update-source',
-                                                    'fatsecret',
-                                                )
-                                            "
-                                            :disabled="
-                                                selectedBahanList.length > 0
-                                            "
-                                            class="px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
-                                            :class="[
-                                                selectedSource === 'fatsecret'
-                                                    ? 'bg-white text-primary shadow-xs font-black'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                                selectedBahanList.length > 0
-                                                    ? 'opacity-80 cursor-not-allowed'
-                                                    : 'cursor-pointer',
-                                            ]"
-                                        >
-                                            FatSecret (fatsecret.com)
-                                        </button>
+                                            🔒 Terkunci
+                                        </span>
                                     </div>
-                                    <span
-                                        v-if="selectedBahanList.length > 0"
-                                        class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold inline-flex items-center gap-1"
-                                        title="Database terkunci karena sudah ada bahan dipilih"
+                                </div>
+                                <div
+                                    class="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5 p-0.5 rounded-lg bg-slate-100 border border-slate-200/80 w-full sm:w-auto"
+                                    :title="
+                                        selectedBahanList.length > 0
+                                            ? 'Database terkunci karena sudah ada bahan pangan yang dipilih. Hapus/reset semua bahan terlebih dahulu jika ingin mengganti database.'
+                                            : 'Pilih Database Acuan'
+                                    "
+                                >
+                                    <button
+                                        type="button"
+                                        @click="
+                                            selectedBahanList.length ===
+                                                0 &&
+                                            emit('update-source', 'fta')
+                                        "
+                                        :disabled="
+                                            selectedBahanList.length > 0
+                                        "
+                                        class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
+                                        :class="[
+                                            selectedSource === 'fta'
+                                                ? 'bg-white text-primary shadow-xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                            selectedBahanList.length > 0
+                                                ? 'opacity-80 cursor-not-allowed'
+                                                : 'cursor-pointer',
+                                        ]"
                                     >
-                                        🔒 Terkunci
-                                    </span>
+                                        NutriSurvey (indo.fta)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="
+                                            selectedBahanList.length ===
+                                                0 &&
+                                            emit('update-source', 'csv')
+                                        "
+                                        :disabled="
+                                            selectedBahanList.length > 0
+                                        "
+                                        class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
+                                        :class="[
+                                            selectedSource === 'csv'
+                                                ? 'bg-white text-primary shadow-xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                            selectedBahanList.length > 0
+                                                ? 'opacity-80 cursor-not-allowed'
+                                                : 'cursor-pointer',
+                                        ]"
+                                    >
+                                        Kemenkes (tkpi2020.csv)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="
+                                            selectedBahanList.length ===
+                                                0 &&
+                                            emit(
+                                                'update-source',
+                                                'tkpi2020',
+                                            )
+                                        "
+                                        :disabled="
+                                            selectedBahanList.length > 0
+                                        "
+                                        class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
+                                        :class="[
+                                            selectedSource === 'tkpi2020' ||
+                                            selectedSource === 'xlsx'
+                                                ? 'bg-white text-primary shadow-xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                            selectedBahanList.length > 0
+                                                ? 'opacity-80 cursor-not-allowed'
+                                                : 'cursor-pointer',
+                                        ]"
+                                    >
+                                        Modifikasi (tkpi2020.xlsx)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="
+                                            selectedBahanList.length ===
+                                                0 &&
+                                            emit(
+                                                'update-source',
+                                                'fatsecret',
+                                            )
+                                        "
+                                        :disabled="
+                                            selectedBahanList.length > 0
+                                        "
+                                        class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
+                                        :class="[
+                                            selectedSource === 'fatsecret'
+                                                ? 'bg-white text-primary shadow-xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                            selectedBahanList.length > 0
+                                                ? 'opacity-80 cursor-not-allowed'
+                                                : 'cursor-pointer',
+                                        ]"
+                                    >
+                                        FatSecret (fatsecret.com)
+                                    </button>
                                 </div>
                                 <button
                                     type="button"
                                     @click="showRumusBahan = !showRumusBahan"
-                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer"
+                                    class="text-[11px] text-primary font-bold hover:underline cursor-pointer shrink-0 hidden md:inline-block ml-1"
                                 >
                                     {{
                                         showRumusBahan
@@ -8963,26 +9389,6 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Error Alert jika belum ada bahan sama sekali -->
-                    <div
-                        v-if="validationErrors.selectedBahan"
-                        class="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center justify-between gap-3 font-bold"
-                    >
-                        <div class="flex items-center gap-2">
-                            <AlertTriangle
-                                class="h-4 w-4 text-rose-600 shrink-0"
-                            />
-                            <span>{{ validationErrors.selectedBahan }}</span>
-                        </div>
-                        <button
-                            type="button"
-                            @click="handleGunakanContohFormula"
-                            class="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-black cursor-pointer flex items-center gap-1.5 transition shrink-0 shadow-2xs"
-                        >
-                            <Sparkles class="h-3.5 w-3.5 text-amber-500" />
-                            <span>Gunakan Contoh Uji Coba</span>
-                        </button>
-                    </div>
 
                     <!-- ========================================================================= -->
                     <!-- BLOK-BLOK SUB MENU & VARIAN PENGGANTI ALERGI (LANGKAH 2) -->
@@ -11349,8 +11755,8 @@ watch(
                                         class="text-xs font-black uppercase tracking-wider text-slate-800"
                                     >
                                         {{
-                                            activeAlergiList &&
-                                            activeAlergiList.length > 0
+                                            activeAlergiAkgList &&
+                                            activeAlergiAkgList.length > 0
                                                 ? "A. Menu Utama (Porsi Normal)"
                                                 : "Menu Utama (Porsi Normal)"
                                         }}
@@ -12574,18 +12980,19 @@ watch(
                                         class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                     >
                                         <div
-                                            class="flex items-center justify-between"
+                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
                                         >
                                             <h5
                                                 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                             >
                                                 <Activity
-                                                    class="h-4 w-4 text-slate-600"
+                                                    class="h-4 w-4 text-slate-600 shrink-0"
                                                 />
                                                 <span>Porsi Kecil (PK)</span>
                                             </h5>
                                             <Badge
                                                 variant="outline"
+                                                class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-extrabold px-2.5 py-1 leading-normal"
                                                 :class="
                                                     getAkgStatusBadge(
                                                         akgResultPKNormal,
@@ -12602,10 +13009,11 @@ watch(
                                             </Badge>
                                         </div>
                                         <div
-                                            class="grid grid-cols-3 gap-2 text-xs"
+                                            class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs"
                                         >
+                                            <!-- Energi -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPKNormal.energi,
@@ -12614,48 +13022,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Energi</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.energi,
-                                                                330,
-                                                                413,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Energi</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.energi,
+                                                                    330,
+                                                                    413,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.energi,
+                                                                    330,
+                                                                    413,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.energi,
-                                                                330,
-                                                                413,
-                                                            ).label
+                                                            akgResultPKNormal.energi
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPKNormal.energi
-                                                    }}
-                                                    kkal
+                                                        kkal
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 330 - 413
-                                                    kkal</span
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                    >Target: 330 - 413 kkal</span
                                                 >
                                             </div>
+
+                                            <!-- Protein -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPKNormal.protein,
@@ -12664,47 +13075,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Protein</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.protein,
-                                                                8.0,
-                                                                10.0,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Protein</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.protein,
+                                                                    8.0,
+                                                                    10.0,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.protein,
+                                                                    8.0,
+                                                                    10.0,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.protein,
-                                                                8.0,
-                                                                10.0,
-                                                            ).label
+                                                            akgResultPKNormal.protein
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPKNormal.protein
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 8.0 - 10.0 g</span
                                                 >
                                             </div>
+
+                                            <!-- Lemak -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPKNormal.lemak,
@@ -12713,51 +13128,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Lemak</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.lemak,
-                                                                11.0,
-                                                                13.8,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Lemak</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.lemak,
+                                                                    11.0,
+                                                                    13.8,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.lemak,
+                                                                    11.0,
+                                                                    13.8,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.lemak,
-                                                                11.0,
-                                                                13.8,
-                                                            ).label
+                                                            akgResultPKNormal.lemak
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPKNormal.lemak
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 11.0 - 13.8 g</span
                                                 >
                                             </div>
-                                        </div>
-                                        <div
-                                            class="grid grid-cols-2 gap-2 text-xs"
-                                        >
+
+                                            <!-- Karbohidrat -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPKNormal.karbohidrat,
@@ -12766,47 +13181,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Karbohidrat</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.karbohidrat,
-                                                                50.0,
-                                                                62.5,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Karbohidrat</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.karbohidrat,
+                                                                    50.0,
+                                                                    62.5,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.karbohidrat,
+                                                                    50.0,
+                                                                    62.5,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.karbohidrat,
-                                                                50.0,
-                                                                62.5,
-                                                            ).label
+                                                            akgResultPKNormal.karbohidrat
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPKNormal.karbohidrat
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 50.0 - 62.5 g</span
                                                 >
                                             </div>
+
+                                            <!-- Serat -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-2 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPKNormal.serat,
@@ -12815,42 +13234,44 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Serat</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.serat,
-                                                                4.0,
-                                                                7.0,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Serat</span
+                                                        >
+                                                        <span
+                                                            class="text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.serat,
+                                                                    4.0,
+                                                                    7.0,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPKNormal.serat,
+                                                                    4.0,
+                                                                    7.0,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPKNormal.serat,
-                                                                4.0,
-                                                                7.0,
-                                                            ).label
+                                                            akgResultPKNormal.serat
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPKNormal.serat
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 4.0 - 7.0 g</span
                                                 >
                                             </div>
@@ -12862,18 +13283,19 @@ watch(
                                         class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                     >
                                         <div
-                                            class="flex items-center justify-between"
+                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
                                         >
                                             <h5
                                                 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                             >
                                                 <Activity
-                                                    class="h-4 w-4 text-slate-600"
+                                                    class="h-4 w-4 text-slate-600 shrink-0"
                                                 />
                                                 <span>Porsi Besar (PB)</span>
                                             </h5>
                                             <Badge
                                                 variant="outline"
+                                                class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-extrabold px-2.5 py-1 leading-normal"
                                                 :class="
                                                     getAkgStatusBadge(
                                                         akgResultPBNormal,
@@ -12890,10 +13312,11 @@ watch(
                                             </Badge>
                                         </div>
                                         <div
-                                            class="grid grid-cols-3 gap-2 text-xs"
+                                            class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs"
                                         >
+                                            <!-- Energi -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPBNormal.energi,
@@ -12902,48 +13325,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Energi</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.energi,
-                                                                585,
-                                                                831,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Energi</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.energi,
+                                                                    585,
+                                                                    831,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.energi,
+                                                                    585,
+                                                                    831,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.energi,
-                                                                585,
-                                                                831,
-                                                            ).label
+                                                            akgResultPBNormal.energi
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPBNormal.energi
-                                                    }}
-                                                    kkal
+                                                        kkal
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 585 - 831
-                                                    kkal</span
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                    >Target: 585 - 831 kkal</span
                                                 >
                                             </div>
+
+                                            <!-- Protein -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPBNormal.protein,
@@ -12952,47 +13378,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Protein</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.protein,
-                                                                15.8,
-                                                                24.5,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Protein</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.protein,
+                                                                    15.8,
+                                                                    24.5,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.protein,
+                                                                    15.8,
+                                                                    24.5,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.protein,
-                                                                15.8,
-                                                                24.5,
-                                                            ).label
+                                                            akgResultPBNormal.protein
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPBNormal.protein
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 15.8 - 24.5 g</span
                                                 >
                                             </div>
+
+                                            <!-- Lemak -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPBNormal.lemak,
@@ -13001,51 +13431,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Lemak</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.lemak,
-                                                                19.5,
-                                                                26.3,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Lemak</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.lemak,
+                                                                    19.5,
+                                                                    26.3,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.lemak,
+                                                                    19.5,
+                                                                    26.3,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.lemak,
-                                                                19.5,
-                                                                26.3,
-                                                            ).label
+                                                            akgResultPBNormal.lemak
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPBNormal.lemak
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 19.5 - 26.3 g</span
                                                 >
                                             </div>
-                                        </div>
-                                        <div
-                                            class="grid grid-cols-2 gap-2 text-xs"
-                                        >
+
+                                            <!-- Karbohidrat -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-1 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPBNormal.karbohidrat,
@@ -13054,48 +13484,51 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Karbohidrat</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.karbohidrat,
-                                                                87.0,
-                                                                122.5,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Karbohidrat</span
+                                                        >
+                                                        <span
+                                                            class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.karbohidrat,
+                                                                    87.0,
+                                                                    122.5,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.karbohidrat,
+                                                                    87.0,
+                                                                    122.5,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.karbohidrat,
-                                                                87.0,
-                                                                122.5,
-                                                            ).label
+                                                            akgResultPBNormal.karbohidrat
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPBNormal.karbohidrat
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
-                                                    >Target: 87.0 - 122.5
-                                                    g</span
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                    >Target: 87.0 - 122.5 g</span
                                                 >
                                             </div>
+
+                                            <!-- Serat -->
                                             <div
-                                                class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                class="col-span-2 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                 :class="
                                                     getNutrientStatus(
                                                         akgResultPBNormal.serat,
@@ -13104,42 +13537,44 @@ watch(
                                                     ).borderClass
                                                 "
                                             >
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <span
-                                                        class="text-slate-500 text-[10px] uppercase font-bold"
-                                                        >Serat</span
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="flex items-center justify-between gap-1"
                                                     >
-                                                    <span
-                                                        class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                        :class="
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.serat,
-                                                                6.0,
-                                                                10.0,
-                                                            ).badgeClass
-                                                        "
+                                                        <span
+                                                            class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                            >Serat</span
+                                                        >
+                                                        <span
+                                                            class="text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                            :class="
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.serat,
+                                                                    6.0,
+                                                                    10.0,
+                                                                ).badgeClass
+                                                            "
+                                                        >
+                                                            {{
+                                                                getNutrientStatus(
+                                                                    akgResultPBNormal.serat,
+                                                                    6.0,
+                                                                    10.0,
+                                                                ).label
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="font-black text-slate-900 text-sm mt-0.5"
                                                     >
                                                         {{
-                                                            getNutrientStatus(
-                                                                akgResultPBNormal.serat,
-                                                                6.0,
-                                                                10.0,
-                                                            ).label
+                                                            akgResultPBNormal.serat
                                                         }}
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    class="font-black text-slate-900 text-sm mt-0.5"
-                                                >
-                                                    {{
-                                                        akgResultPBNormal.serat
-                                                    }}
-                                                    g
+                                                        g
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    class="text-[9.5px] text-slate-400 block"
+                                                    class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
                                                     >Target: 6.0 - 10.0 g</span
                                                 >
                                             </div>
@@ -13191,13 +13626,13 @@ watch(
                                             class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                         >
                                             <div
-                                                class="flex items-center justify-between"
+                                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
                                             >
                                                 <h6
                                                     class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                                 >
                                                     <Activity
-                                                        class="h-4 w-4 text-slate-600"
+                                                        class="h-4 w-4 text-slate-600 shrink-0"
                                                     />
                                                     <span
                                                         >Porsi Kecil (PK) •
@@ -13209,6 +13644,7 @@ watch(
                                                 </h6>
                                                 <Badge
                                                     variant="outline"
+                                                    class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-extrabold px-2.5 py-1 leading-normal"
                                                     :class="
                                                         getAkgStatusBadge(
                                                             alRes.pk,
@@ -13225,10 +13661,11 @@ watch(
                                                 </Badge>
                                             </div>
                                             <div
-                                                class="grid grid-cols-3 gap-2 text-xs"
+                                                class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs"
                                             >
+                                                <!-- Energi -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pk.energi,
@@ -13237,48 +13674,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Energi</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .energi,
-                                                                    330,
-                                                                    413,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Energi</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .energi,
+                                                                        330,
+                                                                        413,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .energi,
+                                                                        330,
+                                                                        413,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .energi,
-                                                                    330,
-                                                                    413,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pk.energi }}
-                                                        kkal
+                                                            {{ alRes.pk.energi }}
+                                                            kkal
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 330 - 413
-                                                        kkal</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 330 - 413 kkal</span
                                                     >
                                                 </div>
+
+                                                <!-- Protein -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pk.protein,
@@ -13287,47 +13727,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Protein</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .protein,
-                                                                    8.0,
-                                                                    10.0,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Protein</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .protein,
+                                                                        8.0,
+                                                                        10.0,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .protein,
+                                                                        8.0,
+                                                                        10.0,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .protein,
-                                                                    8.0,
-                                                                    10.0,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pk.protein }} g
+                                                            {{ alRes.pk.protein }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 8.0 - 10.0
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 8.0 - 10.0 g</span
                                                     >
                                                 </div>
+
+                                                <!-- Lemak -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pk.lemak,
@@ -13336,51 +13780,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Lemak</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .lemak,
-                                                                    11.0,
-                                                                    13.8,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Lemak</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .lemak,
+                                                                        11.0,
+                                                                        13.8,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .lemak,
+                                                                        11.0,
+                                                                        13.8,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .lemak,
-                                                                    11.0,
-                                                                    13.8,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pk.lemak }} g
+                                                            {{ alRes.pk.lemak }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 11.0 - 13.8
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 11.0 - 13.8 g</span
                                                     >
                                                 </div>
-                                            </div>
-                                            <div
-                                                class="grid grid-cols-2 gap-2 text-xs"
-                                            >
+
+                                                <!-- Karbohidrat -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pk
@@ -13390,50 +13834,54 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Karbohidrat</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .karbohidrat,
-                                                                    50.0,
-                                                                    62.5,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Karbohidrat</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .karbohidrat,
+                                                                        50.0,
+                                                                        62.5,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .karbohidrat,
+                                                                        50.0,
+                                                                        62.5,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
                                                             {{
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .karbohidrat,
-                                                                    50.0,
-                                                                    62.5,
-                                                                ).label
+                                                                alRes.pk
+                                                                    .karbohidrat
                                                             }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{
-                                                            alRes.pk.karbohidrat
-                                                        }}
-                                                        g
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 50.0 - 62.5
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 50.0 - 62.5 g</span
                                                     >
                                                 </div>
+
+                                                <!-- Serat -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-2 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pk.serat,
@@ -13442,43 +13890,45 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Serat</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .serat,
-                                                                    4.0,
-                                                                    7.0,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Serat</span
+                                                            >
+                                                            <span
+                                                                class="text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .serat,
+                                                                        4.0,
+                                                                        7.0,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pk
+                                                                            .serat,
+                                                                        4.0,
+                                                                        7.0,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pk
-                                                                        .serat,
-                                                                    4.0,
-                                                                    7.0,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pk.serat }} g
+                                                            {{ alRes.pk.serat }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 4.0 - 7.0
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 4.0 - 7.0 g</span
                                                     >
                                                 </div>
                                             </div>
@@ -13489,13 +13939,13 @@ watch(
                                             class="p-4 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-2xs"
                                         >
                                             <div
-                                                class="flex items-center justify-between"
+                                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
                                             >
                                                 <h6
                                                     class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5"
                                                 >
                                                     <Activity
-                                                        class="h-4 w-4 text-slate-600"
+                                                        class="h-4 w-4 text-slate-600 shrink-0"
                                                     />
                                                     <span
                                                         >Porsi Besar (PB) •
@@ -13507,6 +13957,7 @@ watch(
                                                 </h6>
                                                 <Badge
                                                     variant="outline"
+                                                    class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-extrabold px-2.5 py-1 leading-normal"
                                                     :class="
                                                         getAkgStatusBadge(
                                                             alRes.pb,
@@ -13523,10 +13974,11 @@ watch(
                                                 </Badge>
                                             </div>
                                             <div
-                                                class="grid grid-cols-3 gap-2 text-xs"
+                                                class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs"
                                             >
+                                                <!-- Energi -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pb.energi,
@@ -13535,48 +13987,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Energi</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .energi,
-                                                                    585,
-                                                                    831,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Energi</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .energi,
+                                                                        585,
+                                                                        831,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .energi,
+                                                                        585,
+                                                                        831,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .energi,
-                                                                    585,
-                                                                    831,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pb.energi }}
-                                                        kkal
+                                                            {{ alRes.pb.energi }}
+                                                            kkal
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 585 - 831
-                                                        kkal</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 585 - 831 kkal</span
                                                     >
                                                 </div>
+
+                                                <!-- Protein -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pb.protein,
@@ -13585,47 +14040,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Protein</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .protein,
-                                                                    15.8,
-                                                                    24.5,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Protein</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .protein,
+                                                                        15.8,
+                                                                        24.5,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .protein,
+                                                                        15.8,
+                                                                        24.5,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .protein,
-                                                                    15.8,
-                                                                    24.5,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pb.protein }} g
+                                                            {{ alRes.pb.protein }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 15.8 - 24.5
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 15.8 - 24.5 g</span
                                                     >
                                                 </div>
+
+                                                <!-- Lemak -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-2 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pb.lemak,
@@ -13634,51 +14093,51 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Lemak</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .lemak,
-                                                                    19.5,
-                                                                    26.3,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Lemak</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .lemak,
+                                                                        19.5,
+                                                                        26.3,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .lemak,
+                                                                        19.5,
+                                                                        26.3,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .lemak,
-                                                                    19.5,
-                                                                    26.3,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pb.lemak }} g
+                                                            {{ alRes.pb.lemak }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 19.5 - 26.3
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 19.5 - 26.3 g</span
                                                     >
                                                 </div>
-                                            </div>
-                                            <div
-                                                class="grid grid-cols-2 gap-2 text-xs"
-                                            >
+
+                                                <!-- Karbohidrat -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-1 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pb
@@ -13688,50 +14147,54 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Karbohidrat</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .karbohidrat,
-                                                                    87.0,
-                                                                    122.5,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Karbohidrat</span
+                                                            >
+                                                            <span
+                                                                class="self-start sm:self-auto text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .karbohidrat,
+                                                                        87.0,
+                                                                        122.5,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .karbohidrat,
+                                                                        87.0,
+                                                                        122.5,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
                                                             {{
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .karbohidrat,
-                                                                    87.0,
-                                                                    122.5,
-                                                                ).label
+                                                                alRes.pb
+                                                                    .karbohidrat
                                                             }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{
-                                                            alRes.pb.karbohidrat
-                                                        }}
-                                                        g
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 87.0 - 122.5
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 87.0 - 122.5 g</span
                                                     >
                                                 </div>
+
+                                                <!-- Serat -->
                                                 <div
-                                                    class="p-2.5 bg-white rounded-xl border space-y-1 transition-all"
+                                                    class="col-span-2 sm:col-span-3 p-2 sm:p-2.5 bg-white rounded-xl border transition-all overflow-hidden flex flex-col justify-between"
                                                     :class="
                                                         getNutrientStatus(
                                                             alRes.pb.serat,
@@ -13740,53 +14203,55 @@ watch(
                                                         ).borderClass
                                                     "
                                                 >
-                                                    <div
-                                                        class="flex items-center justify-between"
-                                                    >
-                                                        <span
-                                                            class="text-slate-500 text-[10px] uppercase font-bold"
-                                                            >Serat</span
+                                                    <div class="space-y-1">
+                                                        <div
+                                                            class="flex items-center justify-between gap-1"
                                                         >
-                                                        <span
-                                                            class="text-[9px] px-1.5 py-0.2 rounded border font-extrabold"
-                                                            :class="
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .serat,
-                                                                    6.0,
-                                                                    10.0,
-                                                                ).badgeClass
-                                                            "
+                                                            <span
+                                                                class="text-slate-500 text-[9.5px] sm:text-[10px] uppercase font-bold tracking-tight"
+                                                                >Serat</span
+                                                            >
+                                                            <span
+                                                                class="text-[8px] sm:text-[8.5px] px-1.5 py-0.5 rounded border font-extrabold whitespace-nowrap"
+                                                                :class="
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .serat,
+                                                                        6.0,
+                                                                        10.0,
+                                                                    ).badgeClass
+                                                                "
+                                                            >
+                                                                {{
+                                                                    getNutrientStatus(
+                                                                        alRes.pb
+                                                                            .serat,
+                                                                        6.0,
+                                                                        10.0,
+                                                                    ).label
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{
-                                                                getNutrientStatus(
-                                                                    alRes.pb
-                                                                        .serat,
-                                                                    6.0,
-                                                                    10.0,
-                                                                ).label
-                                                            }}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        class="font-black text-slate-900 text-sm mt-0.5"
-                                                    >
-                                                        {{ alRes.pb.serat }} g
+                                                            {{ alRes.pb.serat }}
+                                                            g
+                                                        </div>
                                                     </div>
                                                     <span
-                                                        class="text-[9.5px] text-slate-400 block"
-                                                        >Target: 6.0 - 10.0
-                                                        g</span
+                                                        class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
+                                                        >Target: 6.0 - 10.0 g</span
                                                     >
                                                 </div>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </CardContent>
+                </div>
+            </CardContent>
             </Card>
 
             <!-- Bottom Action Bar Step 2 -->
@@ -13809,7 +14274,7 @@ watch(
                     </p>
                 </div>
                 <div
-                    class="flex items-center gap-2.5 shrink-0 flex-wrap w-full sm:w-auto"
+                    class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
                 >
                     <Button
                         type="button"
@@ -13831,7 +14296,7 @@ watch(
                     <Button
                         type="button"
                         @click="handleLanjutStep3"
-                        className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer shrink-0 w-full sm:w-auto text-center"
+                        className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-5 h-10 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
                     >
                         <ArrowRight class="h-4 w-4 shrink-0" />
                         <span>Lanjut ke Catatan Tim Produksi (Langkah 3)</span>
@@ -13854,22 +14319,17 @@ watch(
                 >
                     <div class="space-y-1">
                         <div class="flex items-center gap-2.5">
-                            <div
-                                class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-sm"
-                            >
-                                3
-                            </div>
                             <CardTitle
                                 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                             >
-                                <ClipboardList class="h-5 w-5 text-primary" />
+                                <ClipboardList class="h-5 w-5 text-primary shrink-0" />
                                 <span
                                     >Catatan Kerja & Instruksi Operasional Tim
                                     Produksi</span
                                 >
                             </CardTitle>
                         </div>
-                        <CardDescription class="text-xs text-slate-500 pl-10.5">
+                        <CardDescription class="text-xs text-slate-500">
                             Instruksi operasional spesifik per sub-menu untuk
                             <strong>Tim Persiapan</strong>,
                             <strong>Tim Pengolahan</strong>, dan
@@ -13879,29 +14339,29 @@ watch(
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="flex items-center gap-2.5 flex-wrap shrink-0">
-                        <Button
+                    <div class="flex items-center justify-between sm:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto min-w-0">
+                        <button
                             type="button"
-                            @click="handleGunakanContohCatatan()"
-                            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-3.5 h-9.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs transition"
-                            title="Gunakan contoh catatan instruksi operasional untuk Tim Persiapan, Pengolahan, dan Pemorsian"
+                            @click="handleGunakanContohCatatan"
+                            class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1.5 cursor-pointer shrink-0 py-1"
+                            title="Gunakan Contoh Catatan"
                         >
-                            <Sparkles class="h-4 w-4 text-amber-600" />
+                            <Sparkles class="h-3.5 w-3.5 shrink-0 text-amber-500" />
                             <span>Gunakan Contoh</span>
-                        </Button>
+                        </button>
                         <Button
                             type="button"
                             @click="tambahBarisCatatan(activeTimTab)"
                             :disabled="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)"
                             :className="[
-                                'text-xs font-bold px-4 h-9.5 rounded-xl flex items-center gap-1.5 shadow-xs transition',
+                                'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0',
                                 ['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)
                                     ? 'bg-slate-300 opacity-60 cursor-not-allowed text-slate-600'
-                                    : 'bg-primary hover:bg-primary/90 text-white cursor-pointer'
+                                    : 'bg-primary hover:bg-primary/90 text-white'
                             ]"
                             :title="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab) ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Catatan'"
                         >
-                            <Plus class="h-4 w-4" />
+                            <Plus class="h-3.5 w-3.5" />
                             <span>Tambah Baris Catatan</span>
                         </Button>
                     </div>
@@ -13909,26 +14369,26 @@ watch(
 
                 <CardContent className="p-4 sm:p-6 space-y-6">
                     <!-- Tab Switcher Tim: Persiapan | Pengolahan | Pemorsian -->
-                    <div
-                        class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80"
-                    >
-                        <div class="flex items-center gap-1.5 p-1 flex-1">
+                    <div class="w-full overflow-x-auto no-scrollbar pb-1">
+                        <div
+                            class="inline-flex min-w-full sm:w-full items-center p-1 sm:p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 gap-1.5"
+                        >
                             <!-- Tab Tim Persiapan -->
                             <button
                                 type="button"
                                 @click="handleSwitchTimTab('persiapan')"
                                 :class="[
-                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    'flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
                                     activeTimTab === 'persiapan'
                                         ? 'bg-white text-amber-900 shadow-xs border border-amber-200/80 ring-2 ring-amber-500/20'
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
                                 ]"
                             >
-                                <Utensils class="h-4 w-4 text-amber-600" />
-                                <span>Tim Persiapan</span>
+                                <Utensils class="h-4 w-4 text-amber-600 shrink-0" />
+                                <span class="whitespace-nowrap font-black">Tim Persiapan</span>
                                 <Badge
                                     :className="[
-                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
                                         activeTimTab === 'persiapan'
                                             ? 'bg-amber-500 text-white border-amber-600'
                                             : 'bg-slate-200 text-slate-700 border-slate-300',
@@ -13943,19 +14403,19 @@ watch(
                                 type="button"
                                 @click="handleSwitchTimTab('pengolahan')"
                                 :class="[
-                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    'flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
                                     activeTimTab === 'pengolahan'
                                         ? 'bg-white text-blue-900 shadow-xs border border-blue-200/80 ring-2 ring-blue-500/20'
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
                                 ]"
                             >
                                 <UtensilsCrossed
-                                    class="h-4 w-4 text-blue-600"
+                                    class="h-4 w-4 text-blue-600 shrink-0"
                                 />
-                                <span>Tim Pengolahan</span>
+                                <span class="whitespace-nowrap font-black">Tim Pengolahan</span>
                                 <Badge
                                     :className="[
-                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
                                         activeTimTab === 'pengolahan'
                                             ? 'bg-blue-600 text-white border-blue-700'
                                             : 'bg-slate-200 text-slate-700 border-slate-300',
@@ -13970,17 +14430,17 @@ watch(
                                 type="button"
                                 @click="handleSwitchTimTab('pemorsian')"
                                 :class="[
-                                    'flex-1 py-2.5 px-3.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer',
+                                    'flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
                                     activeTimTab === 'pemorsian'
                                         ? 'bg-white text-purple-900 shadow-xs border border-purple-200/80 ring-2 ring-purple-500/20'
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
                                 ]"
                             >
-                                <ShoppingBag class="h-4 w-4 text-purple-600" />
-                                <span>Tim Pemorsian</span>
+                                <ShoppingBag class="h-4 w-4 text-purple-600 shrink-0" />
+                                <span class="whitespace-nowrap font-black">Tim Pemorsian</span>
                                 <Badge
                                     :className="[
-                                        'ml-1 text-[10px] font-black px-1.5 py-0.2 rounded-full border',
+                                        'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
                                         activeTimTab === 'pemorsian'
                                             ? 'bg-purple-600 text-white border-purple-700'
                                             : 'bg-slate-200 text-slate-700 border-slate-300',
@@ -14076,7 +14536,7 @@ watch(
                                             >
                                                 No
                                             </th>
-                                            <th class="py-3 px-3 min-w-[170px]">
+                                            <th class="py-3 px-3 min-w-[210px]">
                                                 Nama Menu (Sub-Menu)
                                             </th>
                                             <th class="py-3 px-3 min-w-[190px]">
@@ -14123,16 +14583,12 @@ watch(
                                             >
                                                 {{ pIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3">
-                                                <input
-                                                    type="text"
-                                                    :value="item.nama_menu"
-                                                    disabled
-                                                    readonly
-                                                    placeholder="Nama menu..."
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
-                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
-                                                />
+                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                                <div
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
+                                                >
+                                                    {{ item.nama_menu }}
+                                                </div>
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <select
@@ -14306,7 +14762,7 @@ watch(
 
                             <!-- Footer Bar Tim Persiapan -->
                             <div
-                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
                                 <span class="text-xs text-slate-500 font-medium">
                                     Total: <strong class="text-slate-800">{{ catatanTim.persiapan?.length || 0 }}</strong> instruksi persiapan
@@ -14333,21 +14789,21 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex items-center justify-between">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
                                 <label
-                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                    class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
                                     <ClipboardList
-                                        class="w-4 h-4 text-amber-600"
+                                        class="w-4 h-4 text-amber-600 shrink-0"
                                     />
                                     <span
                                         >Catatan Tambahan (Global) Tim
                                         Persiapan</span
                                     >
-                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
+                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
-                                    class="text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full"
+                                    class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full shrink-0"
                                 >
                                     SOP & Instruksi Umum
                                 </span>
@@ -14424,7 +14880,7 @@ watch(
                                             >
                                                 No
                                             </th>
-                                            <th class="py-3 px-3 min-w-[170px]">
+                                            <th class="py-3 px-3 min-w-[210px]">
                                                 Nama Menu (Sub-Menu)
                                             </th>
                                             <th class="py-3 px-3 min-w-[190px]">
@@ -14471,16 +14927,12 @@ watch(
                                             >
                                                 {{ cIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3">
-                                                <input
-                                                    type="text"
-                                                    :value="item.nama_menu"
-                                                    disabled
-                                                    readonly
-                                                    placeholder="Nama menu..."
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
-                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
-                                                />
+                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                                <div
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
+                                                >
+                                                    {{ item.nama_menu }}
+                                                </div>
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <select
@@ -14654,7 +15106,7 @@ watch(
 
                             <!-- Footer Bar Tim Pengolahan -->
                             <div
-                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
                                 <span class="text-xs text-slate-500 font-medium">
                                     Total: <strong class="text-slate-800">{{ catatanTim.pengolahan?.length || 0 }}</strong> instruksi pengolahan
@@ -14681,21 +15133,21 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex items-center justify-between">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
                                 <label
-                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                    class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
                                     <ClipboardList
-                                        class="w-4 h-4 text-blue-600"
+                                        class="w-4 h-4 text-blue-600 shrink-0"
                                     />
                                     <span
                                         >Catatan Tambahan (Global) Tim
                                         Pengolahan</span
                                     >
-                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
+                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
-                                    class="text-[10.5px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full"
+                                    class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full shrink-0"
                                 >
                                     SOP & Instruksi Umum
                                 </span>
@@ -14763,7 +15215,7 @@ watch(
                                             >
                                                 No
                                             </th>
-                                            <th class="py-3 px-3 min-w-[180px]">
+                                            <th class="py-3 px-3 min-w-[210px]">
                                                 Nama Menu (Sub-Menu)
                                             </th>
                                             <th
@@ -14802,32 +15254,23 @@ watch(
                                             >
                                                 {{ sIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3">
-                                                <input
-                                                    type="text"
-                                                    :value="item.nama_menu"
-                                                    disabled
-                                                    readonly
-                                                    placeholder="Nama menu..."
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
-                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed outline-none select-none disabled:opacity-100 disabled:text-slate-900"
-                                                />
+                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                                <div
+                                                    class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
+                                                >
+                                                    {{ item.nama_menu }}
+                                                </div>
                                             </td>
-                                            <td class="py-2.5 px-3">
-                                                <textarea
+                                            <td class="py-2.5 px-3 min-w-[280px]">
+                                                <div
                                                     :id="`catatan_pemorsian_${sIdx}_kuantitas`"
-                                                    :value="item.kuantitas"
-                                                    readonly
-                                                    disabled
-                                                    rows="2"
-                                                    tabindex="-1"
-                                                    placeholder="Target porsi dihitung dari WO..."
-                                                    title="Target porsi dihitung otomatis dari Work Order (tidak dapat diedit manual)"
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #581c87; color: #581c87;"
-                                                    class="w-full text-center text-xs font-bold text-purple-900 bg-purple-50/80 border rounded-lg p-2 outline-none cursor-not-allowed select-text resize-none leading-relaxed transition disabled:opacity-100 disabled:text-purple-900"
+                                                    class="w-full text-center text-xs font-bold text-purple-950 bg-purple-50/80 border rounded-lg p-2.5 leading-relaxed whitespace-normal break-words select-text"
                                                     :class="!item.kuantitas || !item.kuantitas.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-purple-200/90'"
-                                                ></textarea>
-                                                <span v-if="!item.kuantitas || !item.kuantitas.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                    title="Target porsi dihitung otomatis dari Work Order"
+                                                >
+                                                    {{ item.kuantitas || '-' }}
+                                                </div>
+                                                <span v-if="!item.kuantitas || !item.kuantitas.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5 text-center">Wajib diisi!</span>
                                             </td>
                                             <td class="py-2.5 px-3 text-center">
                                                 <div
@@ -14947,7 +15390,7 @@ watch(
 
                             <!-- Footer Bar Tim Pemorsian -->
                             <div
-                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between"
+                                class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
                                 <span class="text-xs text-slate-500 font-medium">
                                     Total: <strong class="text-slate-800">{{ catatanTim.pemorsian?.length || 0 }}</strong> instruksi pemorsian
@@ -14967,21 +15410,21 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex items-center justify-between">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
                                 <label
-                                    class="text-xs font-black text-slate-800 flex items-center gap-2"
+                                    class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
                                     <ClipboardList
-                                        class="w-4 h-4 text-purple-600"
+                                        class="w-4 h-4 text-purple-600 shrink-0"
                                     />
                                     <span
                                         >Catatan Tambahan (Global) Tim
                                         Pemorsian</span
                                     >
-                                    <span class="text-[10.5px] font-medium text-slate-400">(Opsional)</span>
+                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
                                 </label>
                                 <span
-                                    class="text-[10.5px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full"
+                                    class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full shrink-0"
                                 >
                                     SOP & Instruksi Umum
                                 </span>
@@ -14997,7 +15440,7 @@ watch(
 
                     <!-- Bottom Nav Bar Step 3 -->
                     <div
-                        class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+                        class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
                     >
                         <Button
                             type="button"
@@ -15008,7 +15451,7 @@ watch(
                             <span>Kembali ke Formula Makanan (Langkah 2)</span>
                         </Button>
 
-                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                             <Button
                                 type="button"
                                 @click="simpanDraftStep3"
@@ -15021,7 +15464,7 @@ watch(
                             <Button
                                 type="button"
                                 @click="handleLanjutStep4"
-                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2 text-center"
                             >
                                 <span
                                     >Lanjut ke Review & Pengajuan (Langkah
@@ -15911,14 +16354,10 @@ watch(
                         </div>
 
                         <!-- 3.A Evaluasi AKG Porsi Normal -->
-                        <div class="space-y-2">
+                        <div class="space-y-3">
                             <div class="flex items-center gap-2">
-                                <span
-                                    class="w-2 h-2 rounded-full bg-emerald-500"
-                                ></span>
-                                <h5
-                                    class="text-xs font-black text-slate-800 uppercase tracking-wider"
-                                >
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                <h5 class="text-xs font-black text-slate-800 uppercase tracking-wider">
                                     {{
                                         activeAlergiAkgList &&
                                         activeAlergiAkgList.length > 0
@@ -15929,320 +16368,199 @@ watch(
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Evaluasi PK Normal -->
-                                <div
-                                    class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3"
-                                >
-                                    <div
-                                        class="flex items-center justify-between border-b border-slate-100 pb-2.5"
-                                    >
-                                        <div>
-                                            <span
-                                                class="text-xs font-black text-slate-900 block"
-                                                >Porsi Kecil (PK) Normal</span
-                                            >
-                                            <span
-                                                class="text-[10px] text-slate-500"
-                                                >PAUD, TK, SD Kelas 1-3</span
-                                            >
+                                <div class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+                                                PK
+                                            </div>
+                                            <div>
+                                                <span class="text-xs sm:text-sm font-black text-slate-900 block leading-tight">Porsi Kecil (PK) Normal</span>
+                                                <span class="text-[10px] text-slate-500 font-medium">PAUD, TK, SD Kelas 1-3</span>
+                                            </div>
                                         </div>
-                                        <span
+                                        <div
                                             :class="[
-                                                'px-2.5 py-1 text-[10px] rounded-lg border',
-                                                getAkgStatusBadge(
-                                                    akgResultPKNormal,
-                                                    false,
-                                                ).badgeClass,
+                                                'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
+                                                getAkgStatusBadge(akgResultPKNormal, false).badgeClass,
                                             ]"
                                         >
-                                            {{
-                                                getAkgStatusBadge(
-                                                    akgResultPKNormal,
-                                                    false,
-                                                ).label
-                                            }}
-                                        </span>
+                                            {{ getAkgStatusBadge(akgResultPKNormal, false).label }}
+                                        </div>
                                     </div>
-                                    <!-- 5 Kotak: 3 Di Atas, 2 Di Bawah -->
-                                    <div class="grid grid-cols-6 gap-2 text-xs">
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Energi</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPKNormal.energi.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >kkal</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 330 - 413 kkal</span
-                                            >
+
+                                    <!-- Hero Energi Total PK -->
+                                    <div class="p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                                <Zap class="w-4 h-4 fill-white" />
+                                            </div>
+                                            <div class="min-w-0">
+                                                <span class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
+                                                <span class="text-[10px] text-slate-500 truncate block mt-0.5">
+                                                    Standar Rujukan: <strong class="text-slate-700">330 - 413 kkal</strong>
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Protein</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPKNormal.protein.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 8.0 - 10.0g</span
-                                            >
+                                        <div class="text-right shrink-0">
+                                            <span class="font-black text-slate-900 text-lg sm:text-xl leading-none">
+                                                {{ akgResultPKNormal.energi.toFixed(1) }}
+                                            </span>
+                                            <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Lemak</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPKNormal.lemak.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 11.0 - 13.8g</span
-                                            >
+                                    </div>
+
+                                    <!-- 4 Makronutrien: Grid 2x2 di HP, 4 kolom di layar sedang -->
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                        <!-- Protein -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Protein</span>
+                                                <span class="text-xs">🥩</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.protein.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 8.0 - 10.0g</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Karbohidrat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPKNormal.karbohidrat.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 50.0 - 62.5g</span
-                                            >
+
+                                        <!-- Lemak -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Lemak</span>
+                                                <span class="text-xs">🥑</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.lemak.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 11.0 - 13.8g</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Serat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPKNormal.serat.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 4.0 - 7.0g</span
-                                            >
+
+                                        <!-- Karbohidrat -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Karbo</span>
+                                                <span class="text-xs">🌾</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.karbohidrat.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 50 - 62.5g</span>
+                                        </div>
+
+                                        <!-- Serat -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Serat</span>
+                                                <span class="text-xs">🥗</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.serat.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 4.0 - 7.0g</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Evaluasi PB Normal -->
-                                <div
-                                    class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3"
-                                >
-                                    <div
-                                        class="flex items-center justify-between border-b border-slate-100 pb-2.5"
-                                    >
-                                        <div>
-                                            <span
-                                                class="text-xs font-black text-slate-900 block"
-                                                >Porsi Besar (PB) Normal</span
-                                            >
-                                            <span
-                                                class="text-[10px] text-slate-500"
-                                                >SD 4-6, SMP, SMA/SMK,
-                                                Bumil/Busui</span
-                                            >
+                                <div class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+                                                PB
+                                            </div>
+                                            <div>
+                                                <span class="text-xs sm:text-sm font-black text-slate-900 block leading-tight">Porsi Besar (PB) Normal</span>
+                                                <span class="text-[10px] text-slate-500 font-medium">SD 4-6, SMP, SMA/SMK, Bumil/Busui</span>
+                                            </div>
                                         </div>
-                                        <span
+                                        <div
                                             :class="[
-                                                'px-2.5 py-1 text-[10px] rounded-lg border',
-                                                getAkgStatusBadge(
-                                                    akgResultPBNormal,
-                                                    true,
-                                                ).badgeClass,
+                                                'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
+                                                getAkgStatusBadge(akgResultPBNormal, true).badgeClass,
                                             ]"
                                         >
-                                            {{
-                                                getAkgStatusBadge(
-                                                    akgResultPBNormal,
-                                                    true,
-                                                ).label
-                                            }}
-                                        </span>
+                                            {{ getAkgStatusBadge(akgResultPBNormal, true).label }}
+                                        </div>
                                     </div>
-                                    <!-- 5 Kotak: 3 Di Atas, 2 Di Bawah -->
-                                    <div class="grid grid-cols-6 gap-2 text-xs">
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Energi</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPBNormal.energi.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >kkal</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 585 - 831 kkal</span
-                                            >
+
+                                    <!-- Hero Energi Total PB -->
+                                    <div class="p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                                <Zap class="w-4 h-4 fill-white" />
+                                            </div>
+                                            <div class="min-w-0">
+                                                <span class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
+                                                <span class="text-[10px] text-slate-500 truncate block mt-0.5">
+                                                    Standar Rujukan: <strong class="text-slate-700">585 - 831 kkal</strong>
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Protein</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPBNormal.protein.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 15.8 - 24.5g</span
-                                            >
+                                        <div class="text-right shrink-0">
+                                            <span class="font-black text-slate-900 text-lg sm:text-xl leading-none">
+                                                {{ akgResultPBNormal.energi.toFixed(1) }}
+                                            </span>
+                                            <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Lemak</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPBNormal.lemak.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 19.5 - 26.3g</span
-                                            >
+                                    </div>
+
+                                    <!-- 4 Makronutrien PB: Grid 2x2 di HP, 4 kolom di layar sedang -->
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                        <!-- Protein -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Protein</span>
+                                                <span class="text-xs">🥩</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.protein.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 15.8 - 24.5g</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Karbohidrat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPBNormal.karbohidrat.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 87.0 - 122.5g</span
-                                            >
+
+                                        <!-- Lemak -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Lemak</span>
+                                                <span class="text-xs">🥑</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.lemak.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 19.5 - 26.3g</span>
                                         </div>
-                                        <div
-                                            class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                        >
-                                            <span
-                                                class="text-[10px] text-slate-500 block font-semibold"
-                                                >Serat</span
-                                            >
-                                            <span
-                                                class="font-black text-slate-900 text-sm"
-                                                >{{
-                                                    akgResultPBNormal.serat.toFixed(
-                                                        1,
-                                                    )
-                                                }}
-                                                <span
-                                                    class="text-[10px] font-normal text-slate-500"
-                                                    >g</span
-                                                ></span
-                                            >
-                                            <span
-                                                class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                >Std: 6.0 - 10.0g</span
-                                            >
+
+                                        <!-- Karbohidrat -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Karbo</span>
+                                                <span class="text-xs">🌾</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.karbohidrat.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 87 - 122.5g</span>
+                                        </div>
+
+                                        <!-- Serat -->
+                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Serat</span>
+                                                <span class="text-xs">🥗</span>
+                                            </div>
+                                            <div class="flex items-baseline gap-0.5">
+                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.serat.toFixed(1) }}</span>
+                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            </div>
+                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 6.0 - 10.0g</span>
                                         </div>
                                     </div>
                                 </div>
@@ -16252,397 +16570,231 @@ watch(
                         <!-- 3.B Evaluasi AKG Varian Alergi (Jika Ada) -->
                         <div
                             v-if="activeAlergiAkgList.length > 0"
-                            class="space-y-4 pt-2 border-t border-slate-200"
+                            class="space-y-4 pt-3 border-t border-slate-200"
                         >
-                            <div
-                                class="flex items-center justify-between flex-wrap gap-2"
-                            >
+                            <div class="flex items-center justify-between flex-wrap gap-2">
                                 <div class="flex items-center gap-2">
-                                    <span
-                                        class="w-2 h-2 rounded-full bg-rose-500"
-                                    ></span>
-                                    <h5
-                                        class="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5"
-                                    >
-                                        <ShieldAlert
-                                            class="h-3.5 w-3.5 text-rose-600"
-                                        />
-                                        <span
-                                            >B. Standar AKG Varian Khusus
-                                            Alergi</span
-                                        >
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
+                                    <h5 class="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <ShieldAlert class="h-3.5 w-3.5 text-rose-600" />
+                                        <span>B. Standar AKG Varian Khusus Alergi</span>
                                     </h5>
                                 </div>
-                                <span
-                                    class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg"
-                                >
-                                    {{ activeAlergiAkgList.length }} Varian
-                                    Alergi Dikonfigurasi
+                                <span class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                                    {{ activeAlergiAkgList.length }} Varian Alergi Dikonfigurasi
                                 </span>
                             </div>
 
                             <div
                                 v-for="alRes in activeAlergiAkgList"
                                 :key="'akg-al-' + alRes.jenis_alergi"
-                                class="p-3.5 bg-white rounded-xl border border-rose-200 space-y-3"
+                                class="p-3.5 sm:p-4 bg-white rounded-2xl border border-rose-200/90 space-y-3.5 shadow-2xs"
                             >
-                                <div
-                                    class="flex items-center justify-between flex-wrap gap-2"
-                                >
-                                    <span
-                                        class="text-xs font-black text-rose-950 flex items-center gap-1.5"
-                                    >
-                                        <span
-                                            >Varian Alergi:
-                                            <strong
-                                                class="text-rose-700 underline underline-offset-2"
-                                                >{{
-                                                    alRes.jenis_alergi
-                                                }}</strong
-                                            ></span
-                                        >
-                                        <span
-                                            class="text-[10.5px] font-bold text-slate-600"
-                                            >({{ alRes.total_pm }} Porsi • PK:
-                                            {{ alRes.pm_pk }}, PB:
-                                            {{ alRes.pm_pb }})</span
-                                        >
-                                    </span>
-                                    <span
-                                        class="text-[10px] font-semibold text-rose-800 bg-white px-2 py-0.5 rounded border border-rose-200"
-                                    >
-                                        {{ alRes.bahan_count }} Bahan Substitusi
-                                        Terpilih
+                                <!-- Header Varian Alergi -->
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-rose-50/60 p-3 rounded-xl border border-rose-100">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[10px] uppercase shadow-2xs">
+                                            Alergi
+                                        </span>
+                                        <span class="text-xs font-black text-rose-950 underline underline-offset-2">
+                                            {{ alRes.jenis_alergi }}
+                                        </span>
+                                        <span class="text-[10.5px] font-bold text-slate-600">
+                                            ({{ alRes.total_pm }} Porsi • PK: {{ alRes.pm_pk }}, PB: {{ alRes.pm_pb }})
+                                        </span>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-rose-800 bg-white px-2.5 py-1 rounded-lg border border-rose-200 self-start sm:self-auto shrink-0 shadow-2xs">
+                                        {{ alRes.bahan_count }} Bahan Substitusi Terpilih
                                     </span>
                                 </div>
 
-                                <div
-                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
-                                >
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <!-- Evaluasi PK Alergi -->
-                                    <div
-                                        class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
-                                        >
-                                            <div>
-                                                <span
-                                                    class="text-xs font-black text-slate-900 block"
-                                                    >Porsi Kecil (PK) •
-                                                    {{
-                                                        alRes.jenis_alergi
-                                                    }}</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-500"
-                                                    >PAUD, TK, SD Kelas
-                                                    1-3</span
-                                                >
+                                    <div class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs">
+                                                    PK
+                                                </div>
+                                                <div>
+                                                    <span class="text-xs font-black text-slate-900 block leading-tight">Porsi Kecil (PK) • {{ alRes.jenis_alergi }}</span>
+                                                    <span class="text-[10px] text-slate-500 font-medium">PAUD, TK, SD Kelas 1-3</span>
+                                                </div>
                                             </div>
-                                            <span
+                                            <div
                                                 :class="[
-                                                    'px-2.5 py-1 text-[10px] rounded-lg border',
-                                                    getAkgStatusBadge(
-                                                        alRes.pk,
-                                                        false,
-                                                    ).badgeClass,
+                                                    'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
+                                                    getAkgStatusBadge(alRes.pk, false).badgeClass,
                                                 ]"
                                             >
-                                                {{
-                                                    getAkgStatusBadge(
-                                                        alRes.pk,
-                                                        false,
-                                                    ).label
-                                                }}
-                                            </span>
+                                                {{ getAkgStatusBadge(alRes.pk, false).label }}
+                                            </div>
                                         </div>
-                                        <div
-                                            class="grid grid-cols-6 gap-2 text-xs"
-                                        >
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.energi.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >kkal</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 330 - 413 kkal</span
-                                                >
+
+                                        <!-- Hero Energi PK Alergi -->
+                                        <div class="p-2.5 sm:p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <div class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                                    <Zap class="w-3.5 h-3.5 fill-white" />
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <span class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
+                                                    <span class="text-[9.5px] text-slate-500 truncate block mt-0.5">
+                                                        Std: <strong class="text-slate-700">330 - 413 kkal</strong>
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.protein.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 8.0 - 10.0g</span
-                                                >
+                                            <div class="text-right shrink-0">
+                                                <span class="font-black text-slate-900 text-base sm:text-lg leading-none">
+                                                    {{ alRes.pk.energi.toFixed(1) }}
+                                                </span>
+                                                <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.lemak.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 11.0 - 13.8g</span
-                                                >
+                                        </div>
+
+                                        <!-- 4 Makronutrien PK Alergi: Grid 2x2 di HP -->
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Protein</span>
+                                                    <span class="text-xs">🥩</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.protein.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 8.0 - 10.0g</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.karbohidrat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 50.0 - 62.5g</span
-                                                >
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Lemak</span>
+                                                    <span class="text-xs">🥑</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.lemak.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 11.0 - 13.8g</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pk.serat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 4.0 - 7.0g</span
-                                                >
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Karbo</span>
+                                                    <span class="text-xs">🌾</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.karbohidrat.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 50 - 62.5g</span>
+                                            </div>
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Serat</span>
+                                                    <span class="text-xs">🥗</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.serat.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 4.0 - 7.0g</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Evaluasi PB Alergi -->
-                                    <div
-                                        class="p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between border-b border-slate-100 pb-2"
-                                        >
-                                            <div>
-                                                <span
-                                                    class="text-xs font-black text-slate-900 block"
-                                                    >Porsi Besar (PB) •
-                                                    {{
-                                                        alRes.jenis_alergi
-                                                    }}</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-500"
-                                                    >SD 4-6, SMP, SMA/SMK,
-                                                    Bumil/Busui</span
-                                                >
+                                    <div class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-7 h-7 rounded-lg bg-rose-700 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs">
+                                                    PB
+                                                </div>
+                                                <div>
+                                                    <span class="text-xs font-black text-slate-900 block leading-tight">Porsi Besar (PB) • {{ alRes.jenis_alergi }}</span>
+                                                    <span class="text-[10px] text-slate-500 font-medium">SD 4-6, SMP, SMA/SMK, Bumil/Busui</span>
+                                                </div>
                                             </div>
-                                            <span
+                                            <div
                                                 :class="[
-                                                    'px-2.5 py-1 text-[10px] rounded-lg border',
-                                                    getAkgStatusBadge(
-                                                        alRes.pb,
-                                                        true,
-                                                    ).badgeClass,
+                                                    'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
+                                                    getAkgStatusBadge(alRes.pb, true).badgeClass,
                                                 ]"
                                             >
-                                                {{
-                                                    getAkgStatusBadge(
-                                                        alRes.pb,
-                                                        true,
-                                                    ).label
-                                                }}
-                                            </span>
+                                                {{ getAkgStatusBadge(alRes.pb, true).label }}
+                                            </div>
                                         </div>
-                                        <div
-                                            class="grid grid-cols-6 gap-2 text-xs"
-                                        >
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.energi.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >kkal</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 585 - 831 kkal</span
-                                                >
+
+                                        <!-- Hero Energi PB Alergi -->
+                                        <div class="p-2.5 sm:p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <div class="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                                    <Zap class="w-3.5 h-3.5 fill-white" />
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <span class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
+                                                    <span class="text-[9.5px] text-slate-500 truncate block mt-0.5">
+                                                        Std: <strong class="text-slate-700">585 - 831 kkal</strong>
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.protein.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 15.8 - 24.5g</span
-                                                >
+                                            <div class="text-right shrink-0">
+                                                <span class="font-black text-slate-900 text-base sm:text-lg leading-none">
+                                                    {{ alRes.pb.energi.toFixed(1) }}
+                                                </span>
+                                                <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.lemak.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 19.5 - 26.3g</span
-                                                >
+                                        </div>
+
+                                        <!-- 4 Makronutrien PB Alergi: Grid 2x2 di HP -->
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Protein</span>
+                                                    <span class="text-xs">🥩</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.protein.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 15.8 - 24.5g</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.karbohidrat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 87.0 - 122.5g</span
-                                                >
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Lemak</span>
+                                                    <span class="text-xs">🥑</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.lemak.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 19.5 - 26.3g</span>
                                             </div>
-                                            <div
-                                                class="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-3"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-slate-500 block font-semibold"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="font-black text-slate-900 text-sm"
-                                                    >{{
-                                                        alRes.pb.serat.toFixed(
-                                                            1,
-                                                        )
-                                                    }}
-                                                    <span
-                                                        class="text-[10px] font-normal text-slate-500"
-                                                        >g</span
-                                                    ></span
-                                                >
-                                                <span
-                                                    class="text-[9.5px] text-slate-400 block mt-0.5"
-                                                    >Std: 6.0 - 10.0g</span
-                                                >
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Karbo</span>
+                                                    <span class="text-xs">🌾</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.karbohidrat.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 87 - 122.5g</span>
+                                            </div>
+
+                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Serat</span>
+                                                    <span class="text-xs">🥗</span>
+                                                </div>
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.serat.toFixed(1) }}</span>
+                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 6.0 - 10.0g</span>
                                             </div>
                                         </div>
                                     </div>
@@ -17668,14 +17820,14 @@ watch(
 
                     <!-- Ringkasan Catatan Kerja Tim Produksi di Review Step 4 -->
                     <div
-                        class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4"
+                        class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3.5"
                     >
                         <div
-                            class="flex items-center justify-between flex-wrap gap-2"
+                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
                             <div class="flex items-center gap-2.5">
                                 <div
-                                    class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center"
+                                    class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"
                                 >
                                     <ClipboardList class="w-4 h-4" />
                                 </div>
@@ -17686,233 +17838,118 @@ watch(
                                         Instruksi & Catatan Kerja Tim Produksi
                                     </h4>
                                     <p class="text-[11px] text-slate-500">
-                                        Ringkasan arahan teknis operasional
-                                        untuk Tim Persiapan, Pengolahan, dan
-                                        Pemorsian.
+                                        Ringkasan arahan teknis operasional untuk Tim Persiapan, Pengolahan, dan Pemorsian.
                                     </p>
                                 </div>
                             </div>
-                            <Button
-                                type="button"
-                                @click="handleSwitchSubTab('catatan_resep')"
-                                className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                            >
-                                <Edit3 class="w-3.5 h-3.5 text-primary" />
-                                <span>Edit Catatan Tim</span>
-                            </Button>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <Button
+                                    type="button"
+                                    @click="openModalDetailCatatan('persiapan')"
+                                    className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                >
+                                    <Eye class="w-3.5 h-3.5" />
+                                    <span>Lihat Detail Catatan</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    @click="handleSwitchSubTab('catatan_resep')"
+                                    className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                >
+                                    <Edit3 class="w-3.5 h-3.5 text-primary" />
+                                    <span>Edit Catatan</span>
+                                </Button>
+                            </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <!-- Tim Persiapan Summary -->
+                        <!-- 3 Compact Team Cards with Eye Icon buttons -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <!-- Tim Persiapan -->
                             <div
-                                class="p-3.5 rounded-xl bg-white border border-amber-200/80 space-y-2"
+                                @click="openModalDetailCatatan('persiapan')"
+                                class="p-3 bg-white rounded-xl border border-amber-200/80 hover:border-amber-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
-                                <div class="flex items-center justify-between">
-                                    <span
-                                        class="text-xs font-black text-amber-950 flex items-center gap-1.5"
-                                    >
-                                        <Utensils
-                                            class="w-3.5 h-3.5 text-amber-600"
-                                        />
-                                        Tim Persiapan
-                                    </span>
-                                    <span
-                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900"
-                                    >
-                                        {{ catatanTim.persiapan?.length || 0 }}
-                                        Item
-                                    </span>
-                                </div>
-                                <div
-                                    v-if="
-                                        catatanTim.persiapan &&
-                                        catatanTim.persiapan.length > 0
-                                    "
-                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
-                                >
-                                    <div
-                                        v-for="(
-                                            it, iIdx
-                                        ) in catatanTim.persiapan"
-                                        :key="iIdx"
-                                        class="p-2 rounded-lg bg-amber-50/50 border border-amber-100 text-[11px] space-y-0.5"
-                                    >
-                                        <div
-                                            class="font-black text-slate-900 flex items-center justify-between"
-                                        >
-                                            <span>{{ it.nama_menu }}</span>
-                                            <span
-                                                class="text-[10px] text-amber-800 font-bold"
-                                                >{{ it.kuantitas }}</span
-                                            >
-                                        </div>
-                                        <p class="text-slate-600 line-clamp-1">
-                                            {{ it.bahan_baku }}:
-                                            {{ it.perlakuan }}
-                                        </p>
-                                        <p
-                                            v-if="it.waktu_mulai"
-                                            class="text-[10px] text-slate-400"
-                                        >
-                                            ⏰ {{ it.waktu_mulai }} -
-                                            {{ it.waktu_selesai }}
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div class="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                        <Utensils class="w-3.5 h-3.5" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-amber-900 transition">
+                                            Tim Persiapan
+                                        </h5>
+                                        <p class="text-[10px] text-slate-500 font-semibold">
+                                            {{ catatanTim.persiapan?.length || 0 }} instruksi bahan
                                         </p>
                                     </div>
                                 </div>
-                                <p
-                                    v-else
-                                    class="text-[11px] text-slate-400 italic"
+                                <button
+                                    type="button"
+                                    class="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 transition"
+                                    title="Lihat Detail Tim Persiapan"
                                 >
-                                    Belum ada catatan item.
-                                </p>
-                                <div
-                                    v-if="catatanTim.catatan_global?.persiapan"
-                                    class="pt-1.5 border-t border-amber-100 text-[10.5px] text-amber-900 bg-amber-50/30 p-1.5 rounded-lg"
-                                >
-                                    <strong>Global:</strong>
-                                    {{ catatanTim.catatan_global.persiapan }}
-                                </div>
+                                    <Eye class="w-3.5 h-3.5" />
+                                </button>
                             </div>
 
-                            <!-- Tim Pengolahan Summary -->
+                            <!-- Tim Pengolahan -->
                             <div
-                                class="p-3.5 rounded-xl bg-white border border-blue-200/80 space-y-2"
+                                @click="openModalDetailCatatan('pengolahan')"
+                                class="p-3 bg-white rounded-xl border border-blue-200/80 hover:border-blue-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
-                                <div class="flex items-center justify-between">
-                                    <span
-                                        class="text-xs font-black text-blue-950 flex items-center gap-1.5"
-                                    >
-                                        <UtensilsCrossed
-                                            class="w-3.5 h-3.5 text-blue-600"
-                                        />
-                                        Tim Pengolahan
-                                    </span>
-                                    <span
-                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-900"
-                                    >
-                                        {{ catatanTim.pengolahan?.length || 0 }}
-                                        Item
-                                    </span>
-                                </div>
-                                <div
-                                    v-if="
-                                        catatanTim.pengolahan &&
-                                        catatanTim.pengolahan.length > 0
-                                    "
-                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
-                                >
-                                    <div
-                                        v-for="(
-                                            it, iIdx
-                                        ) in catatanTim.pengolahan"
-                                        :key="iIdx"
-                                        class="p-2 rounded-lg bg-blue-50/50 border border-blue-100 text-[11px] space-y-0.5"
-                                    >
-                                        <div
-                                            class="font-black text-slate-900 flex items-center justify-between"
-                                        >
-                                            <span>{{ it.nama_menu }}</span>
-                                            <span
-                                                class="text-[10px] text-blue-800 font-bold"
-                                                >{{ it.kuantitas }}</span
-                                            >
-                                        </div>
-                                        <p class="text-slate-600 line-clamp-1">
-                                            {{ it.bahan_baku }}:
-                                            {{ it.perlakuan }}
-                                        </p>
-                                        <p
-                                            v-if="it.waktu_mulai"
-                                            class="text-[10px] text-slate-400"
-                                        >
-                                            ⏰ {{ it.waktu_mulai }} -
-                                            {{ it.waktu_selesai }}
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div class="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+                                        <UtensilsCrossed class="w-3.5 h-3.5" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-blue-900 transition">
+                                            Tim Pengolahan
+                                        </h5>
+                                        <p class="text-[10px] text-slate-500 font-semibold">
+                                            {{ catatanTim.pengolahan?.length || 0 }} instruksi olah
                                         </p>
                                     </div>
                                 </div>
-                                <p
-                                    v-else
-                                    class="text-[11px] text-slate-400 italic"
+                                <button
+                                    type="button"
+                                    class="w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 transition"
+                                    title="Lihat Detail Tim Pengolahan"
                                 >
-                                    Belum ada catatan item.
-                                </p>
-                                <div
-                                    v-if="catatanTim.catatan_global?.pengolahan"
-                                    class="pt-1.5 border-t border-blue-100 text-[10.5px] text-blue-900 bg-blue-50/30 p-1.5 rounded-lg"
-                                >
-                                    <strong>Global:</strong>
-                                    {{ catatanTim.catatan_global.pengolahan }}
-                                </div>
+                                    <Eye class="w-3.5 h-3.5" />
+                                </button>
                             </div>
 
-                            <!-- Tim Pemorsian Summary -->
+                            <!-- Tim Pemorsian -->
                             <div
-                                class="p-3.5 rounded-xl bg-white border border-purple-200/80 space-y-2"
+                                @click="openModalDetailCatatan('pemorsian')"
+                                class="p-3 bg-white rounded-xl border border-purple-200/80 hover:border-purple-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
-                                <div class="flex items-center justify-between">
-                                    <span
-                                        class="text-xs font-black text-purple-950 flex items-center gap-1.5"
-                                    >
-                                        <ShoppingBag
-                                            class="w-3.5 h-3.5 text-purple-600"
-                                        />
-                                        Tim Pemorsian
-                                    </span>
-                                    <span
-                                        class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900"
-                                    >
-                                        {{ catatanTim.pemorsian?.length || 0 }}
-                                        Item
-                                    </span>
-                                </div>
-                                <div
-                                    v-if="
-                                        catatanTim.pemorsian &&
-                                        catatanTim.pemorsian.length > 0
-                                    "
-                                    class="space-y-1.5 max-h-36 overflow-y-auto pr-1"
-                                >
-                                    <div
-                                        v-for="(
-                                            it, iIdx
-                                        ) in catatanTim.pemorsian"
-                                        :key="iIdx"
-                                        class="p-2 rounded-lg bg-purple-50/50 border border-purple-100 text-[11px] space-y-0.5"
-                                    >
-                                        <div class="font-black text-slate-900">
-                                            {{ it.nama_menu }}
-                                        </div>
-                                        <p class="text-slate-600 line-clamp-1">
-                                            {{ it.perlakuan }}
-                                        </p>
-                                        <p
-                                            v-if="it.keterangan"
-                                            class="text-[10px] text-slate-400 italic"
-                                        >
-                                            {{ it.keterangan }}
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div class="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+                                        <ShoppingBag class="w-3.5 h-3.5" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-purple-900 transition">
+                                            Tim Pemorsian
+                                        </h5>
+                                        <p class="text-[10px] text-slate-500 font-semibold">
+                                            {{ catatanTim.pemorsian?.length || 0 }} instruksi porsi
                                         </p>
                                     </div>
                                 </div>
-                                <p
-                                    v-else
-                                    class="text-[11px] text-slate-400 italic"
+                                <button
+                                    type="button"
+                                    class="w-7 h-7 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 flex items-center justify-center shrink-0 transition"
+                                    title="Lihat Detail Tim Pemorsian"
                                 >
-                                    Belum ada catatan item.
-                                </p>
-                                <div
-                                    v-if="catatanTim.catatan_global?.pemorsian"
-                                    class="pt-1.5 border-t border-purple-100 text-[10.5px] text-purple-900 bg-purple-50/30 p-1.5 rounded-lg"
-                                >
-                                    <strong>Global:</strong>
-                                    {{ catatanTim.catatan_global.pemorsian }}
-                                </div>
+                                    <Eye class="w-3.5 h-3.5" />
+                                </button>
                             </div>
                         </div>
                     </div>
 
                     <!-- Baris Tombol Aksi Simpan & Ajukan -->
                     <div
-                        class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+                        class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
                     >
                         <Button
                             type="button"
@@ -17923,7 +17960,7 @@ watch(
                             <span>Kembali ke Catatan Tim (Langkah 3)</span>
                         </Button>
 
-                        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                             <Button
                                 type="button"
                                 @click="simpanSebagaiDraft"
@@ -17937,7 +17974,7 @@ watch(
                                 type="button"
                                 @click="ajukanKeKeuangan"
                                 :disabled="isSubmitting"
-                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2"
+                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-7 h-11 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center gap-2 text-center"
                             >
                                 <Send class="h-4 w-4" />
                                 <span>Ajukan ke Keuangan</span>
@@ -17947,6 +17984,288 @@ watch(
                 </CardContent>
             </Card>
         </div>
+
+        <!-- ================================================================= -->
+        <!-- MODAL DETAIL INSTRUKSI & CATATAN KERJA TIM PRODUKSI               -->
+        <!-- ================================================================= -->
+        <Modal
+            :show="showDetailCatatanModal"
+            @close="showDetailCatatanModal = false"
+            max-width="5xl"
+        >
+            <div class="p-4 sm:p-6 space-y-4 max-h-[85vh] overflow-y-auto w-full min-w-0 max-w-full">
+                <!-- Modal Header -->
+                <div
+                    class="flex items-start justify-between gap-3 border-b border-slate-200 pb-3.5"
+                >
+                    <div class="space-y-1 min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <div
+                                class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"
+                            >
+                                <ClipboardList class="w-4 h-4" />
+                            </div>
+                            <h3 class="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                                Detail Instruksi & Catatan Kerja Tim Produksi
+                            </h3>
+                            <Badge
+                                variant="outline"
+                                class="bg-primary/5 text-primary border-primary/20 text-[10px] font-bold"
+                            >
+                                {{ props.activeWorkOrder?.nomor_wo || "Work Order" }}
+                            </Badge>
+                        </div>
+                        <p class="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                            Rincian instruksi operasional lengkap per menu, bahan baku, waktu eksekusi, standar perlakuan, dan kontrol mutu (QC/HACCP).
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showDetailCatatanModal = false"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
+                        title="Tutup Modal"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Tab Navigasi Tim di Modal: Persiapan | Pengolahan | Pemorsian -->
+                <div class="w-full overflow-x-auto no-scrollbar pb-0.5">
+                    <div
+                        class="inline-flex min-w-full items-center p-1 sm:p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 gap-1.5"
+                    >
+                        <!-- Tim Persiapan -->
+                        <button
+                            type="button"
+                            @click="modalActiveTimTab = 'persiapan'"
+                            :class="[
+                                'flex-1 shrink-0 py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
+                                modalActiveTimTab === 'persiapan'
+                                    ? 'bg-white text-amber-950 shadow-xs border border-amber-300 ring-2 ring-amber-500/20'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 border border-transparent',
+                            ]"
+                        >
+                            <Utensils class="w-4 h-4 text-amber-600 shrink-0" />
+                            <span class="font-black">Tim Persiapan</span>
+                            <span
+                                :class="[
+                                    'text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 border transition-colors',
+                                    modalActiveTimTab === 'persiapan'
+                                        ? 'bg-amber-500 text-white border-amber-600'
+                                        : 'bg-slate-200 text-slate-700 border-slate-300',
+                                ]"
+                            >
+                                {{ catatanTim.persiapan?.length || 0 }}
+                            </span>
+                        </button>
+
+                        <!-- Tim Pengolahan -->
+                        <button
+                            type="button"
+                            @click="modalActiveTimTab = 'pengolahan'"
+                            :class="[
+                                'flex-1 shrink-0 py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
+                                modalActiveTimTab === 'pengolahan'
+                                    ? 'bg-white text-blue-950 shadow-xs border border-blue-300 ring-2 ring-blue-500/20'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 border border-transparent',
+                            ]"
+                        >
+                            <UtensilsCrossed class="w-4 h-4 text-blue-600 shrink-0" />
+                            <span class="font-black">Tim Pengolahan</span>
+                            <span
+                                :class="[
+                                    'text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 border transition-colors',
+                                    modalActiveTimTab === 'pengolahan'
+                                        ? 'bg-blue-600 text-white border-blue-700'
+                                        : 'bg-slate-200 text-slate-700 border-slate-300',
+                                ]"
+                            >
+                                {{ catatanTim.pengolahan?.length || 0 }}
+                            </span>
+                        </button>
+
+                        <!-- Tim Pemorsian -->
+                        <button
+                            type="button"
+                            @click="modalActiveTimTab = 'pemorsian'"
+                            :class="[
+                                'flex-1 shrink-0 py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap',
+                                modalActiveTimTab === 'pemorsian'
+                                    ? 'bg-white text-purple-950 shadow-xs border border-purple-300 ring-2 ring-purple-500/20'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 border border-transparent',
+                            ]"
+                        >
+                            <ShoppingBag class="w-4 h-4 text-purple-600 shrink-0" />
+                            <span class="font-black">Tim Pemorsian</span>
+                            <span
+                                :class="[
+                                    'text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 border transition-colors',
+                                    modalActiveTimTab === 'pemorsian'
+                                        ? 'bg-purple-600 text-white border-purple-700'
+                                        : 'bg-slate-200 text-slate-700 border-slate-300',
+                                ]"
+                            >
+                                {{ catatanTim.pemorsian?.length || 0 }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Konten Tab Modal: Tim Persiapan -->
+                <div v-if="modalActiveTimTab === 'persiapan'" class="space-y-4">
+                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-amber-50/70 border-b border-amber-200/80 text-amber-950 text-[11px] uppercase tracking-wider font-black">
+                                <tr>
+                                    <th class="py-3 px-3 text-center w-12">No</th>
+                                    <th class="py-3 px-3 min-w-[180px]">Sub-Menu Masakan</th>
+                                    <th class="py-3 px-3 min-w-[180px]">Bahan Baku PO</th>
+                                    <th class="py-3 px-3 min-w-[110px] text-center">Kuantitas</th>
+                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
+                                    <th class="py-3 px-3 min-w-[260px]">Perlakuan & Standar Olah</th>
+                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (HACCP/QC)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr
+                                    v-for="(item, idx) in catatanTim.persiapan"
+                                    :key="item.id || idx"
+                                    class="hover:bg-amber-50/20 transition"
+                                >
+                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
+                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
+                                    <td class="py-3 px-3 font-bold text-amber-950 whitespace-normal break-words">{{ item.bahan_baku }}</td>
+                                    <td class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap">{{ item.kuantitas || `${item.jumlah || 0} ${item.satuan || ''}` }}</td>
+                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
+                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
+                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
+                                        </span>
+                                        <span v-else class="text-slate-400 italic">-</span>
+                                    </td>
+                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
+                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                </tr>
+                                <tr v-if="!catatanTim.persiapan || catatanTim.persiapan.length === 0">
+                                    <td colspan="7" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Persiapan.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="catatanTim.catatan_global?.persiapan" class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
+                        <strong>Catatan Global Tim Persiapan:</strong> {{ catatanTim.catatan_global.persiapan }}
+                    </div>
+                </div>
+
+                <!-- Konten Tab Modal: Tim Pengolahan -->
+                <div v-if="modalActiveTimTab === 'pengolahan'" class="space-y-4">
+                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-blue-50/70 border-b border-blue-200/80 text-blue-950 text-[11px] uppercase tracking-wider font-black">
+                                <tr>
+                                    <th class="py-3 px-3 text-center w-12">No</th>
+                                    <th class="py-3 px-3 min-w-[180px]">Sub-Menu Masakan</th>
+                                    <th class="py-3 px-3 min-w-[180px]">Bahan Baku PO</th>
+                                    <th class="py-3 px-3 min-w-[110px] text-center">Kuantitas</th>
+                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
+                                    <th class="py-3 px-3 min-w-[260px]">Perlakuan & Standar Olah</th>
+                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (HACCP/QC)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr
+                                    v-for="(item, idx) in catatanTim.pengolahan"
+                                    :key="item.id || idx"
+                                    class="hover:bg-blue-50/20 transition"
+                                >
+                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
+                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
+                                    <td class="py-3 px-3 font-bold text-blue-950 whitespace-normal break-words">{{ item.bahan_baku }}</td>
+                                    <td class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap">{{ item.kuantitas || `${item.jumlah || 0} ${item.satuan || ''}` }}</td>
+                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
+                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
+                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
+                                        </span>
+                                        <span v-else class="text-slate-400 italic">-</span>
+                                    </td>
+                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
+                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                </tr>
+                                <tr v-if="!catatanTim.pengolahan || catatanTim.pengolahan.length === 0">
+                                    <td colspan="7" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Pengolahan.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="catatanTim.catatan_global?.pengolahan" class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
+                        <strong>Catatan Global Tim Pengolahan:</strong> {{ catatanTim.catatan_global.pengolahan }}
+                    </div>
+                </div>
+
+                <!-- Konten Tab Modal: Tim Pemorsian -->
+                <div v-if="modalActiveTimTab === 'pemorsian'" class="space-y-4">
+                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-purple-50/70 border-b border-purple-200/80 text-purple-950 text-[11px] uppercase tracking-wider font-black">
+                                <tr>
+                                    <th class="py-3 px-3 text-center w-12">No</th>
+                                    <th class="py-3 px-3 min-w-[200px]">Nama Menu (Sub-Menu)</th>
+                                    <th class="py-3 px-3 min-w-[240px] text-center">Target Porsi / Kuantitas</th>
+                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
+                                    <th class="py-3 px-3 min-w-[260px]">Tata Letak Sekat & Standar Porsi</th>
+                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (Hygienitas / QC)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr
+                                    v-for="(item, idx) in catatanTim.pemorsian"
+                                    :key="item.id || idx"
+                                    class="hover:bg-purple-50/20 transition"
+                                >
+                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
+                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
+                                    <td class="py-3 px-3 text-center font-bold text-purple-950 whitespace-normal break-words text-[11px] leading-relaxed">
+                                        <div class="bg-purple-50 p-2 rounded-lg border border-purple-100">{{ item.kuantitas }}</div>
+                                    </td>
+                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
+                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
+                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
+                                        </span>
+                                        <span v-else class="text-slate-400 italic">-</span>
+                                    </td>
+                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
+                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                </tr>
+                                <tr v-if="!catatanTim.pemorsian || catatanTim.pemorsian.length === 0">
+                                    <td colspan="6" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Pemorsian.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="catatanTim.catatan_global?.pemorsian" class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 leading-relaxed">
+                        <strong>Catatan Global Tim Pemorsian:</strong> {{ catatanTim.catatan_global.pemorsian }}
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3.5 border-t border-slate-200">
+                    <Button
+                        type="button"
+                        @click="showDetailCatatanModal = false; handleSwitchSubTab('catatan_resep')"
+                        className="w-full sm:w-auto bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3.5 h-9 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                        <Edit3 class="w-3.5 h-3.5 text-primary" />
+                        <span>Edit Catatan di Langkah 3</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        @click="showDetailCatatanModal = false"
+                        className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-5 h-9 rounded-xl cursor-pointer"
+                    >
+                        Tutup
+                    </Button>
+                </div>
+            </div>
+        </Modal>
 
         <!-- ================================================================= -->
         <!-- MODAL DATASET RUJUKAN ANGKA KECUKUPAN GIZI (AKG) SATU KALI MBG   -->
@@ -19187,6 +19506,79 @@ watch(
                                 ? "Perbarui Catatan"
                                 : "Simpan Catatan"
                         }}</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL KONFIRMASI TINGGALKAN HALAMAN (PERUBAHAN BELUM DISIMPAN)            -->
+        <!-- ========================================================================= -->
+        <Modal
+            :show="showLeaveConfirmModal"
+            @close="handleCancelLeave"
+            max-width="md"
+        >
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Icon & Header -->
+                <div class="flex items-start gap-3.5">
+                    <div
+                        class="h-11 w-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs"
+                    >
+                        <AlertTriangle class="h-6 w-6 stroke-[2.2]" />
+                    </div>
+                    <div class="space-y-1">
+                        <h3 class="text-base font-black text-slate-900 leading-snug">
+                            Perubahan Belum Disimpan
+                        </h3>
+                        <p class="text-xs font-semibold text-slate-500">
+                            Konfirmasi Meninggalkan Halaman Rancang Menu
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Konten Penjelasan -->
+                <div class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 space-y-2 text-xs text-amber-950 leading-relaxed shadow-2xs">
+                    <p class="font-bold">
+                        Anda telah melakukan perubahan pada <strong>Rancang Menu MBG</strong> ini yang belum disimpan.
+                    </p>
+                    <p v-if="pendingNavigation?.type === 'reload'" class="text-slate-600 text-[11.5px]">
+                        Anda akan <strong>memuat ulang (refresh)</strong> halaman ini. Seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                    </p>
+                    <p v-else-if="pendingNavigation?.type === 'history_back'" class="text-slate-600 text-[11.5px]">
+                        Anda menekan tombol <strong>kembali (back)</strong> pada browser. Seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                    </p>
+                    <p v-else class="text-slate-600 text-[11.5px]">
+                        Jika Anda beralih ke menu lain, kembali, atau memuat ulang halaman sekarang, seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                    </p>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2">
+                    <Lightbulb class="h-4 w-4 text-amber-500 shrink-0" />
+                    <span>Anda dapat menyimpan pekerjaan Anda terlebih dahulu sebagai <strong>Draft</strong> sebelum berpindah halaman.</span>
+                </div>
+
+                <!-- Footer Aksi -->
+                <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="handleCancelLeave"
+                        class="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer text-center"
+                    >
+                        Tetap di Halaman Ini
+                    </button>
+                    <button
+                        type="button"
+                        @click="handleConfirmLeave"
+                        class="w-full sm:w-auto px-5 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition cursor-pointer text-center flex items-center justify-center gap-1.5"
+                    >
+                        <RotateCcw v-if="pendingNavigation?.type === 'reload'" class="h-3.5 w-3.5" />
+                        <ArrowLeft v-else-if="pendingNavigation?.type === 'history_back'" class="h-3.5 w-3.5" />
+                        <Trash2 v-else class="h-3.5 w-3.5" />
+
+                        <span v-if="pendingNavigation?.type === 'reload'">Ya, Muat Ulang Halaman</span>
+                        <span v-else-if="pendingNavigation?.type === 'history_back'">Ya, Kembali (Tinggalkan)</span>
+                        <span v-else>Ya, Tinggalkan Halaman</span>
                     </button>
                 </div>
             </div>
