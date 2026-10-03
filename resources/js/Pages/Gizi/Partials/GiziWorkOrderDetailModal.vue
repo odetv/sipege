@@ -664,6 +664,20 @@ const parsedCatatanTim = computed(() => {
     }
 });
 
+// Waktu Kegiatan Operasional
+const parsedJadwalOperasional = computed(() => {
+    const j =
+        props.workOrder?.jadwal_operasional ||
+        props.workOrder?.raw?.jadwal_operasional;
+    if (!j) return null;
+    if (typeof j === "object") return j;
+    try {
+        return JSON.parse(j);
+    } catch {
+        return null;
+    }
+});
+
 // Seluruh Jenis Alergi yang Aktif
 const determinedActiveAlergiTypes = computed(() => {
     const types = new Set();
@@ -1740,6 +1754,45 @@ function getSubMenuLabelForBahan(it) {
                             </div>
                             <div v-if="parsedCatatanTim.catatan_global?.pemorsian" class="p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-950">
                                 <strong>Catatan Tambahan (Global):</strong> {{ parsedCatatanTim.catatan_global.pemorsian }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Waktu Kegiatan Operasional SPPG -->
+                    <div
+                        v-if="parsedJadwalOperasional"
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-3.5 shadow-2xs"
+                    >
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <Clock class="h-4 w-4 text-indigo-600" />
+                                <h4 class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
+                                    Waktu Kegiatan Operasional
+                                </h4>
+                            </div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                6 Tahapan Kerja
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                            <div
+                                v-for="(keg, kKey) in {
+                                    persiapan: '1. Persiapan',
+                                    pengolahan: '2. Pengolahan',
+                                    pemorsian: '3. Pemorsian',
+                                    uji_organolaptik: '4. Uji Organolaptik',
+                                    distribusi: '5. Distribusi',
+                                    pencucian_ompreng: '6. Pencucian Ompreng'
+                                }"
+                                :key="kKey"
+                                class="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 text-center space-y-1"
+                            >
+                                <span class="text-[10px] font-bold text-slate-500 uppercase block truncate">
+                                    {{ keg }}
+                                </span>
+                                <div class="text-xs font-black text-indigo-900 font-mono">
+                                    {{ parsedJadwalOperasional[kKey]?.mulai || '--:--' }} s.d {{ parsedJadwalOperasional[kKey]?.selesai || '--:--' }}
+                                </div>
                             </div>
                         </div>
                     </div>

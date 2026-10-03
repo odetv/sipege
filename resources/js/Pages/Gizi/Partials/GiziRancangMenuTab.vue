@@ -622,7 +622,9 @@ function getInitialAvailableDate() {
 }
 
 const tanggalRencana = ref(new Date().toISOString().split("T")[0]);
-const currentDateConflict = computed(() => getTakenWoInfo(tanggalRencana.value));
+const currentDateConflict = computed(() =>
+    getTakenWoInfo(tanggalRencana.value),
+);
 
 const todayStr = computed(() => {
     const now = new Date();
@@ -651,8 +653,18 @@ const pickerCalendarYear = ref(new Date().getFullYear());
 const pickerCalendarMonth = ref(new Date().getMonth());
 
 const NAMA_BULAN_PICKER = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
 ];
 
 const pickerMonthLabel = computed(() => {
@@ -1438,8 +1450,7 @@ function handleGunakanContohFormula() {
                 bdd: Number(found.bdd) || fallbackBdd,
                 satuan:
                     found.satuan ||
-                    (found.nama &&
-                    found.nama.toLowerCase().includes("minyak")
+                    (found.nama && found.nama.toLowerCase().includes("minyak")
                         ? "L"
                         : "Kg"),
                 tkpi: found,
@@ -2136,8 +2147,7 @@ function selectTkpiItemForBlock(master, block) {
         kategori: master.kategori || "Lainnya",
         satuan: normalizeSatuan(
             master.satuan ||
-                (master.nama &&
-                master.nama.toLowerCase().includes("minyak")
+                (master.nama && master.nama.toLowerCase().includes("minyak")
                     ? "L"
                     : "Kg"),
         ),
@@ -2647,6 +2657,7 @@ function takeFormSnapshot() {
                 s5: (subMenuKomponen.value?.sub_menu_5 || "").trim(),
             },
             alergi: subMenuAlergi.value || {},
+            jadwal: jadwalOperasional.value || {},
             kelompok: (woKelompokList.value || []).map((k) => ({
                 id: k.id,
                 status: k.status_menerima !== false,
@@ -2724,7 +2735,7 @@ function installHistoryTrap() {
             window.history.pushState(
                 { rancangMenuTrap: true },
                 document.title,
-                window.location.href
+                window.location.href,
             );
             hasHistoryTrap = true;
         } catch (e) {}
@@ -2745,7 +2756,7 @@ function handlePopState(e) {
             window.history.pushState(
                 { rancangMenuTrap: true },
                 document.title,
-                window.location.href
+                window.location.href,
             );
         } catch (err) {}
 
@@ -2755,7 +2766,11 @@ function handlePopState(e) {
 }
 
 function handleKeyDown(e) {
-    if (isSubmitting.value || isNavigationConfirmed.value || !isFormDirty.value) {
+    if (
+        isSubmitting.value ||
+        isNavigationConfirmed.value ||
+        !isFormDirty.value
+    ) {
         return;
     }
 
@@ -2788,7 +2803,11 @@ function handleBeforeUnload(e) {
     // browser HANYA menampilkan dialog bawaan — kita tidak bisa menampilkan
     // modal custom selama event ini. Cukup set returnValue agar browser
     // menampilkan konfirmasinya sendiri.
-    if (isFormDirty.value && !isSubmitting.value && !isNavigationConfirmed.value) {
+    if (
+        isFormDirty.value &&
+        !isSubmitting.value &&
+        !isNavigationConfirmed.value
+    ) {
         e.preventDefault();
         e.returnValue = "";
         return "";
@@ -2903,6 +2922,145 @@ function clearError(field) {
     }
 }
 
+// ==========================================
+// Waktu Kegiatan Operasional SPPG (Step 1)
+// ==========================================
+const DEFAULT_JADWAL_OPERASIONAL = {
+    persiapan: {
+        nama: "Persiapan",
+        mulai: "19:00",
+        selesai: "03:00",
+        deskripsi:
+            "Pukul 19.00 s.d 03.00 • Persiapan bahan baku, sortasi & bumbu",
+    },
+    pengolahan: {
+        nama: "Pengolahan",
+        mulai: "02:00",
+        selesai: "10:00",
+        deskripsi:
+            "Pukul 02.00 s.d 10.00 • Pengolahan & pemasakan seluruh menu",
+    },
+    pemorsian: {
+        nama: "Pemorsian",
+        mulai: "04:00",
+        selesai: "12:00",
+        deskripsi: "Pukul 04.00 s.d 12.00 • Pengepakan & pemorsian ke ompreng",
+    },
+    uji_organolaptik: {
+        nama: "Uji Organolaptik",
+        mulai: "05:00",
+        selesai: "06:00",
+        deskripsi:
+            "Pukul 05.00 s.d 06.00 • Uji sensori rasa, aroma, tekstur & suhu",
+    },
+    distribusi: {
+        nama: "Distribusi",
+        mulai: "06:00",
+        selesai: "14:00",
+        deskripsi:
+            "Pukul 06.00 s.d 14.00 • Pengantaran makanan ke kelompok sasaran",
+    },
+    pencucian_ompreng: {
+        nama: "Pencucian Ompreng",
+        mulai: "12:00",
+        selesai: "20:00",
+        deskripsi:
+            "Pukul 12.00 s.d 20.00 • Penerimaan kembali & sanitasi ompreng",
+    },
+};
+
+const jadwalOperasionalList = {
+    persiapan: {
+        no: 1,
+        nama: "Persiapan",
+        defaultMulai: "19:00",
+        defaultSelesai: "03:00",
+        deskripsi:
+            "Pukul 19.00 s.d 03.00 • Persiapan bahan baku, sortasi & bumbu",
+    },
+    pengolahan: {
+        no: 2,
+        nama: "Pengolahan",
+        defaultMulai: "02:00",
+        defaultSelesai: "10:00",
+        deskripsi:
+            "Pukul 02.00 s.d 10.00 • Pengolahan & pemasakan seluruh menu",
+    },
+    pemorsian: {
+        no: 3,
+        nama: "Pemorsian",
+        defaultMulai: "04:00",
+        defaultSelesai: "12:00",
+        deskripsi: "Pukul 04.00 s.d 12.00 • Pengepakan & pemorsian ke ompreng",
+    },
+    uji_organolaptik: {
+        no: 4,
+        nama: "Uji Organolaptik",
+        defaultMulai: "05:00",
+        defaultSelesai: "06:00",
+        deskripsi:
+            "Pukul 05.00 s.d 06.00 • Uji sensori rasa, aroma, tekstur & suhu",
+    },
+    distribusi: {
+        no: 5,
+        nama: "Distribusi",
+        defaultMulai: "06:00",
+        defaultSelesai: "14:00",
+        deskripsi:
+            "Pukul 06.00 s.d 14.00 • Pengantaran makanan ke kelompok sasaran",
+    },
+    pencucian_ompreng: {
+        no: 6,
+        nama: "Pencucian Ompreng",
+        defaultMulai: "12:00",
+        defaultSelesai: "20:00",
+        deskripsi:
+            "Pukul 12.00 s.d 20.00 • Penerimaan kembali & sanitasi ompreng",
+    },
+};
+
+const EMPTY_JADWAL_OPERASIONAL = {
+    persiapan: { mulai: "", selesai: "" },
+    pengolahan: { mulai: "", selesai: "" },
+    pemorsian: { mulai: "", selesai: "" },
+    uji_organolaptik: { mulai: "", selesai: "" },
+    distribusi: { mulai: "", selesai: "" },
+    pencucian_ompreng: { mulai: "", selesai: "" },
+};
+
+const jadwalOperasional = ref(
+    JSON.parse(JSON.stringify(EMPTY_JADWAL_OPERASIONAL)),
+);
+
+const totalJadwalTerisi = computed(() => {
+    let count = 0;
+    Object.keys(jadwalOperasionalList).forEach((k) => {
+        const item = jadwalOperasional.value?.[k];
+        if (item?.mulai && item?.selesai) {
+            count++;
+        }
+    });
+    return count;
+});
+
+function resetJadwalOperasionalToEmpty() {
+    jadwalOperasional.value = JSON.parse(
+        JSON.stringify(EMPTY_JADWAL_OPERASIONAL),
+    );
+}
+
+function resetJadwalOperasionalToDefault() {
+    jadwalOperasional.value = JSON.parse(
+        JSON.stringify(DEFAULT_JADWAL_OPERASIONAL),
+    );
+    clearError("jadwal_operasional");
+    Object.keys(jadwalOperasionalList).forEach((k) => {
+        clearError("jadwal_" + k);
+        clearError("jadwal_" + k + "_mulai");
+        clearError("jadwal_" + k + "_selesai");
+    });
+}
+
 // Helper konversi otomatis tombol koma (,) menjadi titik (.) pada input desimal
 function handleDecimalKeydown(event) {
     if (event.key === "," || event.key === "Decimal") {
@@ -3003,8 +3161,10 @@ watch(buatMenuSubTab, (newVal, oldVal) => {
                 catatanTim.value.pemorsian.forEach((pRow) => {
                     const matchedMenu = menuOptionsList.value.find(
                         (m) =>
-                            (m.name || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase() ||
-                            (m.label || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase(),
+                            (m.name || "").trim().toLowerCase() ===
+                                (pRow.nama_menu || "").trim().toLowerCase() ||
+                            (m.label || "").trim().toLowerCase() ===
+                                (pRow.nama_menu || "").trim().toLowerCase(),
                     );
                     if (matchedMenu) {
                         pRow.isAlergi = matchedMenu.isAlergi || false;
@@ -3134,6 +3294,31 @@ function validateStep1() {
         if (zeroReceiving) {
             errs.kelompok = `Kelompok "${zeroReceiving.nama_kelompok}" berstatus Menerima tetapi memiliki 0 porsi. Wajib minimal 1 porsi atau tandai 'Tidak Menerima'.`;
         }
+    }
+
+    // Validasi Waktu Kegiatan Operasional (Wajib diisi seluruhnya)
+    let emptyJadwalFound = false;
+    Object.keys(jadwalOperasionalList).forEach((kKey) => {
+        const item = jadwalOperasional.value?.[kKey];
+        const isMulaiEmpty = !item || !item.mulai || !String(item.mulai).trim();
+        const isSelesaiEmpty = !item || !item.selesai || !String(item.selesai).trim();
+        if (isMulaiEmpty) {
+            errs["jadwal_" + kKey + "_mulai"] = "Jam mulai wajib diisi.";
+            emptyJadwalFound = true;
+        }
+        if (isSelesaiEmpty) {
+            errs["jadwal_" + kKey + "_selesai"] = "Jam selesai wajib diisi.";
+            emptyJadwalFound = true;
+        }
+        if (isMulaiEmpty || isSelesaiEmpty) {
+            errs["jadwal_" + kKey] =
+                `Waktu ${jadwalOperasionalList[kKey].nama} belum lengkap. Jam mulai & jam selesai wajib diisi.`;
+        }
+    });
+    if (emptyJadwalFound) {
+        errs.jadwal_operasional =
+            "Seluruh waktu kegiatan operasional wajib diisi lengkap (tidak boleh kosong). Anda dapat menggunakan tombol 'Gunakan Jam Default' untuk mengisi otomatis.";
+        triggerSubmitError(errs.jadwal_operasional);
     }
     validationErrors.value = errs;
     const isValid = Object.keys(errs).length === 0;
@@ -3323,7 +3508,12 @@ function focusInvalidField(tim, index, fieldName) {
         if (el) {
             el.focus();
             el.scrollIntoView({ behavior: "smooth", block: "center" });
-            el.classList.add("ring-2", "ring-rose-500", "border-rose-500", "bg-rose-50");
+            el.classList.add(
+                "ring-2",
+                "ring-rose-500",
+                "border-rose-500",
+                "bg-rose-50",
+            );
             setTimeout(() => {
                 el.classList.remove("ring-2", "ring-rose-500");
             }, 3000);
@@ -3362,12 +3552,20 @@ function validateStep3() {
             activeTimTab.value = t.key;
             nextTick(() => {
                 const addBtn =
-                    document.querySelector("button[title*='Tambah Baris Catatan']") ||
-                    document.querySelector("#catatan_tambah_baris");
+                    document.querySelector(
+                        "button[title*='Tambah Baris Catatan']",
+                    ) || document.querySelector("#catatan_tambah_baris");
                 if (addBtn) {
-                    addBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+                    addBtn.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                    });
                     addBtn.classList.add("ring-2", "ring-rose-400");
-                    setTimeout(() => addBtn.classList.remove("ring-2", "ring-rose-400"), 2500);
+                    setTimeout(
+                        () =>
+                            addBtn.classList.remove("ring-2", "ring-rose-400"),
+                        2500,
+                    );
                 }
             });
             return false;
@@ -3391,7 +3589,10 @@ function validateStep3() {
                 focusInvalidField(t.key, i, "keterangan");
                 return false;
             }
-            if (t.key === "pemorsian" && (!row.kuantitas || !row.kuantitas.trim())) {
+            if (
+                t.key === "pemorsian" &&
+                (!row.kuantitas || !row.kuantitas.trim())
+            ) {
                 focusInvalidField(t.key, i, "kuantitas");
                 return false;
             }
@@ -3423,8 +3624,10 @@ function handleLanjutStep3() {
         catatanTim.value.pemorsian.forEach((pRow) => {
             const matchedMenu = menuOptionsList.value.find(
                 (m) =>
-                    (m.name || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase() ||
-                    (m.label || "").trim().toLowerCase() === (pRow.nama_menu || "").trim().toLowerCase(),
+                    (m.name || "").trim().toLowerCase() ===
+                        (pRow.nama_menu || "").trim().toLowerCase() ||
+                    (m.label || "").trim().toLowerCase() ===
+                        (pRow.nama_menu || "").trim().toLowerCase(),
             );
             if (matchedMenu) {
                 pRow.isAlergi = matchedMenu.isAlergi || false;
@@ -3587,9 +3790,10 @@ const aggregatedBahanList = computed(() => {
     const map = new Map();
 
     rawItems.forEach((b) => {
-        const poName = (b.nama_po && b.nama_po.trim())
-            ? b.nama_po.trim()
-            : (b.nama || "").trim();
+        const poName =
+            b.nama_po && b.nama_po.trim()
+                ? b.nama_po.trim()
+                : (b.nama || "").trim();
         if (!poName) return;
 
         // Grouping key: bila item database pangan sama (tkpi_id / code / id) atau nama raw database sama dan satuan sama
@@ -3616,7 +3820,11 @@ const aggregatedBahanList = computed(() => {
             });
         } else {
             const existing = map.get(groupKey);
-            if (b.nama_po && b.nama_po.trim() && (!existing.nama_po || existing.nama_po === existing.nama_db)) {
+            if (
+                b.nama_po &&
+                b.nama_po.trim() &&
+                (!existing.nama_po || existing.nama_po === existing.nama_db)
+            ) {
                 existing.nama_po = b.nama_po.trim();
             }
             if (menuName && !existing.menus.includes(menuName)) {
@@ -3627,7 +3835,9 @@ const aggregatedBahanList = computed(() => {
     });
 
     return Array.from(map.values()).map((item) => {
-        const roundedJumlah = Number((Math.round(item.jumlah * 10) / 10).toFixed(1));
+        const roundedJumlah = Number(
+            (Math.round(item.jumlah * 10) / 10).toFixed(1),
+        );
         return {
             ...item,
             nama_menu: item.menus.join(", "),
@@ -3662,7 +3872,9 @@ function getAvailableBahanOptions(tim, currentItem) {
 
     return aggregatedBahanList.value.filter((b) => {
         const bName = (b.nama_po || "").trim().toLowerCase();
-        const currentName = (currentItem?.bahan_baku || "").trim().toLowerCase();
+        const currentName = (currentItem?.bahan_baku || "")
+            .trim()
+            .toLowerCase();
         return bName === currentName || !usedNames.has(bName);
     });
 }
@@ -3671,7 +3883,9 @@ function getAvailableBahanOptions(tim, currentItem) {
 function hasUnassignedBahan(tim) {
     const rows = catatanTim.value[tim] || [];
     const usedNames = new Set(
-        rows.map((r) => (r.bahan_baku || "").trim().toLowerCase()).filter(Boolean),
+        rows
+            .map((r) => (r.bahan_baku || "").trim().toLowerCase())
+            .filter(Boolean),
     );
     return aggregatedBahanList.value.some(
         (b) => !usedNames.has((b.nama_po || "").trim().toLowerCase()),
@@ -3835,7 +4049,8 @@ const affectedAlergiTypesInWO = computed(() => {
 
 // Helper untuk menyusun string Target Porsi pada Tim Pemorsian
 function getPemorsianTargetPorsi(m) {
-    if (!m) return `PK: ${totalPK.value || 0} porsi • PB: ${totalPB.value || 0} porsi`;
+    if (!m)
+        return `PK: ${totalPK.value || 0} porsi • PB: ${totalPB.value || 0} porsi`;
 
     // Ambil metadata dari menuOptionsList jika m hanya berupa objek baris catatan ({ nama_menu })
     const targetMenuName = (m.nama_menu || m.name || "").trim();
@@ -3861,11 +4076,18 @@ function getPemorsianTargetPorsi(m) {
     let subMenuKey = m.key || matchedOpt?.key;
     if (!subMenuKey) {
         // Coba deteksi sub_menu_key dari nama komponen
-        const smMap = ["sub_menu_1", "sub_menu_2", "sub_menu_3", "sub_menu_4", "sub_menu_5"];
+        const smMap = [
+            "sub_menu_1",
+            "sub_menu_2",
+            "sub_menu_3",
+            "sub_menu_4",
+            "sub_menu_5",
+        ];
         for (const k of smMap) {
             if (
                 subMenuKomponen.value[k] &&
-                subMenuKomponen.value[k].trim().toLowerCase() === targetMenuName.toLowerCase()
+                subMenuKomponen.value[k].trim().toLowerCase() ===
+                    targetMenuName.toLowerCase()
             ) {
                 subMenuKey = k;
                 break;
@@ -3881,7 +4103,9 @@ function getPemorsianTargetPorsi(m) {
         if (j && j.trim()) {
             const detail = findAlergiDetail(j.trim());
             if (detail && detail.total > 0) {
-                validAllergiesForThisSubMenu.push(`${detail.jenis_alergi}: ${detail.total}`);
+                validAllergiesForThisSubMenu.push(
+                    `${detail.jenis_alergi}: ${detail.total}`,
+                );
             } else {
                 validAllergiesForThisSubMenu.push(j.trim());
             }
@@ -3989,14 +4213,16 @@ function handleGunakanContohCatatan() {
         let perlakuan = "Timbang dan periksa kesegaran bahan";
         const kat = (b.kategori || "").toLowerCase();
         if (kat.includes("sayur")) {
-            perlakuan = "Cuci bersih air mengalir, kupas & potong rapi, tiriskan";
+            perlakuan =
+                "Cuci bersih air mengalir, kupas & potong rapi, tiriskan";
         } else if (
             kat.includes("hewani") ||
             kat.includes("daging") ||
             kat.includes("ikan") ||
             kat.includes("ayam")
         ) {
-            perlakuan = "Bersihkan, potong sesuai gramatur standar porsi, marinasi";
+            perlakuan =
+                "Bersihkan, potong sesuai gramatur standar porsi, marinasi";
         } else if (
             kat.includes("nabati") ||
             kat.includes("tahu") ||
@@ -4028,14 +4254,16 @@ function handleGunakanContohCatatan() {
         let perlakuan = "Masak sesuai metode dan SOP standar olah";
         const kat = (b.kategori || "").toLowerCase();
         if (kat.includes("sayur")) {
-            perlakuan = "Tumis/rebus cepat (blanching) agar tekstur renyah dan gizi terjaga";
+            perlakuan =
+                "Tumis/rebus cepat (blanching) agar tekstur renyah dan gizi terjaga";
         } else if (
             kat.includes("hewani") ||
             kat.includes("daging") ||
             kat.includes("ikan") ||
             kat.includes("ayam")
         ) {
-            perlakuan = "Goreng/panggang/ungkep hingga matang sempurna (suhu internal >75°C)";
+            perlakuan =
+                "Goreng/panggang/ungkep hingga matang sempurna (suhu internal >75°C)";
         } else if (
             kat.includes("nabati") ||
             kat.includes("tahu") ||
@@ -4043,9 +4271,11 @@ function handleGunakanContohCatatan() {
         ) {
             perlakuan = "Goreng atau bumbui hingga matang keemasan";
         } else if (kat.includes("pokok") || kat.includes("beras")) {
-            perlakuan = "Kukus/aron dengan rasio air tepat hingga pulen sempurna";
+            perlakuan =
+                "Kukus/aron dengan rasio air tepat hingga pulen sempurna";
         } else if (kat.includes("buah")) {
-            perlakuan = "Potong siap saji menjelang waktu distribusi (hindari browning)";
+            perlakuan =
+                "Potong siap saji menjelang waktu distribusi (hindari browning)";
         }
 
         return {
@@ -4058,7 +4288,8 @@ function handleGunakanContohCatatan() {
             waktu_mulai: "06:15",
             waktu_selesai: "07:45",
             perlakuan: perlakuan,
-            keterangan: "Cek suhu masakan dan uji organoleptik sebelum diserahkan ke pemorsian",
+            keterangan:
+                "Cek suhu masakan dan uji organoleptik sebelum diserahkan ke pemorsian",
         };
     });
 
@@ -4073,16 +4304,21 @@ function handleGunakanContohCatatan() {
             kuantitas: getPemorsianTargetPorsi(m),
             waktu_mulai: "07:45",
             waktu_selesai: "09:00",
-            perlakuan: "Porsikan ke wadah sekat kotak MBG sesuai standar gramatur AKG (PK & PB)",
-            keterangan: "Wajib menggunakan sarung tangan plastik higienis & masker penutup",
+            perlakuan:
+                "Porsikan ke wadah sekat kotak MBG sesuai standar gramatur AKG (PK & PB)",
+            keterangan:
+                "Wajib menggunakan sarung tangan plastik higienis & masker penutup",
         };
     });
 
     // Catatan tambahan (global) contoh
     catatanTim.value.catatan_global = {
-        persiapan: "Wajib sterilisasi pisau dan talenan sebelum digunakan. Pisahkan talenan sayur (hijau) dan daging (merah).",
-        pengolahan: "Pastikan api dan suhu penggorengan stabil. Simpan sampel makanan (food testing) 50g per menu untuk arsip quality control.",
-        pemorsian: "Lakukan penimbangan porsi sampel setiap 50 kotak. Pastikan kotak tertutup rapat sebelum dimasukkan ke thermal box pengantaran.",
+        persiapan:
+            "Wajib sterilisasi pisau dan talenan sebelum digunakan. Pisahkan talenan sayur (hijau) dan daging (merah).",
+        pengolahan:
+            "Pastikan api dan suhu penggorengan stabil. Simpan sampel makanan (food testing) 50g per menu untuk arsip quality control.",
+        pemorsian:
+            "Lakukan penimbangan porsi sampel setiap 50 kotak. Pastikan kotak tertutup rapat sebelum dimasukkan ke thermal box pengantaran.",
     };
 
     triggerSubmitSuccess(
@@ -4101,7 +4337,10 @@ function tambahBarisCatatan(tim = null) {
         const defaultMenu =
             menuOptionsList.value.length > 0
                 ? menuOptionsList.value[0]
-                : { name: namaMenuAktif.value || "Menu Utama", key: "sub_menu_1" };
+                : {
+                      name: namaMenuAktif.value || "Menu Utama",
+                      key: "sub_menu_1",
+                  };
 
         catatanTim.value.pemorsian.push({
             id: `cat_pemorsian_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -4118,7 +4357,10 @@ function tambahBarisCatatan(tim = null) {
     }
 
     // Untuk Persiapan & Pengolahan: cegah duplikasi bila semua bahan sudah dibuatkan catatan
-    if (["persiapan", "pengolahan"].includes(targetTim) && !hasUnassignedBahan(targetTim)) {
+    if (
+        ["persiapan", "pengolahan"].includes(targetTim) &&
+        !hasUnassignedBahan(targetTim)
+    ) {
         triggerSubmitError(
             `Semua bahan formula sudah dibuatkan catatan untuk Tim ${targetTim === "persiapan" ? "Persiapan" : "Pengolahan"}. Tidak ada bahan tersisa untuk ditambahkan.`,
         );
@@ -4130,11 +4372,15 @@ function tambahBarisCatatan(tim = null) {
 
     catatanTim.value[targetTim].push({
         id: `cat_${targetTim}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        nama_menu: chosenBahan ? chosenBahan.nama_menu : (namaMenuAktif.value || "Menu Utama"),
+        nama_menu: chosenBahan
+            ? chosenBahan.nama_menu
+            : namaMenuAktif.value || "Menu Utama",
         bahan_baku: chosenBahan ? chosenBahan.nama_po : "",
         jumlah: chosenBahan ? chosenBahan.jumlah : 0,
         satuan: chosenBahan ? chosenBahan.satuan : "Kg",
-        kuantitas: chosenBahan ? `${chosenBahan.jumlah} ${chosenBahan.satuan}` : "0 Kg",
+        kuantitas: chosenBahan
+            ? `${chosenBahan.jumlah} ${chosenBahan.satuan}`
+            : "0 Kg",
         waktu_mulai: "",
         waktu_selesai: "",
         perlakuan: "",
@@ -4726,6 +4972,11 @@ const grandTotalDraftMaster = computed(() => {
         (acc, item) => acc + item.subtotalMaster,
         0,
     );
+});
+
+// Rekapitulasi Total Gross per Satuan untuk Bahan PO
+const groupedUnitBahanCalculations = computed(() => {
+    return getGroupedUnitList(bahanCalculations.value);
 });
 const grandTotalAktual = computed(() => {
     return bahanCalculations.value.reduce(
@@ -5627,6 +5878,7 @@ function getPayload(statusStr, stepNumber = 3) {
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
         catatan: catatanTim.value,
+        jadwal_operasional: jadwalOperasional.value,
         items: (bahanCalculations.value || []).map((b) => ({
             sub_menu_key: b.sub_menu_key || null,
             sub_menu_block_id: b.sub_menu_block_id || null,
@@ -5850,6 +6102,23 @@ watch(
                 };
             }
 
+            // 0. Populate jadwal_operasional
+            if (
+                wo.jadwal_operasional &&
+                typeof wo.jadwal_operasional === "object"
+            ) {
+                const loaded = {};
+                Object.keys(EMPTY_JADWAL_OPERASIONAL).forEach((k) => {
+                    loaded[k] = {
+                        mulai: wo.jadwal_operasional[k]?.mulai || "",
+                        selesai: wo.jadwal_operasional[k]?.selesai || "",
+                    };
+                });
+                jadwalOperasional.value = loaded;
+            } else {
+                resetJadwalOperasionalToEmpty();
+            }
+
             // 1. Populate selectedBahanList with full TKPI nutritional lookup
             if (wo.items && wo.items.length > 0) {
                 selectedBahanList.value = wo.items.map((it) => {
@@ -6052,7 +6321,8 @@ watch(
                         {{ submitErrorMessage }}
                     </h4>
                     <p class="text-[11px] text-rose-700 mt-0.5">
-                        Harap periksa dan lengkapi kolom tabel yang ditandai merah sebelum melanjutkan.
+                        Harap periksa dan lengkapi kolom tabel yang ditandai
+                        merah sebelum melanjutkan.
                     </p>
                 </div>
             </div>
@@ -6070,7 +6340,9 @@ watch(
             class="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 print:hidden"
         >
             <!-- Top Mobile Bar: Tombol Kembali ke Daftar Menu & Badge Status (Tampil Khusus Mobile < lg) -->
-            <div class="flex items-center justify-between gap-2 lg:hidden pb-1 border-b border-slate-100">
+            <div
+                class="flex items-center justify-between gap-2 lg:hidden pb-1 border-b border-slate-100"
+            >
                 <button
                     type="button"
                     @click="handleNavigasiKembali"
@@ -6096,8 +6368,12 @@ watch(
                         title="Ada perubahan data yang belum disimpan ke database"
                     >
                         <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"
+                            ></span>
+                            <span
+                                class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"
+                            ></span>
                         </span>
                         <span>Belum Disimpan</span>
                     </div>
@@ -6105,7 +6381,9 @@ watch(
             </div>
 
             <!-- Steps Tabs: 2x2 Grid di HP / Layar Kecil (< sm), Rapi Menyamping di Layar Lebih Besar (>= sm) -->
-            <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
+            <div
+                class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 w-full lg:w-auto"
+            >
                 <button
                     v-for="sub in buatMenuSubTabs"
                     :key="sub.id"
@@ -6121,7 +6399,9 @@ watch(
                     <component :is="sub.icon" class="h-3.5 w-3.5 shrink-0" />
                     <!-- Teks Ringkas di Layar Kecil, Teks Lengkap di Layar Lebih Lebar -->
                     <span class="hidden sm:inline">{{ sub.label }}</span>
-                    <span class="sm:hidden truncate">{{ sub.shortLabel || sub.label }}</span>
+                    <span class="sm:hidden truncate">{{
+                        sub.shortLabel || sub.label
+                    }}</span>
                 </button>
             </div>
 
@@ -6142,8 +6422,12 @@ watch(
                         title="Ada perubahan data yang belum disimpan ke database"
                     >
                         <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"
+                            ></span>
+                            <span
+                                class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"
+                            ></span>
                         </span>
                         <span>Perubahan Belum Disimpan</span>
                     </div>
@@ -6431,8 +6715,16 @@ watch(
                                     <button
                                         type="button"
                                         @click="setTanggalHariIni"
-                                        :class="isTodayTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-primary hover:underline cursor-pointer'"
-                                        :title="isTodayTaken ? `Hari ini sudah ada WO: ${getTakenWoInfo(todayStr)?.nama_menu}` : 'Pilih Tanggal Hari Ini'"
+                                        :class="
+                                            isTodayTaken
+                                                ? 'text-slate-400 cursor-not-allowed line-through'
+                                                : 'text-primary hover:underline cursor-pointer'
+                                        "
+                                        :title="
+                                            isTodayTaken
+                                                ? `Hari ini sudah ada WO: ${getTakenWoInfo(todayStr)?.nama_menu}`
+                                                : 'Pilih Tanggal Hari Ini'
+                                        "
                                     >
                                         Hari Ini
                                     </button>
@@ -6440,8 +6732,16 @@ watch(
                                     <button
                                         type="button"
                                         @click="setTanggalBesok"
-                                        :class="isTomorrowTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-primary hover:underline cursor-pointer'"
-                                        :title="isTomorrowTaken ? `Besok sudah ada WO: ${getTakenWoInfo(tomorrowStr)?.nama_menu}` : 'Pilih Tanggal Besok'"
+                                        :class="
+                                            isTomorrowTaken
+                                                ? 'text-slate-400 cursor-not-allowed line-through'
+                                                : 'text-primary hover:underline cursor-pointer'
+                                        "
+                                        :title="
+                                            isTomorrowTaken
+                                                ? `Besok sudah ada WO: ${getTakenWoInfo(tomorrowStr)?.nama_menu}`
+                                                : 'Pilih Tanggal Besok'
+                                        "
                                     >
                                         Besok
                                     </button>
@@ -6454,22 +6754,40 @@ watch(
                                     @click="toggleDatePickerPopover"
                                     class="w-full flex items-center justify-between gap-2 text-xs font-bold rounded-xl border p-2.5 bg-white cursor-pointer transition select-none shadow-2xs hover:border-primary/60"
                                     :class="[
-                                        validationErrors.tanggalRencana || currentDateConflict
+                                        validationErrors.tanggalRencana ||
+                                        currentDateConflict
                                             ? 'border-rose-400 ring-2 ring-rose-200 bg-rose-50/20 text-rose-950'
-                                            : 'border-slate-300 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 text-slate-800'
+                                            : 'border-slate-300 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 text-slate-800',
                                     ]"
                                     title="Klik untuk membuka kalender pemilihan tanggal"
                                 >
-                                    <div class="flex items-center gap-2 truncate">
-                                        <Calendar class="h-4 w-4 shrink-0" :class="currentDateConflict ? 'text-rose-500' : 'text-primary'" />
+                                    <div
+                                        class="flex items-center gap-2 truncate"
+                                    >
+                                        <Calendar
+                                            class="h-4 w-4 shrink-0"
+                                            :class="
+                                                currentDateConflict
+                                                    ? 'text-rose-500'
+                                                    : 'text-primary'
+                                            "
+                                        />
                                         <span class="font-extrabold truncate">
-                                            {{ formatTanggalIndo(tanggalRencana) }}
+                                            {{
+                                                formatTanggalIndo(
+                                                    tanggalRencana,
+                                                )
+                                            }}
                                         </span>
-                                        <span class="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                                        <span
+                                            class="text-[10px] text-slate-400 font-mono hidden sm:inline"
+                                        >
                                             ({{ tanggalRencana }})
                                         </span>
                                     </div>
-                                    <div class="flex items-center gap-1.5 shrink-0">
+                                    <div
+                                        class="flex items-center gap-1.5 shrink-0"
+                                    >
                                         <span
                                             v-if="currentDateConflict"
                                             class="text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300"
@@ -6482,7 +6800,14 @@ watch(
                                         >
                                             Tersedia
                                         </span>
-                                        <ChevronDown class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="showDatePickerPopover ? 'rotate-180 text-primary' : ''" />
+                                        <ChevronDown
+                                            class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200"
+                                            :class="
+                                                showDatePickerPopover
+                                                    ? 'rotate-180 text-primary'
+                                                    : ''
+                                            "
+                                        />
                                     </div>
                                 </div>
 
@@ -6502,7 +6827,9 @@ watch(
                                     class="absolute z-50 top-full left-0 mt-2 w-[320px] sm:w-[350px] bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
                                 >
                                     <!-- Header Bulan & Navigasi -->
-                                    <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                                    <div
+                                        class="flex items-center justify-between pb-2 border-b border-slate-100"
+                                    >
                                         <button
                                             type="button"
                                             @click.stop="prevPickerMonth"
@@ -6511,7 +6838,9 @@ watch(
                                         >
                                             <ChevronLeft class="h-4 w-4" />
                                         </button>
-                                        <div class="text-xs font-black text-slate-800 tracking-wide">
+                                        <div
+                                            class="text-xs font-black text-slate-800 tracking-wide"
+                                        >
                                             {{ pickerMonthLabel }}
                                         </div>
                                         <button
@@ -6525,25 +6854,46 @@ watch(
                                     </div>
 
                                     <!-- Nama Hari (Sen - Min) -->
-                                    <div class="grid grid-cols-7 gap-1 text-center text-[10.5px] font-bold text-slate-500 uppercase">
+                                    <div
+                                        class="grid grid-cols-7 gap-1 text-center text-[10.5px] font-bold text-slate-500 uppercase"
+                                    >
                                         <span class="py-1">Sen</span>
                                         <span class="py-1">Sel</span>
                                         <span class="py-1">Rab</span>
                                         <span class="py-1">Kam</span>
                                         <span class="py-1">Jum</span>
-                                        <span class="py-1 text-amber-600">Sab</span>
-                                        <span class="py-1 text-rose-600">Min</span>
+                                        <span class="py-1 text-amber-600"
+                                            >Sab</span
+                                        >
+                                        <span class="py-1 text-rose-600"
+                                            >Min</span
+                                        >
                                     </div>
 
                                     <!-- Grid Tanggal -->
-                                    <div class="grid grid-cols-7 gap-1 text-center">
+                                    <div
+                                        class="grid grid-cols-7 gap-1 text-center"
+                                    >
                                         <button
-                                            v-for="(day, dIdx) in pickerCalendarDays"
-                                            :key="'picker-day-' + dIdx + '-' + day.dateStr"
+                                            v-for="(
+                                                day, dIdx
+                                            ) in pickerCalendarDays"
+                                            :key="
+                                                'picker-day-' +
+                                                dIdx +
+                                                '-' +
+                                                day.dateStr
+                                            "
                                             type="button"
-                                            @click.stop="handleSelectPickerDate(day)"
+                                            @click.stop="
+                                                handleSelectPickerDate(day)
+                                            "
                                             :disabled="day.isTaken"
-                                            :title="day.isTaken ? `SUDAH ADA WO: ${day.takenInfo.nama_menu} (${day.takenInfo.nomor_wo} - Status: ${day.takenInfo.status})` : `Pilih tanggal ${day.dateStr}`"
+                                            :title="
+                                                day.isTaken
+                                                    ? `SUDAH ADA WO: ${day.takenInfo.nama_menu} (${day.takenInfo.nomor_wo} - Status: ${day.takenInfo.status})`
+                                                    : `Pilih tanggal ${day.dateStr}`
+                                            "
                                             class="h-9 relative rounded-xl text-xs font-bold transition flex flex-col items-center justify-center select-none"
                                             :class="[
                                                 day.isTaken
@@ -6554,10 +6904,16 @@ watch(
                                                         ? 'border border-primary text-primary hover:bg-primary/10 cursor-pointer'
                                                         : day.isCurrentMonth
                                                           ? 'text-slate-800 hover:bg-slate-100 cursor-pointer'
-                                                          : 'text-slate-300 hover:bg-slate-50 cursor-pointer'
+                                                          : 'text-slate-300 hover:bg-slate-50 cursor-pointer',
                                             ]"
                                         >
-                                            <span :class="day.isTaken ? 'line-through text-rose-500 text-[11px]' : ''">
+                                            <span
+                                                :class="
+                                                    day.isTaken
+                                                        ? 'line-through text-rose-500 text-[11px]'
+                                                        : ''
+                                                "
+                                            >
                                                 {{ day.dayNumber }}
                                             </span>
 
@@ -6570,30 +6926,55 @@ watch(
                                             </span>
                                             <!-- Dot jika hari ini dan belum dipilih -->
                                             <span
-                                                v-else-if="day.isToday && !day.isSelected"
+                                                v-else-if="
+                                                    day.isToday &&
+                                                    !day.isSelected
+                                                "
                                                 class="h-1 w-1 rounded-full bg-primary mt-0.5"
                                             ></span>
                                         </button>
                                     </div>
 
                                     <!-- Legenda & Keterangan Popover -->
-                                    <div class="pt-2.5 border-t border-slate-100 space-y-2">
-                                        <div class="flex items-center justify-between text-[10px] text-slate-500 font-semibold px-0.5">
-                                            <div class="flex items-center gap-1.5">
-                                                <span class="h-2.5 w-2.5 rounded bg-rose-100 border border-rose-400"></span>
-                                                <span>Sudah Ada WO (Terkunci)</span>
+                                    <div
+                                        class="pt-2.5 border-t border-slate-100 space-y-2"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between text-[10px] text-slate-500 font-semibold px-0.5"
+                                        >
+                                            <div
+                                                class="flex items-center gap-1.5"
+                                            >
+                                                <span
+                                                    class="h-2.5 w-2.5 rounded bg-rose-100 border border-rose-400"
+                                                ></span>
+                                                <span
+                                                    >Sudah Ada WO
+                                                    (Terkunci)</span
+                                                >
                                             </div>
-                                            <div class="flex items-center gap-1.5">
-                                                <span class="h-2.5 w-2.5 rounded bg-primary"></span>
+                                            <div
+                                                class="flex items-center gap-1.5"
+                                            >
+                                                <span
+                                                    class="h-2.5 w-2.5 rounded bg-primary"
+                                                ></span>
                                                 <span>Terpilih</span>
                                             </div>
-                                            <div class="flex items-center gap-1.5">
-                                                <span class="h-2.5 w-2.5 rounded bg-white border border-slate-300"></span>
+                                            <div
+                                                class="flex items-center gap-1.5"
+                                            >
+                                                <span
+                                                    class="h-2.5 w-2.5 rounded bg-white border border-slate-300"
+                                                ></span>
                                                 <span>Tersedia</span>
                                             </div>
                                         </div>
-                                        <p class="text-[9.5px] text-slate-400 leading-tight">
-                                            * 1 tanggal hanya diperbolehkan 1 Work Order (termasuk status Draft).
+                                        <p
+                                            class="text-[9.5px] text-slate-400 leading-tight"
+                                        >
+                                            * 1 tanggal hanya diperbolehkan 1
+                                            Work Order (termasuk status Draft).
                                         </p>
                                     </div>
                                 </div>
@@ -6604,31 +6985,77 @@ watch(
                                 v-if="currentDateConflict"
                                 class="p-2.5 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 space-y-1 mt-1.5 shadow-2xs"
                             >
-                                <div class="font-extrabold flex items-center gap-1.5 text-rose-900">
-                                    <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
-                                    <span>Tanggal Ini Sudah Memiliki Work Order!</span>
+                                <div
+                                    class="font-extrabold flex items-center gap-1.5 text-rose-900"
+                                >
+                                    <AlertTriangle
+                                        class="h-4 w-4 text-rose-600 shrink-0"
+                                    />
+                                    <span
+                                        >Tanggal Ini Sudah Memiliki Work
+                                        Order!</span
+                                    >
                                 </div>
-                                <p class="text-[11px] leading-relaxed text-rose-700">
-                                    Tanggal <strong>{{ formatTanggalIndo(tanggalRencana) }}</strong> sudah digunakan untuk menu <strong>"{{ currentDateConflict.nama_menu }}"</strong> (Nomor: {{ currentDateConflict.nomor_wo }} • Status: <span class="uppercase font-bold">{{ currentDateConflict.status }}</span>). <strong>Hanya boleh 1 Work Order per tanggal (termasuk status Draft).</strong> Silakan pilih tanggal lain yang masih tersedia.
+                                <p
+                                    class="text-[11px] leading-relaxed text-rose-700"
+                                >
+                                    Tanggal
+                                    <strong>{{
+                                        formatTanggalIndo(tanggalRencana)
+                                    }}</strong>
+                                    sudah digunakan untuk menu
+                                    <strong
+                                        >"{{
+                                            currentDateConflict.nama_menu
+                                        }}"</strong
+                                    >
+                                    (Nomor: {{ currentDateConflict.nomor_wo }} •
+                                    Status:
+                                    <span class="uppercase font-bold">{{
+                                        currentDateConflict.status
+                                    }}</span
+                                    >).
+                                    <strong
+                                        >Hanya boleh 1 Work Order per tanggal
+                                        (termasuk status Draft).</strong
+                                    >
+                                    Silakan pilih tanggal lain yang masih
+                                    tersedia.
                                 </p>
                             </div>
 
                             <!-- Status Hijau Jika Tanggal Bersih / Tersedia -->
                             <div
-                                v-else-if="tanggalRencana && !validationErrors.tanggalRencana"
+                                v-else-if="
+                                    tanggalRencana &&
+                                    !validationErrors.tanggalRencana
+                                "
                                 class="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold bg-emerald-50/80 border border-emerald-200 px-2.5 py-1.5 rounded-lg mt-1.5"
                             >
-                                <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                                <span>Tanggal {{ formatTanggalIndo(tanggalRencana) }} tersedia (belum ada Work Order).</span>
+                                <CheckCircle2
+                                    class="h-3.5 w-3.5 text-emerald-600 shrink-0"
+                                />
+                                <span
+                                    >Tanggal
+                                    {{
+                                        formatTanggalIndo(tanggalRencana)
+                                    }}
+                                    tersedia (belum ada Work Order).</span
+                                >
                             </div>
 
                             <!-- Error Message jika ada validation error lain -->
                             <p
-                                v-if="validationErrors.tanggalRencana && !currentDateConflict"
+                                v-if="
+                                    validationErrors.tanggalRencana &&
+                                    !currentDateConflict
+                                "
                                 class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1"
                             >
                                 <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                <span>{{ validationErrors.tanggalRencana }}</span>
+                                <span>{{
+                                    validationErrors.tanggalRencana
+                                }}</span>
                             </p>
                         </div>
 
@@ -6652,9 +7079,7 @@ watch(
                                     <Sparkles
                                         class="h-3 w-3 shrink-0 text-amber-500"
                                     />
-                                    <span class="truncate"
-                                        >Gunakan Contoh</span
-                                    >
+                                    <span class="truncate">Gunakan Contoh</span>
                                 </button>
                             </div>
                             <input
@@ -6766,27 +7191,52 @@ watch(
                                     "
                                 >
                                     <!-- Bagian Kiri/Atas: Sub Menu & Menu & Alergi -->
-                                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] min-w-0">
-                                        <span class="font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-[10px] shrink-0">
+                                    <div
+                                        class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] min-w-0"
+                                    >
+                                        <span
+                                            class="font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-[10px] shrink-0"
+                                        >
                                             {{ al.subLabel }}
                                         </span>
-                                        <span class="font-extrabold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none">
+                                        <span
+                                            class="font-extrabold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none"
+                                        >
                                             "{{ al.menuName }}"
                                         </span>
-                                        <span class="text-slate-400 font-bold shrink-0">➔</span>
-                                        <span class="font-extrabold text-rose-700 bg-rose-100/70 border border-rose-200 px-2 py-0.5 rounded-md text-[10.5px] shrink-0">
-                                            {{ formatAllergenDisplay(al.allergen) }} ({{ al.totalPm }} PM)
+                                        <span
+                                            class="text-slate-400 font-bold shrink-0"
+                                            >➔</span
+                                        >
+                                        <span
+                                            class="font-extrabold text-rose-700 bg-rose-100/70 border border-rose-200 px-2 py-0.5 rounded-md text-[10.5px] shrink-0"
+                                        >
+                                            {{
+                                                formatAllergenDisplay(
+                                                    al.allergen,
+                                                )
+                                            }}
+                                            ({{ al.totalPm }} PM)
                                         </span>
                                     </div>
 
                                     <!-- Bagian Kanan/Bawah: Menu Pengganti -->
-                                    <div class="flex items-center justify-end shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                                    <div
+                                        class="flex items-center justify-end shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-100"
+                                    >
                                         <span
                                             v-if="al.hasReplacement"
                                             class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-emerald-800 font-extrabold text-[10.5px] bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 shadow-2xs"
                                         >
-                                            <Check class="h-3 w-3 text-emerald-600 shrink-0" />
-                                            <span>Pengganti: <strong>{{ al.replacementName }}</strong></span>
+                                            <Check
+                                                class="h-3 w-3 text-emerald-600 shrink-0"
+                                            />
+                                            <span
+                                                >Pengganti:
+                                                <strong>{{
+                                                    al.replacementName
+                                                }}</strong></span
+                                            >
                                         </span>
                                         <button
                                             v-else
@@ -6800,7 +7250,9 @@ watch(
                                             class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-rose-700 hover:text-white font-extrabold text-[11px] bg-white hover:bg-rose-600 px-3 py-1.5 rounded-lg border border-rose-300 hover:border-rose-600 shadow-2xs cursor-pointer transition-colors"
                                             title="Tambahkan menu pengganti sekarang"
                                         >
-                                            <Plus class="h-3.5 w-3.5 shrink-0" />
+                                            <Plus
+                                                class="h-3.5 w-3.5 shrink-0"
+                                            />
                                             <span>+ Menu Pengganti</span>
                                         </button>
                                     </div>
@@ -8183,6 +8635,262 @@ watch(
                         </div>
                     </div>
 
+                    <!-- Waktu Kegiatan Operasional SPPG -->
+                    <div
+                        id="section-jadwal-operasional"
+                        class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 space-y-4"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs"
+                                >
+                                    <Clock class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4
+                                            class="text-xs sm:text-sm font-black text-slate-900"
+                                        >
+                                            Waktu Kegiatan Operasional
+                                        </h4>
+                                        <span
+                                            class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200"
+                                        >
+                                            Wajib Diisi
+                                        </span>
+                                    </div>
+                                    <p
+                                        class="text-[11px] text-slate-500 mt-0.5"
+                                    >
+                                        Tentukan jam pelaksanaan 6 tahapan operasional. Seluruh tahapan wajib diisi sebelum lanjut.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <!-- Status Badge Real-time -->
+                                <span
+                                    v-if="totalJadwalTerisi === 6"
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                >
+                                    <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600" />
+                                    <span>Terisi Lengkap (6/6)</span>
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                                >
+                                    <AlertTriangle class="h-3.5 w-3.5 text-amber-600" />
+                                    <span>{{ totalJadwalTerisi }}/6 Terisi</span>
+                                </span>
+
+                                <!-- Tombol Set Jam Default -->
+                                <button
+                                    type="button"
+                                    @click="resetJadwalOperasionalToDefault"
+                                    class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                    title="Isi seluruh jam kegiatan dengan jadwal standar operasional secara otomatis"
+                                >
+                                    <Sparkles class="h-3.5 w-3.5 text-amber-500" />
+                                    <span>Gunakan Jam Default</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Grid 6 Kegiatan Operasional -->
+                        <div
+                            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5"
+                        >
+                            <div
+                                v-for="(
+                                    kegiatan, kKey
+                                ) in jadwalOperasionalList"
+                                :key="kKey"
+                                class="p-3.5 rounded-xl border transition-all duration-200"
+                                :class="[
+                                    (validationErrors['jadwal_' + kKey] || validationErrors['jadwal_' + kKey + '_mulai'] || validationErrors['jadwal_' + kKey + '_selesai'])
+                                        ? 'border-rose-400 bg-rose-50/20 ring-1 ring-rose-300'
+                                        : (jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai)
+                                            ? 'border-emerald-200/80 bg-white hover:bg-slate-50/60'
+                                            : 'border-slate-200/90 bg-slate-50/60 hover:bg-slate-50/90',
+                                ]"
+                            >
+                                <div
+                                    class="flex items-center justify-between mb-1.5"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span
+                                            class="h-5 w-5 rounded-lg text-[10.5px] font-black flex items-center justify-center shrink-0"
+                                            :class="[
+                                                (jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai)
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : 'bg-indigo-100/90 text-indigo-700'
+                                            ]"
+                                        >
+                                            {{ kegiatan.no }}
+                                        </span>
+                                        <span
+                                            class="text-xs font-black text-slate-800"
+                                        >
+                                            {{ kegiatan.nama }}
+                                        </span>
+                                    </div>
+                                    <span
+                                        v-if="jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai"
+                                        class="text-[10px] font-bold font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 flex items-center gap-1"
+                                    >
+                                        <Check class="h-2.5 w-2.5 text-emerald-600" />
+                                        {{ jadwalOperasional[kKey].mulai }} s.d {{ jadwalOperasional[kKey].selesai }}
+                                    </span>
+                                    <span
+                                        v-else-if="validationErrors['jadwal_' + kKey] || validationErrors['jadwal_' + kKey + '_mulai'] || validationErrors['jadwal_' + kKey + '_selesai']"
+                                        class="text-[10px] font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/70 flex items-center gap-1"
+                                    >
+                                        <AlertCircle class="h-2.5 w-2.5 text-rose-600" />
+                                        Wajib Diisi
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
+                                    >
+                                        --:-- s.d --:--
+                                    </span>
+                                </div>
+
+                                <p
+                                    class="text-[10px] text-slate-500 leading-tight mb-2.5"
+                                >
+                                    {{ kegiatan.deskripsi }}
+                                </p>
+
+                                <div class="flex items-start gap-2">
+                                    <!-- Jam Mulai -->
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label
+                                                class="block text-[9.5px] font-bold text-slate-600 uppercase tracking-wider"
+                                            >
+                                                Jam Mulai
+                                                <span class="text-rose-500">*</span>
+                                            </label>
+                                            <span
+                                                v-if="validationErrors['jadwal_' + kKey + '_mulai'] || (!jadwalOperasional[kKey]?.mulai && validationErrors.jadwal_operasional)"
+                                                class="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200"
+                                            >
+                                                Wajib
+                                            </span>
+                                        </div>
+                                        <input
+                                            :id="'input-jadwal-' + kKey + '-mulai'"
+                                            type="time"
+                                            v-model="
+                                                jadwalOperasional[kKey].mulai
+                                            "
+                                            @input="
+                                                clearError('jadwal_' + kKey + '_mulai');
+                                                clearError('jadwal_' + kKey);
+                                                clearError(
+                                                    'jadwal_operasional',
+                                                );
+                                            "
+                                            required
+                                            :class="[
+                                                'w-full text-xs font-bold rounded-lg border p-2 transition-colors shadow-2xs',
+                                                (validationErrors['jadwal_' + kKey + '_mulai'] || (!jadwalOperasional[kKey]?.mulai && validationErrors.jadwal_operasional))
+                                                    ? 'border-rose-400 bg-rose-50/40 text-rose-950 ring-2 ring-rose-200 focus:border-rose-500 focus:ring-rose-400'
+                                                    : 'border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="validationErrors['jadwal_' + kKey + '_mulai'] || (!jadwalOperasional[kKey]?.mulai && validationErrors.jadwal_operasional)"
+                                            class="text-[9.5px] text-rose-600 font-bold mt-1 flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle class="h-2.5 w-2.5 shrink-0" />
+                                            <span>Jam mulai wajib diisi</span>
+                                        </p>
+                                    </div>
+
+                                    <span
+                                        class="text-xs font-bold text-slate-400 mt-6 shrink-0"
+                                    >
+                                        s.d
+                                    </span>
+
+                                    <!-- Jam Selesai -->
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label
+                                                class="block text-[9.5px] font-bold text-slate-600 uppercase tracking-wider"
+                                            >
+                                                Jam Selesai
+                                                <span class="text-rose-500">*</span>
+                                            </label>
+                                            <span
+                                                v-if="validationErrors['jadwal_' + kKey + '_selesai'] || (!jadwalOperasional[kKey]?.selesai && validationErrors.jadwal_operasional)"
+                                                class="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200"
+                                            >
+                                                Wajib
+                                            </span>
+                                        </div>
+                                        <input
+                                            :id="'input-jadwal-' + kKey + '-selesai'"
+                                            type="time"
+                                            v-model="
+                                                jadwalOperasional[kKey].selesai
+                                            "
+                                            @input="
+                                                clearError('jadwal_' + kKey + '_selesai');
+                                                clearError('jadwal_' + kKey);
+                                                clearError(
+                                                    'jadwal_operasional',
+                                                );
+                                            "
+                                            required
+                                            :class="[
+                                                'w-full text-xs font-bold rounded-lg border p-2 transition-colors shadow-2xs',
+                                                (validationErrors['jadwal_' + kKey + '_selesai'] || (!jadwalOperasional[kKey]?.selesai && validationErrors.jadwal_operasional))
+                                                    ? 'border-rose-400 bg-rose-50/40 text-rose-950 ring-2 ring-rose-200 focus:border-rose-500 focus:ring-rose-400'
+                                                    : 'border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
+                                            ]"
+                                        />
+                                        <p
+                                            v-if="validationErrors['jadwal_' + kKey + '_selesai'] || (!jadwalOperasional[kKey]?.selesai && validationErrors.jadwal_operasional)"
+                                            class="text-[9.5px] text-rose-600 font-bold mt-1 flex items-center gap-0.5"
+                                        >
+                                            <AlertCircle class="h-2.5 w-2.5 shrink-0" />
+                                            <span>Jam selesai wajib diisi</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alert Error Global Jadwal jika ada -->
+                        <div
+                            v-if="validationErrors.jadwal_operasional"
+                            class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        >
+                            <div class="flex items-center gap-2">
+                                <AlertCircle
+                                    class="h-4 w-4 shrink-0 text-rose-600"
+                                />
+                                <span>{{
+                                    validationErrors.jadwal_operasional
+                                }}</span>
+                            </div>
+                            <button
+                                type="button"
+                                @click="resetJadwalOperasionalToDefault"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-rose-100 text-xs font-extrabold text-indigo-700 border border-indigo-200 rounded-lg shrink-0 cursor-pointer shadow-2xs"
+                            >
+                                <Sparkles class="h-3 w-3 text-amber-500" />
+                                <span>Klik untuk Isi Jam Default Otomatis</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Ringkasan Kuota PM Fix Berdasarkan Tanggal Work Order -->
                     <div class="space-y-3 pt-4 border-t border-slate-200">
                         <div class="flex items-center justify-between">
@@ -8748,7 +9456,9 @@ watch(
                             Pastikan tanggal, nama menu, dan status penerima
                             sasaran sudah sesuai sebelum melanjutkan.
                         </div>
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                        <div
+                            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
+                        >
                             <Button
                                 type="button"
                                 @click="simpanDraftStep1"
@@ -9178,9 +9888,7 @@ watch(
                             title="Gunakan Contoh"
                         >
                             <Sparkles class="h-3 w-3 shrink-0 text-amber-500" />
-                            <span class="truncate"
-                                >Gunakan Contoh</span
-                            >
+                            <span class="truncate">Gunakan Contoh</span>
                         </button>
                     </div>
                 </CardHeader>
@@ -9189,13 +9897,22 @@ watch(
                     <div
                         class="rounded-xl border border-slate-200 bg-white p-3 sm:p-3.5 text-xs space-y-2.5 shadow-2xs"
                     >
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-                            <div class="flex items-center justify-between gap-2 w-full md:w-auto">
+                        <div
+                            class="flex flex-col md:flex-row md:items-center justify-between gap-2.5"
+                        >
+                            <div
+                                class="flex items-center justify-between gap-2 w-full md:w-auto"
+                            >
                                 <span
                                     class="font-bold text-slate-800 flex items-center gap-1.5 text-xs"
                                 >
-                                    <HelpCircle class="h-4 w-4 text-primary shrink-0" />
-                                    <span>Panduan Rumus Perhitungan Bahan Mentah</span>
+                                    <HelpCircle
+                                        class="h-4 w-4 text-primary shrink-0"
+                                    />
+                                    <span
+                                        >Panduan Rumus Perhitungan Bahan
+                                        Mentah</span
+                                    >
                                 </span>
                                 <button
                                     type="button"
@@ -9209,12 +9926,16 @@ watch(
                                     }}
                                 </button>
                             </div>
-                            <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto"
+                            >
                                 <div
                                     class="flex items-center justify-between sm:justify-start gap-1.5 text-[11px] text-slate-500 font-medium"
                                 >
                                     <div class="flex items-center gap-1.5">
-                                        <span class="font-bold text-slate-600">Database:</span>
+                                        <span class="font-bold text-slate-600"
+                                            >Database:</span
+                                        >
                                         <span
                                             v-if="selectedBahanList.length > 0"
                                             class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold inline-flex items-center gap-1"
@@ -9235,13 +9956,10 @@ watch(
                                     <button
                                         type="button"
                                         @click="
-                                            selectedBahanList.length ===
-                                                0 &&
+                                            selectedBahanList.length === 0 &&
                                             emit('update-source', 'fta')
                                         "
-                                        :disabled="
-                                            selectedBahanList.length > 0
-                                        "
+                                        :disabled="selectedBahanList.length > 0"
                                         class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
                                         :class="[
                                             selectedSource === 'fta'
@@ -9257,13 +9975,10 @@ watch(
                                     <button
                                         type="button"
                                         @click="
-                                            selectedBahanList.length ===
-                                                0 &&
+                                            selectedBahanList.length === 0 &&
                                             emit('update-source', 'csv')
                                         "
-                                        :disabled="
-                                            selectedBahanList.length > 0
-                                        "
+                                        :disabled="selectedBahanList.length > 0"
                                         class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
                                         :class="[
                                             selectedSource === 'csv'
@@ -9279,16 +9994,10 @@ watch(
                                     <button
                                         type="button"
                                         @click="
-                                            selectedBahanList.length ===
-                                                0 &&
-                                            emit(
-                                                'update-source',
-                                                'tkpi2020',
-                                            )
+                                            selectedBahanList.length === 0 &&
+                                            emit('update-source', 'tkpi2020')
                                         "
-                                        :disabled="
-                                            selectedBahanList.length > 0
-                                        "
+                                        :disabled="selectedBahanList.length > 0"
                                         class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
                                         :class="[
                                             selectedSource === 'tkpi2020' ||
@@ -9305,16 +10014,10 @@ watch(
                                     <button
                                         type="button"
                                         @click="
-                                            selectedBahanList.length ===
-                                                0 &&
-                                            emit(
-                                                'update-source',
-                                                'fatsecret',
-                                            )
+                                            selectedBahanList.length === 0 &&
+                                            emit('update-source', 'fatsecret')
                                         "
-                                        :disabled="
-                                            selectedBahanList.length > 0
-                                        "
+                                        :disabled="selectedBahanList.length > 0"
                                         class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
                                         :class="[
                                             selectedSource === 'fatsecret'
@@ -9407,7 +10110,6 @@ watch(
                             </div>
                         </div>
                     </div>
-
 
                     <!-- ========================================================================= -->
                     <!-- BLOK-BLOK SUB MENU & VARIAN PENGGANTI ALERGI (LANGKAH 2) -->
@@ -13079,7 +13781,8 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                    >Target: 330 - 413 kkal</span
+                                                    >Target: 330 - 413
+                                                    kkal</span
                                                 >
                                             </div>
 
@@ -13382,7 +14085,8 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                    >Target: 585 - 831 kkal</span
+                                                    >Target: 585 - 831
+                                                    kkal</span
                                                 >
                                             </div>
 
@@ -13541,7 +14245,8 @@ watch(
                                                 </div>
                                                 <span
                                                     class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                    >Target: 87.0 - 122.5 g</span
+                                                    >Target: 87.0 - 122.5
+                                                    g</span
                                                 >
                                             </div>
 
@@ -13725,13 +14430,16 @@ watch(
                                                         <div
                                                             class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{ alRes.pk.energi }}
+                                                            {{
+                                                                alRes.pk.energi
+                                                            }}
                                                             kkal
                                                         </div>
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 330 - 413 kkal</span
+                                                        >Target: 330 - 413
+                                                        kkal</span
                                                     >
                                                 </div>
 
@@ -13778,13 +14486,16 @@ watch(
                                                         <div
                                                             class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{ alRes.pk.protein }}
+                                                            {{
+                                                                alRes.pk.protein
+                                                            }}
                                                             g
                                                         </div>
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 8.0 - 10.0 g</span
+                                                        >Target: 8.0 - 10.0
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -13837,7 +14548,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 11.0 - 13.8 g</span
+                                                        >Target: 11.0 - 13.8
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -13894,7 +14606,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 50.0 - 62.5 g</span
+                                                        >Target: 50.0 - 62.5
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -13947,7 +14660,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 4.0 - 7.0 g</span
+                                                        >Target: 4.0 - 7.0
+                                                        g</span
                                                     >
                                                 </div>
                                             </div>
@@ -14038,13 +14752,16 @@ watch(
                                                         <div
                                                             class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{ alRes.pb.energi }}
+                                                            {{
+                                                                alRes.pb.energi
+                                                            }}
                                                             kkal
                                                         </div>
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 585 - 831 kkal</span
+                                                        >Target: 585 - 831
+                                                        kkal</span
                                                     >
                                                 </div>
 
@@ -14091,13 +14808,16 @@ watch(
                                                         <div
                                                             class="font-black text-slate-900 text-sm mt-0.5"
                                                         >
-                                                            {{ alRes.pb.protein }}
+                                                            {{
+                                                                alRes.pb.protein
+                                                            }}
                                                             g
                                                         </div>
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 15.8 - 24.5 g</span
+                                                        >Target: 15.8 - 24.5
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -14150,7 +14870,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 19.5 - 26.3 g</span
+                                                        >Target: 19.5 - 26.3
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -14207,7 +14928,8 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 87.0 - 122.5 g</span
+                                                        >Target: 87.0 - 122.5
+                                                        g</span
                                                     >
                                                 </div>
 
@@ -14260,17 +14982,18 @@ watch(
                                                     </div>
                                                     <span
                                                         class="text-[9px] sm:text-[9.5px] text-slate-400 block whitespace-nowrap overflow-hidden text-ellipsis mt-1"
-                                                        >Target: 6.0 - 10.0 g</span
+                                                        >Target: 6.0 - 10.0
+                                                        g</span
                                                     >
                                                 </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </CardContent>
+                </CardContent>
             </Card>
 
             <!-- Bottom Action Bar Step 2 -->
@@ -14341,7 +15064,9 @@ watch(
                             <CardTitle
                                 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
                             >
-                                <ClipboardList class="h-5 w-5 text-primary shrink-0" />
+                                <ClipboardList
+                                    class="h-5 w-5 text-primary shrink-0"
+                                />
                                 <span
                                     >Catatan Kerja & Instruksi Operasional Tim
                                     Produksi</span
@@ -14358,27 +15083,43 @@ watch(
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="flex items-center justify-between sm:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto min-w-0">
+                    <div
+                        class="flex items-center justify-between sm:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto min-w-0"
+                    >
                         <button
                             type="button"
                             @click="handleGunakanContohCatatan"
                             class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1.5 cursor-pointer shrink-0 py-1"
                             title="Gunakan Contoh Catatan"
                         >
-                            <Sparkles class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            <Sparkles
+                                class="h-3.5 w-3.5 shrink-0 text-amber-500"
+                            />
                             <span>Gunakan Contoh</span>
                         </button>
                         <Button
                             type="button"
                             @click="tambahBarisCatatan(activeTimTab)"
-                            :disabled="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)"
+                            :disabled="
+                                ['persiapan', 'pengolahan'].includes(
+                                    activeTimTab,
+                                ) && !hasUnassignedBahan(activeTimTab)
+                            "
                             :className="[
                                 'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0',
-                                ['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab)
+                                ['persiapan', 'pengolahan'].includes(
+                                    activeTimTab,
+                                ) && !hasUnassignedBahan(activeTimTab)
                                     ? 'bg-slate-300 opacity-60 cursor-not-allowed text-slate-600'
-                                    : 'bg-primary hover:bg-primary/90 text-white'
+                                    : 'bg-primary hover:bg-primary/90 text-white',
                             ]"
-                            :title="['persiapan', 'pengolahan'].includes(activeTimTab) && !hasUnassignedBahan(activeTimTab) ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Catatan'"
+                            :title="
+                                ['persiapan', 'pengolahan'].includes(
+                                    activeTimTab,
+                                ) && !hasUnassignedBahan(activeTimTab)
+                                    ? 'Semua bahan formula sudah dibuatkan catatan'
+                                    : 'Tambah Baris Catatan'
+                            "
                         >
                             <Plus class="h-3.5 w-3.5" />
                             <span>Tambah Baris Catatan</span>
@@ -14403,8 +15144,12 @@ watch(
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
                                 ]"
                             >
-                                <Utensils class="h-4 w-4 text-amber-600 shrink-0" />
-                                <span class="whitespace-nowrap font-black">Tim Persiapan</span>
+                                <Utensils
+                                    class="h-4 w-4 text-amber-600 shrink-0"
+                                />
+                                <span class="whitespace-nowrap font-black"
+                                    >Tim Persiapan</span
+                                >
                                 <Badge
                                     :className="[
                                         'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
@@ -14431,7 +15176,9 @@ watch(
                                 <UtensilsCrossed
                                     class="h-4 w-4 text-blue-600 shrink-0"
                                 />
-                                <span class="whitespace-nowrap font-black">Tim Pengolahan</span>
+                                <span class="whitespace-nowrap font-black"
+                                    >Tim Pengolahan</span
+                                >
                                 <Badge
                                     :className="[
                                         'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
@@ -14455,8 +15202,12 @@ watch(
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
                                 ]"
                             >
-                                <ShoppingBag class="h-4 w-4 text-purple-600 shrink-0" />
-                                <span class="whitespace-nowrap font-black">Tim Pemorsian</span>
+                                <ShoppingBag
+                                    class="h-4 w-4 text-purple-600 shrink-0"
+                                />
+                                <span class="whitespace-nowrap font-black"
+                                    >Tim Pemorsian</span
+                                >
                                 <Badge
                                     :className="[
                                         'text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0',
@@ -14517,7 +15268,8 @@ watch(
                                     <p class="text-[11px] text-amber-800">
                                         Fokus pada penerimaan bahan,
                                         penimbangan, pencucian, pemotongan, dan
-                                        pra-olah (marinasi). Langsung edit tabel di bawah ini.
+                                        pra-olah (marinasi). Langsung edit tabel
+                                        di bawah ini.
                                     </p>
                                 </div>
                             </div>
@@ -14529,9 +15281,13 @@ watch(
                                     'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shrink-0 shadow-2xs transition',
                                     !hasUnassignedBahan('persiapan')
                                         ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
-                                        : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                                        : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer',
                                 ]"
-                                :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Persiapan'"
+                                :title="
+                                    !hasUnassignedBahan('persiapan')
+                                        ? 'Semua bahan formula sudah dibuatkan catatan'
+                                        : 'Tambah Baris Persiapan'
+                                "
                             >
                                 <Plus class="w-3.5 h-3.5" />
                                 <span>Tambah Baris Persiapan</span>
@@ -14577,10 +15333,16 @@ watch(
                                                 Waktu Eksekusi
                                             </th>
                                             <th class="py-3 px-3 min-w-[230px]">
-                                                Perlakuan & Standar Olah <span class="text-rose-500">*</span>
+                                                Perlakuan & Standar Olah
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th class="py-3 px-3 min-w-[180px]">
-                                                Keterangan (HACCP/QC) <span class="text-rose-500">*</span>
+                                                Keterangan (HACCP/QC)
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th
                                                 class="py-3 px-3 text-center w-14"
@@ -14602,7 +15364,9 @@ watch(
                                             >
                                                 {{ pIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                            <td
+                                                class="py-2.5 px-3 min-w-[210px]"
+                                            >
                                                 <div
                                                     class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
                                                 >
@@ -14612,22 +15376,65 @@ watch(
                                             <td class="py-2.5 px-3">
                                                 <select
                                                     v-model="item.bahan_baku"
-                                                    @change="onBahanBakuSelect(item, 'persiapan')"
-                                                    :disabled="!hasUnassignedBahan('persiapan') && (item.bahan_baku ? getAvailableBahanOptions('persiapan', item).length <= 1 : true)"
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    @change="
+                                                        onBahanBakuSelect(
+                                                            item,
+                                                            'persiapan',
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        !hasUnassignedBahan(
+                                                            'persiapan',
+                                                        ) &&
+                                                        (item.bahan_baku
+                                                            ? getAvailableBahanOptions(
+                                                                  'persiapan',
+                                                                  item,
+                                                              ).length <= 1
+                                                            : true)
+                                                    "
+                                                    style="
+                                                        opacity: 1 !important;
+                                                        -webkit-text-fill-color: #0f172a;
+                                                        color: #0f172a;
+                                                    "
                                                     class="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition disabled:bg-slate-100/80 disabled:text-slate-900 disabled:opacity-100 disabled:border-slate-200 disabled:cursor-default"
-                                                    :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Pilih bahan baku formula'"
+                                                    :title="
+                                                        !hasUnassignedBahan(
+                                                            'persiapan',
+                                                        )
+                                                            ? 'Semua bahan formula sudah dibuatkan catatan'
+                                                            : 'Pilih bahan baku formula'
+                                                    "
                                                 >
-                                                    <option value="" disabled>-- Pilih Bahan PO --</option>
+                                                    <option value="" disabled>
+                                                        -- Pilih Bahan PO --
+                                                    </option>
                                                     <option
-                                                        v-for="b in getAvailableBahanOptions('persiapan', item)"
+                                                        v-for="b in getAvailableBahanOptions(
+                                                            'persiapan',
+                                                            item,
+                                                        )"
                                                         :key="b.key"
                                                         :value="b.nama_po"
                                                     >
-                                                        {{ b.nama_po }} ({{ b.jumlah }} {{ b.satuan }})
+                                                        {{ b.nama_po }} ({{
+                                                            b.jumlah
+                                                        }}
+                                                        {{ b.satuan }})
                                                     </option>
                                                     <option
-                                                        v-if="item.bahan_baku && !getAvailableBahanOptions('persiapan', item).some(b => b.nama_po === item.bahan_baku)"
+                                                        v-if="
+                                                            item.bahan_baku &&
+                                                            !getAvailableBahanOptions(
+                                                                'persiapan',
+                                                                item,
+                                                            ).some(
+                                                                (b) =>
+                                                                    b.nama_po ===
+                                                                    item.bahan_baku,
+                                                            )
+                                                        "
                                                         :value="item.bahan_baku"
                                                     >
                                                         {{ item.bahan_baku }}
@@ -14640,7 +15447,9 @@ watch(
                                                     step="0.1"
                                                     min="0"
                                                     v-model.number="item.jumlah"
-                                                    @input="item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`"
+                                                    @input="
+                                                        item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`
+                                                    "
                                                     placeholder="0.0"
                                                     class="w-full text-center text-xs font-black text-amber-900 bg-amber-50/60 border border-amber-200/90 rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
                                                 />
@@ -14652,7 +15461,11 @@ watch(
                                                     disabled
                                                     readonly
                                                     placeholder="Kg"
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #334155; color: #334155;"
+                                                    style="
+                                                        opacity: 1 !important;
+                                                        -webkit-text-fill-color: #334155;
+                                                        color: #334155;
+                                                    "
                                                     class="w-full text-center text-xs font-bold text-slate-700 bg-slate-100/90 border border-slate-200 rounded-lg px-2 py-1.5 cursor-not-allowed outline-none disabled:opacity-100 disabled:text-slate-700"
                                                 />
                                             </td>
@@ -14663,22 +15476,44 @@ watch(
                                                     <input
                                                         :id="`catatan_persiapan_${pIdx}_waktu_mulai`"
                                                         type="time"
-                                                        v-model="item.waktu_mulai"
+                                                        v-model="
+                                                            item.waktu_mulai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
-                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_mulai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Mulai"
                                                     />
-                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <span
+                                                        class="text-slate-400 font-bold text-xs shrink-0"
+                                                        >-</span
+                                                    >
                                                     <input
                                                         :id="`catatan_persiapan_${pIdx}_waktu_selesai`"
                                                         type="time"
-                                                        v-model="item.waktu_selesai"
+                                                        v-model="
+                                                            item.waktu_selesai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
-                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_selesai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Selesai"
                                                     />
                                                 </div>
-                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.waktu_mulai ||
+                                                        !item.waktu_selesai
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-1"
+                                                    >Wajib isi jam!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -14688,9 +15523,21 @@ watch(
                                                     required
                                                     placeholder="Instruksi perlakuan..."
                                                     class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -14700,14 +15547,31 @@ watch(
                                                     required
                                                     placeholder="Catatan HACCP/suhu..."
                                                     class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3 text-center">
                                                 <button
                                                     type="button"
-                                                    @click="hapusCatatanItem(item.id, 'persiapan')"
+                                                    @click="
+                                                        hapusCatatanItem(
+                                                            item.id,
+                                                            'persiapan',
+                                                        )
+                                                    "
                                                     class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                                                     title="Hapus baris"
                                                 >
@@ -14720,7 +15584,8 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.persiapan ||
-                                                catatanTim.persiapan.length === 0
+                                                catatanTim.persiapan.length ===
+                                                    0
                                             "
                                         >
                                             <td
@@ -14733,42 +15598,71 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center"
                                                     >
-                                                        <Utensils class="w-5 h-5" />
+                                                        <Utensils
+                                                            class="w-5 h-5"
+                                                        />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk Tim Persiapan
+                                                        Belum ada catatan untuk
+                                                        Tim Persiapan
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Klik tombol di bawah untuk menambah baris manual atau gunakan contoh untuk mengisi otomatis.
+                                                        Klik tombol di bawah
+                                                        untuk menambah baris
+                                                        manual atau gunakan
+                                                        contoh untuk mengisi
+                                                        otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="tambahBarisCatatan('persiapan')"
-                                                            :disabled="!hasUnassignedBahan('persiapan')"
+                                                            @click="
+                                                                tambahBarisCatatan(
+                                                                    'persiapan',
+                                                                )
+                                                            "
+                                                            :disabled="
+                                                                !hasUnassignedBahan(
+                                                                    'persiapan',
+                                                                )
+                                                            "
                                                             :className="[
                                                                 'text-xs font-bold px-3.5 h-8 rounded-xl shadow-xs transition',
-                                                                !hasUnassignedBahan('persiapan')
+                                                                !hasUnassignedBahan(
+                                                                    'persiapan',
+                                                                )
                                                                     ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
-                                                                    : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                                                                    : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer',
                                                             ]"
-                                                            :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Baru'"
+                                                            :title="
+                                                                !hasUnassignedBahan(
+                                                                    'persiapan',
+                                                                )
+                                                                    ? 'Semua bahan formula sudah dibuatkan catatan'
+                                                                    : 'Tambah Baris Baru'
+                                                            "
                                                         >
-                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
                                                             Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="handleGunakanContohCatatan()"
+                                                            @click="
+                                                                handleGunakanContohCatatan()
+                                                            "
                                                             className="bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-amber-600" />
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-amber-600"
+                                                            />
                                                             Gunakan Contoh
                                                         </Button>
                                                     </div>
@@ -14783,8 +15677,14 @@ watch(
                             <div
                                 class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
-                                <span class="text-xs text-slate-500 font-medium">
-                                    Total: <strong class="text-slate-800">{{ catatanTim.persiapan?.length || 0 }}</strong> instruksi persiapan
+                                <span
+                                    class="text-xs text-slate-500 font-medium"
+                                >
+                                    Total:
+                                    <strong class="text-slate-800">{{
+                                        catatanTim.persiapan?.length || 0
+                                    }}</strong>
+                                    instruksi persiapan
                                 </span>
                                 <button
                                     type="button"
@@ -14794,9 +15694,13 @@ watch(
                                         'text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition',
                                         !hasUnassignedBahan('persiapan')
                                             ? 'text-slate-400 opacity-50 cursor-not-allowed'
-                                            : 'text-amber-800 hover:text-amber-900 hover:bg-amber-100/80 cursor-pointer'
+                                            : 'text-amber-800 hover:text-amber-900 hover:bg-amber-100/80 cursor-pointer',
                                     ]"
-                                    :title="!hasUnassignedBahan('persiapan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah baris baru'"
+                                    :title="
+                                        !hasUnassignedBahan('persiapan')
+                                            ? 'Semua bahan formula sudah dibuatkan catatan'
+                                            : 'Tambah baris baru'
+                                    "
                                 >
                                     <Plus class="w-3.5 h-3.5" />
                                     <span>Tambah Baris Baru</span>
@@ -14808,7 +15712,9 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
+                            >
                                 <label
                                     class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
@@ -14819,7 +15725,10 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Persiapan</span
                                     >
-                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
+                                    <span
+                                        class="text-[10.5px] font-normal text-slate-400"
+                                        >(Opsional)</span
+                                    >
                                 </label>
                                 <span
                                     class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full shrink-0"
@@ -14861,7 +15770,8 @@ watch(
                                     <p class="text-[11px] text-blue-800">
                                         Fokus pada teknik memasak (tumis, kukus,
                                         goreng, rebus), suhu minyak/api, durasi
-                                        matang, dan uji rasa. Langsung edit tabel di bawah ini.
+                                        matang, dan uji rasa. Langsung edit
+                                        tabel di bawah ini.
                                     </p>
                                 </div>
                             </div>
@@ -14873,9 +15783,13 @@ watch(
                                     'text-xs font-bold px-3.5 h-8.5 rounded-xl flex items-center gap-1.5 shrink-0 shadow-2xs transition',
                                     !hasUnassignedBahan('pengolahan')
                                         ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer',
                                 ]"
-                                :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Pengolahan'"
+                                :title="
+                                    !hasUnassignedBahan('pengolahan')
+                                        ? 'Semua bahan formula sudah dibuatkan catatan'
+                                        : 'Tambah Baris Pengolahan'
+                                "
                             >
                                 <Plus class="w-3.5 h-3.5" />
                                 <span>Tambah Baris Pengolahan</span>
@@ -14921,10 +15835,16 @@ watch(
                                                 Waktu Eksekusi
                                             </th>
                                             <th class="py-3 px-3 min-w-[230px]">
-                                                Perlakuan & Standar Olah <span class="text-rose-500">*</span>
+                                                Perlakuan & Standar Olah
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th class="py-3 px-3 min-w-[180px]">
-                                                Keterangan (HACCP/QC) <span class="text-rose-500">*</span>
+                                                Keterangan (HACCP/QC)
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th
                                                 class="py-3 px-3 text-center w-14"
@@ -14946,7 +15866,9 @@ watch(
                                             >
                                                 {{ cIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                            <td
+                                                class="py-2.5 px-3 min-w-[210px]"
+                                            >
                                                 <div
                                                     class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
                                                 >
@@ -14956,22 +15878,65 @@ watch(
                                             <td class="py-2.5 px-3">
                                                 <select
                                                     v-model="item.bahan_baku"
-                                                    @change="onBahanBakuSelect(item, 'pengolahan')"
-                                                    :disabled="!hasUnassignedBahan('pengolahan') && (item.bahan_baku ? getAvailableBahanOptions('pengolahan', item).length <= 1 : true)"
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #0f172a; color: #0f172a;"
+                                                    @change="
+                                                        onBahanBakuSelect(
+                                                            item,
+                                                            'pengolahan',
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        !hasUnassignedBahan(
+                                                            'pengolahan',
+                                                        ) &&
+                                                        (item.bahan_baku
+                                                            ? getAvailableBahanOptions(
+                                                                  'pengolahan',
+                                                                  item,
+                                                              ).length <= 1
+                                                            : true)
+                                                    "
+                                                    style="
+                                                        opacity: 1 !important;
+                                                        -webkit-text-fill-color: #0f172a;
+                                                        color: #0f172a;
+                                                    "
                                                     class="w-full text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition disabled:bg-slate-100/80 disabled:text-slate-900 disabled:opacity-100 disabled:border-slate-200 disabled:cursor-default"
-                                                    :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Pilih bahan baku formula'"
+                                                    :title="
+                                                        !hasUnassignedBahan(
+                                                            'pengolahan',
+                                                        )
+                                                            ? 'Semua bahan formula sudah dibuatkan catatan'
+                                                            : 'Pilih bahan baku formula'
+                                                    "
                                                 >
-                                                    <option value="" disabled>-- Pilih Bahan PO --</option>
+                                                    <option value="" disabled>
+                                                        -- Pilih Bahan PO --
+                                                    </option>
                                                     <option
-                                                        v-for="b in getAvailableBahanOptions('pengolahan', item)"
+                                                        v-for="b in getAvailableBahanOptions(
+                                                            'pengolahan',
+                                                            item,
+                                                        )"
                                                         :key="b.key"
                                                         :value="b.nama_po"
                                                     >
-                                                        {{ b.nama_po }} ({{ b.jumlah }} {{ b.satuan }})
+                                                        {{ b.nama_po }} ({{
+                                                            b.jumlah
+                                                        }}
+                                                        {{ b.satuan }})
                                                     </option>
                                                     <option
-                                                        v-if="item.bahan_baku && !getAvailableBahanOptions('pengolahan', item).some(b => b.nama_po === item.bahan_baku)"
+                                                        v-if="
+                                                            item.bahan_baku &&
+                                                            !getAvailableBahanOptions(
+                                                                'pengolahan',
+                                                                item,
+                                                            ).some(
+                                                                (b) =>
+                                                                    b.nama_po ===
+                                                                    item.bahan_baku,
+                                                            )
+                                                        "
                                                         :value="item.bahan_baku"
                                                     >
                                                         {{ item.bahan_baku }}
@@ -14984,7 +15949,9 @@ watch(
                                                     step="0.1"
                                                     min="0"
                                                     v-model.number="item.jumlah"
-                                                    @input="item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`"
+                                                    @input="
+                                                        item.kuantitas = `${item.jumlah || 0} ${item.satuan || 'Kg'}`
+                                                    "
                                                     placeholder="0.0"
                                                     class="w-full text-center text-xs font-black text-blue-900 bg-blue-50/60 border border-blue-200/90 rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
                                                 />
@@ -14996,7 +15963,11 @@ watch(
                                                     disabled
                                                     readonly
                                                     placeholder="Kg"
-                                                    style="opacity: 1 !important; -webkit-text-fill-color: #334155; color: #334155;"
+                                                    style="
+                                                        opacity: 1 !important;
+                                                        -webkit-text-fill-color: #334155;
+                                                        color: #334155;
+                                                    "
                                                     class="w-full text-center text-xs font-bold text-slate-700 bg-slate-100/90 border border-slate-200 rounded-lg px-2 py-1.5 cursor-not-allowed outline-none disabled:opacity-100 disabled:text-slate-700"
                                                 />
                                             </td>
@@ -15007,22 +15978,44 @@ watch(
                                                     <input
                                                         :id="`catatan_pengolahan_${cIdx}_waktu_mulai`"
                                                         type="time"
-                                                        v-model="item.waktu_mulai"
+                                                        v-model="
+                                                            item.waktu_mulai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
-                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_mulai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Mulai"
                                                     />
-                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <span
+                                                        class="text-slate-400 font-bold text-xs shrink-0"
+                                                        >-</span
+                                                    >
                                                     <input
                                                         :id="`catatan_pengolahan_${cIdx}_waktu_selesai`"
                                                         type="time"
-                                                        v-model="item.waktu_selesai"
+                                                        v-model="
+                                                            item.waktu_selesai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
-                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_selesai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Selesai"
                                                     />
                                                 </div>
-                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.waktu_mulai ||
+                                                        !item.waktu_selesai
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-1"
+                                                    >Wajib isi jam!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -15032,9 +16025,21 @@ watch(
                                                     required
                                                     placeholder="Teknik masak & standar olah..."
                                                     class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -15044,14 +16049,31 @@ watch(
                                                     required
                                                     placeholder="Catatan QC/suhu..."
                                                     class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3 text-center">
                                                 <button
                                                     type="button"
-                                                    @click="hapusCatatanItem(item.id, 'pengolahan')"
+                                                    @click="
+                                                        hapusCatatanItem(
+                                                            item.id,
+                                                            'pengolahan',
+                                                        )
+                                                    "
                                                     class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                                                     title="Hapus baris"
                                                 >
@@ -15064,7 +16086,8 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.pengolahan ||
-                                                catatanTim.pengolahan.length === 0
+                                                catatanTim.pengolahan.length ===
+                                                    0
                                             "
                                         >
                                             <td
@@ -15077,42 +16100,70 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center"
                                                     >
-                                                        <UtensilsCrossed class="w-5 h-5" />
+                                                        <UtensilsCrossed
+                                                            class="w-5 h-5"
+                                                        />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk Tim Pengolahan
+                                                        Belum ada catatan untuk
+                                                        Tim Pengolahan
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Tambahkan catatan pengolahan manual atau gunakan contoh untuk mengisi otomatis.
+                                                        Tambahkan catatan
+                                                        pengolahan manual atau
+                                                        gunakan contoh untuk
+                                                        mengisi otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="tambahBarisCatatan('pengolahan')"
-                                                            :disabled="!hasUnassignedBahan('pengolahan')"
+                                                            @click="
+                                                                tambahBarisCatatan(
+                                                                    'pengolahan',
+                                                                )
+                                                            "
+                                                            :disabled="
+                                                                !hasUnassignedBahan(
+                                                                    'pengolahan',
+                                                                )
+                                                            "
                                                             :className="[
                                                                 'text-xs font-bold px-3.5 h-8 rounded-xl shadow-xs transition',
-                                                                !hasUnassignedBahan('pengolahan')
+                                                                !hasUnassignedBahan(
+                                                                    'pengolahan',
+                                                                )
                                                                     ? 'bg-slate-200 text-slate-500 opacity-60 cursor-not-allowed border border-slate-300'
-                                                                    : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                                                    : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer',
                                                             ]"
-                                                            :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah Baris Baru'"
+                                                            :title="
+                                                                !hasUnassignedBahan(
+                                                                    'pengolahan',
+                                                                )
+                                                                    ? 'Semua bahan formula sudah dibuatkan catatan'
+                                                                    : 'Tambah Baris Baru'
+                                                            "
                                                         >
-                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
                                                             Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="handleGunakanContohCatatan()"
+                                                            @click="
+                                                                handleGunakanContohCatatan()
+                                                            "
                                                             className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-blue-600" />
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-blue-600"
+                                                            />
                                                             Gunakan Contoh
                                                         </Button>
                                                     </div>
@@ -15127,20 +16178,32 @@ watch(
                             <div
                                 class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
-                                <span class="text-xs text-slate-500 font-medium">
-                                    Total: <strong class="text-slate-800">{{ catatanTim.pengolahan?.length || 0 }}</strong> instruksi pengolahan
+                                <span
+                                    class="text-xs text-slate-500 font-medium"
+                                >
+                                    Total:
+                                    <strong class="text-slate-800">{{
+                                        catatanTim.pengolahan?.length || 0
+                                    }}</strong>
+                                    instruksi pengolahan
                                 </span>
                                 <button
                                     type="button"
                                     @click="tambahBarisCatatan('pengolahan')"
-                                    :disabled="!hasUnassignedBahan('pengolahan')"
+                                    :disabled="
+                                        !hasUnassignedBahan('pengolahan')
+                                    "
                                     :class="[
                                         'text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition',
                                         !hasUnassignedBahan('pengolahan')
                                             ? 'text-slate-400 opacity-50 cursor-not-allowed'
-                                            : 'text-blue-800 hover:text-blue-900 hover:bg-blue-100/80 cursor-pointer'
+                                            : 'text-blue-800 hover:text-blue-900 hover:bg-blue-100/80 cursor-pointer',
                                     ]"
-                                    :title="!hasUnassignedBahan('pengolahan') ? 'Semua bahan formula sudah dibuatkan catatan' : 'Tambah baris baru'"
+                                    :title="
+                                        !hasUnassignedBahan('pengolahan')
+                                            ? 'Semua bahan formula sudah dibuatkan catatan'
+                                            : 'Tambah baris baru'
+                                    "
                                 >
                                     <Plus class="w-3.5 h-3.5" />
                                     <span>Tambah Baris Baru</span>
@@ -15152,7 +16215,9 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
+                            >
                                 <label
                                     class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
@@ -15163,7 +16228,10 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Pengolahan</span
                                     >
-                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
+                                    <span
+                                        class="text-[10.5px] font-normal text-slate-400"
+                                        >(Opsional)</span
+                                    >
                                 </label>
                                 <span
                                     class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full shrink-0"
@@ -15200,10 +16268,15 @@ watch(
                                     <h4
                                         class="text-xs sm:text-sm font-black text-purple-950"
                                     >
-                                        Instruksi Kerja Tim Pemorsian (Plating & Packing)
+                                        Instruksi Kerja Tim Pemorsian (Plating &
+                                        Packing)
                                     </h4>
                                     <p class="text-[11px] text-purple-800">
-                                        Fokus pada tata letak sekat kotak makanan, gramatur per porsi (PK vs PB), kontrol higienitas, dan packing kotak thermal. Langsung edit tabel di bawah ini.
+                                        Fokus pada tata letak sekat kotak
+                                        makanan, gramatur per porsi (PK vs PB),
+                                        kontrol higienitas, dan packing kotak
+                                        thermal. Langsung edit tabel di bawah
+                                        ini.
                                     </p>
                                 </div>
                             </div>
@@ -15248,10 +16321,16 @@ watch(
                                                 Waktu Eksekusi
                                             </th>
                                             <th class="py-3 px-3 min-w-[240px]">
-                                                Tata Letak Sekat & Standar Porsi <span class="text-rose-500">*</span>
+                                                Tata Letak Sekat & Standar Porsi
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th class="py-3 px-3 min-w-[180px]">
-                                                Keterangan (Hygienitas / QC) <span class="text-rose-500">*</span>
+                                                Keterangan (Hygienitas / QC)
+                                                <span class="text-rose-500"
+                                                    >*</span
+                                                >
                                             </th>
                                             <th
                                                 class="py-3 px-3 text-center w-14"
@@ -15273,23 +16352,39 @@ watch(
                                             >
                                                 {{ sIdx + 1 }}
                                             </td>
-                                            <td class="py-2.5 px-3 min-w-[210px]">
+                                            <td
+                                                class="py-2.5 px-3 min-w-[210px]"
+                                            >
                                                 <div
                                                     class="w-full text-xs font-bold text-slate-900 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-2 leading-relaxed whitespace-normal break-words"
                                                 >
                                                     {{ item.nama_menu }}
                                                 </div>
                                             </td>
-                                            <td class="py-2.5 px-3 min-w-[280px]">
+                                            <td
+                                                class="py-2.5 px-3 min-w-[280px]"
+                                            >
                                                 <div
                                                     :id="`catatan_pemorsian_${sIdx}_kuantitas`"
                                                     class="w-full text-center text-xs font-bold text-purple-950 bg-purple-50/80 border rounded-lg p-2.5 leading-relaxed whitespace-normal break-words select-text"
-                                                    :class="!item.kuantitas || !item.kuantitas.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-purple-200/90'"
+                                                    :class="
+                                                        !item.kuantitas ||
+                                                        !item.kuantitas.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-purple-200/90'
+                                                    "
                                                     title="Target porsi dihitung otomatis dari Work Order"
                                                 >
-                                                    {{ item.kuantitas || '-' }}
+                                                    {{ item.kuantitas || "-" }}
                                                 </div>
-                                                <span v-if="!item.kuantitas || !item.kuantitas.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5 text-center">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.kuantitas ||
+                                                        !item.kuantitas.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5 text-center"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3 text-center">
                                                 <div
@@ -15298,22 +16393,44 @@ watch(
                                                     <input
                                                         :id="`catatan_pemorsian_${sIdx}_waktu_mulai`"
                                                         type="time"
-                                                        v-model="item.waktu_mulai"
+                                                        v-model="
+                                                            item.waktu_mulai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
-                                                        :class="!item.waktu_mulai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_mulai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Mulai"
                                                     />
-                                                    <span class="text-slate-400 font-bold text-xs shrink-0">-</span>
+                                                    <span
+                                                        class="text-slate-400 font-bold text-xs shrink-0"
+                                                        >-</span
+                                                    >
                                                     <input
                                                         :id="`catatan_pemorsian_${sIdx}_waktu_selesai`"
                                                         type="time"
-                                                        v-model="item.waktu_selesai"
+                                                        v-model="
+                                                            item.waktu_selesai
+                                                        "
                                                         class="w-[88px] shrink-0 text-center text-xs font-bold text-slate-800 bg-white border rounded-lg px-2 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
-                                                        :class="!item.waktu_selesai ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                        :class="
+                                                            !item.waktu_selesai
+                                                                ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                                : 'border-slate-200'
+                                                        "
                                                         title="Waktu Selesai"
                                                     />
                                                 </div>
-                                                <span v-if="!item.waktu_mulai || !item.waktu_selesai" class="text-[10px] text-rose-500 font-bold block mt-1">Wajib isi jam!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.waktu_mulai ||
+                                                        !item.waktu_selesai
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-1"
+                                                    >Wajib isi jam!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -15323,9 +16440,21 @@ watch(
                                                     required
                                                     placeholder="Tata letak sekat porsi..."
                                                     class="w-full text-xs font-medium text-slate-800 bg-white border rounded-lg px-2.5 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.perlakuan || !item.perlakuan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.perlakuan || !item.perlakuan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.perlakuan ||
+                                                        !item.perlakuan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3">
                                                 <textarea
@@ -15335,14 +16464,31 @@ watch(
                                                     required
                                                     placeholder="Catatan QC/higienitas..."
                                                     class="w-full text-xs font-normal text-slate-600 italic bg-white border rounded-lg px-2.5 py-1.5 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition resize-y leading-snug"
-                                                    :class="!item.keterangan || !item.keterangan.trim() ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300' : 'border-slate-200'"
+                                                    :class="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                            ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-300'
+                                                            : 'border-slate-200'
+                                                    "
                                                 ></textarea>
-                                                <span v-if="!item.keterangan || !item.keterangan.trim()" class="text-[10px] text-rose-500 font-bold block mt-0.5">Wajib diisi!</span>
+                                                <span
+                                                    v-if="
+                                                        !item.keterangan ||
+                                                        !item.keterangan.trim()
+                                                    "
+                                                    class="text-[10px] text-rose-500 font-bold block mt-0.5"
+                                                    >Wajib diisi!</span
+                                                >
                                             </td>
                                             <td class="py-2.5 px-3 text-center">
                                                 <button
                                                     type="button"
-                                                    @click="hapusCatatanItem(item.id, 'pemorsian')"
+                                                    @click="
+                                                        hapusCatatanItem(
+                                                            item.id,
+                                                            'pemorsian',
+                                                        )
+                                                    "
                                                     class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                                                     title="Hapus baris"
                                                 >
@@ -15355,7 +16501,8 @@ watch(
                                         <tr
                                             v-if="
                                                 !catatanTim.pemorsian ||
-                                                catatanTim.pemorsian.length === 0
+                                                catatanTim.pemorsian.length ===
+                                                    0
                                             "
                                         >
                                             <td
@@ -15368,35 +16515,51 @@ watch(
                                                     <div
                                                         class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center"
                                                     >
-                                                        <ShoppingBag class="w-5 h-5" />
+                                                        <ShoppingBag
+                                                            class="w-5 h-5"
+                                                        />
                                                     </div>
                                                     <p
                                                         class="font-bold text-xs text-slate-600"
                                                     >
-                                                        Belum ada catatan untuk Tim Pemorsian
+                                                        Belum ada catatan untuk
+                                                        Tim Pemorsian
                                                     </p>
                                                     <p
                                                         class="text-[11px] text-slate-400 max-w-sm"
                                                     >
-                                                        Tambahkan catatan pemorsian manual atau gunakan contoh untuk mengisi otomatis.
+                                                        Tambahkan catatan
+                                                        pemorsian manual atau
+                                                        gunakan contoh untuk
+                                                        mengisi otomatis.
                                                     </p>
                                                     <div
                                                         class="flex items-center gap-2 mt-2"
                                                     >
                                                         <Button
                                                             type="button"
-                                                            @click="tambahBarisCatatan('pemorsian')"
+                                                            @click="
+                                                                tambahBarisCatatan(
+                                                                    'pemorsian',
+                                                                )
+                                                            "
                                                             className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer shadow-xs"
                                                         >
-                                                            <Plus class="w-3.5 h-3.5 mr-1" />
+                                                            <Plus
+                                                                class="w-3.5 h-3.5 mr-1"
+                                                            />
                                                             Tambah Baris Baru
                                                         </Button>
                                                         <Button
                                                             type="button"
-                                                            @click="handleGunakanContohCatatan()"
+                                                            @click="
+                                                                handleGunakanContohCatatan()
+                                                            "
                                                             className="bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer"
                                                         >
-                                                            <Sparkles class="w-3.5 h-3.5 mr-1 text-purple-600" />
+                                                            <Sparkles
+                                                                class="w-3.5 h-3.5 mr-1 text-purple-600"
+                                                            />
                                                             Gunakan Contoh
                                                         </Button>
                                                     </div>
@@ -15411,8 +16574,14 @@ watch(
                             <div
                                 class="p-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2"
                             >
-                                <span class="text-xs text-slate-500 font-medium">
-                                    Total: <strong class="text-slate-800">{{ catatanTim.pemorsian?.length || 0 }}</strong> instruksi pemorsian
+                                <span
+                                    class="text-xs text-slate-500 font-medium"
+                                >
+                                    Total:
+                                    <strong class="text-slate-800">{{
+                                        catatanTim.pemorsian?.length || 0
+                                    }}</strong>
+                                    instruksi pemorsian
                                 </span>
                                 <button
                                     type="button"
@@ -15429,7 +16598,9 @@ watch(
                         <div
                             class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2"
                         >
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+                            <div
+                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2"
+                            >
                                 <label
                                     class="text-xs font-black text-slate-800 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                                 >
@@ -15440,7 +16611,10 @@ watch(
                                         >Catatan Tambahan (Global) Tim
                                         Pemorsian</span
                                     >
-                                    <span class="text-[10.5px] font-normal text-slate-400">(Opsional)</span>
+                                    <span
+                                        class="text-[10.5px] font-normal text-slate-400"
+                                        >(Opsional)</span
+                                    >
                                 </label>
                                 <span
                                     class="w-fit self-start sm:self-auto text-[10px] sm:text-[10.5px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full shrink-0"
@@ -15470,7 +16644,9 @@ watch(
                             <span>Kembali ke Formula Makanan (Langkah 2)</span>
                         </Button>
 
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                        <div
+                            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
+                        >
                             <Button
                                 type="button"
                                 @click="simpanDraftStep3"
@@ -15550,13 +16726,13 @@ watch(
                     </div>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-6">
-                    <!-- Ringkasan Info Menu & Kuota Sasaran (Grid 4 Kolom) -->
+                    <!-- Paket 1: Ringkasan Dokumen & Evaluasi Finansial Anggaran (4 Kolom Simetris) -->
                     <div
-                        class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4"
+                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
                     >
-                        <!-- Card 1: No WO -->
+                        <!-- Card 1: No WO & Tanggal Distribusi -->
                         <div
-                            class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 col-span-2 sm:col-span-1"
+                            class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 shadow-2xs space-y-0.5"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider"
@@ -15574,86 +16750,30 @@ watch(
                             </p>
                         </div>
 
-                        <!-- Card 2: Sasaran PK Normal -->
+                        <!-- Card 2: Total Target Sasaran PM -->
                         <div
-                            class="p-3.5 bg-white rounded-xl border border-amber-200/80 col-span-1"
+                            class="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-0.5"
                         >
                             <p
-                                class="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider"
+                                class="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider"
                             >
-                                Sasaran PK (Normal)
+                                Total Sasaran PM
                             </p>
                             <p
-                                class="text-sm sm:text-base font-black text-amber-950 mt-1"
+                                class="text-sm sm:text-base font-black text-slate-900 mt-1"
                             >
-                                {{
-                                    targetSasaranNormal.pk.toLocaleString(
-                                        "id-ID",
-                                    )
-                                }}
+                                {{ (totalPK + totalPB).toLocaleString("id-ID") }}
                                 Porsi
                             </p>
-                            <p class="text-[11px] text-slate-700 mt-0.5">
-                                Food Cost:
-                                {{ formatRupiah(totalFoodCostPKNormal) }}
+                            <p class="text-[11px] text-slate-500 mt-0.5 font-medium">
+                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB:
+                                {{ totalPB.toLocaleString("id-ID") }}
                             </p>
                         </div>
 
-                        <!-- Card 3: Sasaran PB Normal -->
+                        <!-- Card 3: Batas Total Pagu BGN -->
                         <div
-                            class="p-3.5 bg-white rounded-xl border border-indigo-200/80 col-span-1"
-                        >
-                            <p
-                                class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
-                            >
-                                Sasaran PB (Normal)
-                            </p>
-                            <p
-                                class="text-sm sm:text-base font-black text-indigo-950 mt-1"
-                            >
-                                {{
-                                    targetSasaranNormal.pb.toLocaleString(
-                                        "id-ID",
-                                    )
-                                }}
-                                Porsi
-                            </p>
-                            <p class="text-[11px] text-indigo-800 mt-0.5">
-                                Food Cost:
-                                {{ formatRupiah(totalFoodCostPBNormal) }}
-                            </p>
-                        </div>
-
-                        <!-- Card 4+: Kartu Sasaran Khusus Setiap Varian Alergi yang Ada -->
-                        <div
-                            v-for="al in activeAlergiFoodCostList"
-                            :key="'header-al-card-' + al.jenis_alergi"
-                            class="p-3.5 bg-white rounded-xl border border-rose-200/90 col-span-1 shadow-2xs space-y-0.5"
-                        >
-                            <p
-                                class="text-[10.5px] font-black text-rose-800 uppercase tracking-wider truncate"
-                                :title="'Sasaran Alergi: ' + al.jenis_alergi"
-                            >
-                                ⚠️ Alergi: {{ al.jenis_alergi }}
-                            </p>
-                            <p
-                                class="text-sm sm:text-base font-black text-rose-950 mt-1"
-                            >
-                                {{ al.total_pm.toLocaleString("id-ID") }}
-                                Porsi
-                            </p>
-                            <p class="text-[10px] text-rose-700 font-bold">
-                                PK: {{ al.pm_pk }} • PB: {{ al.pm_pb }}
-                            </p>
-                            <p class="text-[9.5px] text-rose-600 font-medium">
-                                Cost: PK {{ formatRupiah(al.cost_pk) }} | PB
-                                {{ formatRupiah(al.cost_pb) }}
-                            </p>
-                        </div>
-
-                        <!-- Card: Batas Total Pagu BGN -->
-                        <div
-                            class="p-3.5 bg-white rounded-xl border border-slate-200 col-span-1 shadow-2xs space-y-0.5"
+                            class="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-0.5"
                         >
                             <p
                                 class="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider"
@@ -15665,15 +16785,14 @@ watch(
                             >
                                 {{ formatRupiah(totalBatasPaguMaster) }}
                             </p>
-                            <p class="text-[10px] text-slate-500 mt-0.5">
-                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB:
-                                {{ totalPB.toLocaleString("id-ID") }}
+                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                Pagu Maksimal Anggaran BGN
                             </p>
                         </div>
 
-                        <!-- Card Terakhir: Total Anggaran PO & Status Evaluasi -->
+                        <!-- Card 4: Total Anggaran Draft PO & Evaluasi (Sepaket dengan Pagu) -->
                         <div
-                            class="p-3.5 rounded-xl border col-span-2 sm:col-span-1 shadow-2xs space-y-0.5"
+                            class="p-3.5 rounded-xl border shadow-2xs space-y-0.5"
                             :class="statusEvaluasiPaguMaster.cardClass"
                         >
                             <div class="flex items-center justify-between">
@@ -15699,6 +16818,199 @@ watch(
                                     statusEvaluasiPaguMaster.percentFormatted
                                 }})
                             </p>
+                        </div>
+                    </div>
+
+                    <!-- Paket 2: Rincian Sasaran Porsi & Food Cost per Varian (Flex seimbang tanpa card tunggal) -->
+                    <div class="flex flex-wrap gap-3">
+                        <!-- Card Sasaran PK Normal -->
+                        <div
+                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-amber-200/80 shadow-2xs space-y-0.5"
+                        >
+                            <p
+                                class="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider"
+                            >
+                                Sasaran PK (Normal)
+                            </p>
+                            <p
+                                class="text-sm sm:text-base font-black text-amber-950 mt-1"
+                            >
+                                {{
+                                    targetSasaranNormal.pk.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                Porsi
+                            </p>
+                            <p class="text-[11px] text-slate-700 mt-0.5">
+                                Food Cost:
+                                {{ formatRupiah(totalFoodCostPKNormal) }}
+                            </p>
+                        </div>
+
+                        <!-- Card Sasaran PB Normal -->
+                        <div
+                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-indigo-200/80 shadow-2xs space-y-0.5"
+                        >
+                            <p
+                                class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
+                            >
+                                Sasaran PB (Normal)
+                            </p>
+                            <p
+                                class="text-sm sm:text-base font-black text-indigo-950 mt-1"
+                            >
+                                {{
+                                    targetSasaranNormal.pb.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                Porsi
+                            </p>
+                            <p class="text-[11px] text-indigo-800 mt-0.5">
+                                Food Cost:
+                                {{ formatRupiah(totalFoodCostPBNormal) }}
+                            </p>
+                        </div>
+
+                        <!-- Card Sasaran Khusus Setiap Varian Alergi yang Ada -->
+                        <div
+                            v-for="al in activeAlergiFoodCostList"
+                            :key="'header-al-card-' + al.jenis_alergi"
+                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-rose-200/90 shadow-2xs space-y-0.5"
+                        >
+                            <p
+                                class="text-[10.5px] font-black text-rose-800 uppercase tracking-wider truncate"
+                                :title="'Sasaran Alergi: ' + al.jenis_alergi"
+                            >
+                                ⚠️ Alergi: {{ al.jenis_alergi }}
+                            </p>
+                            <p
+                                class="text-sm sm:text-base font-black text-rose-950 mt-1"
+                            >
+                                {{ al.total_pm.toLocaleString("id-ID") }}
+                                Porsi
+                            </p>
+                            <p class="text-[10px] text-rose-700 font-bold">
+                                PK: {{ al.pm_pk }} • PB: {{ al.pm_pb }}
+                            </p>
+                            <p class="text-[9.5px] text-rose-600 font-medium">
+                                Cost: PK {{ formatRupiah(al.cost_pk) }} | PB
+                                {{ formatRupiah(al.cost_pb) }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- JADWAL WAKTU KEGIATAN OPERASIONAL SPPG (STEP REVIEW) -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4 shadow-2xs"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs"
+                                >
+                                    <Clock class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4
+                                            class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider"
+                                        >
+                                            Waktu Kegiatan Operasional
+                                        </h4>
+                                        <span
+                                            v-if="totalJadwalTerisi === 6"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                        >
+                                            <CheckCircle2 class="h-3 w-3 text-emerald-600" />
+                                            6 Tahapan Lengkap
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300"
+                                        >
+                                            <AlertTriangle class="h-3 w-3 text-amber-600" />
+                                            {{ totalJadwalTerisi }}/6 Terisi
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        Jadwal pelaksanaan tahapan kerja operasional dari persiapan bahan hingga sanitasi ompreng.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                @click="
+                                    buatMenuSubTab = 'rencana';
+                                    nextTick(() => {
+                                        const el = document.getElementById('section-jadwal-operasional');
+                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    });
+                                "
+                                class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Kembali ke Langkah 1 untuk mengubah jam operasional"
+                            >
+                                <Edit3 class="h-3.5 w-3.5 text-slate-500" />
+                                <span>Ubah Jadwal Operasional</span>
+                            </button>
+                        </div>
+
+                        <!-- Grid 6 Kartu Tahapan Operasional -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+                            <div
+                                v-for="(kegiatan, kKey) in jadwalOperasionalList"
+                                :key="'review-jadwal-' + kKey"
+                                class="p-3 rounded-xl border transition-all duration-200 flex flex-col justify-between"
+                                :class="[
+                                    (jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai)
+                                        ? 'bg-slate-50/70 border-slate-200/90'
+                                        : 'bg-rose-50/30 border-rose-200'
+                                ]"
+                            >
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <span
+                                            class="h-4.5 w-4.5 rounded-md text-[10px] font-black flex items-center justify-center shrink-0"
+                                            :class="[
+                                                (jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai)
+                                                    ? 'bg-indigo-100 text-indigo-700'
+                                                    : 'bg-rose-100 text-rose-700'
+                                            ]"
+                                        >
+                                            {{ kegiatan.no }}
+                                        </span>
+                                        <span class="text-[11px] font-black text-slate-800 truncate" :title="kegiatan.nama">
+                                            {{ kegiatan.nama }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[9.5px] text-slate-500 line-clamp-2 leading-tight">
+                                        {{ kegiatan.deskripsi }}
+                                    </p>
+                                </div>
+
+                                <div class="mt-2.5 pt-2 border-t border-slate-200/60">
+                                    <div
+                                        v-if="jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai"
+                                        class="text-xs font-black text-indigo-900 font-mono flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-indigo-100 shadow-2xs"
+                                    >
+                                        <Clock class="h-3 w-3 text-indigo-500 shrink-0" />
+                                        <span>{{ jadwalOperasional[kKey].mulai }} - {{ jadwalOperasional[kKey].selesai }}</span>
+                                    </div>
+                                    <div
+                                        v-else
+                                        class="text-xs font-bold text-rose-600 font-mono flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-rose-200 shadow-2xs"
+                                    >
+                                        <AlertCircle class="h-3 w-3 text-rose-500 shrink-0" />
+                                        <span>Belum diatur</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -16375,8 +17687,12 @@ watch(
                         <!-- 3.A Evaluasi AKG Porsi Normal -->
                         <div class="space-y-3">
                             <div class="flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                <h5 class="text-xs font-black text-slate-800 uppercase tracking-wider">
+                                <span
+                                    class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"
+                                ></span>
+                                <h5
+                                    class="text-xs font-black text-slate-800 uppercase tracking-wider"
+                                >
                                     {{
                                         activeAlergiAkgList &&
                                         activeAlergiAkgList.length > 0
@@ -16387,199 +17703,475 @@ watch(
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Evaluasi PK Normal -->
-                                <div class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
-                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                <div
+                                    class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3"
+                                >
+                                    <div
+                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3"
+                                    >
                                         <div class="flex items-center gap-2.5">
-                                            <div class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+                                            <div
+                                                class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs"
+                                            >
                                                 PK
                                             </div>
                                             <div>
-                                                <span class="text-xs sm:text-sm font-black text-slate-900 block leading-tight">Porsi Kecil (PK) Normal</span>
-                                                <span class="text-[10px] text-slate-500 font-medium">PAUD, TK, SD Kelas 1-3</span>
+                                                <span
+                                                    class="text-xs sm:text-sm font-black text-slate-900 block leading-tight"
+                                                    >Porsi Kecil (PK)
+                                                    Normal</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-medium"
+                                                    >PAUD, TK, SD Kelas
+                                                    1-3</span
+                                                >
                                             </div>
                                         </div>
                                         <div
                                             :class="[
                                                 'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
-                                                getAkgStatusBadge(akgResultPKNormal, false).badgeClass,
+                                                getAkgStatusBadge(
+                                                    akgResultPKNormal,
+                                                    false,
+                                                ).badgeClass,
                                             ]"
                                         >
-                                            {{ getAkgStatusBadge(akgResultPKNormal, false).label }}
+                                            {{
+                                                getAkgStatusBadge(
+                                                    akgResultPKNormal,
+                                                    false,
+                                                ).label
+                                            }}
                                         </div>
                                     </div>
 
                                     <!-- Hero Energi Total PK -->
-                                    <div class="p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <div class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                                <Zap class="w-4 h-4 fill-white" />
+                                    <div
+                                        class="p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2.5 min-w-0"
+                                        >
+                                            <div
+                                                class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                                            >
+                                                <Zap
+                                                    class="w-4 h-4 fill-white"
+                                                />
                                             </div>
                                             <div class="min-w-0">
-                                                <span class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
-                                                <span class="text-[10px] text-slate-500 truncate block mt-0.5">
-                                                    Standar Rujukan: <strong class="text-slate-700">330 - 413 kkal</strong>
+                                                <span
+                                                    class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight"
+                                                    >Energi Total</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500 truncate block mt-0.5"
+                                                >
+                                                    Standar Rujukan:
+                                                    <strong
+                                                        class="text-slate-700"
+                                                        >330 - 413 kkal</strong
+                                                    >
                                                 </span>
                                             </div>
                                         </div>
                                         <div class="text-right shrink-0">
-                                            <span class="font-black text-slate-900 text-lg sm:text-xl leading-none">
-                                                {{ akgResultPKNormal.energi.toFixed(1) }}
+                                            <span
+                                                class="font-black text-slate-900 text-lg sm:text-xl leading-none"
+                                            >
+                                                {{
+                                                    akgResultPKNormal.energi.toFixed(
+                                                        1,
+                                                    )
+                                                }}
                                             </span>
-                                            <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
+                                            <span
+                                                class="text-xs font-bold text-slate-500 ml-1"
+                                                >kkal</span
+                                            >
                                         </div>
                                     </div>
 
                                     <!-- 4 Makronutrien: Grid 2x2 di HP, 4 kolom di layar sedang -->
-                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                    <div
+                                        class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"
+                                    >
                                         <!-- Protein -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Protein</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Protein</span
+                                                >
                                                 <span class="text-xs">🥩</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.protein.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPKNormal.protein.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 8.0 - 10.0g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 8.0 - 10.0g</span
+                                            >
                                         </div>
 
                                         <!-- Lemak -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Lemak</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Lemak</span
+                                                >
                                                 <span class="text-xs">🥑</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.lemak.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPKNormal.lemak.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 11.0 - 13.8g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 11.0 - 13.8g</span
+                                            >
                                         </div>
 
                                         <!-- Karbohidrat -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Karbo</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Karbo</span
+                                                >
                                                 <span class="text-xs">🌾</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.karbohidrat.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPKNormal.karbohidrat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 50 - 62.5g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 50 - 62.5g</span
+                                            >
                                         </div>
 
                                         <!-- Serat -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Serat</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Serat</span
+                                                >
                                                 <span class="text-xs">🥗</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPKNormal.serat.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPKNormal.serat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 4.0 - 7.0g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 4.0 - 7.0g</span
+                                            >
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Evaluasi PB Normal -->
-                                <div class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
-                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                <div
+                                    class="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3"
+                                >
+                                    <div
+                                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3"
+                                    >
                                         <div class="flex items-center gap-2.5">
-                                            <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+                                            <div
+                                                class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs"
+                                            >
                                                 PB
                                             </div>
                                             <div>
-                                                <span class="text-xs sm:text-sm font-black text-slate-900 block leading-tight">Porsi Besar (PB) Normal</span>
-                                                <span class="text-[10px] text-slate-500 font-medium">SD 4-6, SMP, SMA/SMK, Bumil/Busui</span>
+                                                <span
+                                                    class="text-xs sm:text-sm font-black text-slate-900 block leading-tight"
+                                                    >Porsi Besar (PB)
+                                                    Normal</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500 font-medium"
+                                                    >SD 4-6, SMP, SMA/SMK,
+                                                    Bumil/Busui</span
+                                                >
                                             </div>
                                         </div>
                                         <div
                                             :class="[
                                                 'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
-                                                getAkgStatusBadge(akgResultPBNormal, true).badgeClass,
+                                                getAkgStatusBadge(
+                                                    akgResultPBNormal,
+                                                    true,
+                                                ).badgeClass,
                                             ]"
                                         >
-                                            {{ getAkgStatusBadge(akgResultPBNormal, true).label }}
+                                            {{
+                                                getAkgStatusBadge(
+                                                    akgResultPBNormal,
+                                                    true,
+                                                ).label
+                                            }}
                                         </div>
                                     </div>
 
                                     <!-- Hero Energi Total PB -->
-                                    <div class="p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                                <Zap class="w-4 h-4 fill-white" />
+                                    <div
+                                        class="p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2.5 min-w-0"
+                                        >
+                                            <div
+                                                class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                                            >
+                                                <Zap
+                                                    class="w-4 h-4 fill-white"
+                                                />
                                             </div>
                                             <div class="min-w-0">
-                                                <span class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
-                                                <span class="text-[10px] text-slate-500 truncate block mt-0.5">
-                                                    Standar Rujukan: <strong class="text-slate-700">585 - 831 kkal</strong>
+                                                <span
+                                                    class="text-[11px] font-black text-slate-800 block uppercase tracking-wider leading-tight"
+                                                    >Energi Total</span
+                                                >
+                                                <span
+                                                    class="text-[10px] text-slate-500 truncate block mt-0.5"
+                                                >
+                                                    Standar Rujukan:
+                                                    <strong
+                                                        class="text-slate-700"
+                                                        >585 - 831 kkal</strong
+                                                    >
                                                 </span>
                                             </div>
                                         </div>
                                         <div class="text-right shrink-0">
-                                            <span class="font-black text-slate-900 text-lg sm:text-xl leading-none">
-                                                {{ akgResultPBNormal.energi.toFixed(1) }}
+                                            <span
+                                                class="font-black text-slate-900 text-lg sm:text-xl leading-none"
+                                            >
+                                                {{
+                                                    akgResultPBNormal.energi.toFixed(
+                                                        1,
+                                                    )
+                                                }}
                                             </span>
-                                            <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
+                                            <span
+                                                class="text-xs font-bold text-slate-500 ml-1"
+                                                >kkal</span
+                                            >
                                         </div>
                                     </div>
 
                                     <!-- 4 Makronutrien PB: Grid 2x2 di HP, 4 kolom di layar sedang -->
-                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                    <div
+                                        class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"
+                                    >
                                         <!-- Protein -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Protein</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Protein</span
+                                                >
                                                 <span class="text-xs">🥩</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.protein.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPBNormal.protein.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 15.8 - 24.5g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 15.8 - 24.5g</span
+                                            >
                                         </div>
 
                                         <!-- Lemak -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Lemak</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Lemak</span
+                                                >
                                                 <span class="text-xs">🥑</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.lemak.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPBNormal.lemak.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 19.5 - 26.3g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 19.5 - 26.3g</span
+                                            >
                                         </div>
 
                                         <!-- Karbohidrat -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Karbo</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Karbo</span
+                                                >
                                                 <span class="text-xs">🌾</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.karbohidrat.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPBNormal.karbohidrat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 87 - 122.5g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 87 - 122.5g</span
+                                            >
                                         </div>
 
                                         <!-- Serat -->
-                                        <div class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Serat</span>
+                                        <div
+                                            class="p-2.5 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 space-y-1 transition shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center justify-between"
+                                            >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                                    >Serat</span
+                                                >
                                                 <span class="text-xs">🥗</span>
                                             </div>
-                                            <div class="flex items-baseline gap-0.5">
-                                                <span class="font-black text-slate-900 text-sm sm:text-base">{{ akgResultPBNormal.serat.toFixed(1) }}</span>
-                                                <span class="text-[10px] font-bold text-slate-500">g</span>
+                                            <div
+                                                class="flex items-baseline gap-0.5"
+                                            >
+                                                <span
+                                                    class="font-black text-slate-900 text-sm sm:text-base"
+                                                    >{{
+                                                        akgResultPBNormal.serat.toFixed(
+                                                            1,
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500"
+                                                    >g</span
+                                                >
                                             </div>
-                                            <span class="text-[9.5px] text-slate-500 block leading-tight font-medium">Std: 6.0 - 10.0g</span>
+                                            <span
+                                                class="text-[9.5px] text-slate-500 block leading-tight font-medium"
+                                                >Std: 6.0 - 10.0g</span
+                                            >
                                         </div>
                                     </div>
                                 </div>
@@ -16591,16 +18183,30 @@ watch(
                             v-if="activeAlergiAkgList.length > 0"
                             class="space-y-4 pt-3 border-t border-slate-200"
                         >
-                            <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div
+                                class="flex items-center justify-between flex-wrap gap-2"
+                            >
                                 <div class="flex items-center gap-2">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
-                                    <h5 class="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5">
-                                        <ShieldAlert class="h-3.5 w-3.5 text-rose-600" />
-                                        <span>B. Standar AKG Varian Khusus Alergi</span>
+                                    <span
+                                        class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"
+                                    ></span>
+                                    <h5
+                                        class="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5"
+                                    >
+                                        <ShieldAlert
+                                            class="h-3.5 w-3.5 text-rose-600"
+                                        />
+                                        <span
+                                            >B. Standar AKG Varian Khusus
+                                            Alergi</span
+                                        >
                                     </h5>
                                 </div>
-                                <span class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
-                                    {{ activeAlergiAkgList.length }} Varian Alergi Dikonfigurasi
+                                <span
+                                    class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg shadow-2xs"
+                                >
+                                    {{ activeAlergiAkgList.length }} Varian
+                                    Alergi Dikonfigurasi
                                 </span>
                             </div>
 
@@ -16610,210 +18216,529 @@ watch(
                                 class="p-3.5 sm:p-4 bg-white rounded-2xl border border-rose-200/90 space-y-3.5 shadow-2xs"
                             >
                                 <!-- Header Varian Alergi -->
-                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-rose-50/60 p-3 rounded-xl border border-rose-100">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[10px] uppercase shadow-2xs">
+                                <div
+                                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-rose-50/60 p-3 rounded-xl border border-rose-100"
+                                >
+                                    <div
+                                        class="flex items-center gap-2 flex-wrap"
+                                    >
+                                        <span
+                                            class="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[10px] uppercase shadow-2xs"
+                                        >
                                             Alergi
                                         </span>
-                                        <span class="text-xs font-black text-rose-950 underline underline-offset-2">
+                                        <span
+                                            class="text-xs font-black text-rose-950 underline underline-offset-2"
+                                        >
                                             {{ alRes.jenis_alergi }}
                                         </span>
-                                        <span class="text-[10.5px] font-bold text-slate-600">
-                                            ({{ alRes.total_pm }} Porsi • PK: {{ alRes.pm_pk }}, PB: {{ alRes.pm_pb }})
+                                        <span
+                                            class="text-[10.5px] font-bold text-slate-600"
+                                        >
+                                            ({{ alRes.total_pm }} Porsi • PK:
+                                            {{ alRes.pm_pk }}, PB:
+                                            {{ alRes.pm_pb }})
                                         </span>
                                     </div>
-                                    <span class="text-[10px] font-bold text-rose-800 bg-white px-2.5 py-1 rounded-lg border border-rose-200 self-start sm:self-auto shrink-0 shadow-2xs">
-                                        {{ alRes.bahan_count }} Bahan Substitusi Terpilih
+                                    <span
+                                        class="text-[10px] font-bold text-rose-800 bg-white px-2.5 py-1 rounded-lg border border-rose-200 self-start sm:self-auto shrink-0 shadow-2xs"
+                                    >
+                                        {{ alRes.bahan_count }} Bahan Substitusi
+                                        Terpilih
                                     </span>
                                 </div>
 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                >
                                     <!-- Evaluasi PK Alergi -->
-                                    <div class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
-                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs">
+                                    <div
+                                        class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
+                                    >
+                                        <div
+                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5"
+                                        >
+                                            <div
+                                                class="flex items-center gap-2"
+                                            >
+                                                <div
+                                                    class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs"
+                                                >
                                                     PK
                                                 </div>
                                                 <div>
-                                                    <span class="text-xs font-black text-slate-900 block leading-tight">Porsi Kecil (PK) • {{ alRes.jenis_alergi }}</span>
-                                                    <span class="text-[10px] text-slate-500 font-medium">PAUD, TK, SD Kelas 1-3</span>
+                                                    <span
+                                                        class="text-xs font-black text-slate-900 block leading-tight"
+                                                        >Porsi Kecil (PK) •
+                                                        {{
+                                                            alRes.jenis_alergi
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[10px] text-slate-500 font-medium"
+                                                        >PAUD, TK, SD Kelas
+                                                        1-3</span
+                                                    >
                                                 </div>
                                             </div>
                                             <div
                                                 :class="[
                                                     'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
-                                                    getAkgStatusBadge(alRes.pk, false).badgeClass,
+                                                    getAkgStatusBadge(
+                                                        alRes.pk,
+                                                        false,
+                                                    ).badgeClass,
                                                 ]"
                                             >
-                                                {{ getAkgStatusBadge(alRes.pk, false).label }}
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        alRes.pk,
+                                                        false,
+                                                    ).label
+                                                }}
                                             </div>
                                         </div>
 
                                         <!-- Hero Energi PK Alergi -->
-                                        <div class="p-2.5 sm:p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs">
-                                            <div class="flex items-center gap-2 min-w-0">
-                                                <div class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                                    <Zap class="w-3.5 h-3.5 fill-white" />
+                                        <div
+                                            class="p-2.5 sm:p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center gap-2 min-w-0"
+                                            >
+                                                <div
+                                                    class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                                                >
+                                                    <Zap
+                                                        class="w-3.5 h-3.5 fill-white"
+                                                    />
                                                 </div>
                                                 <div class="min-w-0">
-                                                    <span class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
-                                                    <span class="text-[9.5px] text-slate-500 truncate block mt-0.5">
-                                                        Std: <strong class="text-slate-700">330 - 413 kkal</strong>
+                                                    <span
+                                                        class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight"
+                                                        >Energi Total</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] text-slate-500 truncate block mt-0.5"
+                                                    >
+                                                        Std:
+                                                        <strong
+                                                            class="text-slate-700"
+                                                            >330 - 413
+                                                            kkal</strong
+                                                        >
                                                     </span>
                                                 </div>
                                             </div>
                                             <div class="text-right shrink-0">
-                                                <span class="font-black text-slate-900 text-base sm:text-lg leading-none">
-                                                    {{ alRes.pk.energi.toFixed(1) }}
+                                                <span
+                                                    class="font-black text-slate-900 text-base sm:text-lg leading-none"
+                                                >
+                                                    {{
+                                                        alRes.pk.energi.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
                                                 </span>
-                                                <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
+                                                <span
+                                                    class="text-xs font-bold text-slate-500 ml-1"
+                                                    >kkal</span
+                                                >
                                             </div>
                                         </div>
 
                                         <!-- 4 Makronutrien PK Alergi: Grid 2x2 di HP -->
-                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Protein</span>
-                                                    <span class="text-xs">🥩</span>
+                                        <div
+                                            class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Protein</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥩</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.protein.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pk.protein.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 8.0 - 10.0g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 8.0 - 10.0g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Lemak</span>
-                                                    <span class="text-xs">🥑</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Lemak</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥑</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.lemak.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pk.lemak.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 11.0 - 13.8g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 11.0 - 13.8g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Karbo</span>
-                                                    <span class="text-xs">🌾</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Karbo</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🌾</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.karbohidrat.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pk.karbohidrat.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 50 - 62.5g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 50 - 62.5g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Serat</span>
-                                                    <span class="text-xs">🥗</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Serat</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥗</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pk.serat.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pk.serat.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 4.0 - 7.0g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 4.0 - 7.0g</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Evaluasi PB Alergi -->
-                                    <div class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
-                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-7 h-7 rounded-lg bg-rose-700 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs">
+                                    <div
+                                        class="p-3 sm:p-3.5 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3"
+                                    >
+                                        <div
+                                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5"
+                                        >
+                                            <div
+                                                class="flex items-center gap-2"
+                                            >
+                                                <div
+                                                    class="w-7 h-7 rounded-lg bg-rose-700 text-white flex items-center justify-center font-black text-[11px] shrink-0 shadow-2xs"
+                                                >
                                                     PB
                                                 </div>
                                                 <div>
-                                                    <span class="text-xs font-black text-slate-900 block leading-tight">Porsi Besar (PB) • {{ alRes.jenis_alergi }}</span>
-                                                    <span class="text-[10px] text-slate-500 font-medium">SD 4-6, SMP, SMA/SMK, Bumil/Busui</span>
+                                                    <span
+                                                        class="text-xs font-black text-slate-900 block leading-tight"
+                                                        >Porsi Besar (PB) •
+                                                        {{
+                                                            alRes.jenis_alergi
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[10px] text-slate-500 font-medium"
+                                                        >SD 4-6, SMP, SMA/SMK,
+                                                        Bumil/Busui</span
+                                                    >
                                                 </div>
                                             </div>
                                             <div
                                                 :class="[
                                                     'px-2.5 py-1 text-[10px] rounded-lg border font-black self-start sm:self-auto shrink-0 shadow-2xs leading-tight',
-                                                    getAkgStatusBadge(alRes.pb, true).badgeClass,
+                                                    getAkgStatusBadge(
+                                                        alRes.pb,
+                                                        true,
+                                                    ).badgeClass,
                                                 ]"
                                             >
-                                                {{ getAkgStatusBadge(alRes.pb, true).label }}
+                                                {{
+                                                    getAkgStatusBadge(
+                                                        alRes.pb,
+                                                        true,
+                                                    ).label
+                                                }}
                                             </div>
                                         </div>
 
                                         <!-- Hero Energi PB Alergi -->
-                                        <div class="p-2.5 sm:p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs">
-                                            <div class="flex items-center gap-2 min-w-0">
-                                                <div class="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                                                    <Zap class="w-3.5 h-3.5 fill-white" />
+                                        <div
+                                            class="p-2.5 sm:p-3 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-white rounded-xl border border-blue-200/80 flex items-center justify-between gap-3 shadow-2xs"
+                                        >
+                                            <div
+                                                class="flex items-center gap-2 min-w-0"
+                                            >
+                                                <div
+                                                    class="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs"
+                                                >
+                                                    <Zap
+                                                        class="w-3.5 h-3.5 fill-white"
+                                                    />
                                                 </div>
                                                 <div class="min-w-0">
-                                                    <span class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight">Energi Total</span>
-                                                    <span class="text-[9.5px] text-slate-500 truncate block mt-0.5">
-                                                        Std: <strong class="text-slate-700">585 - 831 kkal</strong>
+                                                    <span
+                                                        class="text-[10.5px] font-black text-slate-800 block uppercase tracking-wider leading-tight"
+                                                        >Energi Total</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] text-slate-500 truncate block mt-0.5"
+                                                    >
+                                                        Std:
+                                                        <strong
+                                                            class="text-slate-700"
+                                                            >585 - 831
+                                                            kkal</strong
+                                                        >
                                                     </span>
                                                 </div>
                                             </div>
                                             <div class="text-right shrink-0">
-                                                <span class="font-black text-slate-900 text-base sm:text-lg leading-none">
-                                                    {{ alRes.pb.energi.toFixed(1) }}
+                                                <span
+                                                    class="font-black text-slate-900 text-base sm:text-lg leading-none"
+                                                >
+                                                    {{
+                                                        alRes.pb.energi.toFixed(
+                                                            1,
+                                                        )
+                                                    }}
                                                 </span>
-                                                <span class="text-xs font-bold text-slate-500 ml-1">kkal</span>
+                                                <span
+                                                    class="text-xs font-bold text-slate-500 ml-1"
+                                                    >kkal</span
+                                                >
                                             </div>
                                         </div>
 
                                         <!-- 4 Makronutrien PB Alergi: Grid 2x2 di HP -->
-                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Protein</span>
-                                                    <span class="text-xs">🥩</span>
+                                        <div
+                                            class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"
+                                        >
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Protein</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥩</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.protein.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pb.protein.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 15.8 - 24.5g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 15.8 - 24.5g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Lemak</span>
-                                                    <span class="text-xs">🥑</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Lemak</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥑</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.lemak.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pb.lemak.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 19.5 - 26.3g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 19.5 - 26.3g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Karbo</span>
-                                                    <span class="text-xs">🌾</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Karbo</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🌾</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.karbohidrat.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pb.karbohidrat.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 87 - 122.5g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 87 - 122.5g</span
+                                                >
                                             </div>
 
-                                            <div class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[9.5px] font-bold text-slate-600 uppercase">Serat</span>
-                                                    <span class="text-xs">🥗</span>
+                                            <div
+                                                class="p-2 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-0.5 shadow-2xs"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between"
+                                                >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-600 uppercase"
+                                                        >Serat</span
+                                                    >
+                                                    <span class="text-xs"
+                                                        >🥗</span
+                                                    >
                                                 </div>
-                                                <div class="flex items-baseline gap-0.5">
-                                                    <span class="font-black text-slate-900 text-sm">{{ alRes.pb.serat.toFixed(1) }}</span>
-                                                    <span class="text-[9.5px] font-bold text-slate-500">g</span>
+                                                <div
+                                                    class="flex items-baseline gap-0.5"
+                                                >
+                                                    <span
+                                                        class="font-black text-slate-900 text-sm"
+                                                        >{{
+                                                            alRes.pb.serat.toFixed(
+                                                                1,
+                                                            )
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        class="text-[9.5px] font-bold text-slate-500"
+                                                        >g</span
+                                                    >
                                                 </div>
-                                                <span class="text-[9px] text-slate-500 block leading-tight font-medium">Std: 6.0 - 10.0g</span>
+                                                <span
+                                                    class="text-[9px] text-slate-500 block leading-tight font-medium"
+                                                    >Std: 6.0 - 10.0g</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
@@ -16866,37 +18791,35 @@ watch(
                                     >
                                 </span>
                             </div>
-                            <div
-                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5"
-                            >
+                            <div class="flex flex-wrap gap-3 w-full">
                                 <div
                                     v-for="al in activeAlergiFoodCostList"
                                     :key="al.jenis_alergi"
-                                    class="p-2.5 bg-white rounded-xl border border-amber-200 shadow-2xs text-xs space-y-1"
+                                    class="flex-1 min-w-[280px] p-3 bg-white rounded-xl border border-amber-200 shadow-2xs text-xs space-y-1.5"
                                 >
                                     <div
-                                        class="font-bold text-slate-800 flex items-center justify-between"
+                                        class="font-bold text-slate-900 flex items-center justify-between"
                                     >
-                                        <span>{{ al.jenis_alergi }}</span>
+                                        <span class="text-xs sm:text-sm font-black text-amber-950">{{ al.jenis_alergi }}</span>
                                         <span
-                                            class="text-[10.5px] text-slate-700 font-black"
+                                            class="text-[11px] text-slate-700 font-black px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200"
                                         >
                                             {{ al.total_pm }} Porsi (PK:
                                             {{ al.pm_pk }}, PB: {{ al.pm_pb }})
                                         </span>
                                     </div>
                                     <div
-                                        class="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100"
+                                        class="text-xs text-slate-600 flex items-center justify-between pt-1.5 border-t border-slate-100 font-medium"
                                     >
                                         <span
                                             >Cost PK:
-                                            <strong>{{
+                                            <strong class="text-slate-900">{{
                                                 formatRupiah(al.cost_pk)
                                             }}</strong></span
                                         >
                                         <span
                                             >Cost PB:
-                                            <strong>{{
+                                            <strong class="text-slate-900">{{
                                                 formatRupiah(al.cost_pb)
                                             }}</strong></span
                                         >
@@ -17798,32 +19721,46 @@ watch(
                                     class="bg-slate-50 font-bold border-t border-slate-200 text-xs"
                                 >
                                     <tr>
+                                        <!-- Kolom 1-8: Label Grand Total -->
                                         <td
-                                            colspan="7"
-                                            class="p-3.5 text-right text-slate-700"
+                                            colspan="8"
+                                            class="p-3.5 text-right font-black text-slate-700 uppercase tracking-wider text-[11px]"
                                         >
-                                            Grand Total Estimasi Biaya Belanja
-                                            Bahan:
+                                            Grand Total Estimasi Biaya Belanja Bahan:
                                         </td>
+
+                                        <!-- Kolom 9: Total Gross per Satuan (Kg, L, dll.) -->
                                         <td
-                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-slate-900 whitespace-nowrap align-middle"
                                         >
-                                            {{
-                                                grandTotalDraftMaster
-                                                    ? bahanCalculations
-                                                          .reduce(
-                                                              (s, x) =>
-                                                                  s +
-                                                                  x.totalGrossKg,
-                                                              0,
-                                                          )
-                                                          .toFixed(1) + " kg"
-                                                    : "-"
-                                            }}
+                                            <div
+                                                v-if="
+                                                    groupedUnitBahanCalculations &&
+                                                    groupedUnitBahanCalculations.length > 0
+                                                "
+                                                class="flex flex-col items-end justify-center gap-1"
+                                            >
+                                                <div
+                                                    v-for="(
+                                                        grp, gIdx
+                                                    ) in groupedUnitBahanCalculations"
+                                                    :key="gIdx"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-900 text-xs font-black shadow-2xs"
+                                                >
+                                                    <span>{{ grp.label }}</span>
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400">-</span>
                                         </td>
-                                        <td></td>
+
+                                        <!-- Kolom 10: Harga Master (Kosong) -->
+                                        <td class="p-3.5 text-center text-slate-400 font-normal">
+                                            -
+                                        </td>
+
+                                        <!-- Kolom 11: Subtotal Estimasi PO -->
                                         <td
-                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap"
+                                            class="p-3.5 text-right font-black text-emerald-900 text-sm whitespace-nowrap align-middle"
                                         >
                                             {{
                                                 formatRupiah(
@@ -17831,6 +19768,9 @@ watch(
                                                 )
                                             }}
                                         </td>
+
+                                        <!-- Kolom 12: Keterangan (Kosong) -->
+                                        <td class="p-3.5"></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -17857,7 +19797,9 @@ watch(
                                         Instruksi & Catatan Kerja Tim Produksi
                                     </h4>
                                     <p class="text-[11px] text-slate-500">
-                                        Ringkasan arahan teknis operasional untuk Tim Persiapan, Pengolahan, dan Pemorsian.
+                                        Ringkasan arahan teknis operasional
+                                        untuk Tim Persiapan, Pengolahan, dan
+                                        Pemorsian.
                                     </p>
                                 </div>
                             </div>
@@ -17889,15 +19831,25 @@ watch(
                                 class="p-3 bg-white rounded-xl border border-amber-200/80 hover:border-amber-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <div class="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                    <div
+                                        class="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0"
+                                    >
                                         <Utensils class="w-3.5 h-3.5" />
                                     </div>
                                     <div class="min-w-0">
-                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-amber-900 transition">
+                                        <h5
+                                            class="text-xs font-black text-slate-800 truncate group-hover:text-amber-900 transition"
+                                        >
                                             Tim Persiapan
                                         </h5>
-                                        <p class="text-[10px] text-slate-500 font-semibold">
-                                            {{ catatanTim.persiapan?.length || 0 }} instruksi bahan
+                                        <p
+                                            class="text-[10px] text-slate-500 font-semibold"
+                                        >
+                                            {{
+                                                catatanTim.persiapan?.length ||
+                                                0
+                                            }}
+                                            instruksi bahan
                                         </p>
                                     </div>
                                 </div>
@@ -17916,15 +19868,25 @@ watch(
                                 class="p-3 bg-white rounded-xl border border-blue-200/80 hover:border-blue-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <div class="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+                                    <div
+                                        class="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0"
+                                    >
                                         <UtensilsCrossed class="w-3.5 h-3.5" />
                                     </div>
                                     <div class="min-w-0">
-                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-blue-900 transition">
+                                        <h5
+                                            class="text-xs font-black text-slate-800 truncate group-hover:text-blue-900 transition"
+                                        >
                                             Tim Pengolahan
                                         </h5>
-                                        <p class="text-[10px] text-slate-500 font-semibold">
-                                            {{ catatanTim.pengolahan?.length || 0 }} instruksi olah
+                                        <p
+                                            class="text-[10px] text-slate-500 font-semibold"
+                                        >
+                                            {{
+                                                catatanTim.pengolahan?.length ||
+                                                0
+                                            }}
+                                            instruksi olah
                                         </p>
                                     </div>
                                 </div>
@@ -17943,15 +19905,25 @@ watch(
                                 class="p-3 bg-white rounded-xl border border-purple-200/80 hover:border-purple-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2 group"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <div class="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+                                    <div
+                                        class="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0"
+                                    >
                                         <ShoppingBag class="w-3.5 h-3.5" />
                                     </div>
                                     <div class="min-w-0">
-                                        <h5 class="text-xs font-black text-slate-800 truncate group-hover:text-purple-900 transition">
+                                        <h5
+                                            class="text-xs font-black text-slate-800 truncate group-hover:text-purple-900 transition"
+                                        >
                                             Tim Pemorsian
                                         </h5>
-                                        <p class="text-[10px] text-slate-500 font-semibold">
-                                            {{ catatanTim.pemorsian?.length || 0 }} instruksi porsi
+                                        <p
+                                            class="text-[10px] text-slate-500 font-semibold"
+                                        >
+                                            {{
+                                                catatanTim.pemorsian?.length ||
+                                                0
+                                            }}
+                                            instruksi porsi
                                         </p>
                                     </div>
                                 </div>
@@ -17979,7 +19951,9 @@ watch(
                             <span>Kembali ke Catatan Tim (Langkah 3)</span>
                         </Button>
 
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                        <div
+                            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
+                        >
                             <Button
                                 type="button"
                                 @click="simpanSebagaiDraft"
@@ -18010,9 +19984,11 @@ watch(
         <Modal
             :show="showDetailCatatanModal"
             @close="showDetailCatatanModal = false"
-            max-width="5xl"
+            max-width="landscape"
         >
-            <div class="p-4 sm:p-6 space-y-4 max-h-[85vh] overflow-y-auto w-full min-w-0 max-w-full">
+            <div
+                class="p-4 sm:p-6 lg:p-7 space-y-4 max-h-[88vh] overflow-y-auto w-full min-w-0 max-w-full"
+            >
                 <!-- Modal Header -->
                 <div
                     class="flex items-start justify-between gap-3 border-b border-slate-200 pb-3.5"
@@ -18024,18 +20000,27 @@ watch(
                             >
                                 <ClipboardList class="w-4 h-4" />
                             </div>
-                            <h3 class="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                            <h3
+                                class="text-sm sm:text-base font-black text-slate-900 leading-tight"
+                            >
                                 Detail Instruksi & Catatan Kerja Tim Produksi
                             </h3>
                             <Badge
                                 variant="outline"
                                 class="bg-primary/5 text-primary border-primary/20 text-[10px] font-bold"
                             >
-                                {{ props.activeWorkOrder?.nomor_wo || "Work Order" }}
+                                {{
+                                    props.activeWorkOrder?.nomor_wo ||
+                                    "Work Order"
+                                }}
                             </Badge>
                         </div>
-                        <p class="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-                            Rincian instruksi operasional lengkap per menu, bahan baku, waktu eksekusi, standar perlakuan, dan kontrol mutu (QC/HACCP).
+                        <p
+                            class="text-[11px] sm:text-xs text-slate-500 leading-relaxed"
+                        >
+                            Rincian instruksi operasional lengkap per menu,
+                            bahan baku, waktu eksekusi, standar perlakuan, dan
+                            kontrol mutu (QC/HACCP).
                         </p>
                     </div>
                     <button
@@ -18089,7 +20074,9 @@ watch(
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 border border-transparent',
                             ]"
                         >
-                            <UtensilsCrossed class="w-4 h-4 text-blue-600 shrink-0" />
+                            <UtensilsCrossed
+                                class="w-4 h-4 text-blue-600 shrink-0"
+                            />
                             <span class="font-black">Tim Pengolahan</span>
                             <span
                                 :class="[
@@ -18114,7 +20101,9 @@ watch(
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 border border-transparent',
                             ]"
                         >
-                            <ShoppingBag class="w-4 h-4 text-purple-600 shrink-0" />
+                            <ShoppingBag
+                                class="w-4 h-4 text-purple-600 shrink-0"
+                            />
                             <span class="font-black">Tim Pemorsian</span>
                             <span
                                 :class="[
@@ -18132,17 +20121,39 @@ watch(
 
                 <!-- Konten Tab Modal: Tim Persiapan -->
                 <div v-if="modalActiveTimTab === 'persiapan'" class="space-y-4">
-                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                    <div
+                        class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full"
+                    >
                         <table class="w-full text-left text-xs border-collapse">
-                            <thead class="bg-amber-50/70 border-b border-amber-200/80 text-amber-950 text-[11px] uppercase tracking-wider font-black">
+                            <thead
+                                class="bg-amber-50/70 border-b border-amber-200/80 text-amber-950 text-[11px] uppercase tracking-wider font-black"
+                            >
                                 <tr>
-                                    <th class="py-3 px-3 text-center w-12">No</th>
-                                    <th class="py-3 px-3 min-w-[180px]">Sub-Menu Masakan</th>
-                                    <th class="py-3 px-3 min-w-[180px]">Bahan Baku PO</th>
-                                    <th class="py-3 px-3 min-w-[110px] text-center">Kuantitas</th>
-                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
-                                    <th class="py-3 px-3 min-w-[260px]">Perlakuan & Standar Olah</th>
-                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (HACCP/QC)</th>
+                                    <th class="py-3 px-3 text-center w-12">
+                                        No
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[180px]">
+                                        Sub-Menu Masakan
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[180px]">
+                                        Bahan Baku PO
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[110px] text-center"
+                                    >
+                                        Kuantitas
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[140px] text-center"
+                                    >
+                                        Waktu Eksekusi
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[260px]">
+                                        Perlakuan & Standar Olah
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[200px]">
+                                        Keterangan (HACCP/QC)
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -18151,43 +20162,119 @@ watch(
                                     :key="item.id || idx"
                                     class="hover:bg-amber-50/20 transition"
                                 >
-                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
-                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
-                                    <td class="py-3 px-3 font-bold text-amber-950 whitespace-normal break-words">{{ item.bahan_baku }}</td>
-                                    <td class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap">{{ item.kuantitas || `${item.jumlah || 0} ${item.satuan || ''}` }}</td>
-                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
-                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
-                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
-                                        </span>
-                                        <span v-else class="text-slate-400 italic">-</span>
+                                    <td
+                                        class="py-3 px-3 text-center font-black text-slate-500"
+                                    >
+                                        {{ idx + 1 }}
                                     </td>
-                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
-                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                    <td
+                                        class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words"
+                                    >
+                                        {{ item.nama_menu }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 font-bold text-amber-950 whitespace-normal break-words"
+                                    >
+                                        {{ item.bahan_baku }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap"
+                                    >
+                                        {{
+                                            item.kuantitas ||
+                                            `${item.jumlah || 0} ${item.satuan || ""}`
+                                        }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center text-slate-700 whitespace-nowrap"
+                                    >
+                                        <span
+                                            v-if="item.waktu_mulai"
+                                            class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]"
+                                        >
+                                            ⏰ {{ item.waktu_mulai }} -
+                                            {{ item.waktu_selesai }}
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="text-slate-400 italic"
+                                            >-</span
+                                        >
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed"
+                                    >
+                                        {{ item.perlakuan || "-" }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]"
+                                    >
+                                        {{ item.keterangan || "-" }}
+                                    </td>
                                 </tr>
-                                <tr v-if="!catatanTim.persiapan || catatanTim.persiapan.length === 0">
-                                    <td colspan="7" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Persiapan.</td>
+                                <tr
+                                    v-if="
+                                        !catatanTim.persiapan ||
+                                        catatanTim.persiapan.length === 0
+                                    "
+                                >
+                                    <td
+                                        colspan="7"
+                                        class="py-6 text-center text-slate-400 italic"
+                                    >
+                                        Belum ada catatan Tim Persiapan.
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-if="catatanTim.catatan_global?.persiapan" class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
-                        <strong>Catatan Global Tim Persiapan:</strong> {{ catatanTim.catatan_global.persiapan }}
+                    <div
+                        v-if="catatanTim.catatan_global?.persiapan"
+                        class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed"
+                    >
+                        <strong>Catatan Global Tim Persiapan:</strong>
+                        {{ catatanTim.catatan_global.persiapan }}
                     </div>
                 </div>
 
                 <!-- Konten Tab Modal: Tim Pengolahan -->
-                <div v-if="modalActiveTimTab === 'pengolahan'" class="space-y-4">
-                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                <div
+                    v-if="modalActiveTimTab === 'pengolahan'"
+                    class="space-y-4"
+                >
+                    <div
+                        class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full"
+                    >
                         <table class="w-full text-left text-xs border-collapse">
-                            <thead class="bg-blue-50/70 border-b border-blue-200/80 text-blue-950 text-[11px] uppercase tracking-wider font-black">
+                            <thead
+                                class="bg-blue-50/70 border-b border-blue-200/80 text-blue-950 text-[11px] uppercase tracking-wider font-black"
+                            >
                                 <tr>
-                                    <th class="py-3 px-3 text-center w-12">No</th>
-                                    <th class="py-3 px-3 min-w-[180px]">Sub-Menu Masakan</th>
-                                    <th class="py-3 px-3 min-w-[180px]">Bahan Baku PO</th>
-                                    <th class="py-3 px-3 min-w-[110px] text-center">Kuantitas</th>
-                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
-                                    <th class="py-3 px-3 min-w-[260px]">Perlakuan & Standar Olah</th>
-                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (HACCP/QC)</th>
+                                    <th class="py-3 px-3 text-center w-12">
+                                        No
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[180px]">
+                                        Sub-Menu Masakan
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[180px]">
+                                        Bahan Baku PO
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[110px] text-center"
+                                    >
+                                        Kuantitas
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[140px] text-center"
+                                    >
+                                        Waktu Eksekusi
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[260px]">
+                                        Perlakuan & Standar Olah
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[200px]">
+                                        Keterangan (HACCP/QC)
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -18196,42 +20283,113 @@ watch(
                                     :key="item.id || idx"
                                     class="hover:bg-blue-50/20 transition"
                                 >
-                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
-                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
-                                    <td class="py-3 px-3 font-bold text-blue-950 whitespace-normal break-words">{{ item.bahan_baku }}</td>
-                                    <td class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap">{{ item.kuantitas || `${item.jumlah || 0} ${item.satuan || ''}` }}</td>
-                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
-                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
-                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
-                                        </span>
-                                        <span v-else class="text-slate-400 italic">-</span>
+                                    <td
+                                        class="py-3 px-3 text-center font-black text-slate-500"
+                                    >
+                                        {{ idx + 1 }}
                                     </td>
-                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
-                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                    <td
+                                        class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words"
+                                    >
+                                        {{ item.nama_menu }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 font-bold text-blue-950 whitespace-normal break-words"
+                                    >
+                                        {{ item.bahan_baku }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center font-black text-slate-800 whitespace-nowrap"
+                                    >
+                                        {{
+                                            item.kuantitas ||
+                                            `${item.jumlah || 0} ${item.satuan || ""}`
+                                        }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center text-slate-700 whitespace-nowrap"
+                                    >
+                                        <span
+                                            v-if="item.waktu_mulai"
+                                            class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]"
+                                        >
+                                            ⏰ {{ item.waktu_mulai }} -
+                                            {{ item.waktu_selesai }}
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="text-slate-400 italic"
+                                            >-</span
+                                        >
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed"
+                                    >
+                                        {{ item.perlakuan || "-" }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]"
+                                    >
+                                        {{ item.keterangan || "-" }}
+                                    </td>
                                 </tr>
-                                <tr v-if="!catatanTim.pengolahan || catatanTim.pengolahan.length === 0">
-                                    <td colspan="7" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Pengolahan.</td>
+                                <tr
+                                    v-if="
+                                        !catatanTim.pengolahan ||
+                                        catatanTim.pengolahan.length === 0
+                                    "
+                                >
+                                    <td
+                                        colspan="7"
+                                        class="py-6 text-center text-slate-400 italic"
+                                    >
+                                        Belum ada catatan Tim Pengolahan.
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-if="catatanTim.catatan_global?.pengolahan" class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
-                        <strong>Catatan Global Tim Pengolahan:</strong> {{ catatanTim.catatan_global.pengolahan }}
+                    <div
+                        v-if="catatanTim.catatan_global?.pengolahan"
+                        class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed"
+                    >
+                        <strong>Catatan Global Tim Pengolahan:</strong>
+                        {{ catatanTim.catatan_global.pengolahan }}
                     </div>
                 </div>
 
                 <!-- Konten Tab Modal: Tim Pemorsian -->
                 <div v-if="modalActiveTimTab === 'pemorsian'" class="space-y-4">
-                    <div class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full">
+                    <div
+                        class="border border-slate-200 rounded-xl overflow-x-auto shadow-xs w-full max-w-full"
+                    >
                         <table class="w-full text-left text-xs border-collapse">
-                            <thead class="bg-purple-50/70 border-b border-purple-200/80 text-purple-950 text-[11px] uppercase tracking-wider font-black">
+                            <thead
+                                class="bg-purple-50/70 border-b border-purple-200/80 text-purple-950 text-[11px] uppercase tracking-wider font-black"
+                            >
                                 <tr>
-                                    <th class="py-3 px-3 text-center w-12">No</th>
-                                    <th class="py-3 px-3 min-w-[200px]">Nama Menu (Sub-Menu)</th>
-                                    <th class="py-3 px-3 min-w-[240px] text-center">Target Porsi / Kuantitas</th>
-                                    <th class="py-3 px-3 min-w-[140px] text-center">Waktu Eksekusi</th>
-                                    <th class="py-3 px-3 min-w-[260px]">Tata Letak Sekat & Standar Porsi</th>
-                                    <th class="py-3 px-3 min-w-[200px]">Keterangan (Hygienitas / QC)</th>
+                                    <th class="py-3 px-3 text-center w-12">
+                                        No
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[200px]">
+                                        Nama Menu (Sub-Menu)
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[240px] text-center"
+                                    >
+                                        Target Porsi / Kuantitas
+                                    </th>
+                                    <th
+                                        class="py-3 px-3 min-w-[140px] text-center"
+                                    >
+                                        Waktu Eksekusi
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[260px]">
+                                        Tata Letak Sekat & Standar Porsi
+                                    </th>
+                                    <th class="py-3 px-3 min-w-[200px]">
+                                        Keterangan (Hygienitas / QC)
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -18240,36 +20398,87 @@ watch(
                                     :key="item.id || idx"
                                     class="hover:bg-purple-50/20 transition"
                                 >
-                                    <td class="py-3 px-3 text-center font-black text-slate-500">{{ idx + 1 }}</td>
-                                    <td class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words">{{ item.nama_menu }}</td>
-                                    <td class="py-3 px-3 text-center font-bold text-purple-950 whitespace-normal break-words text-[11px] leading-relaxed">
-                                        <div class="bg-purple-50 p-2 rounded-lg border border-purple-100">{{ item.kuantitas }}</div>
+                                    <td
+                                        class="py-3 px-3 text-center font-black text-slate-500"
+                                    >
+                                        {{ idx + 1 }}
                                     </td>
-                                    <td class="py-3 px-3 text-center text-slate-700 whitespace-nowrap">
-                                        <span v-if="item.waktu_mulai" class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]">
-                                            ⏰ {{ item.waktu_mulai }} - {{ item.waktu_selesai }}
+                                    <td
+                                        class="py-3 px-3 font-black text-slate-900 whitespace-normal break-words"
+                                    >
+                                        {{ item.nama_menu }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center font-bold text-purple-950 whitespace-normal break-words text-[11px] leading-relaxed"
+                                    >
+                                        <div
+                                            class="bg-purple-50 p-2 rounded-lg border border-purple-100"
+                                        >
+                                            {{ item.kuantitas }}
+                                        </div>
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-center text-slate-700 whitespace-nowrap"
+                                    >
+                                        <span
+                                            v-if="item.waktu_mulai"
+                                            class="bg-slate-100 font-bold px-2 py-1 rounded-md text-[11px]"
+                                        >
+                                            ⏰ {{ item.waktu_mulai }} -
+                                            {{ item.waktu_selesai }}
                                         </span>
-                                        <span v-else class="text-slate-400 italic">-</span>
+                                        <span
+                                            v-else
+                                            class="text-slate-400 italic"
+                                            >-</span
+                                        >
                                     </td>
-                                    <td class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed">{{ item.perlakuan || '-' }}</td>
-                                    <td class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]">{{ item.keterangan || '-' }}</td>
+                                    <td
+                                        class="py-3 px-3 text-slate-700 whitespace-normal break-words leading-relaxed"
+                                    >
+                                        {{ item.perlakuan || "-" }}
+                                    </td>
+                                    <td
+                                        class="py-3 px-3 text-slate-600 whitespace-normal break-words leading-relaxed text-[11px]"
+                                    >
+                                        {{ item.keterangan || "-" }}
+                                    </td>
                                 </tr>
-                                <tr v-if="!catatanTim.pemorsian || catatanTim.pemorsian.length === 0">
-                                    <td colspan="6" class="py-6 text-center text-slate-400 italic">Belum ada catatan Tim Pemorsian.</td>
+                                <tr
+                                    v-if="
+                                        !catatanTim.pemorsian ||
+                                        catatanTim.pemorsian.length === 0
+                                    "
+                                >
+                                    <td
+                                        colspan="6"
+                                        class="py-6 text-center text-slate-400 italic"
+                                    >
+                                        Belum ada catatan Tim Pemorsian.
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-if="catatanTim.catatan_global?.pemorsian" class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 leading-relaxed">
-                        <strong>Catatan Global Tim Pemorsian:</strong> {{ catatanTim.catatan_global.pemorsian }}
+                    <div
+                        v-if="catatanTim.catatan_global?.pemorsian"
+                        class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 leading-relaxed"
+                    >
+                        <strong>Catatan Global Tim Pemorsian:</strong>
+                        {{ catatanTim.catatan_global.pemorsian }}
                     </div>
                 </div>
 
                 <!-- Modal Footer -->
-                <div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3.5 border-t border-slate-200">
+                <div
+                    class="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3.5 border-t border-slate-200"
+                >
                     <Button
                         type="button"
-                        @click="showDetailCatatanModal = false; handleSwitchSubTab('catatan_resep')"
+                        @click="
+                            showDetailCatatanModal = false;
+                            handleSwitchSubTab('catatan_resep');
+                        "
                         className="w-full sm:w-auto bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3.5 h-9 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                         <Edit3 class="w-3.5 h-3.5 text-primary" />
@@ -19547,7 +21756,9 @@ watch(
                         <AlertTriangle class="h-6 w-6 stroke-[2.2]" />
                     </div>
                     <div class="space-y-1">
-                        <h3 class="text-base font-black text-slate-900 leading-snug">
+                        <h3
+                            class="text-base font-black text-slate-900 leading-snug"
+                        >
                             Perubahan Belum Disimpan
                         </h3>
                         <p class="text-xs font-semibold text-slate-500">
@@ -19557,28 +21768,54 @@ watch(
                 </div>
 
                 <!-- Konten Penjelasan -->
-                <div class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 space-y-2 text-xs text-amber-950 leading-relaxed shadow-2xs">
+                <div
+                    class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 space-y-2 text-xs text-amber-950 leading-relaxed shadow-2xs"
+                >
                     <p class="font-bold">
-                        Anda telah melakukan perubahan pada <strong>Rancang Menu MBG</strong> ini yang belum disimpan.
+                        Anda telah melakukan perubahan pada
+                        <strong>Rancang Menu MBG</strong> ini yang belum
+                        disimpan.
                     </p>
-                    <p v-if="pendingNavigation?.type === 'reload'" class="text-slate-600 text-[11.5px]">
-                        Anda akan <strong>memuat ulang (refresh)</strong> halaman ini. Seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                    <p
+                        v-if="pendingNavigation?.type === 'reload'"
+                        class="text-slate-600 text-[11.5px]"
+                    >
+                        Anda akan
+                        <strong>memuat ulang (refresh)</strong> halaman ini.
+                        Seluruh data perubahan yang belum disimpan akan
+                        <strong>hilang secara permanen</strong>.
                     </p>
-                    <p v-else-if="pendingNavigation?.type === 'history_back'" class="text-slate-600 text-[11.5px]">
-                        Anda menekan tombol <strong>kembali (back)</strong> pada browser. Seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                    <p
+                        v-else-if="pendingNavigation?.type === 'history_back'"
+                        class="text-slate-600 text-[11.5px]"
+                    >
+                        Anda menekan tombol <strong>kembali (back)</strong> pada
+                        browser. Seluruh data perubahan yang belum disimpan akan
+                        <strong>hilang secara permanen</strong>.
                     </p>
                     <p v-else class="text-slate-600 text-[11.5px]">
-                        Jika Anda beralih ke menu lain, kembali, atau memuat ulang halaman sekarang, seluruh data perubahan yang belum disimpan akan <strong>hilang secara permanen</strong>.
+                        Jika Anda beralih ke menu lain, kembali, atau memuat
+                        ulang halaman sekarang, seluruh data perubahan yang
+                        belum disimpan akan
+                        <strong>hilang secara permanen</strong>.
                     </p>
                 </div>
 
-                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2">
+                <div
+                    class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2"
+                >
                     <Lightbulb class="h-4 w-4 text-amber-500 shrink-0" />
-                    <span>Anda dapat menyimpan pekerjaan Anda terlebih dahulu sebagai <strong>Draft</strong> sebelum berpindah halaman.</span>
+                    <span
+                        >Anda dapat menyimpan pekerjaan Anda terlebih dahulu
+                        sebagai <strong>Draft</strong> sebelum berpindah
+                        halaman.</span
+                    >
                 </div>
 
                 <!-- Footer Aksi -->
-                <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-slate-100">
+                <div
+                    class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-slate-100"
+                >
                     <button
                         type="button"
                         @click="handleCancelLeave"
@@ -19591,12 +21828,27 @@ watch(
                         @click="handleConfirmLeave"
                         class="w-full sm:w-auto px-5 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition cursor-pointer text-center flex items-center justify-center gap-1.5"
                     >
-                        <RotateCcw v-if="pendingNavigation?.type === 'reload'" class="h-3.5 w-3.5" />
-                        <ArrowLeft v-else-if="pendingNavigation?.type === 'history_back'" class="h-3.5 w-3.5" />
+                        <RotateCcw
+                            v-if="pendingNavigation?.type === 'reload'"
+                            class="h-3.5 w-3.5"
+                        />
+                        <ArrowLeft
+                            v-else-if="
+                                pendingNavigation?.type === 'history_back'
+                            "
+                            class="h-3.5 w-3.5"
+                        />
                         <Trash2 v-else class="h-3.5 w-3.5" />
 
-                        <span v-if="pendingNavigation?.type === 'reload'">Ya, Muat Ulang Halaman</span>
-                        <span v-else-if="pendingNavigation?.type === 'history_back'">Ya, Kembali (Tinggalkan)</span>
+                        <span v-if="pendingNavigation?.type === 'reload'"
+                            >Ya, Muat Ulang Halaman</span
+                        >
+                        <span
+                            v-else-if="
+                                pendingNavigation?.type === 'history_back'
+                            "
+                            >Ya, Kembali (Tinggalkan)</span
+                        >
                         <span v-else>Ya, Tinggalkan Halaman</span>
                     </button>
                 </div>

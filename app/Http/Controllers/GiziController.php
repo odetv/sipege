@@ -125,6 +125,7 @@ class GiziController extends Controller
             'items' => ['nullable', 'array'],
             'kelompoks' => ['nullable', 'array'],
             'catatan' => ['nullable'],
+            'jadwal_operasional' => ['nullable', 'array'],
         ]);
 
         // Validasi 1 Work Order per 1 Tanggal Distribusi dalam unit SPPG
@@ -167,6 +168,7 @@ class GiziController extends Controller
                     'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
                     'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
                     'catatan' => $validated['catatan'] ?? null,
+                    'jadwal_operasional' => $validated['jadwal_operasional'] ?? null,
                 ]
             );
 

@@ -47,6 +47,7 @@ class WorkOrder extends Model
         'riwayat_verifikasi' => 'array',
         'sub_menu_alergi' => 'array',
         'catatan' => 'array',
+        'jadwal_operasional' => 'array',
     ];
 
     public function unitSppg(): BelongsTo
