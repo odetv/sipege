@@ -2711,19 +2711,25 @@ const isFormDirty = computed(() => {
     return takeFormSnapshot() !== initialFormSnapshot.value;
 });
 
+// ─── History Trap untuk Tombol Back Browser ───────────────────────────────
+// Kita pasang trap state segera saat mount agar tombol Back browser selalu
+// memicu popstate di halaman ini, bukan langsung pindah ke halaman sebelumnya.
+// Listener dipasang di capture phase (true) agar handler kita dieksekusi
+// SEBELUM Inertia sempat menangkap popstate dan menavigasi.
 let hasHistoryTrap = false;
 
-// Pasang trap history saat form kotor agar tombol browser Back memicu popstate di halaman ini
-watch(isFormDirty, (dirty) => {
-    if (dirty && !hasHistoryTrap && typeof window !== "undefined") {
+function installHistoryTrap() {
+    if (!hasHistoryTrap && typeof window !== "undefined") {
         try {
-            window.history.pushState({ rancangMenuTrap: true }, document.title, window.location.href);
+            window.history.pushState(
+                { rancangMenuTrap: true },
+                document.title,
+                window.location.href
+            );
             hasHistoryTrap = true;
         } catch (e) {}
-    } else if (!dirty) {
-        hasHistoryTrap = false;
     }
-});
+}
 
 function handlePopState(e) {
     if (isSubmitting.value || isNavigationConfirmed.value) {
@@ -2731,9 +2737,16 @@ function handlePopState(e) {
     }
 
     if (isFormDirty.value) {
-        // Tahan pengguna tetap di halaman ini dengan mendorong kembali state trap
+        // Cegah Inertia dan event listener lain menangani popstate ini
+        e.stopImmediatePropagation();
+
+        // Re-push trap state agar back button selalu bisa dicegat
         try {
-            window.history.pushState({ rancangMenuTrap: true }, document.title, window.location.href);
+            window.history.pushState(
+                { rancangMenuTrap: true },
+                document.title,
+                window.location.href
+            );
         } catch (err) {}
 
         pendingNavigation.value = { type: "history_back" };
@@ -2771,9 +2784,11 @@ function handleKeyDown(e) {
 }
 
 function handleBeforeUnload(e) {
+    // Untuk browser refresh (tombol reload / Ctrl+Shift+R dsb.),
+    // browser HANYA menampilkan dialog bawaan — kita tidak bisa menampilkan
+    // modal custom selama event ini. Cukup set returnValue agar browser
+    // menampilkan konfirmasinya sendiri.
     if (isFormDirty.value && !isSubmitting.value && !isNavigationConfirmed.value) {
-        pendingNavigation.value = { type: "reload" };
-        showLeaveConfirmModal.value = true;
         e.preventDefault();
         e.returnValue = "";
         return "";
@@ -2794,11 +2809,8 @@ function handleConfirmLeave() {
         }
 
         if (nav.type === "history_back") {
-            if (typeof window !== "undefined" && window.history.length > 2) {
-                window.history.go(-2);
-            } else {
-                router.visit("/gizi/daftar-menu");
-            }
+            // Navigasi ke halaman sebelum rancang-menu via Inertia
+            router.visit("/gizi/daftar-menu");
             return;
         }
 
@@ -2835,11 +2847,16 @@ let removeRouterBeforeHook = null;
 
 onMounted(() => {
     window.addEventListener("click", onGlobalWindowClick);
+    // Pasang beforeunload untuk mencegah refresh browser (native dialog akan muncul, tidak bisa diganti custom)
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("popstate", handlePopState);
+    // capture: true → handler kita jalan SEBELUM Inertia menangkap popstate
+    window.addEventListener("popstate", handlePopState, true);
 
-    // Tangkap navigasi keluar dari halaman Rancang Menu via Inertia (sidebar, link, browser back)
+    // Pasang trap history langsung saat mount agar back button selalu terpotong
+    installHistoryTrap();
+
+    // Tangkap navigasi keluar dari halaman Rancang Menu via Inertia (sidebar, link)
     removeRouterBeforeHook = router.on("before", (event) => {
         if (isSubmitting.value || isNavigationConfirmed.value) {
             return;
@@ -2847,13 +2864,14 @@ onMounted(() => {
 
         if (isFormDirty.value) {
             event.preventDefault();
+            const visit = event.detail?.visit ?? {};
             pendingNavigation.value = {
-                url: event.detail.visit.url,
-                method: event.detail.visit.method,
-                data: event.detail.visit.data,
-                replace: event.detail.visit.replace,
-                preserveScroll: event.detail.visit.preserveScroll,
-                preserveState: event.detail.visit.preserveState,
+                url: visit.url,
+                method: visit.method,
+                data: visit.data,
+                replace: visit.replace,
+                preserveScroll: visit.preserveScroll,
+                preserveState: visit.preserveState,
             };
             showLeaveConfirmModal.value = true;
         }
@@ -2870,7 +2888,8 @@ onUnmounted(() => {
     window.removeEventListener("click", onGlobalWindowClick);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     window.removeEventListener("keydown", handleKeyDown);
-    window.removeEventListener("popstate", handlePopState);
+    // Harus pakai capture: true agar sama dengan yang dipasang
+    window.removeEventListener("popstate", handlePopState, true);
     if (typeof removeRouterBeforeHook === "function") {
         removeRouterBeforeHook();
     }

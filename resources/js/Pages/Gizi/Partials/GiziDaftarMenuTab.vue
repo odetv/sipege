@@ -395,7 +395,7 @@ const daftarMenuList = computed(() => {
                 total_anggaran: wo.total_anggaran_master || 0,
                 status_akg: "memenuhi",
                 status_wo: wo.status || "Draft",
-                catatan_keuangan: wo.catatan_keuangan || wo.catatan || "",
+                catatan_keuangan: wo.catatan_keuangan || "",
                 created_at: wo.created_at,
                 updated_at: wo.updated_at,
                 diajukan_pada: wo.diajukan_pada,

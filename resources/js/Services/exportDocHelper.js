@@ -622,6 +622,95 @@ export async function exportWorkOrderExcel(wo) {
         console.warn('Gagal memuat logo ke workbook Excel:', e);
     }
 
+    // Helper terpadu render Kop Surat Excel (Sheet 1, Sheet 2, Sheet 3)
+    // Logo BGN rata kiri (sejajar tepi kiri kolom A), Logo Yayasan rata kanan (sejajar tepi kanan kolom terakhir)
+    // Teks di tengah-tengah, tidak saling menutupi, peletakan logo simetris dan rapi
+    function applyWorkOrderKop(sheet, maxCols, bgnId, yayasanId) {
+        const lastColLetter = (function(n) {
+            let s = '';
+            while (n > 0) {
+                let m = (n - 1) % 26;
+                s = String.fromCharCode(65 + m) + s;
+                n = Math.floor((n - m) / 26);
+            }
+            return s;
+        })(maxCols);
+
+        // Ketinggian baris kop surat
+        sheet.getRow(1).height = 24;
+        sheet.getRow(2).height = 18;
+        sheet.getRow(3).height = 15;
+        sheet.getRow(4).height = 15;
+
+        sheet.mergeCells(`A1:${lastColLetter}1`);
+        sheet.getCell('A1').value = 'SPPG BULELENG SUKASADA TEGALLINGGAH';
+        sheet.getCell('A1').font = { name: 'Arial', size: 13, bold: true };
+        sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet.mergeCells(`A2:${lastColLetter}2`);
+        sheet.getCell('A2').value = 'YAYASAN PESANTREN MIFTAHUL ULUM';
+        sheet.getCell('A2').font = { name: 'Arial', size: 12, bold: true };
+        sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet.mergeCells(`A3:${lastColLetter}3`);
+        sheet.getCell('A3').value = 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali';
+        sheet.getCell('A3').font = { name: 'Arial', size: 9 };
+        sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet.mergeCells(`A4:${lastColLetter}4`);
+        sheet.getCell('A4').value = 'E-mail: sppgsukasadategallinggah@gmail.com';
+        sheet.getCell('A4').font = { name: 'Arial', size: 9, italic: true };
+        sheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        // Garis pemisah bawah kop (hitam medium)
+        for (let c = 1; c <= maxCols; c++) {
+            sheet.getRow(4).getCell(c).border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } };
+        }
+
+        // Hitung pixel kumulatif kolom tabel
+        const colPxOffsets = [0];
+        let totalPx = 0;
+        for (let c = 1; c <= maxCols; c++) {
+            const w = sheet.getColumn(c).width || 15;
+            const px = Math.floor((w * 7.5) + 5);
+            totalPx += px;
+            colPxOffsets.push(totalPx);
+        }
+
+        function findColAndOffset(targetPx) {
+            for (let c = 0; c < colPxOffsets.length - 1; c++) {
+                if (targetPx >= colPxOffsets[c] && targetPx < colPxOffsets[c + 1]) {
+                    const offPx = Math.round(targetPx - colPxOffsets[c]);
+                    return { nativeCol: c, nativeColOff: Math.max(0, offPx) * 9525 };
+                }
+            }
+            return { nativeCol: Math.max(0, colPxOffsets.length - 2), nativeColOff: 0 };
+        }
+
+        const marginPx = 16;
+        const logoW = 58;
+        const logoH = 58;
+        const targetBgnPx = marginPx;
+        const targetYayasanPx = Math.max(0, totalPx - marginPx - logoW);
+
+        const bgnPos = findColAndOffset(targetBgnPx);
+        const yayasanPos = findColAndOffset(targetYayasanPx);
+        const nativeRowOff = 8 * 9525; // ~8px dari atas baris 1
+
+        if (bgnId !== null) {
+            sheet.addImage(bgnId, {
+                tl: { nativeCol: bgnPos.nativeCol, nativeColOff: bgnPos.nativeColOff, nativeRow: 0, nativeRowOff },
+                ext: { width: logoW, height: logoH },
+            });
+        }
+        if (yayasanId !== null) {
+            sheet.addImage(yayasanId, {
+                tl: { nativeCol: yayasanPos.nativeCol, nativeColOff: yayasanPos.nativeColOff, nativeRow: 0, nativeRowOff },
+                ext: { width: logoW, height: logoH },
+            });
+        }
+    }
+
     // =========================================================
     // SHEET 1: PERENCANAAN PRODUKSI
     // =========================================================
@@ -630,57 +719,28 @@ export async function exportWorkOrderExcel(wo) {
     });
 
     sheet1.columns = [
-        { width: 16 },  // A: No / Label 1
+        { width: 14 },  // A: No / Label 1
         { width: 16 },  // B: Status / Label 1
         { width: 34 },  // C: Nama KPM / Value 1
         { width: 22 },  // D: Kategori / Value 1
-        { width: 20 },  // E: Jumlah PK / Label 2
-        { width: 20 },  // F: Jumlah PB / Label 2
-        { width: 20 },  // G: Total PM / Value 2
-        { width: 36 },  // H: Keterangan Alergi / Value 2
+        { width: 16 },  // E: Jumlah PK / Label 2
+        { width: 16 },  // F: Jumlah PB / Label 2
+        { width: 16 },  // G: Total PM / Value 2
+        { width: 38 },  // H: Keterangan Alergi / Value 2
     ];
     for (let c = 9; c <= 25; c++) {
         sheet1.getColumn(c).width = 20;
     }
 
-    // Add Kop to Sheet 1
-    if (logoBgnId !== null) {
-        sheet1.addImage(logoBgnId, {
-            tl: { nativeCol: 2, nativeColOff: 781050, nativeRow: 0, nativeRowOff: 18000 },
-            ext: { width: 62, height: 62 },
-        });
-    }
-    if (logoYayasanId !== null) {
-        sheet1.addImage(logoYayasanId, {
-            tl: { nativeCol: 6, nativeColOff: 38100, nativeRow: 0, nativeRowOff: 18000 },
-            ext: { width: 62, height: 62 },
-        });
-    }
+    // Auto-expand kolom C (Nama KPM) bila ada nama sekolah/lembaga panjang
+    let maxLenKpm = 28;
+    [...(data.kpmMenerima || []), ...(data.kpmTidakMenerima || [])].forEach(k => {
+        if (k.nama && k.nama.length > maxLenKpm) maxLenKpm = k.nama.length;
+    });
+    sheet1.getColumn(3).width = Math.min(maxLenKpm + 4, 48);
 
-    sheet1.mergeCells('A1:H1');
-    sheet1.getCell('A1').value = 'SPPG BULELENG SUKASADA TEGALLINGGAH';
-    sheet1.getCell('A1').font = { name: 'Arial', size: 13, bold: true };
-    sheet1.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet1.mergeCells('A2:H2');
-    sheet1.getCell('A2').value = 'YAYASAN PESANTREN MIFTAHUL ULUM';
-    sheet1.getCell('A2').font = { name: 'Arial', size: 12, bold: true };
-    sheet1.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet1.mergeCells('A3:H3');
-    sheet1.getCell('A3').value = 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali';
-    sheet1.getCell('A3').font = { name: 'Arial', size: 9 };
-    sheet1.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet1.mergeCells('A4:H4');
-    sheet1.getCell('A4').value = 'E-mail: sppgsukasadategallinggah@gmail.com';
-    sheet1.getCell('A4').font = { name: 'Arial', size: 9, italic: true };
-    sheet1.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    // Border bawah kop
-    for (let c = 1; c <= 8; c++) {
-        sheet1.getRow(4).getCell(c).border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } };
-    }
+    // Render Kop Sheet 1 (8 kolom: A - H)
+    applyWorkOrderKop(sheet1, 8, logoBgnId, logoYayasanId);
 
     sheet1.addRow([]); // Gap Baris Kosong (Row 5)
 
@@ -1032,84 +1092,27 @@ export async function exportWorkOrderExcel(wo) {
         { width: 16 },  // N: Kebutuhan (PO)
         { width: 16 },  // O: Harga/Satuan
         { width: 18 },  // P: Subtotal
-        { width: 16 },  // Q: Keterangan
+        { width: 36 },  // Q: Keterangan (lega agar tidak terpotong)
     ];
 
-    // Auto-expand kolom B, C, D bila ada nama menu/bahan yang lebih panjang dari standar
+    // Auto-expand kolom B, C, D, Q bila ada nama menu/bahan/keterangan yang lebih panjang dari standar
     let maxLenB = 26;
     let maxLenC = 36;
     let maxLenD = 24;
+    let maxLenQ = 24;
     data.formattedItems.forEach(it => {
         if (it.sub_menu && it.sub_menu.length > maxLenB) maxLenB = it.sub_menu.length;
         if (it.bahan_master && it.bahan_master.length > maxLenC) maxLenC = it.bahan_master.length;
         if (it.nama_po && it.nama_po.length > maxLenD) maxLenD = it.nama_po.length;
+        if (it.keterangan && it.keterangan.length > maxLenQ) maxLenQ = it.keterangan.length;
     });
     sheet2.getColumn(2).width = Math.min(maxLenB + 4, 44);
     sheet2.getColumn(3).width = Math.min(maxLenC + 4, 55);
     sheet2.getColumn(4).width = Math.min(maxLenD + 4, 38);
+    sheet2.getColumn(17).width = Math.max(34, Math.min(maxLenQ + 4, 52));
 
-    // Hitung posisi Logo Kop Sheet 2 secara matematis agar persis membingkai teks judul
-    const colPxOffsets_s2 = [0];
-    let totalPx_s2 = 0;
-    for (let c = 1; c <= 17; c++) {
-        const w = sheet2.getColumn(c).width || 15;
-        const px = Math.floor((w * 7.5) + 5);
-        totalPx_s2 += px;
-        colPxOffsets_s2.push(totalPx_s2);
-    }
-    const centerPx_s2 = totalPx_s2 / 2;
-    const targetBgnPx_s2 = (centerPx_s2 - 180) - 70;
-    const targetYayasanPx_s2 = (centerPx_s2 + 180) + 15;
-
-    function findColAndOffset_s2(targetPx) {
-        for (let c = 0; c < colPxOffsets_s2.length - 1; c++) {
-            if (targetPx >= colPxOffsets_s2[c] && targetPx < colPxOffsets_s2[c + 1]) {
-                const offPx = Math.round(targetPx - colPxOffsets_s2[c]);
-                return { nativeCol: c, nativeColOff: offPx * 9525 };
-            }
-        }
-        return { nativeCol: 4, nativeColOff: 0 };
-    }
-
-    const bgnPos_s2 = findColAndOffset_s2(targetBgnPx_s2);
-    const yayasanPos_s2 = findColAndOffset_s2(targetYayasanPx_s2);
-
-    if (logoBgnId !== null) {
-        sheet2.addImage(logoBgnId, {
-            tl: { nativeCol: bgnPos_s2.nativeCol, nativeColOff: bgnPos_s2.nativeColOff, nativeRow: 0, nativeRowOff: 18000 },
-            ext: { width: 62, height: 62 },
-        });
-    }
-    if (logoYayasanId !== null) {
-        sheet2.addImage(logoYayasanId, {
-            tl: { nativeCol: yayasanPos_s2.nativeCol, nativeColOff: yayasanPos_s2.nativeColOff, nativeRow: 0, nativeRowOff: 18000 },
-            ext: { width: 62, height: 62 },
-        });
-    }
-
-    sheet2.mergeCells('A1:Q1');
-    sheet2.getCell('A1').value = 'SPPG BULELENG SUKASADA TEGALLINGGAH';
-    sheet2.getCell('A1').font = { name: 'Arial', size: 13, bold: true };
-    sheet2.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet2.mergeCells('A2:Q2');
-    sheet2.getCell('A2').value = 'YAYASAN PESANTREN MIFTAHUL ULUM';
-    sheet2.getCell('A2').font = { name: 'Arial', size: 12, bold: true };
-    sheet2.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet2.mergeCells('A3:Q3');
-    sheet2.getCell('A3').value = 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali';
-    sheet2.getCell('A3').font = { name: 'Arial', size: 9 };
-    sheet2.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    sheet2.mergeCells('A4:Q4');
-    sheet2.getCell('A4').value = 'E-mail: sppgsukasadategallinggah@gmail.com';
-    sheet2.getCell('A4').font = { name: 'Arial', size: 9, italic: true };
-    sheet2.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
-
-    for (let c = 1; c <= 17; c++) {
-        sheet2.getRow(4).getCell(c).border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } };
-    }
+    // Render Kop Sheet 2 (17 kolom: A - Q)
+    applyWorkOrderKop(sheet2, 17, logoBgnId, logoYayasanId);
 
     sheet2.addRow([]); // Gap Baris Kosong (Row 5)
 
@@ -1263,8 +1266,20 @@ export async function exportWorkOrderExcel(wo) {
         row.getCell(16).font = { bold: true };
         row.getCell(16).numFmt = '"Rp "#,##0';
 
-        row.getCell(17).alignment = { horizontal: 'center' };
+        row.getCell(17).alignment = { vertical: 'middle', wrapText: true };
         row.eachCell(cell => { cell.border = borderThin; });
+
+        // Tinggi baris dinamis agar keterangan/nama menu tidak terpotong
+        const colB_w = sheet2.getColumn(2).width || 28;
+        const colC_w = sheet2.getColumn(3).width || 38;
+        const colD_w = sheet2.getColumn(4).width || 26;
+        const colQ_w = sheet2.getColumn(17).width || 36;
+        const lB = Math.ceil(((it.sub_menu || '').length) / (colB_w * 0.85));
+        const lC = Math.ceil(((it.bahan_master || '').length) / (colC_w * 0.85));
+        const lD = Math.ceil(((it.nama_po || '').length) / (colD_w * 0.85));
+        const lQ = Math.ceil(((it.keterangan || '').length) / (colQ_w * 0.85));
+        const maxL_s2 = Math.max(1, lB, lC, lD, lQ);
+        row.height = Math.min(Math.max(20, maxL_s2 * 14 + 4), 65);
     });
 
     // Total Kebutuhan Bahan (Pisah Total PK dan PB)
@@ -1282,6 +1297,7 @@ export async function exportWorkOrderExcel(wo) {
     ]);
     sheet2.mergeCells(`A${rTotBahan1.number}:G${rTotBahan1.number}`);
     rTotBahan1.font = { bold: true };
+    rTotBahan1.height = 22;
     rTotBahan1.getCell(1).alignment = { horizontal: 'right' };
     [8, 9, 10, 11, 14].forEach(c => {
         rTotBahan1.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1298,6 +1314,7 @@ export async function exportWorkOrderExcel(wo) {
     sheet2.mergeCells(`A${rTotBahan2.number}:M${rTotBahan2.number}`);
     sheet2.mergeCells(`N${rTotBahan2.number}:Q${rTotBahan2.number}`);
     rTotBahan2.font = { bold: true };
+    rTotBahan2.height = 22;
     rTotBahan2.getCell(1).alignment = { horizontal: 'right' };
     rTotBahan2.getCell(14).alignment = { horizontal: 'right' };
     rTotBahan2.getCell(14).numFmt = '"Rp "#,##0';
@@ -1310,6 +1327,7 @@ export async function exportWorkOrderExcel(wo) {
     sheet2.mergeCells(`A${rTotBahan3.number}:M${rTotBahan3.number}`);
     sheet2.mergeCells(`N${rTotBahan3.number}:Q${rTotBahan3.number}`);
     rTotBahan3.font = { bold: true };
+    rTotBahan3.height = 22;
     rTotBahan3.getCell(1).alignment = { horizontal: 'right' };
     rTotBahan3.getCell(14).alignment = { horizontal: 'right' };
     rTotBahan3.getCell(14).numFmt = '"Rp "#,##0';
@@ -1323,6 +1341,7 @@ export async function exportWorkOrderExcel(wo) {
     sheet2.mergeCells(`A${rTotBahan4.number}:M${rTotBahan4.number}`);
     sheet2.mergeCells(`N${rTotBahan4.number}:Q${rTotBahan4.number}`);
     rTotBahan4.font = { bold: true };
+    rTotBahan4.height = 24;
     rTotBahan4.getCell(1).alignment = { horizontal: 'right' };
     rTotBahan4.getCell(14).alignment = { horizontal: 'right' };
     rTotBahan4.getCell(14).font = { bold: true, color: { argb: data.selisihPagu >= 0 ? 'FF15803D' : 'FFB91C1C' } };
@@ -1600,6 +1619,249 @@ export async function exportWorkOrderExcel(wo) {
     rTtdName.getCell(2).alignment = { horizontal: 'center' };
     rTtdName.getCell(4).alignment = { horizontal: 'center' };
     rTtdName.getCell(6).alignment = { horizontal: 'center' };
+
+    // =========================================================
+    // SHEET 3: CATATAN KERJA TIM PRODUKSI
+    // =========================================================
+    const rawCatatan = wo.catatan || (wo.raw && wo.raw.catatan) || null;
+    let parsedCatatan = rawCatatan;
+    if (typeof rawCatatan === 'string') {
+        try { parsedCatatan = JSON.parse(rawCatatan); } catch (e) { parsedCatatan = null; }
+    }
+    const catatanPersiapan = (parsedCatatan && Array.isArray(parsedCatatan.persiapan)) ? parsedCatatan.persiapan : [];
+    const catatanPengolahan = (parsedCatatan && Array.isArray(parsedCatatan.pengolahan)) ? parsedCatatan.pengolahan : [];
+    const catatanPemorsian  = (parsedCatatan && Array.isArray(parsedCatatan.pemorsian))  ? parsedCatatan.pemorsian  : [];
+    const globalPersiapan  = parsedCatatan?.catatan_global?.persiapan  || '';
+    const globalPengolahan = parsedCatatan?.catatan_global?.pengolahan || '';
+    const globalPemorsian  = parsedCatatan?.catatan_global?.pemorsian  || '';
+
+    const sheet3 = workbook.addWorksheet('Catatan Kerja', {
+        views: [{ showGridLines: true }],
+    });
+
+    sheet3.columns = [
+        { width: 6  },  // A: No
+        { width: 30 },  // B: Nama Menu
+        { width: 32 },  // C: Bahan Baku
+        { width: 22 },  // D: Kuantitas (diperlebar agar tidak terpotong)
+        { width: 14 },  // E: Waktu Mulai
+        { width: 14 },  // F: Waktu Selesai
+        { width: 36 },  // G: Perlakuan / Teknik
+        { width: 48 },  // H: Keterangan
+    ];
+
+    // Auto-expand kolom B, C, D, G, H bila ada teks yang lebih panjang dari standar
+    let maxLenB_s3 = 26;
+    let maxLenC_s3 = 28;
+    let maxLenD_s3 = 18;
+    let maxLenG_s3 = 32;
+    let maxLenH_s3 = 40;
+    const allCatatanItems = [...catatanPersiapan, ...catatanPengolahan, ...catatanPemorsian];
+    allCatatanItems.forEach(item => {
+        if (item.nama_menu && item.nama_menu.length > maxLenB_s3) maxLenB_s3 = item.nama_menu.length;
+        if (item.bahan_baku && item.bahan_baku.length > maxLenC_s3) maxLenC_s3 = item.bahan_baku.length;
+        if (item.kuantitas) {
+            String(item.kuantitas).split(/\r?\n/).forEach(l => {
+                if (l.trim().length > maxLenD_s3) maxLenD_s3 = l.trim().length;
+            });
+        }
+        if (item.perlakuan && item.perlakuan.length > maxLenG_s3) maxLenG_s3 = item.perlakuan.length;
+        if (item.keterangan && item.keterangan.length > maxLenH_s3) maxLenH_s3 = item.keterangan.length;
+    });
+    sheet3.getColumn(2).width = Math.min(maxLenB_s3 + 4, 44);
+    sheet3.getColumn(3).width = Math.min(maxLenC_s3 + 4, 46);
+    sheet3.getColumn(4).width = Math.min(Math.max(22, maxLenD_s3 + 4), 34);
+    sheet3.getColumn(7).width = Math.min(maxLenG_s3 + 4, 54);
+    sheet3.getColumn(8).width = Math.min(maxLenH_s3 + 4, 64);
+
+    // Render Kop Sheet 3 (8 kolom: A - H)
+    applyWorkOrderKop(sheet3, 8, logoBgnId, logoYayasanId);
+
+    sheet3.addRow([]); // Gap Baris Kosong (Row 5)
+
+    // --- Banner dua baris ---
+    const rowBannerS3a = sheet3.addRow(['CATATAN KERJA TIM PRODUKSI MBG']);
+    sheet3.mergeCells(`A${rowBannerS3a.number}:H${rowBannerS3a.number}`);
+    rowBannerS3a.getCell(1).font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    rowBannerS3a.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+    rowBannerS3a.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rowBannerS3a.height = 24;
+
+    const rowBannerS3b = sheet3.addRow([sppgName]);
+    sheet3.mergeCells(`A${rowBannerS3b.number}:H${rowBannerS3b.number}`);
+    rowBannerS3b.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFD1FAE5' } };
+    rowBannerS3b.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+    rowBannerS3b.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rowBannerS3b.height = 20;
+
+    sheet3.addRow([]); // Gap Baris Kosong
+
+    // --- Info WO ---
+    const rInfoHeadS3 = sheet3.addRow([`No. WO: ${data.noWO}   |   Menu: ${data.namaMenu}   |   Tanggal Distribusi: ${data.tglDist}`]);
+    sheet3.mergeCells(`A${rInfoHeadS3.number}:H${rInfoHeadS3.number}`);
+    rInfoHeadS3.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF475569' } };
+    rInfoHeadS3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rInfoHeadS3.height = 16;
+
+    // --- Helper: render satu blok catatan tim ---
+    function renderCatatanTimSection(sheet, label, timColor, items, globalCatatan) {
+        sheet.addRow([]); // Spasi
+
+        // Header seksi
+        const rSeksiHeader = sheet.addRow([label]);
+        sheet.mergeCells(`A${rSeksiHeader.number}:H${rSeksiHeader.number}`);
+        rSeksiHeader.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+        rSeksiHeader.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: timColor } };
+        rSeksiHeader.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        rSeksiHeader.height = 20;
+
+        // Catatan Global (jika ada)
+        if (globalCatatan && globalCatatan.trim()) {
+            const rGlobal = sheet.addRow(['', 'Catatan Global / Tambahan:', globalCatatan]);
+            sheet.mergeCells(`C${rGlobal.number}:H${rGlobal.number}`);
+            rGlobal.getCell(2).font = { name: 'Arial', size: 9, bold: true, italic: true, color: { argb: 'FF78350F' } };
+            rGlobal.getCell(3).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF78350F' } };
+            rGlobal.getCell(3).alignment = { wrapText: true, vertical: 'top' };
+            rGlobal.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            rGlobal.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            rGlobal.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            for (let c = 4; c <= 8; c++) {
+                rGlobal.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            }
+            // Hitung tinggi baris catatan global berdasarkan panjang teks
+            const globalColsWidth = (sheet3.getColumn(3).width || 32) + (sheet3.getColumn(4).width || 22) + 28 + (sheet3.getColumn(7).width || 36) + (sheet3.getColumn(8).width || 48);
+            const globalLines = Math.ceil(globalCatatan.length / (globalColsWidth * 0.85));
+            rGlobal.height = Math.max(22, globalLines * 16 + 6);
+        }
+
+        if (items.length === 0) {
+            const rEmpty = sheet.addRow(['', '', 'Belum ada catatan kerja yang diinputkan untuk tim ini.']);
+            sheet.mergeCells(`C${rEmpty.number}:H${rEmpty.number}`);
+            rEmpty.getCell(3).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF94A3B8' } };
+            rEmpty.getCell(3).alignment = { horizontal: 'center' };
+            rEmpty.height = 16;
+            return;
+        }
+
+        // Header tabel
+        const rTblHeader = sheet.addRow(['No', 'Nama Menu', 'Bahan Baku', 'Kuantitas', 'Waktu Mulai', 'Waktu Selesai', 'Perlakuan / Teknik', 'Keterangan']);
+        rTblHeader.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            if (colNumber <= 8) {
+                cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF334155' } },
+                    bottom: { style: 'thin', color: { argb: 'FF334155' } },
+                    left: { style: 'thin', color: { argb: 'FF334155' } },
+                    right: { style: 'thin', color: { argb: 'FF334155' } },
+                };
+            }
+        });
+        rTblHeader.height = 20;
+
+        // Baris data
+        items.forEach((item, idx) => {
+            const isEven = idx % 2 === 1;
+            const rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+            const rData = sheet.addRow([
+                idx + 1,
+                item.nama_menu || '-',
+                item.bahan_baku || '-',
+                item.kuantitas || '-',
+                item.waktu_mulai || '-',
+                item.waktu_selesai || '-',
+                item.perlakuan || '-',
+                item.keterangan || '-',
+            ]);
+            rData.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                if (colNumber <= 8) {
+                    cell.font = { name: 'Arial', size: 9 };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+                    cell.alignment = { vertical: 'top', wrapText: true };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    };
+                }
+            });
+            rData.getCell(1).alignment = { horizontal: 'center', vertical: 'top' };
+            
+            // Hitung baris teks terpanjang dengan memperhatikan pemisah baris \n dan auto-wrap
+            function calcTextLines(text, colWidth) {
+                if (!text) return 1;
+                const rawLines = String(text).split(/\r?\n/);
+                let total = 0;
+                const charsPerLine = Math.max(1, Math.floor(colWidth * 0.82));
+                for (const line of rawLines) {
+                    total += Math.max(1, Math.ceil(line.length / charsPerLine));
+                }
+                return total;
+            }
+
+            const colB_w3 = sheet3.getColumn(2).width || 30;
+            const colC_w3 = sheet3.getColumn(3).width || 32;
+            const colD_w3 = sheet3.getColumn(4).width || 22;
+            const colG_w3 = sheet3.getColumn(7).width || 36;
+            const colH_w3 = sheet3.getColumn(8).width || 48;
+
+            const linesB = calcTextLines(item.nama_menu, colB_w3);
+            const linesC = calcTextLines(item.bahan_baku, colC_w3);
+            const linesD = calcTextLines(item.kuantitas, colD_w3);
+            const linesG = calcTextLines(item.perlakuan, colG_w3);
+            const linesH = calcTextLines(item.keterangan, colH_w3);
+            const maxLines = Math.max(1, linesB, linesC, linesD, linesG, linesH);
+            rData.height = Math.min(Math.max(22, maxLines * 15 + 4), 120);
+        });
+
+        // Baris rekap
+        const rRekap = sheet.addRow(['', `Total: ${items.length} catatan kerja`]);
+        sheet.mergeCells(`B${rRekap.number}:H${rRekap.number}`);
+        rRekap.getCell(2).font = { name: 'Arial', size: 8, italic: true, bold: true, color: { argb: 'FF64748B' } };
+        rRekap.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        rRekap.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        rRekap.height = 14;
+    }
+
+    // Render tiga seksi tim
+    renderCatatanTimSection(sheet3, '🔪  TIM PERSIAPAN BAHAN', 'FF1E3A8A', catatanPersiapan, globalPersiapan);
+    renderCatatanTimSection(sheet3, '🍳  TIM PENGOLAHAN / MEMASAK', 'FF166534', catatanPengolahan, globalPengolahan);
+    renderCatatanTimSection(sheet3, '🥣  TIM PEMORSIAN & DISTRIBUSI', 'FF6B21A8', catatanPemorsian, globalPemorsian);
+
+    // --- Lembar Pengesahan Sheet 3 ---
+    sheet3.addRow([]);
+    sheet3.addRow([]);
+    const rTtdTitleS3 = sheet3.addRow(['', 'Disusun Oleh:', '', 'Diperiksa Oleh:', '', 'Mengetahui & Menyetujui:', '']);
+    sheet3.mergeCells(`B${rTtdTitleS3.number}:C${rTtdTitleS3.number}`);
+    sheet3.mergeCells(`D${rTtdTitleS3.number}:E${rTtdTitleS3.number}`);
+    sheet3.mergeCells(`F${rTtdTitleS3.number}:G${rTtdTitleS3.number}`);
+    rTtdTitleS3.getCell(2).alignment = { horizontal: 'center' };
+    rTtdTitleS3.getCell(4).alignment = { horizontal: 'center' };
+    rTtdTitleS3.getCell(6).alignment = { horizontal: 'center' };
+
+    const rTtdRoleS3 = sheet3.addRow(['', 'Koordinator Tim Produksi', '', 'Ahli Gizi SPPG', '', 'Kepala SPPG', '']);
+    sheet3.mergeCells(`B${rTtdRoleS3.number}:C${rTtdRoleS3.number}`);
+    sheet3.mergeCells(`D${rTtdRoleS3.number}:E${rTtdRoleS3.number}`);
+    sheet3.mergeCells(`F${rTtdRoleS3.number}:G${rTtdRoleS3.number}`);
+    rTtdRoleS3.font = { bold: true };
+    rTtdRoleS3.getCell(2).alignment = { horizontal: 'center' };
+    rTtdRoleS3.getCell(4).alignment = { horizontal: 'center' };
+    rTtdRoleS3.getCell(6).alignment = { horizontal: 'center' };
+
+    sheet3.addRow([]);
+    sheet3.addRow([]);
+    sheet3.addRow([]);
+
+    const rTtdNameS3 = sheet3.addRow(['', '(....................................)', '', '(....................................)', '', '(....................................)', '']);
+    sheet3.mergeCells(`B${rTtdNameS3.number}:C${rTtdNameS3.number}`);
+    sheet3.mergeCells(`D${rTtdNameS3.number}:E${rTtdNameS3.number}`);
+    sheet3.mergeCells(`F${rTtdNameS3.number}:G${rTtdNameS3.number}`);
+    rTtdNameS3.font = { bold: true };
+    rTtdNameS3.getCell(2).alignment = { horizontal: 'center' };
+    rTtdNameS3.getCell(4).alignment = { horizontal: 'center' };
+    rTtdNameS3.getCell(6).alignment = { horizontal: 'center' };
 
     // Export to ArrayBuffer and Download as .xlsx
     const buffer = await workbook.xlsx.writeBuffer();

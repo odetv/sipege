@@ -201,6 +201,7 @@ const workOrdersMap = computed(() => {
         map[dateStr].push({
             id: wo.nomor_wo,
             db_id: wo.id,
+            uuid: wo.uuid || wo.id,
             nomor_wo: wo.nomor_wo,
             tanggal: dateStr,
             namaMenu: wo.nama_menu || "Menu Makan Bergizi Gratis",
@@ -374,8 +375,8 @@ function handleCellClick(cell) {
 }
 
 function handleOpenMenuInRancang(item) {
-    if (item && item.db_id) {
-        router.visit("/gizi/rancang-menu?wo_id=" + item.db_id);
+    if (item && (item.uuid || item.db_id)) {
+        router.visit("/gizi/rancang-menu?wo_id=" + (item.uuid || item.db_id));
     } else {
         emit("openRancangMenu");
     }
