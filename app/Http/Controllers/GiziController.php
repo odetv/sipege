@@ -325,6 +325,97 @@ class GiziController extends Controller
     }
 
     /**
+     * Duplikat Work Order sebagai Draft baru untuk tanggal tertentu.
+     */
+    public function duplicateWorkOrder(Request $request, $id): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->unitSppg;
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG belum terdaftar.');
+        }
+
+        $query = WorkOrder::where('unit_sppg_id', $unitSppg->id);
+        if (is_numeric($id)) {
+            $query->where('id', (int) $id);
+        } else {
+            $query->where(function ($q) use ($id) {
+                $q->where('uuid', $id)->orWhere('nomor_wo', $id);
+            });
+        }
+        $source = $query->with(['items', 'kelompoks'])->firstOrFail();
+
+        $validated = $request->validate([
+            'tanggal_distribusi' => ['required', 'date'],
+            'nama_menu' => ['required', 'string', 'max:255'],
+            'redirect_to_edit' => ['nullable', 'boolean'],
+        ]);
+
+        // Cek apakah tanggal distribusi sudah digunakan
+        $existing = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+            ->where('tanggal_distribusi', $validated['tanggal_distribusi'])
+            ->first();
+
+        if ($existing) {
+            return back()->with('error', 'Tanggal ' . $validated['tanggal_distribusi'] . ' sudah terdaftar untuk menu "' . $existing->nama_menu . '" (' . $existing->nomor_wo . '). Silakan pilih tanggal distribusi lain.');
+        }
+
+        // Nomor WO baru berdasarkan tanggal distribusi (format: WO-MBG-YYYYMMDD)
+        $datePart = str_replace('-', '', $validated['tanggal_distribusi']);
+        $newNomorWo = 'WO-MBG-' . $datePart;
+
+        // Pastikan nomor WO unik
+        $counter = 1;
+        $baseNomor = $newNomorWo;
+        while (WorkOrder::where('unit_sppg_id', $unitSppg->id)->where('nomor_wo', $newNomorWo)->exists()) {
+            $newNomorWo = $baseNomor . '-' . $counter++;
+        }
+
+        $newWo = DB::transaction(function () use ($unitSppg, $source, $validated, $newNomorWo) {
+            // Replicate WorkOrder attribute
+            $woData = $source->replicate([
+                'id', 'uuid', 'created_at', 'updated_at',
+                'diajukan_pada', 'disetujui_pada', 'ditolak_pada',
+                'catatan_keuangan', 'alasan_penolakan', 'riwayat_verifikasi'
+            ])->toArray();
+
+            $woData['unit_sppg_id'] = $unitSppg->id;
+            $woData['nomor_wo'] = $newNomorWo;
+            $woData['tanggal_distribusi'] = $validated['tanggal_distribusi'];
+            $woData['nama_menu'] = $validated['nama_menu'];
+            $woData['status'] = 'Draft';
+            $woData['current_step'] = 1;
+
+            $newWo = WorkOrder::create($woData);
+
+            // Replicate Items
+            foreach ($source->items as $item) {
+                $itemData = $item->replicate(['id', 'work_order_id', 'created_at', 'updated_at'])->toArray();
+                $itemData['work_order_id'] = $newWo->id;
+                WorkOrderItem::create($itemData);
+            }
+
+            // Replicate Kelompoks
+            foreach ($source->kelompoks as $kelompok) {
+                $kelompokData = $kelompok->replicate(['id', 'work_order_id', 'created_at', 'updated_at'])->toArray();
+                $kelompokData['work_order_id'] = $newWo->id;
+                WorkOrderKelompok::create($kelompokData);
+            }
+
+            return $newWo;
+        });
+
+        if ($request->boolean('redirect_to_edit', true)) {
+            return redirect()->route('gizi.rancang-menu', ['wo_id' => $newWo->uuid])
+                ->with('success', 'Menu berhasil diduplikat sebagai Draft (' . $newWo->nomor_wo . '). Anda dapat langsung mengeditnya.');
+        }
+
+        return redirect()->route('gizi.daftar-menu')
+            ->with('success', 'Menu berhasil diduplikat sebagai Draft (' . $newWo->nomor_wo . ').');
+    }
+
+    /**
      * Hapus Work Order.
      */
     public function destroyWorkOrder($id): RedirectResponse

@@ -52,6 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Work Order Actions
         Route::post('/work-order', [GiziController::class, 'storeWorkOrder'])->name('work-order.store');
+        Route::post('/work-order/{id}/duplicate', [GiziController::class, 'duplicateWorkOrder'])->name('work-order.duplicate');
         Route::put('/work-order/{id}', [GiziController::class, 'updateWorkOrder'])->name('work-order.update');
         Route::delete('/work-order/{id}', [GiziController::class, 'destroyWorkOrder'])->name('work-order.destroy');
 

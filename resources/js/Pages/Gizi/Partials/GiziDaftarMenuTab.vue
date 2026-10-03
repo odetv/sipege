@@ -43,6 +43,10 @@ import {
     Calendar,
     Download,
     ChevronDown,
+    Copy,
+    ChevronLeft,
+    ChevronRight,
+    AlertTriangle,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -109,6 +113,45 @@ const showDeleteConfirmModal = ref(false);
 const menuToDelete = ref(null);
 const isDeleting = ref(false);
 
+// State Modal Duplikat Menu
+const showDuplicateModal = ref(false);
+const menuToDuplicate = ref(null);
+const duplicateForm = ref({
+    tanggal_distribusi: "",
+    nama_menu: "",
+    redirect_to_edit: true,
+});
+const isDuplicating = ref(false);
+const duplicateError = ref("");
+
+// State dropdown aksi (Lihat, Edit, Duplikat, Hapus) per baris
+const openActionMenuId = ref(null);
+const activeMenuForAction = ref(null);
+const actionDropdownPos = ref({ top: 0, right: 0 });
+
+function toggleActionMenu(menu, event) {
+    if (openActionMenuId.value === menu.id) {
+        closeActionMenu();
+        return;
+    }
+    closeDownloadMenu();
+    openActionMenuId.value = menu.id;
+    activeMenuForAction.value = menu;
+
+    if (event?.currentTarget) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        actionDropdownPos.value = {
+            top: rect.bottom + 6,
+            right: Math.max(16, window.innerWidth - rect.right),
+        };
+    }
+}
+
+function closeActionMenu() {
+    openActionMenuId.value = null;
+    activeMenuForAction.value = null;
+}
+
 // State dropdown download per baris
 const openDownloadMenuId = ref(null);
 const activeMenuForDownload = ref(null);
@@ -119,6 +162,7 @@ function toggleDownloadMenu(menu, event) {
         closeDownloadMenu();
         return;
     }
+    closeActionMenu();
     openDownloadMenuId.value = menu.id;
     activeMenuForDownload.value = menu;
 
@@ -499,6 +543,297 @@ function executeDeleteWo() {
         });
     }
 }
+
+// ==========================================
+// Kalender Pemilihan Tanggal Duplikat Work Order
+// Aturan: 1 tanggal hanya boleh 1 Work Order
+// ==========================================
+const existingWoDatesMap = computed(() => {
+    const map = {};
+    (props.workOrdersList || []).forEach((w) => {
+        if (!w || !w.tanggal_distribusi) return;
+        const tgl =
+            typeof w.tanggal_distribusi === "string"
+                ? w.tanggal_distribusi.substring(0, 10)
+                : new Date(w.tanggal_distribusi).toISOString().substring(0, 10);
+        map[tgl] = {
+            id: w.id,
+            nomor_wo: w.nomor_wo,
+            nama_menu: w.nama_menu || "Menu MBG",
+            status: w.status || "Draft",
+            tanggal: tgl,
+        };
+    });
+    return map;
+});
+
+function isDuplicateDateTaken(dateStr) {
+    if (!dateStr) return false;
+    return !!existingWoDatesMap.value[dateStr];
+}
+
+function getDuplicateTakenWoInfo(dateStr) {
+    if (!dateStr) return null;
+    return existingWoDatesMap.value[dateStr] || null;
+}
+
+const currentDuplicateDateConflict = computed(() => {
+    return getDuplicateTakenWoInfo(duplicateForm.value.tanggal_distribusi);
+});
+
+const duplicateTodayStr = computed(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+});
+
+const duplicateTomorrowStr = computed(() => {
+    const tom = new Date();
+    tom.setDate(tom.getDate() + 1);
+    const y = tom.getFullYear();
+    const m = String(tom.getMonth() + 1).padStart(2, "0");
+    const d = String(tom.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+});
+
+const isDuplicateTodayTaken = computed(() => isDuplicateDateTaken(duplicateTodayStr.value));
+const isDuplicateTomorrowTaken = computed(() => isDuplicateDateTaken(duplicateTomorrowStr.value));
+
+function setDuplicateTanggalHariIni() {
+    if (isDuplicateTodayTaken.value) return;
+    duplicateForm.value.tanggal_distribusi = duplicateTodayStr.value;
+    syncDuplicatePickerMonthWithSelected();
+}
+
+function setDuplicateTanggalBesok() {
+    if (isDuplicateTomorrowTaken.value) return;
+    duplicateForm.value.tanggal_distribusi = duplicateTomorrowStr.value;
+    syncDuplicatePickerMonthWithSelected();
+}
+
+// Popover / Panel Kalender Duplikasi
+const showDuplicateDatePickerPopover = ref(true);
+const duplicatePickerCalendarYear = ref(new Date().getFullYear());
+const duplicatePickerCalendarMonth = ref(new Date().getMonth());
+
+const NAMA_BULAN_PICKER = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+const duplicatePickerMonthLabel = computed(() => {
+    return `${NAMA_BULAN_PICKER[duplicatePickerCalendarMonth.value]} ${duplicatePickerCalendarYear.value}`;
+});
+
+function syncDuplicatePickerMonthWithSelected() {
+    if (duplicateForm.value.tanggal_distribusi) {
+        const parts = duplicateForm.value.tanggal_distribusi.split("-").map(Number);
+        if (parts[0] && parts[1]) {
+            duplicatePickerCalendarYear.value = parts[0];
+            duplicatePickerCalendarMonth.value = parts[1] - 1;
+        }
+    }
+}
+
+function toggleDuplicateDatePickerPopover() {
+    showDuplicateDatePickerPopover.value = !showDuplicateDatePickerPopover.value;
+    if (showDuplicateDatePickerPopover.value) {
+        syncDuplicatePickerMonthWithSelected();
+    }
+}
+
+function prevDuplicatePickerMonth() {
+    if (duplicatePickerCalendarMonth.value === 0) {
+        duplicatePickerCalendarMonth.value = 11;
+        duplicatePickerCalendarYear.value -= 1;
+    } else {
+        duplicatePickerCalendarMonth.value -= 1;
+    }
+}
+
+function nextDuplicatePickerMonth() {
+    if (duplicatePickerCalendarMonth.value === 11) {
+        duplicatePickerCalendarMonth.value = 0;
+        duplicatePickerCalendarYear.value += 1;
+    } else {
+        duplicatePickerCalendarMonth.value += 1;
+    }
+}
+
+const duplicatePickerCalendarDays = computed(() => {
+    const year = duplicatePickerCalendarYear.value;
+    const month = duplicatePickerCalendarMonth.value;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Monday index 0, Sunday index 6
+    let startDayOfWeek = firstDay.getDay() - 1;
+    if (startDayOfWeek === -1) startDayOfWeek = 6;
+
+    const days = [];
+    const today = duplicateTodayStr.value;
+
+    // Previous month padding
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevMonthLastDay - i;
+        const prevDate = new Date(year, month - 1, dayNum);
+        const y = prevDate.getFullYear();
+        const m = String(prevDate.getMonth() + 1).padStart(2, "0");
+        const d = String(dayNum).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getDuplicateTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: dayNum,
+            isCurrentMonth: false,
+            isToday: dateStr === today,
+            isSelected: dateStr === duplicateForm.value.tanggal_distribusi,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    // Current month days
+    const totalDays = lastDay.getDate();
+    for (let dayNum = 1; dayNum <= totalDays; dayNum++) {
+        const y = year;
+        const m = String(month + 1).padStart(2, "0");
+        const d = String(dayNum).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getDuplicateTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: dayNum,
+            isCurrentMonth: true,
+            isToday: dateStr === today,
+            isSelected: dateStr === duplicateForm.value.tanggal_distribusi,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    // Next month padding to complete grid
+    const remaining = (7 - (days.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+        const nextDate = new Date(year, month + 1, i);
+        const y = nextDate.getFullYear();
+        const m = String(nextDate.getMonth() + 1).padStart(2, "0");
+        const d = String(i).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const taken = getDuplicateTakenWoInfo(dateStr);
+
+        days.push({
+            dateStr,
+            dayNumber: i,
+            isCurrentMonth: false,
+            isToday: dateStr === today,
+            isSelected: dateStr === duplicateForm.value.tanggal_distribusi,
+            isTaken: !!taken,
+            takenInfo: taken,
+        });
+    }
+
+    return days;
+});
+
+function handleSelectDuplicatePickerDate(day) {
+    if (day.isTaken) return;
+    duplicateForm.value.tanggal_distribusi = day.dateStr;
+    duplicateError.value = "";
+    syncDuplicatePickerMonthWithSelected();
+}
+
+function openDuplicateModal(m) {
+    menuToDuplicate.value = m;
+    duplicateError.value = "";
+    showDuplicateDatePickerPopover.value = true;
+
+    // Kumpulkan tanggal yang sudah digunakan
+    const existingDates = new Set(Object.keys(existingWoDatesMap.value));
+
+    // Cari tanggal kandidat berikutnya (mulai dari besok)
+    let candidate = new Date();
+    candidate.setDate(candidate.getDate() + 1);
+
+    if (m.tanggal) {
+        const d = new Date(m.tanggal);
+        if (!isNaN(d.getTime())) {
+            const nextD = new Date(d);
+            nextD.setDate(nextD.getDate() + 1);
+            if (nextD > candidate) {
+                candidate = nextD;
+            }
+        }
+    }
+
+    let chosenDateStr = candidate.toISOString().substring(0, 10);
+    for (let i = 0; i < 60; i++) {
+        const str = candidate.toISOString().substring(0, 10);
+        if (!existingDates.has(str)) {
+            chosenDateStr = str;
+            break;
+        }
+        candidate.setDate(candidate.getDate() + 1);
+    }
+
+    duplicateForm.value = {
+        tanggal_distribusi: chosenDateStr,
+        nama_menu: m.nama || "",
+        redirect_to_edit: true,
+    };
+    syncDuplicatePickerMonthWithSelected();
+    showDuplicateModal.value = true;
+}
+
+function executeDuplicateWo() {
+    if (!menuToDuplicate.value) return;
+    if (!duplicateForm.value.tanggal_distribusi) {
+        duplicateError.value = "Silakan tentukan tanggal distribusi untuk menu baru.";
+        return;
+    }
+    if (currentDuplicateDateConflict.value) {
+        duplicateError.value = `Tanggal ${formatTanggalIndo(duplicateForm.value.tanggal_distribusi)} sudah memiliki menu "${currentDuplicateDateConflict.value.nama_menu}" (${currentDuplicateDateConflict.value.nomor_wo}). Silakan pilih tanggal lain yang masih tersedia.`;
+        return;
+    }
+    if (!duplicateForm.value.nama_menu?.trim()) {
+        duplicateError.value = "Nama menu tidak boleh kosong.";
+        return;
+    }
+
+    isDuplicating.value = true;
+    duplicateError.value = "";
+
+    const woTarget =
+        menuToDuplicate.value.uuid ||
+        menuToDuplicate.value.db_id ||
+        menuToDuplicate.value.id;
+
+    router.post(
+        "/gizi/work-order/" + woTarget + "/duplicate",
+        duplicateForm.value,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                isDuplicating.value = false;
+                showDuplicateModal.value = false;
+                menuToDuplicate.value = null;
+            },
+            onError: (err) => {
+                isDuplicating.value = false;
+                duplicateError.value =
+                    err?.error ||
+                    Object.values(err || {})[0] ||
+                    "Gagal menduplikat menu. Silakan coba lagi.";
+            },
+        }
+    );
+}
 </script>
 
 <template>
@@ -697,7 +1032,7 @@ function executeDeleteWo() {
                             <th class="py-3.5 px-4 text-center min-w-[130px]">
                                 Status WO
                             </th>
-                            <th class="py-3.5 px-4 text-center min-w-[210px]">
+                            <th class="py-3.5 px-4 text-center min-w-[170px]">
                                 Aksi
                             </th>
                         </tr>
@@ -913,71 +1248,23 @@ function executeDeleteWo() {
                             </td>
 
                             <!-- 7. Aksi -->
-                            <td class="py-4 px-4 text-center whitespace-nowrap min-w-[190px]">
+                            <td class="py-4 px-4 text-center whitespace-nowrap min-w-[170px]">
                                 <div
                                     class="flex items-center justify-center gap-1.5 flex-nowrap whitespace-nowrap"
                                 >
-                                    <!-- 1. Tombol Lihat Detail -->
-                                    <button
-                                        type="button"
-                                        @click="openDetailModal(menu)"
-                                        class="h-8 w-8 shrink-0 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Lihat Detail Resep, Sasaran PM & Waktu"
-                                    >
-                                        <Eye class="h-4 w-4" />
-                                    </button>
-
-                                    <!-- 2. Tombol Edit (Bisa jika Draft atau Ditolak Keuangan) -->
-                                    <button
-                                        v-if="
-                                            menu.status_wo === 'Draft' ||
-                                            menu.status_wo
-                                                .toLowerCase()
-                                                .includes('ditolak')
-                                        "
-                                        type="button"
-                                        @click="handleEditWo(menu)"
-                                        class="h-8 w-8 shrink-0 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        :title="
-                                            menu.status_wo
-                                                .toLowerCase()
-                                                .includes('ditolak')
-                                                ? 'Perbaiki & Edit Menu yang Ditolak'
-                                                : 'Buka & Edit Formulasi Rancang Menu'
-                                        "
-                                    >
-                                        <Edit3 class="h-4 w-4" />
-                                    </button>
-                                    <span
-                                        v-else
-                                        class="h-8 w-8 shrink-0 rounded-lg text-[10.5px] font-bold text-slate-400 bg-slate-100 border border-slate-200 flex items-center justify-center cursor-not-allowed shadow-2xs"
-                                        :title="
-                                            menu.status_wo ===
-                                            'Diajukan ke Keuangan'
-                                                ? 'Sedang diverifikasi Keuangan (Terkunci)'
-                                                : 'Telah disetujui Keuangan (Terkunci)'
-                                        "
-                                    >
-                                        <Lock
-                                            class="h-3.5 w-3.5 text-slate-400"
-                                        />
-                                    </span>
-
-                                    <!-- 3. Tombol Hapus (Bisa jika Draft atau Ditolak Keuangan) -->
-                                    <button
-                                        v-if="
-                                            menu.status_wo === 'Draft' ||
-                                            menu.status_wo
-                                                .toLowerCase()
-                                                .includes('ditolak')
-                                        "
-                                        type="button"
-                                        @click="confirmDeleteWo(menu)"
-                                        class="h-8 w-8 shrink-0 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Hapus Rancangan Menu Ini"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
+                                    <!-- Tombol Dropdown Aksi (Lihat, Edit, Duplikat, Hapus) -->
+                                    <div class="relative shrink-0">
+                                        <button
+                                            type="button"
+                                            @click.stop="toggleActionMenu(menu, $event)"
+                                            class="h-8 px-2.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0 font-bold text-[11px]"
+                                            :class="{ 'bg-slate-200 text-slate-900 border-slate-400': openActionMenuId === menu.id }"
+                                            title="Pilihan Aksi Menu (Lihat, Edit, Duplikat, Hapus)"
+                                        >
+                                            <span>Aksi</span>
+                                            <ChevronDown class="h-3 w-3 opacity-60 transition-transform duration-150" :class="{ 'rotate-180': openActionMenuId === menu.id }" />
+                                        </button>
+                                    </div>
 
                                     <!-- Divider Pemisah -->
                                     <span
@@ -1041,6 +1328,301 @@ function executeDeleteWo() {
             :format-tanggal-indo="formatTanggalIndo"
             @close="showDetailModal = false"
         />
+
+        <!-- MODAL DUPLIKAT WORK ORDER -->
+        <Modal
+            :show="showDuplicateModal"
+            max-width="lg"
+            @close="showDuplicateModal = false"
+        >
+            <div v-if="menuToDuplicate" class="p-6 space-y-5">
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="h-11 w-11 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 shadow-xs"
+                        >
+                            <Copy class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h4 class="text-base font-extrabold text-slate-900">
+                                Duplikat Rancangan Menu
+                            </h4>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Salin resep, sub-menu, porsi, dan sasaran ke tanggal distribusi baru.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showDuplicateModal = false"
+                        class="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <!-- Info Menu Sumber -->
+                <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-1.5">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Menu Sumber:
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-[13px]">
+                            {{ menuToDuplicate.nama }}
+                        </span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                            {{ menuToDuplicate.id }}
+                        </span>
+                    </div>
+                    <div class="text-slate-500 text-[11px] flex items-center gap-2">
+                        <span>Tanggal Distribusi Asal: <strong class="text-slate-700">{{ formatTanggalIndo(menuToDuplicate.tanggal) }}</strong></span>
+                        <span>•</span>
+                        <span>Status Asal: <strong class="text-slate-700">{{ menuToDuplicate.status_wo }}</strong></span>
+                    </div>
+                </div>
+
+                <!-- Alert Error jika ada -->
+                <div
+                    v-if="duplicateError"
+                    class="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700"
+                >
+                    <AlertCircle class="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                    <div class="leading-relaxed">{{ duplicateError }}</div>
+                </div>
+
+                <!-- Form Duplikasi -->
+                <form @submit.prevent="executeDuplicateWo" class="space-y-4">
+                    <!-- Pemilihan Tanggal Distribusi Interaktif (Kalender MBG) -->
+                    <div>
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <label class="text-xs font-bold text-slate-700 block truncate">
+                                Tanggal Distribusi Baru <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="flex items-center gap-1.5 shrink-0 text-[10.5px] font-bold">
+                                <button
+                                    type="button"
+                                    @click="setDuplicateTanggalHariIni"
+                                    :class="isDuplicateTodayTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-indigo-600 hover:underline cursor-pointer'"
+                                    :title="isDuplicateTodayTaken ? `Hari ini sudah ada WO: ${getDuplicateTakenWoInfo(duplicateTodayStr)?.nama_menu}` : 'Pilih Tanggal Hari Ini'"
+                                >
+                                    Hari Ini
+                                </button>
+                                <span class="text-slate-300">•</span>
+                                <button
+                                    type="button"
+                                    @click="setDuplicateTanggalBesok"
+                                    :class="isDuplicateTomorrowTaken ? 'text-slate-400 cursor-not-allowed line-through' : 'text-indigo-600 hover:underline cursor-pointer'"
+                                    :title="isDuplicateTomorrowTaken ? `Besok sudah ada WO: ${getDuplicateTakenWoInfo(duplicateTomorrowStr)?.nama_menu}` : 'Pilih Tanggal Besok'"
+                                >
+                                    Besok
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Bar Pemicu Kalender -->
+                        <div
+                            @click="toggleDuplicateDatePickerPopover"
+                            class="w-full flex items-center justify-between gap-2 text-xs font-bold rounded-xl border p-2.5 bg-white cursor-pointer transition select-none shadow-2xs hover:border-indigo-400"
+                            :class="[
+                                currentDuplicateDateConflict
+                                    ? 'border-rose-400 ring-2 ring-rose-200 bg-rose-50/20 text-rose-950'
+                                    : 'border-slate-300 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 text-slate-800'
+                            ]"
+                            title="Klik untuk membuka/menutup kalender pemilihan tanggal"
+                        >
+                            <div class="flex items-center gap-2 truncate">
+                                <Calendar class="h-4 w-4 shrink-0" :class="currentDuplicateDateConflict ? 'text-rose-500' : 'text-indigo-600'" />
+                                <span class="font-extrabold truncate">
+                                    {{ formatTanggalIndo(duplicateForm.tanggal_distribusi) }}
+                                </span>
+                                <span class="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                                    ({{ duplicateForm.tanggal_distribusi }})
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span
+                                    v-if="currentDuplicateDateConflict"
+                                    class="text-[9.5px] font-black uppercase px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300"
+                                >
+                                    Sudah Ada WO
+                                </span>
+                                <span
+                                    v-else
+                                    class="text-[9.5px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                >
+                                    Tersedia
+                                </span>
+                                <ChevronDown class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="showDuplicateDatePickerPopover ? 'rotate-180 text-indigo-600' : ''" />
+                            </div>
+                        </div>
+
+                        <!-- Panel Kalender Interaktif MBG (Visual Status WO) -->
+                        <div
+                            v-if="showDuplicateDatePickerPopover"
+                            class="mt-2.5 bg-slate-50/80 rounded-2xl border border-slate-200 p-3.5 space-y-3 shadow-inner"
+                        >
+                            <!-- Header Bulan & Navigasi -->
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-200/80">
+                                <button
+                                    type="button"
+                                    @click.stop="prevDuplicatePickerMonth"
+                                    class="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-600 transition cursor-pointer"
+                                    title="Bulan Sebelumnya"
+                                >
+                                    <ChevronLeft class="h-4 w-4" />
+                                </button>
+                                <div class="text-xs font-black text-slate-800 tracking-wide">
+                                    {{ duplicatePickerMonthLabel }}
+                                </div>
+                                <button
+                                    type="button"
+                                    @click.stop="nextDuplicatePickerMonth"
+                                    class="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-600 transition cursor-pointer"
+                                    title="Bulan Berikutnya"
+                                >
+                                    <ChevronRight class="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <!-- Header Nama Hari (Sen - Min) -->
+                            <div class="grid grid-cols-7 gap-1 text-center text-[10.5px] font-bold text-slate-500 uppercase">
+                                <span class="py-1">Sen</span>
+                                <span class="py-1">Sel</span>
+                                <span class="py-1">Rab</span>
+                                <span class="py-1">Kam</span>
+                                <span class="py-1">Jum</span>
+                                <span class="py-1 text-amber-600">Sab</span>
+                                <span class="py-1 text-rose-600">Min</span>
+                            </div>
+
+                            <!-- Grid Tanggal Kalender -->
+                            <div class="grid grid-cols-7 gap-1 text-center">
+                                <button
+                                    v-for="(day, dIdx) in duplicatePickerCalendarDays"
+                                    :key="'dup-day-' + dIdx + '-' + day.dateStr"
+                                    type="button"
+                                    @click.stop="handleSelectDuplicatePickerDate(day)"
+                                    :disabled="day.isTaken"
+                                    :title="day.isTaken ? `SUDAH ADA WO: ${day.takenInfo.nama_menu} (${day.takenInfo.nomor_wo} - Status: ${day.takenInfo.status})` : `Pilih tanggal ${day.dateStr}`"
+                                    class="h-9 relative rounded-xl text-xs font-bold transition flex flex-col items-center justify-center select-none"
+                                    :class="[
+                                        day.isTaken
+                                            ? 'bg-rose-50/90 border border-rose-300 text-rose-600 cursor-not-allowed opacity-80'
+                                            : day.isSelected
+                                              ? 'bg-indigo-600 text-white font-extrabold shadow-md ring-2 ring-indigo-300'
+                                              : day.isToday
+                                                ? 'border border-indigo-500 text-indigo-600 hover:bg-indigo-50 cursor-pointer'
+                                                : day.isCurrentMonth
+                                                  ? 'text-slate-800 hover:bg-white hover:shadow-xs cursor-pointer'
+                                                  : 'text-slate-300 hover:bg-slate-100 cursor-pointer'
+                                    ]"
+                                >
+                                    <span :class="day.isTaken ? 'line-through text-rose-500 text-[11px]' : ''">
+                                        {{ day.dayNumber }}
+                                    </span>
+
+                                    <!-- Indikator Tag Jika Sudah Ada WO -->
+                                    <span
+                                        v-if="day.isTaken"
+                                        class="text-[7.5px] font-black text-rose-700 leading-none tracking-tighter"
+                                    >
+                                        WO ADA
+                                    </span>
+                                    <!-- Dot jika hari ini dan belum dipilih -->
+                                    <span
+                                        v-else-if="day.isToday && !day.isSelected"
+                                        class="h-1 w-1 rounded-full bg-indigo-600 mt-0.5"
+                                    ></span>
+                                </button>
+                            </div>
+
+                            <!-- Legenda Popover -->
+                            <div class="pt-2 border-t border-slate-200/80 space-y-1.5">
+                                <div class="flex items-center justify-between text-[10px] text-slate-500 font-semibold px-0.5">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="h-2.5 w-2.5 rounded bg-rose-100 border border-rose-400"></span>
+                                        <span>Sudah Ada WO (Terkunci)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="h-2.5 w-2.5 rounded bg-indigo-600"></span>
+                                        <span>Terpilih</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="h-2.5 w-2.5 rounded bg-white border border-slate-300"></span>
+                                        <span>Tersedia</span>
+                                    </div>
+                                </div>
+                                <p class="text-[9.5px] text-slate-400 leading-tight">
+                                    * 1 tanggal hanya diperbolehkan 1 Work Order (termasuk status Draft).
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Pesan Peringatan Jika Tanggal Sudah Memiliki WO (Conflict Alert) -->
+                        <div
+                            v-if="currentDuplicateDateConflict"
+                            class="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 space-y-1 mt-2 shadow-2xs"
+                        >
+                            <div class="font-extrabold flex items-center gap-1.5 text-rose-900">
+                                <AlertTriangle class="h-4 w-4 text-rose-600 shrink-0" />
+                                <span>Tanggal Ini Sudah Memiliki Work Order!</span>
+                            </div>
+                            <p class="text-[11px] leading-relaxed text-rose-700">
+                                Tanggal <strong>{{ formatTanggalIndo(duplicateForm.tanggal_distribusi) }}</strong> sudah digunakan untuk menu <strong>"{{ currentDuplicateDateConflict.nama_menu }}"</strong> (Nomor: {{ currentDuplicateDateConflict.nomor_wo }} • Status: <span class="uppercase font-bold">{{ currentDuplicateDateConflict.status }}</span>). Silakan pilih tanggal lain yang masih tersedia pada kalender.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">
+                            Nama Menu Baru <span class="text-rose-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            v-model="duplicateForm.nama_menu"
+                            placeholder="Masukkan nama menu..."
+                            required
+                            class="w-full text-xs font-medium border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                        />
+                    </div>
+
+                    <div class="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-start gap-3">
+                        <input
+                            type="checkbox"
+                            id="redirect_to_edit"
+                            v-model="duplicateForm.redirect_to_edit"
+                            class="h-4 w-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 mt-0.5 cursor-pointer"
+                        />
+                        <label for="redirect_to_edit" class="text-xs text-slate-700 cursor-pointer select-none">
+                            <span class="font-bold text-slate-900 block">Langsung Buka Halaman Edit (Rancang Menu)</span>
+                            <span class="text-slate-500 text-[11px] block mt-0.5">
+                                Setelah menu berhasil diduplikasi sebagai Draft baru, otomatis arahkan browser ke perancang menu untuk penyesuaian porsi & resep.
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                        <button
+                            type="button"
+                            @click="showDuplicateModal = false"
+                            class="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="isDuplicating || !!currentDuplicateDateConflict"
+                            class="px-5 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Copy class="h-4 w-4" />
+                            <span>{{
+                                isDuplicating ? "Menduplikat..." : "Duplikat Menu Sekarang"
+                            }}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Modal>
 
         <!-- MODAL KONFIRMASI HAPUS WORK ORDER -->
         <Modal
@@ -1147,6 +1729,112 @@ function executeDeleteWo() {
                         <FileText class="h-3.5 w-3.5 shrink-0" />
                         PDF (.pdf)
                     </button>
+                </div>
+            </template>
+        </Teleport>
+
+        <!-- Floating Dropdown Aksi (Teleport to body agar tidak terpotong overflow tabel) -->
+        <Teleport to="body">
+            <template v-if="openActionMenuId && activeMenuForAction">
+                <!-- Overlay transparan untuk tutup dropdown -->
+                <div
+                    class="fixed inset-0 z-[9998]"
+                    @click="closeActionMenu()"
+                ></div>
+                <div
+                    class="fixed z-[9999] bg-white border border-slate-200 rounded-xl shadow-2xl w-48 overflow-hidden text-left"
+                    :style="{
+                        top: `${actionDropdownPos.top}px`,
+                        right: `${actionDropdownPos.right}px`,
+                    }"
+                >
+                    <div class="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                        <span>Pilihan Aksi</span>
+                        <span class="text-[9.5px] font-mono text-slate-400 font-normal">#{{ activeMenuForAction.id }}</span>
+                    </div>
+
+                    <div class="py-1">
+                        <!-- 1. Lihat Detail -->
+                        <button
+                            type="button"
+                            @click="openDetailModal(activeMenuForAction); closeActionMenu()"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] font-semibold text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer text-left"
+                        >
+                            <Eye class="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                            <span>Lihat Detail Menu</span>
+                        </button>
+
+                        <!-- 2. Edit Menu -->
+                        <button
+                            v-if="
+                                activeMenuForAction.status_wo === 'Draft' ||
+                                activeMenuForAction.status_wo
+                                    .toLowerCase()
+                                    .includes('ditolak')
+                            "
+                            type="button"
+                            @click="handleEditWo(activeMenuForAction); closeActionMenu()"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] font-semibold text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer text-left"
+                        >
+                            <Edit3 class="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                            <span>Edit Formulasi Menu</span>
+                        </button>
+                        <div
+                            v-else
+                            class="w-full flex items-center justify-between px-3 py-2 text-[11.5px] font-medium text-slate-400 bg-slate-50/50 cursor-not-allowed select-none"
+                            :title="
+                                activeMenuForAction.status_wo === 'Diajukan ke Keuangan'
+                                    ? 'Sedang diverifikasi Keuangan (Terkunci)'
+                                    : 'Telah disetujui Keuangan (Terkunci)'
+                            "
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <Lock class="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span>Edit Formulasi</span>
+                            </div>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-500 uppercase">Terkunci</span>
+                        </div>
+
+                        <!-- 3. Duplikat Menu -->
+                        <button
+                            type="button"
+                            @click="openDuplicateModal(activeMenuForAction); closeActionMenu()"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer text-left"
+                        >
+                            <Copy class="h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                            <span>Duplikat Menu Ini</span>
+                        </button>
+
+                        <!-- Divider sebelum Hapus -->
+                        <div class="h-px bg-slate-100 my-1"></div>
+
+                        <!-- 4. Hapus Menu -->
+                        <button
+                            v-if="
+                                activeMenuForAction.status_wo === 'Draft' ||
+                                activeMenuForAction.status_wo
+                                    .toLowerCase()
+                                    .includes('ditolak')
+                            "
+                            type="button"
+                            @click="confirmDeleteWo(activeMenuForAction); closeActionMenu()"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer text-left"
+                        >
+                            <Trash2 class="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                            <span>Hapus Rancangan</span>
+                        </button>
+                        <div
+                            v-else
+                            class="w-full flex items-center justify-between px-3 py-2 text-[11.5px] font-medium text-slate-300 bg-slate-50/30 cursor-not-allowed select-none"
+                            title="Menu berstatus selain Draft/Ditolak tidak dapat dihapus"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <Trash2 class="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                                <span>Hapus Rancangan</span>
+                            </div>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 uppercase">Terkunci</span>
+                        </div>
+                    </div>
                 </div>
             </template>
         </Teleport>

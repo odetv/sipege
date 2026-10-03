@@ -156,6 +156,24 @@ const avgBdd = computed(() => {
     return (totalBdd / tkpiItems.value.length).toFixed(1) + "%";
 });
 
+// Kalkulasi total bahan dari seluruh sumber database yang tersedia
+const countFta = computed(() => {
+    return props.tkpiDatasets?.fta?.length || (props.selectedSource === "fta" ? tkpiItems.value.length : 1105);
+});
+const countCsv = computed(() => {
+    return props.tkpiDatasets?.csv?.length || (props.selectedSource === "csv" ? tkpiItems.value.length : 1066);
+});
+const countTkpi2020 = computed(() => {
+    return props.tkpiDatasets?.tkpi2020?.length || props.tkpiDatasets?.xlsx?.length || (props.selectedSource === "tkpi2020" || props.selectedSource === "xlsx" ? tkpiItems.value.length : 1158);
+});
+const countFatsecret = computed(() => {
+    return props.tkpiDatasets?.fatsecret?.length || (props.selectedSource === "fatsecret" ? tkpiItems.value.length : 1100);
+});
+
+const totalBahanAllDatabases = computed(() => {
+    return countFta.value + countCsv.value + countTkpi2020.value + countFatsecret.value;
+});
+
 function formatRupiah(val) {
     if (!val && val !== 0) return "Rp 0";
     return new Intl.NumberFormat("id-ID", {
@@ -392,6 +410,7 @@ function formatVal(val) {
                 >
                     <div
                         class="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-center flex flex-col justify-center"
+                        :title="`Total Kumulatif Seluruh Database: ${totalBahanAllDatabases.toLocaleString('id-ID')} Bahan (${countTkpi2020} Modifikasi + ${countFta} NutriSurvey + ${countCsv} Kemenkes + ${countFatsecret} FatSecret)`"
                     >
                         <p
                             class="text-[10px] font-bold text-blue-700 uppercase tracking-wider"
@@ -399,11 +418,14 @@ function formatVal(val) {
                             TOTAL BAHAN TERDAFTAR
                         </p>
                         <h4 class="text-xl font-black text-blue-950 mt-1">
-                            {{ tkpiItems.length }}
+                            {{ totalBahanAllDatabases.toLocaleString("id-ID") }}
                             <span class="text-xs font-medium text-slate-500"
                                 >Bahan</span
                             >
                         </h4>
+                        <p class="text-[10px] text-blue-600/90 font-medium mt-0.5">
+                            Total dari 4 Database ({{ tkpiItems.length.toLocaleString("id-ID") }} Aktif)
+                        </p>
                     </div>
                     <div
                         class="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center flex flex-col justify-center"
@@ -419,6 +441,9 @@ function formatVal(val) {
                                 >Kelompok</span
                             >
                         </h4>
+                        <p class="text-[10px] text-emerald-600/90 font-medium mt-0.5">
+                            Pada Database Terpilih
+                        </p>
                     </div>
                     <div
                         class="p-3.5 bg-amber-50/60 rounded-xl border border-amber-100 text-center flex flex-col justify-center"
@@ -434,6 +459,9 @@ function formatVal(val) {
                                 >Dapat Dimakan</span
                             >
                         </h4>
+                        <p class="text-[10px] text-amber-600/90 font-medium mt-0.5">
+                            Berat Bersih Konsumsi
+                        </p>
                     </div>
                     <div
                         class="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 text-center flex flex-col justify-center"
@@ -444,7 +472,7 @@ function formatVal(val) {
                             SUMBER DATA
                         </p>
                         <h4
-                            class="text-sm sm:text-base font-black text-purple-950 mt-1"
+                            class="text-sm sm:text-base font-black text-purple-950 mt-1 truncate"
                         >
                             {{
                                 selectedSource === "fta"
@@ -455,10 +483,10 @@ function formatVal(val) {
                                             ? "FatSecret (fatsecret.com)"
                                             : "Kemenkes (tkpi2020.csv)"))
                             }}
-                            <span class="text-xs font-medium text-slate-500"
-                                >({{ tkpiItems.length }} Bahan)</span
-                            >
                         </h4>
+                        <p class="text-[10px] text-purple-600/90 font-medium mt-0.5">
+                            {{ tkpiItems.length.toLocaleString("id-ID") }} Bahan Digunakan
+                        </p>
                     </div>
                 </div>
 
