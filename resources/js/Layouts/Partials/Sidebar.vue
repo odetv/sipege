@@ -170,9 +170,18 @@ const isAsetDigitalActive = computed(() => {
     }
 });
 
+const isLaporanSppgActive = computed(() => {
+    try {
+        return route().current("laporan.*");
+    } catch {
+        return false;
+    }
+});
+
 function getInitialMenu() {
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
+    if (isLaporanSppgActive.value) return "laporan-sppg";
     if (isLabelActive.value) return "label";
     if (isPetunjukActive.value) return "petunjuk";
     if (isAsetDigitalActive.value) return "aset-digital";
@@ -192,6 +201,9 @@ const activeKeuanganSubMenu = ref(getInitialKeuanganSubMenu());
 const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
 const isKeuanganExpanded = computed(
     () => activeExpandedMenu.value === "keuangan",
+);
+const isLaporanSppgExpanded = computed(
+    () => activeExpandedMenu.value === "laporan-sppg",
 );
 const isLabelExpanded = computed(() => activeExpandedMenu.value === "label");
 const isPetunjukExpanded = computed(
@@ -213,6 +225,8 @@ watch(
             activeExpandedMenu.value = "gizi";
         } else if (isKeuanganActive.value) {
             activeExpandedMenu.value = "keuangan";
+        } else if (isLaporanSppgActive.value) {
+            activeExpandedMenu.value = "laporan-sppg";
         } else if (isLabelActive.value) {
             activeExpandedMenu.value = "label";
         } else if (isPetunjukActive.value) {
@@ -265,6 +279,14 @@ function toggleLabelMenu() {
     }
     activeExpandedMenu.value =
         activeExpandedMenu.value === "label" ? null : "label";
+}
+
+function toggleLaporanSppgMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "laporan-sppg" ? null : "laporan-sppg";
 }
 
 function togglePetunjukMenu() {
@@ -1082,7 +1104,65 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 5. Menu Supplier Rekanan -->
+                <!-- Menu Laporan (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Laporan Button -->
+                    <button
+                        type="button"
+                        @click="toggleLaporanSppgMenu"
+                        :title="isCollapsed ? 'Laporan' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isLaporanSppgActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <FileText class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Laporan</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isLaporanSppgExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Laporan Harian Lintas Sektor -->
+                    <div
+                        v-if="!isCollapsed && isLaporanSppgExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Laporan Harian Lintas Sektor -->
+                        <Link
+                            :href="route('laporan.harian-lintas-sektor')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('laporan.harian-lintas-sektor') ||
+                                route().current('laporan.index')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <ClipboardList class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Laporan Harian</span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 6. Menu Supplier Rekanan -->
                 <Link
                     :href="route('supplier.index')"
                     :title="isCollapsed ? 'Supplier' : ''"

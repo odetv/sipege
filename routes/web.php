@@ -6,6 +6,7 @@ use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PeriodeController;
 use App\Http\Controllers\PetunjukController;
 use App\Http\Controllers\SupplierController;
@@ -104,6 +105,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [LabelController::class, 'store'])->name('store');
         Route::put('/{id}', [LabelController::class, 'update'])->name('update');
         Route::delete('/{id}', [LabelController::class, 'destroy'])->name('destroy');
+    });
+
+    // Menu Laporan SPPG
+    Route::prefix('laporan')->name('laporan.')->group(function () {
+        Route::get('/', [LaporanController::class, 'harianLintasSektor'])->name('index');
+        Route::get('/harian-lintas-sektor', [LaporanController::class, 'harianLintasSektor'])->name('harian-lintas-sektor');
     });
 
     // Periode Operasional SPPG
