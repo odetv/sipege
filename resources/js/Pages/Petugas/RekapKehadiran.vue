@@ -101,12 +101,66 @@ function onApplyDateRange(newRange) {
     if (newRange && newRange.start && newRange.end) {
         tanggalMulai.value = newRange.start;
         tanggalSelesai.value = newRange.end;
-        modeSkala.value = "custom";
-        selectedPeriodeId.value = "all";
+
+        const matched = findMatchingPeriode(newRange.start, newRange.end);
+        if (matched) {
+            selectedPeriodeId.value = String(matched.id);
+            modeSkala.value = "periodik";
+        } else {
+            selectedPeriodeId.value = "all";
+            const diffDays =
+                Math.round(
+                    (new Date(newRange.end + "T00:00:00") - new Date(newRange.start + "T00:00:00")) /
+                        (1000 * 60 * 60 * 24)
+                ) + 1;
+            if (diffDays === 14) modeSkala.value = "periodik";
+            else if (diffDays === 28) modeSkala.value = "bulanan";
+            else modeSkala.value = "custom";
+        }
+
         isDatePickerOpen.value = false;
         applyFilterTanggal();
     }
 }
+
+// Helper cari periode yang cocok dengan rentang tanggal
+function findMatchingPeriode(startStr, endStr) {
+    if (!props.periodes || !startStr || !endStr) return null;
+    const s = String(startStr).substring(0, 10);
+    const e = String(endStr).substring(0, 10);
+    return (
+        props.periodes.find((p) => {
+            const pStart = p.tanggal_mulai ? p.tanggal_mulai.substring(0, 10) : "";
+            const pEnd = p.tanggal_selesai ? p.tanggal_selesai.substring(0, 10) : "";
+            return pStart === s && pEnd === e;
+        }) || null
+    );
+}
+
+// Inisialisasi awal sinkronisasi jika periode belum terpilih tapi tanggal cocok dengan suatu periode
+if (selectedPeriodeId.value === "all") {
+    const matched = findMatchingPeriode(tanggalMulai.value, tanggalSelesai.value);
+    if (matched) {
+        selectedPeriodeId.value = String(matched.id);
+    }
+}
+
+const selectedPeriode = computed(() => {
+    if (!selectedPeriodeId.value || selectedPeriodeId.value === "all") return null;
+    return props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+});
+
+const is14HariActive = computed(() => dateColumns.value.length === 14);
+const is28HariActive = computed(() => dateColumns.value.length === 28);
+
+const labelSiklus = computed(() => {
+    if (selectedPeriode.value) {
+        return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${dateColumns.value.length} Hari Kerja)`;
+    }
+    if (dateColumns.value.length === 14) return "Siklus: Periodik (14 Hari Kerja)";
+    if (dateColumns.value.length === 28) return "Siklus: Bulanan (28 Hari Kerja)";
+    return `Siklus: Kustom (${dateColumns.value.length} Hari Kerja)`;
+});
 
 // ─── Dynamic Date Columns (Daftar Tanggal dalam Rentang) ───────────────────────
 const dateColumns = computed(() => {
@@ -270,8 +324,16 @@ function applyFilterTanggal() {
 
 function setModeSkala(newMode) {
     modeSkala.value = newMode;
-    selectedPeriodeId.value = "all";
-    tanggalSelesai.value = getDefaultEndDate(newMode, tanggalMulai.value);
+    const newEnd = getDefaultEndDate(newMode, tanggalMulai.value);
+    tanggalSelesai.value = newEnd;
+
+    const matched = findMatchingPeriode(tanggalMulai.value, newEnd);
+    if (matched) {
+        selectedPeriodeId.value = String(matched.id);
+    } else {
+        selectedPeriodeId.value = "all";
+    }
+
     applyFilterTanggal();
 }
 
@@ -284,7 +346,7 @@ function onPeriodeSelectChange() {
     if (p && p.tanggal_mulai && p.tanggal_selesai) {
         tanggalMulai.value = p.tanggal_mulai.substring(0, 10);
         tanggalSelesai.value = p.tanggal_selesai.substring(0, 10);
-        modeSkala.value = "custom";
+        modeSkala.value = "periodik";
         applyFilterTanggal();
     }
 }
@@ -548,17 +610,35 @@ const hadirPerTanggal = computed(() => {
     return map;
 });
 
-// ─── Modal Download Excel Dinamis (Bulanan / Periodik & Rentang Tanggal) ───────
+// ─── Modal Download Excel Dinamis (Hari Ini / Bulanan / Periodik & Kustom) ────
 const isExportModalOpen = ref(false);
+const isExportMenuOpen = ref(false);
 const isExporting = ref(false);
-const exportOption = ref("current"); // 'bulanan', 'periodik', 'current'
+const exportOption = ref("current"); // 'today', 'bulanan', 'periodik', 'current'
 const exportStartDate = ref(tanggalMulai.value);
 const exportEndDate = ref(tanggalSelesai.value);
 
-function openExportModal() {
-    exportOption.value = modeSkala.value === "periodik" ? "periodik" : "bulanan";
-    exportStartDate.value = tanggalMulai.value;
-    exportEndDate.value = tanggalSelesai.value;
+function openExportModal(defaultOpt = null) {
+    isExportMenuOpen.value = false;
+    if (defaultOpt) {
+        exportOption.value = defaultOpt;
+    } else {
+        exportOption.value = modeSkala.value === "periodik" ? "periodik" : "bulanan";
+    }
+
+    if (exportOption.value === "today") {
+        exportStartDate.value = todayStr.value;
+        exportEndDate.value = todayStr.value;
+    } else if (exportOption.value === "current") {
+        exportStartDate.value = tanggalMulai.value;
+        exportEndDate.value = tanggalSelesai.value;
+    } else if (exportOption.value === "bulanan") {
+        exportStartDate.value = tanggalMulai.value;
+        exportEndDate.value = getDefaultEndDate("bulanan", exportStartDate.value);
+    } else if (exportOption.value === "periodik") {
+        exportStartDate.value = tanggalMulai.value;
+        exportEndDate.value = getDefaultEndDate("periodik", exportStartDate.value);
+    }
     isExportModalOpen.value = true;
 }
 
@@ -567,7 +647,10 @@ function closeExportModal() {
 }
 
 watch(exportOption, (newOpt) => {
-    if (newOpt === "bulanan") {
+    if (newOpt === "today") {
+        exportStartDate.value = todayStr.value;
+        exportEndDate.value = todayStr.value;
+    } else if (newOpt === "bulanan") {
         exportEndDate.value = getDefaultEndDate("bulanan", exportStartDate.value);
     } else if (newOpt === "periodik") {
         exportEndDate.value = getDefaultEndDate("periodik", exportStartDate.value);
@@ -576,6 +659,44 @@ watch(exportOption, (newOpt) => {
         exportEndDate.value = tanggalSelesai.value;
     }
 });
+
+async function downloadHariIniDirect() {
+    isExportMenuOpen.value = false;
+    isExporting.value = true;
+    try {
+        let activePeriode = null;
+        if (selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, "0");
+        const exportDateList = [{
+            dateStr: todayStr.value,
+            dayNum: d,
+            label: "1",
+        }];
+
+        await downloadRekapAbsenGajiExcel({
+            petugas: props.petugas,
+            presensiMap: matrixPresensi.value,
+            kehadiranMap: matrixPresensi.value,
+            dateList: exportDateList,
+            startDate: todayStr.value,
+            endDate: todayStr.value,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            modeHariKerja: 1,
+        });
+
+        showToast(`File Excel Presensi Hari Ini (${formatTanggalIndo(todayStr.value)}) berhasil didownload!`);
+    } catch (e) {
+        console.error("Gagal export excel hari ini:", e);
+        showToast("Gagal mengunduh file Excel: " + (e?.message || e));
+    } finally {
+        isExporting.value = false;
+    }
+}
 
 async function handleExecuteExport() {
     isExporting.value = true;
@@ -604,7 +725,7 @@ async function handleExecuteExport() {
         }
 
         const days = exportDateList.length;
-        const modeHari = exportOption.value === "bulanan" ? 28 : (exportOption.value === "periodik" ? 14 : days);
+        const modeHari = exportOption.value === "today" ? 1 : (exportOption.value === "bulanan" ? 28 : (exportOption.value === "periodik" ? 14 : days));
 
         await downloadRekapAbsenGajiExcel({
             petugas: props.petugas,
@@ -618,7 +739,8 @@ async function handleExecuteExport() {
             modeHariKerja: modeHari,
         });
 
-        showToast(`File Excel Rekap Presensi & Gaji (${days} Hari) berhasil didownload!`);
+        const labelHasil = exportOption.value === "today" || days === 1 ? `Hari Ini (${formatTanggalIndo(exportStartDate.value)})` : `${days} Hari`;
+        showToast(`File Excel Rekap Presensi & Gaji (${labelHasil}) berhasil didownload!`);
         closeExportModal();
     } catch (e) {
         console.error("Gagal export excel:", e);
@@ -708,16 +830,102 @@ function closeDetailModal() {
                         <span class="hidden md:inline">Master Petugas</span>
                     </Link>
 
-                    <!-- Tombol Download Excel Rekap & Gaji -->
-                    <button
-                        type="button"
-                        @click="openExportModal"
-                        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                        title="Download File Excel Rekap Absen & Gaji"
-                    >
-                        <FileSpreadsheet class="h-4 w-4" />
-                        <span class="hidden sm:inline">Download Excel</span>
-                    </button>
+                    <!-- Tombol Download Excel Rekap & Gaji dengan Menu Cepat -->
+                    <div class="relative inline-flex items-stretch rounded-lg shadow-xs">
+                        <button
+                            type="button"
+                            @click="openExportModal()"
+                            class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+                            title="Download File Excel Rekap Absen & Gaji"
+                        >
+                            <FileSpreadsheet class="h-4 w-4" />
+                            <span class="hidden sm:inline">Download Excel</span>
+                            <span class="sm:hidden">Excel</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="isExportMenuOpen = !isExportMenuOpen"
+                            class="inline-flex items-center px-1.5 sm:px-2 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer"
+                            title="Opsi Pilihan Download"
+                        >
+                            <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': isExportMenuOpen }" />
+                        </button>
+
+                        <!-- Backdrop Click Outside untuk Menu Dropdown -->
+                        <div
+                            v-if="isExportMenuOpen"
+                            class="fixed inset-0 z-40"
+                            @click="isExportMenuOpen = false"
+                        ></div>
+
+                        <!-- Dropdown Menu Cepat -->
+                        <div
+                            v-if="isExportMenuOpen"
+                            class="absolute right-0 top-full mt-1.5 z-50 w-64 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                        >
+                            <div class="p-1">
+                                <button
+                                    type="button"
+                                    @click="downloadHariIniDirect"
+                                    class="w-full text-left p-2.5 rounded-lg hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
+                                        <CalendarCheck class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold leading-tight text-emerald-800">Download Hari Ini Saja</p>
+                                        <p class="text-[10px] text-slate-500 font-normal mt-0.5">Tanggal {{ formatTanggalIndo(todayStr) }} (1 Hari)</p>
+                                    </div>
+                                </button>
+                            </div>
+                            <div class="p-1">
+                                <button
+                                    type="button"
+                                    @click="openExportModal('today')"
+                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <Calendar class="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Hari Ini (Buka Modal)</span>
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">1 Hari</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="openExportModal('bulanan')"
+                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <Clock class="h-3.5 w-3.5 text-slate-400" />
+                                        <span>Rekap Bulanan</span>
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">28 Hari</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="openExportModal('periodik')"
+                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <Calendar class="h-3.5 w-3.5 text-slate-400" />
+                                        <span>Rekap Periodik</span>
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">14 Hari</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="openExportModal('current')"
+                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <Filter class="h-3.5 w-3.5 text-slate-400" />
+                                        <span>Sesuai Tabel / Kustom...</span>
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">{{ dateColumns.length }} Hari</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Tombol Simpan Presensi -->
                     <button
@@ -752,8 +960,8 @@ function closeDetailModal() {
                                 @click="setModeSkala('bulanan')"
                                 :class="[
                                     'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    modeSkala === 'bulanan'
-                                        ? 'bg-white text-emerald-700 shadow-xs'
+                                    is28HariActive
+                                        ? 'bg-white text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
                                         : 'text-slate-600 hover:text-slate-900',
                                 ]"
                             >
@@ -766,8 +974,8 @@ function closeDetailModal() {
                                 @click="setModeSkala('periodik')"
                                 :class="[
                                     'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    modeSkala === 'periodik'
-                                        ? 'bg-white text-teal-700 shadow-xs'
+                                    is14HariActive
+                                        ? 'bg-white text-teal-700 shadow-xs ring-1 ring-teal-500/20'
                                         : 'text-slate-600 hover:text-slate-900',
                                 ]"
                             >
@@ -879,7 +1087,7 @@ function closeDetailModal() {
                     <!-- Right: Info Text Format Indo -->
                     <div class="text-[11px] font-semibold text-emerald-900/90 hidden lg:flex items-center gap-1.5">
                         <Sparkles class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>Siklus: {{ modeSkala === 'bulanan' ? 'Bulanan (28 Hari Kerja)' : (modeSkala === 'periodik' ? 'Periodik (14 Hari Kerja)' : 'Custom Rentang') }}</span>
+                        <span>{{ labelSiklus }}</span>
                     </div>
                 </div>
 
@@ -1375,7 +1583,23 @@ function closeDetailModal() {
                                 <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
                                     Pilihan Format Siklus
                                 </label>
-                                <div class="grid grid-cols-3 gap-2">
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <label
+                                        :class="[
+                                            'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
+                                            exportOption === 'today'
+                                                ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-500'
+                                                : 'border-slate-200 hover:bg-slate-50',
+                                        ]"
+                                    >
+                                        <input type="radio" value="today" v-model="exportOption" class="sr-only" />
+                                        <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            Hari Ini
+                                        </span>
+                                        <span class="text-[10px] text-slate-500">1 Hari Saja</span>
+                                    </label>
+
                                     <label
                                         :class="[
                                             'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
@@ -1414,6 +1638,10 @@ function closeDetailModal() {
                                         <span class="text-xs font-bold text-slate-900">Tabel Aktif</span>
                                         <span class="text-[10px] text-slate-500">{{ dateColumns.length }} Hari</span>
                                     </label>
+                                </div>
+                                <div v-if="exportOption === 'today'" class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                                    <CalendarCheck class="h-4 w-4 text-emerald-600 shrink-0" />
+                                    <span>Mengekspor daftar presensi personil khusus untuk <strong>Hari Ini ({{ formatTanggalIndo(exportStartDate) }})</strong>.</span>
                                 </div>
                             </div>
 

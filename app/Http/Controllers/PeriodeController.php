@@ -61,6 +61,19 @@ class PeriodeController extends Controller
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
 
+        // Cek tumpang tindih dengan periode yang sudah ada
+        $overlap = Periode::where(function ($query) use ($validated) {
+            $query->where('tanggal_mulai', '<=', $validated['tanggal_selesai'])
+                  ->where('tanggal_selesai', '>=', $validated['tanggal_mulai']);
+        })->first();
+
+        if ($overlap) {
+            return back()->withErrors([
+                'tanggal_mulai' => "Rentang tanggal bertabrakan dengan Periode {$overlap->nomor_periode} (" .
+                    $overlap->tanggal_mulai->format('d/m/Y') . " – " . $overlap->tanggal_selesai->format('d/m/Y') . ").",
+            ]);
+        }
+
         $nextNomor = (Periode::max('nomor_periode') ?? 0) + 1;
         $validated['nomor_periode'] = $nextNomor;
 
@@ -80,6 +93,20 @@ class PeriodeController extends Controller
         ], [
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
+
+        // Cek tumpang tindih dengan periode lain
+        $overlap = Periode::where('id', '!=', $periode->id)
+            ->where(function ($query) use ($validated) {
+                $query->where('tanggal_mulai', '<=', $validated['tanggal_selesai'])
+                      ->where('tanggal_selesai', '>=', $validated['tanggal_mulai']);
+            })->first();
+
+        if ($overlap) {
+            return back()->withErrors([
+                'tanggal_mulai' => "Rentang tanggal bertabrakan dengan Periode {$overlap->nomor_periode} (" .
+                    $overlap->tanggal_mulai->format('d/m/Y') . " – " . $overlap->tanggal_selesai->format('d/m/Y') . ").",
+            ]);
+        }
 
         $periode->update($validated);
 

@@ -41,6 +41,8 @@ class PetugasSeeder extends Seeder
                     'no_telp' => $item['no_telp'],
                     'email' => $item['email'],
                     'jabatan' => $item['jabatan'],
+                    'jenis_bank' => $item['jenis_bank'] ?? 'BNI',
+                    'nomor_rekening' => $item['nomor_rekening'] ?? null,
                     'jam_kerja' => $item['jam_kerja'],
                     'gaji_harian_bgn' => $item['gaji_harian_bgn'],
                     'bonus_harian_mitra' => $item['bonus_harian_mitra'],

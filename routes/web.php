@@ -38,7 +38,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/dashboard/user-profile', [DashboardController::class, 'updateUserProfile'])->name('dashboard.user.update');
     Route::put('/dashboard/unit-sppg', [DashboardController::class, 'updateUnitSppg'])->name('dashboard.unit.update');
 
-    // Kelompok Penerima Manfaat
+    // Kelompok Penerima Manfaat (Daftar PM, Rekap Distribusi, Pembayaran Insentif)
+    Route::prefix('penerima-manfaat')->name('penerima-manfaat.')->group(function () {
+        Route::get('/rekap-distribusi', [KelompokPenerimaManfaatController::class, 'rekapDistribusi'])->name('rekap-distribusi');
+        Route::post('/rekap-distribusi/simpan', [KelompokPenerimaManfaatController::class, 'simpanDistribusi'])->name('rekap-distribusi.simpan');
+        Route::get('/pembayaran-insentif', [KelompokPenerimaManfaatController::class, 'pembayaranInsentif'])->name('pembayaran-insentif');
+        Route::post('/pembayaran-insentif/generate-csv', [KelompokPenerimaManfaatController::class, 'generateInsentifCsv'])->name('pembayaran-insentif.generate-csv');
+    });
     Route::resource('penerima-manfaat', KelompokPenerimaManfaatController::class);
 
     // Gizi SPPG (dengan sub-menu Database Pangan, Analisa PM, Daftar Menu, Buat Menu)
@@ -98,10 +104,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Supplier Rekanan SPPG
     Route::resource('supplier', SupplierController::class);
 
-    // Petugas SPPG (Daftar Petugas & Rekap Kehadiran)
+    // Petugas SPPG (Daftar Petugas, Rekap Kehadiran & Pembayaran Gaji BNI Direct)
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
     Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');
+    Route::get('/petugas/pembayaran-gaji', [PetugasController::class, 'pembayaranGaji'])->name('petugas.pembayaran-gaji');
+    Route::post('/petugas/pembayaran-gaji/generate-bni-csv', [PetugasController::class, 'generateBniDirectCsv'])->name('petugas.pembayaran-gaji.generate-csv');
+    Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');
     Route::resource('petugas', PetugasController::class);
 
     // Label SPPG

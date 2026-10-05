@@ -230,6 +230,8 @@ function buildRekapSheet(workbook, {
     const letterTotBGN = colToLetter(colTotBGNIdx);
     const letterTotSemua = colToLetter(colTotSemuaIdx);
 
+    const isHariIni = actualDays === 1 || (startDate && endDate && startDate === endDate);
+
     // Konfigurasi Lebar Kolom
     const colDefs = [
         { key: 'no', width: 5 },          // A: No
@@ -237,7 +239,7 @@ function buildRekapSheet(workbook, {
         { key: 'jabatan', width: 23 },    // C: Jabatan / Divisi
     ];
 
-    const dayColWidth = actualDays > 20 ? 4.2 : 5.0;
+    const dayColWidth = actualDays === 1 ? 16 : (actualDays > 20 ? 4.2 : 5.0);
     for (let d = 1; d <= actualDays; d++) {
         colDefs.push({ key: `d${d}`, width: dayColWidth });
     }
@@ -270,9 +272,11 @@ function buildRekapSheet(workbook, {
     rJudul.height = 22;
 
     const periodeNama = periode?.label || (periode?.nomor_periode ? `Periode ${periode.nomor_periode}` : 'Periode Operasional Berjalan');
-    const rangeText = (startDate && endDate)
-        ? `Rentang Tanggal: ${formatTanggalIndo(startDate)} s.d. ${formatTanggalIndo(endDate)} (${actualDays} Hari Kerja)`
-        : `Standar Siklus: ${modeLabel} Kerja`;
+    const rangeText = isHariIni
+        ? `Tanggal: ${formatTanggalIndo(startDate || finalDateList[0]?.dateStr)} (Rekap Harian)`
+        : ((startDate && endDate)
+            ? `Rentang Tanggal: ${formatTanggalIndo(startDate)} s.d. ${formatTanggalIndo(endDate)} (${actualDays} Hari Kerja)`
+            : `Standar Siklus: ${modeLabel} Kerja`);
 
     const rSubJudul = sheet.addRow([
         `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | ${periodeNama} | ${rangeText}`
@@ -290,7 +294,7 @@ function buildRekapSheet(workbook, {
         'No',
         'Nama Petugas',
         'Jabatan / Divisi',
-        `Tanggal (${modeLabel})`,
+        actualDays === 1 ? `Tanggal` : `Tanggal (${modeLabel})`,
     ];
     for (let d = 2; d <= actualDays; d++) head1Values.push('');
 
@@ -307,7 +311,16 @@ function buildRekapSheet(workbook, {
     // Baris 10: Sub-Header
     const head2Values = ['', '', ''];
     finalDateList.forEach((dt, idx) => {
-        head2Values.push(dt.dayNum ? String(dt.dayNum) : String(idx + 1));
+        let label = dt.dayNum ? String(dt.dayNum) : String(idx + 1);
+        if (actualDays === 1 && dt.dateStr) {
+            try {
+                const curD = new Date(dt.dateStr + 'T00:00:00');
+                label = `${curD.getDate()} ${MONTHS_INDO[curD.getMonth()] || ''}`;
+            } catch {
+                label = String(dt.dayNum || '1');
+            }
+        }
+        head2Values.push(label);
     });
     head2Values.push('S', 'I', 'TK', 'L', '½', 'Hadir');
     head2Values.push('', '', '', '', '');
@@ -648,9 +661,12 @@ function buildRingkasanDivisiSheet(workbook, {
     rJ2.height = 22;
 
     const periodeNama = periode?.label || (periode?.nomor_periode ? `Periode ${periode.nomor_periode}` : 'Periode Operasional Berjalan');
-    const rangeText = (startDate && endDate)
-        ? `Rentang: ${formatTanggalIndo(startDate)} s.d. ${formatTanggalIndo(endDate)}`
-        : `Standar: ${modeLabel} Kerja`;
+    const isSingleDay = (startDate && endDate && startDate === endDate) || (dateList && dateList.length === 1);
+    const rangeText = isSingleDay
+        ? `Tanggal: ${formatTanggalIndo(startDate || (dateList && dateList[0]?.dateStr))} (Rekap Harian)`
+        : ((startDate && endDate)
+            ? `Rentang: ${formatTanggalIndo(startDate)} s.d. ${formatTanggalIndo(endDate)}`
+            : `Standar: ${modeLabel} Kerja`);
 
     const rSub2 = sheet2.addRow([
         `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | ${periodeNama} | ${rangeText}`
@@ -848,14 +864,17 @@ export async function downloadRekapAbsenGajiExcel({
     }
 
     const isBulanan = Number(modeHariKerja) === 28;
-    const modeLabel = isBulanan ? 'Bulanan 28 Hari' : (Number(modeHariKerja) === 14 ? 'Periodik 14 Hari' : `${modeHariKerja} Hari`);
+    const isSingleDay = Number(modeHariKerja) === 1 || (startDate && endDate && startDate === endDate) || (dateList && dateList.length === 1);
+    const modeLabel = isSingleDay
+        ? `Hari Ini (${formatTanggalIndo(startDate || (dateList && dateList[0]?.dateStr))})`
+        : (isBulanan ? 'Bulanan 28 Hari' : (Number(modeHariKerja) === 14 ? 'Periodik 14 Hari' : `${modeHariKerja} Hari`));
 
     // =========================================================
     // SHEET 1: Rekap Presensi & Gaji (Primary)
     // =========================================================
     buildRekapSheet(workbook, {
         sheetName: 'Rekap Presensi & Gaji',
-        daysCount: Number(modeHariKerja) || 28,
+        daysCount: isSingleDay ? 1 : (Number(modeHariKerja) || 28),
         dateList,
         startDate,
         endDate,
@@ -885,7 +904,11 @@ export async function downloadRekapAbsenGajiExcel({
     });
 
     // Export & Download
-    const cycleSuffix = isBulanan ? 'Bulanan_28_Hari' : (Number(modeHariKerja) === 14 ? 'Periodik_14_Hari' : `Rentang_${startDate || 'custom'}`);
+    const actualStartStr = startDate || (dateList && dateList[0]?.dateStr) || 'tanggal';
+    const actualEndStr = endDate || (dateList && dateList[dateList.length - 1]?.dateStr) || actualStartStr;
+    const cycleSuffix = isSingleDay
+        ? `Hari_Ini_${actualStartStr}`
+        : (isBulanan ? 'Bulanan_28_Hari' : (Number(modeHariKerja) === 14 ? 'Periodik_14_Hari' : `Rentang_${actualStartStr}_sd_${actualEndStr}`));
     const filename = `Rekap_Presensi_dan_Gaji_Petugas_SPPG_${cycleSuffix}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

@@ -8,6 +8,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Models\WorkOrderKelompok;
+use App\Models\Periode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -540,6 +541,16 @@ class GiziController extends Controller
             default => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
         };
 
+        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            return [
+                'id'              => $p->id,
+                'nomor_periode'   => $p->nomor_periode,
+                'tanggal_mulai'   => $p->tanggal_mulai?->format('Y-m-d'),
+                'tanggal_selesai' => $p->tanggal_selesai?->format('Y-m-d'),
+                'status'          => $p->status,
+            ];
+        });
+
         return Inertia::render('Gizi/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
@@ -557,6 +568,7 @@ class GiziController extends Controller
             'initialStep' => $step,
             'workOrdersList' => $workOrders,
             'activeWorkOrder' => $activeWorkOrder,
+            'periodes' => $periodes,
             'stats' => [
                 'total_kelompok' => count($kelompokList),
                 'total_sekolah' => $kelompokList->where('kategori', '!=', 'Posyandu')->count(),

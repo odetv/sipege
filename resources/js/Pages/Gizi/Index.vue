@@ -56,6 +56,10 @@ const props = defineProps({
         type: String,
         default: "tkpi2020",
     },
+    periodes: {
+        type: Array,
+        default: () => [],
+    },
     stats: {
         type: Object,
         default: () => ({
@@ -174,6 +178,7 @@ function selectSubMenu(tabId) {
             <GiziKalenderMenuTab
                 v-if="activeSubMenu === 'kalender-menu'"
                 :work-orders-list="workOrdersList"
+                :periodes="periodes"
                 @open-rancang-menu="selectSubMenu('rancang-menu')"
             />
         </div>

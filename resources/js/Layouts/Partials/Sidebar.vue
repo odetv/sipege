@@ -83,6 +83,14 @@ const isPetugasActive = computed(() => {
     }
 });
 
+const isPenerimaManfaatActive = computed(() => {
+    try {
+        return route().current("penerima-manfaat.*");
+    } catch {
+        return false;
+    }
+});
+
 const isGiziActive = computed(() => {
     try {
         return route().current("gizi.*");
@@ -190,6 +198,7 @@ const isLaporanSppgActive = computed(() => {
 
 function getInitialMenu() {
     if (isPetugasActive.value) return "petugas";
+    if (isPenerimaManfaatActive.value) return "penerima-manfaat";
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
     if (isLaporanSppgActive.value) return "laporan-sppg";
@@ -211,6 +220,9 @@ const activeKeuanganSubMenu = ref(getInitialKeuanganSubMenu());
 
 const isPetugasExpanded = computed(
     () => activeExpandedMenu.value === "petugas",
+);
+const isPenerimaManfaatExpanded = computed(
+    () => activeExpandedMenu.value === "penerima-manfaat",
 );
 const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
 const isKeuanganExpanded = computed(
@@ -237,6 +249,8 @@ watch(
     () => {
         if (isPetugasActive.value) {
             activeExpandedMenu.value = "petugas";
+        } else if (isPenerimaManfaatActive.value) {
+            activeExpandedMenu.value = "penerima-manfaat";
         } else if (isGiziActive.value) {
             activeExpandedMenu.value = "gizi";
         } else if (isKeuanganActive.value) {
@@ -269,6 +283,14 @@ function togglePetugasMenu() {
     }
     activeExpandedMenu.value =
         activeExpandedMenu.value === "petugas" ? null : "petugas";
+}
+
+function togglePenerimaManfaatMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "penerima-manfaat" ? null : "penerima-manfaat";
 }
 
 function toggleSpjMenu() {
@@ -523,7 +545,8 @@ function logout() {
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
                                 (route().current('petugas.index') || route().current('petugas.*')) &&
                                 !route().current('petugas.rekap-kehadiran') &&
-                                !route().current('petugas.kehadiran')
+                                !route().current('petugas.kehadiran') &&
+                                !route().current('petugas.pembayaran-gaji')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
@@ -545,6 +568,20 @@ function logout() {
                         >
                             <CalendarCheck class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Rekap Kehadiran</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Pembayaran Gaji (BNI Direct) -->
+                        <Link
+                            :href="route('petugas.pembayaran-gaji')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petugas.pembayaran-gaji')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CreditCard class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Pembayaran Gaji</span>
                         </Link>
                     </div>
                 </div>
@@ -582,38 +619,90 @@ function logout() {
                     ></div>
                 </Link>
 
-                <!-- 4. Menu Penerima Manfaat -->
-                <Link
-                    :href="route('penerima-manfaat.index')"
-                    :title="isCollapsed ? 'Penerima Manfaat' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('penerima-manfaat.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Users class="h-4 w-4 shrink-0" />
-                    <span
+                <!-- 4. Menu Penerima Manfaat (Accordion with 3 Sub-menus: Daftar PM, Rekap Distribusi, Pembayaran Insentif) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Penerima Manfaat Button -->
+                    <button
+                        type="button"
+                        @click="togglePenerimaManfaatMenu"
+                        :title="isCollapsed ? 'Penerima Manfaat' : ''"
                         :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Penerima Manfaat</span
-                    >
-                    <div
-                        v-if="route().current('penerima-manfaat.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isPenerimaManfaatActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
                         ]"
-                    ></div>
-                </Link>
+                    >
+                        <Users class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Penerima Manfaat</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isPenerimaManfaatExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Daftar PM, Rekap Distribusi, Pembayaran Insentif -->
+                    <div
+                        v-if="!isCollapsed && isPenerimaManfaatExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Daftar PM -->
+                        <Link
+                            :href="route('penerima-manfaat.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                (route().current('penerima-manfaat.index') || route().current('penerima-manfaat.*')) &&
+                                !route().current('penerima-manfaat.rekap-distribusi') &&
+                                !route().current('penerima-manfaat.pembayaran-insentif*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Users class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Daftar PM</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Rekap Distribusi -->
+                        <Link
+                            :href="route('penerima-manfaat.rekap-distribusi')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('penerima-manfaat.rekap-distribusi')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Truck class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rekap Distribusi</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Pembayaran Insentif -->
+                        <Link
+                            :href="route('penerima-manfaat.pembayaran-insentif')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('penerima-manfaat.pembayaran-insentif*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Coins class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Pembayaran Insentif</span>
+                        </Link>
+                    </div>
+                </div>
 
                 <!-- 3. Menu Gizi (Accordion with Submenu) -->
                 <div class="space-y-0.5">

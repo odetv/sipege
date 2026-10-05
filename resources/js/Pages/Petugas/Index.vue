@@ -25,6 +25,8 @@ import {
     RefreshCw,
     MapPin,
     Calendar,
+    CreditCard,
+    Copy,
 } from "lucide-vue-next";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -106,14 +108,29 @@ const listOpsiJabatan = [
     "Persiapan",
     "Pemorsian (Koordinator)",
     "Pemorsian",
+    "Pengemudi",
     "Pengemudi (Koordinator 1)",
     "Pengemudi (Koordinator 2)",
-    "Pengemudi",
-    "Cuci Ompreng (Koordinator)",
     "Cuci Ompreng",
+    "Cuci Ompreng (Koordinator)",
     "Cuci Ompreng (a.k.a Admin)",
     "Kebersihan",
     "Keamanan",
+];
+
+// Preset Bank Options Dropdown
+const listOpsiBank = [
+    "BNI",
+    "BRI",
+    "BCA",
+    "Mandiri",
+    "BSI",
+    "BTN",
+    "BPD Bali",
+    "CIMB Niaga",
+    "Bank Danamon",
+    "Bank Permata",
+    "Lainnya",
 ];
 
 // Helper Badge Divisi
@@ -181,7 +198,9 @@ const filteredPetugas = computed(() => {
             const matchEmail = (p.email || "").toLowerCase().includes(q);
             const matchAlamat = (p.alamat || "").toLowerCase().includes(q);
             const matchJabatan = (p.jabatan || "").toLowerCase().includes(q);
-            if (!matchNama && !matchNik && !matchTelp && !matchEmail && !matchAlamat && !matchJabatan) {
+            const matchBank = (p.jenis_bank || "").toLowerCase().includes(q);
+            const matchRek = (p.nomor_rekening || "").toLowerCase().includes(q);
+            if (!matchNama && !matchNik && !matchTelp && !matchEmail && !matchAlamat && !matchJabatan && !matchBank && !matchRek) {
                 return false;
             }
         }
@@ -241,6 +260,8 @@ const form = useForm({
     no_telp: "",
     email: "",
     jabatan: "",
+    jenis_bank: "BNI",
+    nomor_rekening: "",
     jam_kerja: "",
     gaji_harian_bgn: 0,
     bonus_harian_mitra: 0,
@@ -421,6 +442,17 @@ function handleNikInput(e) {
     }
 }
 
+// Handler Nomor Rekening (hanya angka)
+function handleNomorRekeningInput(e) {
+    const val = e.target.value.replace(/\D/g, "");
+    form.nomor_rekening = val;
+    if (val.length < 5) {
+        clientErrors.value.nomor_rekening = "Nomor rekening minimal 5 digit angka.";
+    } else {
+        delete clientErrors.value.nomor_rekening;
+    }
+}
+
 // Handler Input Nominal Rupiah (Otomatis titik ribuan)
 function handleRupiahInput(field, rawString) {
     const cleanDigits = String(rawString).replace(/\D/g, "");
@@ -474,6 +506,14 @@ function validateForm() {
 
     if (!form.jabatan) {
         errors.jabatan = "Jabatan / Divisi wajib dipilih dari dropdown.";
+    }
+
+    if (!form.jenis_bank || form.jenis_bank.trim().length === 0) {
+        errors.jenis_bank = "Jenis bank payroll wajib dipilih atau diisi.";
+    }
+
+    if (!form.nomor_rekening || form.nomor_rekening.trim().length === 0) {
+        errors.nomor_rekening = "Nomor rekening bank wajib diisi (hanya angka).";
     }
 
     if (tipeJamKerja.value === "reguler") {
@@ -541,6 +581,8 @@ function openCreateModal() {
     form.bonus_harian_mitra = 0;
     form.iuran_bpjs_tk = 16800;
 
+    form.jenis_bank = "BNI";
+    form.nomor_rekening = "";
     displayGajiBgn.value = "0";
     displayBonusMitra.value = "0";
     displayBpjsTk.value = "16.800";
@@ -568,6 +610,8 @@ function openEditModal(p) {
     form.no_telp = p.no_telp || "";
     form.email = p.email || "";
     form.jabatan = p.jabatan || "";
+    form.jenis_bank = p.jenis_bank || "BNI";
+    form.nomor_rekening = p.nomor_rekening || "";
     form.jam_kerja = p.jam_kerja || "";
     form.gaji_harian_bgn = p.gaji_harian_bgn ?? 0;
     form.bonus_harian_mitra = p.bonus_harian_mitra ?? 0;
@@ -629,6 +673,17 @@ function openDetailModal(p) {
 function closeDetailModal() {
     isDetailModalOpen.value = false;
     detailPetugas.value = null;
+}
+
+// Salin nomor rekening ke clipboard
+const copiedRekening = ref(false);
+function copyRekening(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    copiedRekening.value = true;
+    setTimeout(() => {
+        copiedRekening.value = false;
+    }, 2000);
 }
 
 // ─── Modal State: Konfirmasi Hapus ────────────────────────────────────────────
@@ -834,20 +889,20 @@ watch(
                     </div>
                 </div>
 
-                <!-- Card 6: Estimasi Biaya Bulanan (28 Hari) -->
+                <!-- Card 6: Estimasi Biaya Bulanan Standar BGN (20 Hari) -->
                 <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
                     <div class="p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
                         <Clock class="h-5 w-5" />
                     </div>
                     <div class="min-w-0">
                         <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Estimasi Gaji Bulanan
+                            Gaji Bulanan BGN
                         </p>
                         <p class="text-base font-bold text-emerald-700 leading-tight truncate">
-                            {{ formatRupiah(summary.total_pengeluaran_bulanan) }}
+                            {{ formatRupiah(summary.total_pengeluaran_bulanan_20 || (summary.total_pengeluaran_harian * 20)) }}
                         </p>
                         <p class="text-[10px] text-slate-500 mt-0.5">
-                            Standar 28 hari kerja (bulanan)
+                            Standar 20 hari kerja BGN (Excel)
                         </p>
                     </div>
                 </div>
@@ -1019,7 +1074,7 @@ watch(
                                     </div>
                                 </td>
 
-                                <!-- Kontak Resmi (Mulai 62xxxx) -->
+                                <!-- Kontak Resmi & Rekening -->
                                 <td class="px-4 py-3.5">
                                     <div class="space-y-1">
                                         <a
@@ -1034,6 +1089,15 @@ watch(
                                         <div v-if="p.email" class="flex items-center gap-1.5 text-[11px] text-slate-500 truncate max-w-[180px]">
                                             <Mail class="h-3 w-3 text-slate-400 shrink-0" />
                                             <span class="truncate" :title="p.email">{{ p.email }}</span>
+                                        </div>
+                                        <div
+                                            v-if="p.nomor_rekening"
+                                            class="flex items-center gap-1 text-[10.5px] text-slate-600 font-mono pt-1 border-t border-slate-100"
+                                            :title="`Bank ${p.jenis_bank || 'BNI'} - ${p.nomor_rekening}`"
+                                        >
+                                            <CreditCard class="h-3 w-3 text-emerald-600 shrink-0" />
+                                            <span class="font-bold text-slate-700">{{ p.jenis_bank || 'BNI' }}:</span>
+                                            <span class="text-slate-800 font-medium">{{ p.nomor_rekening }}</span>
                                         </div>
                                     </div>
                                 </td>
@@ -1635,11 +1699,76 @@ watch(
                             </div>
                         </div>
 
-                        <!-- Section 4: Kompensasi Rupiah Otomatis Format Titik -->
+                        <!-- Section 4: Rekening Bank Payroll -->
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100 flex items-center gap-1.5">
+                                <CreditCard class="h-3.5 w-3.5 text-primary" />
+                                <span>4. Rekening Bank Payroll</span>
+                            </h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <!-- Jenis Bank -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                                        Jenis Bank <span class="text-rose-500">*</span>
+                                    </label>
+                                    <div class="space-y-1.5">
+                                        <select
+                                            v-model="form.jenis_bank"
+                                            required
+                                            :class="[
+                                                'w-full px-3 py-2 rounded-lg border text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary',
+                                                clientErrors.jenis_bank || form.errors.jenis_bank ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'
+                                            ]"
+                                        >
+                                            <option v-for="bank in listOpsiBank" :key="bank" :value="bank">
+                                                Bank {{ bank }}
+                                            </option>
+                                        </select>
+                                        <!-- Custom input jika memilih Lainnya -->
+                                        <input
+                                            v-if="form.jenis_bank === 'Lainnya'"
+                                            v-model="form.jenis_bank"
+                                            type="text"
+                                            placeholder="Ketik nama bank lainnya..."
+                                            class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
+                                        />
+                                    </div>
+                                    <p v-if="clientErrors.jenis_bank || form.errors.jenis_bank" class="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{ clientErrors.jenis_bank || form.errors.jenis_bank }}</span>
+                                    </p>
+                                </div>
+
+                                <!-- Nomor Rekening -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                                        Nomor Rekening <span class="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        :value="form.nomor_rekening"
+                                        @input="handleNomorRekeningInput"
+                                        type="text"
+                                        required
+                                        maxlength="30"
+                                        placeholder="Contoh: 1972750642"
+                                        :class="[
+                                            'w-full px-3 py-2 rounded-lg border text-xs font-mono font-medium focus:ring-1 focus:ring-primary focus:border-primary',
+                                            clientErrors.nomor_rekening || form.errors.nomor_rekening ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'
+                                        ]"
+                                    />
+                                    <p v-if="clientErrors.nomor_rekening || form.errors.nomor_rekening" class="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
+                                        <AlertCircle class="h-3 w-3 shrink-0" />
+                                        <span>{{ clientErrors.nomor_rekening || form.errors.nomor_rekening }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 5: Kompensasi Rupiah Otomatis Format Titik -->
                         <div>
                             <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100 flex items-center gap-1.5">
                                 <DollarSign class="h-3.5 w-3.5 text-primary" />
-                                <span>4. Kompensasi & BPJS (Otomatis Format Titik)</span>
+                                <span>5. Kompensasi & BPJS (Otomatis Format Titik)</span>
                             </h3>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                                 <!-- Gaji Harian BGN -->
@@ -1717,10 +1846,25 @@ watch(
                                     </p>
                                 </div>
                             </div>
+
+                            <!-- Live Preview Estimasi Bulanan Standar BGN 20 Hari -->
+                            <div class="mt-2.5 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                                <span class="text-emerald-800 font-medium flex items-center gap-1.5">
+                                    <Clock class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                    <span>Estimasi Gaji Bulanan BGN (x20 Hari Kerja):</span>
+                                </span>
+                                <span class="font-bold text-emerald-950 font-mono text-xs bg-white px-2 py-0.5 rounded border border-emerald-300">
+                                    {{ formatRupiah(((form.gaji_harian_bgn || 0) + (form.bonus_harian_mitra || 0)) * 20) }}
+                                </span>
+                            </div>
                         </div>
 
-                        <!-- Section 5: Keterangan -->
+                        <!-- Section 6: Keterangan -->
                         <div>
+                            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100 flex items-center gap-1.5">
+                                <Shield class="h-3.5 w-3.5 text-primary" />
+                                <span>6. Keterangan Tambahan</span>
+                            </h3>
                             <label class="block text-xs font-semibold text-slate-700 mb-1">
                                 Keterangan Tambahan <span class="text-rose-500">*</span>
                             </label>
@@ -1837,6 +1981,37 @@ watch(
                             </div>
                         </div>
 
+                        <!-- Informasi Rekening Payroll -->
+                        <div class="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
+                                    <CreditCard class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p class="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider">Rekening Payroll</p>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="px-2 py-0.5 rounded bg-emerald-200/80 text-emerald-900 font-bold text-xs">
+                                            Bank {{ detailPetugas.jenis_bank || 'BNI' }}
+                                        </span>
+                                        <span class="text-sm font-mono font-extrabold text-slate-900">
+                                            {{ detailPetugas.nomor_rekening || '-' }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                v-if="detailPetugas.nomor_rekening"
+                                type="button"
+                                @click="copyRekening(detailPetugas.nomor_rekening)"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 hover:bg-emerald-100/50 text-emerald-800 text-xs font-semibold transition-colors cursor-pointer"
+                                title="Salin Nomor Rekening"
+                            >
+                                <Check v-if="copiedRekening" class="h-3.5 w-3.5 text-emerald-600" />
+                                <Copy v-else class="h-3.5 w-3.5 text-emerald-700" />
+                                <span>{{ copiedRekening ? "Tersalin!" : "Salin" }}</span>
+                            </button>
+                        </div>
+
                         <!-- Grid Data Pribadi -->
                         <div class="grid grid-cols-2 gap-4 pt-1">
                             <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
@@ -1900,6 +2075,12 @@ watch(
                                 <span class="font-bold text-slate-800">{{ formatRupiah(detailPetugas.iuran_bpjs_tk) }} / bulan</span>
                             </div>
                             <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                                <span class="font-semibold text-emerald-800">Estimasi Bulanan Standar BGN (x20 Hari):</span>
+                                <span class="font-black text-emerald-700 text-xs font-mono">
+                                    {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 20) }}
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                                 <span class="font-semibold text-slate-700">Estimasi Periodik (x14 Hari):</span>
                                 <span class="font-bold text-teal-700 text-xs">
                                     {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 14) }}
@@ -1907,7 +2088,7 @@ watch(
                             </div>
                             <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                                 <span class="font-bold text-slate-800">Estimasi Total Bulanan (x28 Hari):</span>
-                                <span class="font-black text-emerald-800 text-sm">
+                                <span class="font-black text-slate-900 text-sm">
                                     {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 28) }}
                                 </span>
                             </div>

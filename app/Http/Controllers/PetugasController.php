@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AbsensiPetugas;
 use App\Models\Periode;
 use App\Models\Petugas;
+use App\Models\UnitSppg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -51,6 +52,7 @@ class PetugasController extends Controller
             $summary['total_bpjs_tk'] = (int) $petugas->sum('iuran_bpjs_tk');
             $summary['total_pengeluaran_harian'] = $summary['total_gaji_harian_bgn'] + $summary['total_bonus_harian_mitra'];
             $summary['total_pengeluaran_periodik'] = $summary['total_pengeluaran_harian'] * 14; // 14 hari kerja operasional (periodik)
+            $summary['total_pengeluaran_bulanan_20'] = $summary['total_pengeluaran_harian'] * 20; // 20 hari kerja operasional standar BGN (excel)
             $summary['total_pengeluaran_bulanan'] = $summary['total_pengeluaran_harian'] * 28; // 28 hari kerja operasional (bulanan)
 
             $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
@@ -120,6 +122,16 @@ class PetugasController extends Controller
         // Pastikan endDate >= startDate
         if ($endDate->lt($startDate)) {
             $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+        }
+
+        // Sinkronisasi otomatis: jika rentang tanggal cocok persis dengan salah satu periode di DB
+        if (!$periodeId || $periodeId === 'all') {
+            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
+                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
+                ->first();
+            if ($matchedPeriode) {
+                $periodeId = $matchedPeriode->id;
+            }
         }
 
         if ($unitSppg) {
@@ -295,6 +307,8 @@ class PetugasController extends Controller
             'no_telp' => ['required', 'string', 'regex:/^62[0-9]{8,14}$/'],
             'email' => ['required', 'email', 'max:255'],
             'jabatan' => ['required', 'string', 'max:150'],
+            'jenis_bank' => ['nullable', 'string', 'max:50'],
+            'nomor_rekening' => ['nullable', 'string', 'max:50'],
             'jam_kerja' => ['required', 'string', 'max:255'],
             'gaji_harian_bgn' => ['required', 'integer', 'min:0'],
             'bonus_harian_mitra' => ['required', 'integer', 'min:0'],
@@ -327,6 +341,7 @@ class PetugasController extends Controller
         ]);
 
         $validated['unit_sppg_id'] = $unitSppg->id;
+        $validated['jenis_bank'] = $validated['jenis_bank'] ?? 'BNI';
 
         Petugas::create($validated);
 
@@ -357,6 +372,8 @@ class PetugasController extends Controller
             'no_telp' => ['required', 'string', 'regex:/^62[0-9]{8,14}$/'],
             'email' => ['required', 'email', 'max:255'],
             'jabatan' => ['required', 'string', 'max:150'],
+            'jenis_bank' => ['nullable', 'string', 'max:50'],
+            'nomor_rekening' => ['nullable', 'string', 'max:50'],
             'jam_kerja' => ['required', 'string', 'max:255'],
             'gaji_harian_bgn' => ['required', 'integer', 'min:0'],
             'bonus_harian_mitra' => ['required', 'integer', 'min:0'],
@@ -411,4 +428,478 @@ class PetugasController extends Controller
 
         return back()->with('success', "Data Petugas \"{$nama}\" berhasil dihapus.");
     }
+
+    /**
+     * Halaman Pembayaran Gaji Petugas SPPG & Generator Payroll BNI Direct.
+     */
+    public function pembayaranGaji(Request $request): Response
+    {
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+
+        $petugas = [];
+        $daftarJabatan = [];
+        $periodes = [];
+        $presensiMap = [];
+        $mandaysMap = [];
+
+        $mode = $request->input('mode', 'presensi'); // 'presensi' | 'bgn_20' | 'periodik_14' | 'bulanan_28'
+        $tglMulai = $request->input('tanggal_mulai');
+        $tglSelesai = $request->input('tanggal_selesai');
+        $periodeId = $request->input('periode_id');
+
+        // Tentukan rentang tanggal dengan resolusi dua arah yang sinkron
+        if ($periodeId && $periodeId !== 'all') {
+            $p = Periode::find($periodeId);
+            if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
+                $startDate = $p->tanggal_mulai->copy()->startOfDay();
+                $endDate = $p->tanggal_selesai->copy()->startOfDay();
+            }
+        }
+
+        if (!isset($startDate) || !isset($endDate)) {
+            if ($tglMulai && $tglSelesai) {
+                $startDate = Carbon::parse($tglMulai)->startOfDay();
+                $endDate = Carbon::parse($tglSelesai)->startOfDay();
+            } else {
+                // Saat pertama kali dibuka tanpa filter: hadapkan tanggal hari ini (Carbon::today())
+                $startDate = Carbon::today();
+                $endDate = Carbon::today();
+            }
+        }
+
+        if ($endDate->lt($startDate)) {
+            $endDate = $startDate->copy();
+        }
+
+        // Sinkronisasi otomatis: jika rentang tanggal cocok persis dengan salah satu periode di DB
+        if (!$periodeId || $periodeId === 'all') {
+            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
+                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
+                ->first();
+            if ($matchedPeriode) {
+                $periodeId = $matchedPeriode->id;
+            }
+        }
+
+        $summary = [
+            'total_petugas' => 0,
+            'total_aktif' => 0,
+            'total_siap_bni' => 0,
+            'total_rekening_kosong' => 0,
+            'rek_debet_default' => '5268080021123800',
+        ];
+
+        if ($unitSppg) {
+            $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+
+            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+                $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
+                $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+                return [
+                    'id' => $p->id,
+                    'nomor_periode' => $p->nomor_periode,
+                    'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
+                ];
+            });
+
+            // Ambil data absensi
+            $petugasIds = $petugas->pluck('id')->all();
+            $presensiRecords = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
+                ->whereIn('petugas_id', $petugasIds)
+                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->get();
+
+            foreach ($presensiRecords as $rec) {
+                $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
+                $presensiMap[$rec->petugas_id][$tglStr] = $rec->status;
+            }
+
+            // Hitung mandays per petugas
+            foreach ($petugas as $p) {
+                $pDates = $presensiMap[$p->id] ?? [];
+                $mandays = 0;
+                $hadirCount = 0;
+                $setengahCount = 0;
+                $liburCount = 0;
+                $izinCount = 0;
+                $sakitCount = 0;
+                $tkCount = 0;
+
+                foreach ($pDates as $st) {
+                    if ($st === 'H') {
+                        $mandays += 1.0;
+                        $hadirCount++;
+                    } elseif ($st === 'H2') {
+                        $mandays += 0.5;
+                        $setengahCount++;
+                    } elseif ($st === 'L') {
+                        $liburCount++;
+                    } elseif ($st === 'I') {
+                        $izinCount++;
+                    } elseif ($st === 'S') {
+                        $sakitCount++;
+                    } elseif ($st === 'TK') {
+                        $tkCount++;
+                    }
+                }
+
+                $mandaysMap[$p->id] = [
+                    'mandays' => $mandays,
+                    'hadir' => $hadirCount,
+                    'setengah' => $setengahCount,
+                    'libur' => $liburCount,
+                    'izin' => $izinCount,
+                    'sakit' => $sakitCount,
+                    'tk' => $tkCount,
+                ];
+            }
+
+            $summary['total_petugas'] = $petugas->count();
+            $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
+            $summary['total_siap_bni'] = $petugas->where('status', 'Aktif')->whereNotNull('nomor_rekening')->where('nomor_rekening', '!=', '')->count();
+            $summary['total_rekening_kosong'] = $petugas->where('status', 'Aktif')->filter(fn($p) => empty($p->nomor_rekening))->count();
+        }
+
+        return Inertia::render('Petugas/PembayaranGaji', [
+            'petugas' => $petugas,
+            'summary' => $summary,
+            'daftarJabatan' => $daftarJabatan,
+            'periodes' => $periodes,
+            'unitSppg' => $unitSppg,
+            'initialMode' => $mode,
+            'initialTanggalMulai' => $startDate->format('Y-m-d'),
+            'initialTanggalSelesai' => $endDate->format('Y-m-d'),
+            'initialPeriodeId' => $periodeId ?? 'all',
+            'initialPresensiMap' => $presensiMap,
+            'mandaysMap' => $mandaysMap,
+        ]);
+    }
+
+    /**
+     * Generate & Download file CSV format BNI Direct Inhouse Payroll.
+     */
+    public function generateBniDirectCsv(Request $request)
+    {
+        $validated = $request->validate([
+            'rek_debet' => 'required|string|max:20',
+            'tgl_transaksi' => 'required|string',
+            'remark' => 'nullable|string|max:100',
+            'remark1' => 'nullable|string|max:100',
+            'remark2' => 'nullable|string|max:100',
+            'items' => 'required|array|min:1',
+            'items.*.rek_tujuan' => 'required|string',
+            'items.*.nama' => 'required|string',
+            'items.*.amount' => 'required|numeric|min:0',
+            'items.*.email' => 'nullable|string',
+        ]);
+
+        $rekDebet = preg_replace('/\D/', '', $validated['rek_debet']);
+        $tglTransaksiRaw = $validated['tgl_transaksi'];
+        $tglTransaksi = Carbon::parse($tglTransaksiRaw)->format('Ymd');
+
+        $rawRemark = $validated['remark'] ?? $validated['remark1'] ?? null;
+        if (!$rawRemark) {
+            $tglIndo = Carbon::parse($tglTransaksiRaw)->format('d-m-Y');
+            $rawRemark = "Gaji Petugas SPPG {$tglIndo}";
+        }
+
+        list($rem1, $rem2) = $this->splitBniRemark($rawRemark, $validated['remark2'] ?? null);
+
+        $now = Carbon::now();
+        $timestampCreation = $now->format('Y/m/d_H:i:s');
+        $timestampFile = $now->format('Ymd_His');
+
+        $items = $validated['items'];
+        $totalRecords = count($items);
+        $totalAmount = 0;
+        foreach ($items as $it) {
+            $totalAmount += (int) $it['amount'];
+        }
+
+        // Baris 1: Timestamp dan total baris (records + 2 baris header), diikuti 18 koma (total 20 kolom)
+        $totalLinesInCsv = $totalRecords + 2;
+        $line1 = $timestampCreation . ',' . $totalLinesInCsv . str_repeat(',', 18);
+
+        // Baris 2: 'P', TglTransaksi, RekDebet, TotalRecord, TotalAmount, diikuti 15 koma (total 20 kolom)
+        $line2 = 'P,' . $tglTransaksi . ',' . $rekDebet . ',' . $totalRecords . ',' . $totalAmount . str_repeat(',', 15);
+
+        $csvLines = [$line1, $line2];
+
+        // Baris 3+: Data Rows (20 Kolom)
+        foreach ($items as $it) {
+            $rekTujuan = preg_replace('/\D/', '', (string) ($it['rek_tujuan'] ?? ''));
+            $namaClean = $this->sanitizeBniText($it['nama'] ?? '', 40);
+            $amount = (int) ($it['amount'] ?? 0);
+            $email = trim($it['email'] ?? '');
+            $emailFlag = (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) ? 'Y' : 'N';
+
+            $cols = [
+                $rekTujuan,
+                $namaClean,
+                $amount,
+                $rem1,
+                $rem2,
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                $emailFlag === 'Y' ? 'Y' : 'N',
+                $emailFlag === 'Y' ? $email : '',
+                '',
+                'N',
+            ];
+
+            $csvLines[] = implode(',', $cols);
+        }
+
+        // BNI Direct mewajibkan pemisah baris CRLF (\r\n) dan diakhiri \r\n
+        $csvContent = implode("\r\n", $csvLines) . "\r\n";
+        $filename = "Uploadfile_IH_{$timestampFile}.csv";
+
+        return response($csvContent, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ]);
+    }
+
+    /**
+     * Membagi keterangan remark ke Remark1 (maks 33) dan Remark2 (maks 50) sesuai spesifikasi BNI Direct Inhouse
+     */
+    private function splitBniRemark(string $fullRemark, ?string $explicitRem2 = null): array
+    {
+        $cleaned = $this->sanitizeBniText($fullRemark, 83);
+        if ($explicitRem2 !== null && $explicitRem2 !== '') {
+            return [
+                $this->sanitizeBniText($cleaned, 33),
+                $this->sanitizeBniText($explicitRem2, 50),
+            ];
+        }
+
+        if (mb_strlen($cleaned) <= 33) {
+            return [$cleaned, ''];
+        }
+
+        $slice33 = mb_substr($cleaned, 0, 33);
+        $lastSpace = mb_strrpos($slice33, ' ');
+
+        if ($lastSpace !== false && $lastSpace > 15) {
+            $rem1 = trim(mb_substr($cleaned, 0, $lastSpace));
+            $rem2 = trim(mb_substr($cleaned, $lastSpace + 1, 50));
+            return [$rem1, $rem2];
+        }
+
+        $rem1 = trim(mb_substr($cleaned, 0, 33));
+        $rem2 = trim(mb_substr($cleaned, 33, 50));
+        return [$rem1, $rem2];
+    }
+
+    /**
+     * Helper membersihkan karakter terlarang sesuai sheet 'Restricted Characters' BNI Direct
+     */
+    private function sanitizeBniText(string $text, int $maxLen = 40): string
+    {
+        // Karakter terlarang BNI: , ` ~ ! @ # $ % ^ & * _ { } < > [ ] = \ ; " '
+        $restricted = [',', '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '_', '{', '}', '<', '>', '[', ']', '=', '\\', ';', '"', "'"];
+        $cleaned = str_replace($restricted, ' ', $text);
+        $cleaned = preg_replace('/\s+/', ' ', $cleaned);
+        $cleaned = trim($cleaned);
+        return mb_substr($cleaned, 0, $maxLen);
+    }
+
+    /**
+     * Download template resmi BNI Direct (.xls) asli dengan hanya mengisi data 3 kolom wajib (A: Rek. Tujuan, B: Nama Penerima, C: Amount)
+     * tanpa mengubah struktur template, macro, maupun sheet lainnya.
+     */
+    public function downloadBniDirectXls(Request $request)
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.rek_tujuan' => 'nullable',
+            'items.*.nama' => 'nullable',
+            'items.*.amount' => 'nullable',
+            'items.*.email' => 'nullable',
+            'rek_debet' => 'nullable|string',
+            'tgl_transaksi' => 'nullable|string',
+            'remark' => 'nullable|string',
+        ]);
+
+        $templatePath = public_path('templates/BNIDIRECT-EXCEL_TEMPLATE_v1.9.6.xls');
+        if (!file_exists($templatePath)) {
+            $templatePath = database_path('data/BNIDIRECT-EXCEL_TEMPLATE_v1.9.6.xls');
+        }
+
+        if (!file_exists($templatePath)) {
+            return response()->json(['error' => 'Template file BNIDIRECT-EXCEL_TEMPLATE_v1.9.6.xls tidak ditemukan.'], 404);
+        }
+
+        $rekDebet = preg_replace('/\D/', '', (string) ($validated['rek_debet'] ?? '5268080021123800'));
+        if (empty($rekDebet)) $rekDebet = '5268080021123800';
+
+        $tglTransaksiRaw = $validated['tgl_transaksi'] ?? null;
+        $tglTransaksi = $tglTransaksiRaw ? Carbon::parse($tglTransaksiRaw)->format('Ymd') : Carbon::now()->format('Ymd');
+
+        $rawRemark = $validated['remark'] ?? null;
+        if (!$rawRemark) {
+            $tglIndo = Carbon::now()->format('d-m-Y');
+            $rawRemark = "Gaji Petugas SPPG {$tglIndo}";
+        }
+        list($rem1, $rem2) = $this->splitBniRemark($rawRemark);
+
+        $now = Carbon::now();
+        $timestampCreation = $now->format('Y/m/d_H:i:s');
+
+        $totalRecords = count($validated['items']);
+        $totalAmount = 0;
+        foreach ($validated['items'] as $it) {
+            $totalAmount += (float) ($it['amount'] ?? 0);
+        }
+
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'BNIDIRECT_' . uniqid() . '.xls';
+        $jsonFile = $tempDir . DIRECTORY_SEPARATOR . 'BNI_DATA_' . uniqid() . '.json';
+
+        $payload = [
+            'timestamp_creation' => $timestampCreation,
+            'tgl_transaksi' => $tglTransaksi,
+            'rek_debet' => $rekDebet,
+            'total_records' => $totalRecords,
+            'total_amount' => $totalAmount,
+            'remark1' => $rem1,
+            'remark2' => $rem2,
+            'items' => $validated['items'],
+        ];
+
+        file_put_contents($jsonFile, json_encode($payload, JSON_UNESCAPED_UNICODE));
+
+        $scriptPath = base_path('app/Scripts/populate_bni_template.py');
+        $success = false;
+
+        // Jalur 1: Menggunakan PHP COM jika class COM tersedia di environment proses PHP
+        if (class_exists('\COM')) {
+            $excel = null;
+            $wb = null;
+            try {
+                copy($templatePath, $tempFile);
+                $excel = new \COM("Excel.Application");
+                $excel->Visible = false;
+                $excel->DisplayAlerts = false;
+
+                $wb = $excel->Workbooks->Open($tempFile);
+                $ws = $wb->Sheets("Inhouse");
+
+                // Update Header Metadata
+                $ws->Range("A6")->Value = $timestampCreation;
+                $ws->Range("A8")->Value = "P";
+                $ws->Range("B8")->NumberFormat = "@";
+                $ws->Range("B8")->Value = $tglTransaksi;
+                $ws->Range("C8")->NumberFormat = "@";
+                $ws->Range("C8")->Value = $rekDebet;
+                $ws->Range("D8")->Value = (int) $totalRecords;
+                $ws->Range("E8")->Value = (float) $totalAmount;
+
+                $ws->Range("A10:T5000")->ClearContents();
+
+                $row = 10;
+                foreach ($validated['items'] as $item) {
+                    $amount = (float) ($item['amount'] ?? 0);
+                    if ($amount <= 0 && empty($item['rek_tujuan']) && empty($item['nama'])) continue;
+
+                    $rek = preg_replace('/\D/', '', (string) ($item['rek_tujuan'] ?? ''));
+                    $nama = $this->sanitizeBniText((string) ($item['nama'] ?? ''), 40);
+                    $email = trim((string) ($item['email'] ?? ''));
+                    $hasEmail = (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL));
+
+                    // Col 1 (A): Rek. Tujuan(16)
+                    $ws->Cells($row, 1)->NumberFormat = "@";
+                    $ws->Cells($row, 1)->Value = $rek;
+
+                    // Col 2 (B): Nama Penerima(40)
+                    $ws->Cells($row, 2)->Value = $nama;
+
+                    // Col 3 (C): Amount
+                    $ws->Cells($row, 3)->Value = $amount;
+
+                    // Col 4 (D): Remark1(33)
+                    $ws->Cells($row, 4)->Value = $rem1;
+
+                    // Col 5 (E): Remark2(50)
+                    $ws->Cells($row, 5)->Value = $rem2;
+
+                    // Col 17 (Q): EMAIL FLAG(1) & Col 18 (R): Email(100)
+                    $ws->Cells($row, 17)->Value = $hasEmail ? "Y" : "N";
+                    $ws->Cells($row, 18)->Value = $hasEmail ? $email : "";
+
+                    // Col 20 (T): FLAG(1)
+                    $ws->Cells($row, 20)->Value = "N";
+
+                    $row++;
+                }
+
+                $wb->Save();
+                $wb->Close(false);
+                $wb = null;
+
+                $excel->Quit();
+                $excel = null;
+                $success = true;
+            } catch (\Throwable $e) {
+                if ($wb !== null) {
+                    try { $wb->Close(false); } catch (\Throwable $ex) {}
+                }
+                if ($excel !== null) {
+                    try { $excel->Quit(); } catch (\Throwable $ex) {}
+                }
+            }
+        }
+
+        // Jalur 2: Jika PHP COM belum aktif / server belum di-restart, gunakan helper Python (win32com)
+        if (!$success && file_exists($scriptPath)) {
+            $cmd = 'python ' . escapeshellarg($scriptPath) . ' ' . escapeshellarg($templatePath) . ' ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($jsonFile) . ' 2>&1';
+            $output = [];
+            $returnVar = 0;
+            exec($cmd, $output, $returnVar);
+
+            if ($returnVar === 0 && file_exists($tempFile)) {
+                $success = true;
+            }
+        }
+
+        if (file_exists($jsonFile)) {
+            @unlink($jsonFile);
+        }
+
+        if (!$success || !file_exists($tempFile)) {
+            if (file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+            return response()->json(['error' => 'Gagal memproses file template .xls. Pastikan Microsoft Excel tersedia di sistem.'], 500);
+        }
+
+        $filename = 'BNIDIRECT-EXCEL_TEMPLATE_v1.9.6.xls';
+
+        return response()->download($tempFile, $filename, [
+            'Content-Type' => 'application/vnd.ms-excel',
+        ])->deleteFileAfterSend(true);
+    }
 }
+

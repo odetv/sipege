@@ -2,6 +2,7 @@
 import { ref, computed } from "vue";
 import { Head, useForm, router, usePage } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
+import PeriodeCalendarPicker from "@/Components/PeriodeCalendarPicker.vue";
 import {
     CalendarRange,
     Plus,
@@ -75,7 +76,12 @@ function formatDurasi(totalHari) {
 const page = usePage();
 const flash = computed(() => page.props.flash ?? {});
 
-// ─── Nomor periode berikutnya ─────────────────────────────────────────────────
+// ─── Periode Terakhir & Nomor Berikutnya ───────────────────────────────────────
+const latestPeriode = computed(() => {
+    if (!props.periodes || !props.periodes.length) return null;
+    return [...props.periodes].sort((a, b) => (b.tanggal_selesai || "").localeCompare(a.tanggal_selesai || ""))[0];
+});
+
 const nextNomor = computed(() =>
     props.periodes.length
         ? Math.max(...props.periodes.map(p => p.nomor_periode)) + 1
@@ -88,6 +94,19 @@ const formTambah = useForm({
     tanggal_mulai:   "",
     tanggal_selesai: "",
 });
+const calendarRangeTambah = ref({ start: "", end: "" });
+
+function openTambah() {
+    formTambah.reset();
+    formTambah.clearErrors();
+    calendarRangeTambah.value = { start: "", end: "" };
+    showTambah.value = true;
+}
+
+function onRangeTambahChange(val) {
+    formTambah.tanggal_mulai = val.start;
+    formTambah.tanggal_selesai = val.end;
+}
 
 function submitTambah() {
     formTambah.post(route("periode.store"), {
@@ -105,27 +124,50 @@ const formEdit = useForm({
     tanggal_mulai:   "",
     tanggal_selesai: "",
 });
+const calendarRangeEdit = ref({ start: "", end: "" });
 
 function openEdit(p) {
-    editTarget.value  = p;
-    formEdit.tanggal_mulai   = p.tanggal_mulai;
+    editTarget.value = p;
+    formEdit.clearErrors();
+    formEdit.tanggal_mulai = p.tanggal_mulai;
     formEdit.tanggal_selesai = p.tanggal_selesai;
+    calendarRangeEdit.value = {
+        start: p.tanggal_mulai,
+        end: p.tanggal_selesai,
+    };
+}
+
+function onRangeEditChange(val) {
+    formEdit.tanggal_mulai = val.start;
+    formEdit.tanggal_selesai = val.end;
 }
 
 function submitEdit() {
     formEdit.put(route("periode.update", editTarget.value.id), {
         preserveScroll: true,
-        onSuccess: () => { editTarget.value = null; },
+        onSuccess: () => {
+            editTarget.value = null;
+        },
     });
 }
 
 // ─── Hapus ────────────────────────────────────────────────────────────────────
 const deleteTarget = ref(null);
+const isDeleting = ref(false);
+
+function confirmDelete(p) {
+    deleteTarget.value = p;
+}
 
 function doDelete() {
+    if (!deleteTarget.value) return;
+    isDeleting.value = true;
     router.delete(route("periode.destroy", deleteTarget.value.id), {
         preserveScroll: true,
-        onSuccess: () => { deleteTarget.value = null; },
+        onFinish: () => {
+            isDeleting.value = false;
+            deleteTarget.value = null;
+        },
     });
 }
 </script>
@@ -217,8 +259,8 @@ function doDelete() {
                 </p>
             </div>
             <button
-                @click="showTambah = true"
-                class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-primary/30 hover:bg-primary/90 transition-colors shrink-0"
+                @click="openTambah"
+                class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-primary/30 hover:bg-primary/90 transition-colors shrink-0 cursor-pointer"
             >
                 <Plus class="h-4 w-4" />
                 Tambah Periode {{ nextNomor }}
@@ -315,160 +357,171 @@ function doDelete() {
 
         <!-- ═══════════════════ MODAL TAMBAH ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="showTambah" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showTambah = false" />
-                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div v-if="showTambah" class="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="showTambah = false" />
+                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
                     <!-- Header -->
-                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
                         <div class="flex items-center gap-3">
                             <div class="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                                <Plus class="h-4 w-4" />
+                                <Plus class="h-4.5 w-4.5" />
                             </div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-sm">Tambah Periode {{ nextNomor }}</h3>
-                                <p class="text-xs text-slate-500">Nomor periode terisi otomatis</p>
+                                <p class="text-xs text-slate-500">Pilih rentang tanggal atau gunakan opsi cepat per 2 minggu</p>
                             </div>
                         </div>
-                        <button @click="showTambah = false" class="text-slate-400 hover:text-slate-600 transition-colors">
+                        <button
+                            type="button"
+                            @click="showTambah = false"
+                            class="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
                             <X class="h-5 w-5" />
                         </button>
                     </div>
 
-                    <!-- Nomor Periode (read-only display) -->
-                    <div class="px-6 pt-5">
-                        <div class="flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
-                            <div class="h-8 w-8 rounded-lg bg-primary text-white text-sm font-extrabold flex items-center justify-center shrink-0">
-                                {{ nextNomor }}
+                    <!-- Modal Body (Scrollable) -->
+                    <div class="overflow-y-auto px-6 py-5 space-y-4">
+                        <!-- Top Info Badge -->
+                        <div class="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/80 px-4 py-2.5">
+                            <div class="flex items-center gap-3">
+                                <div class="h-7 w-7 rounded-lg bg-primary text-white text-xs font-black flex items-center justify-center shrink-0">
+                                    {{ nextNomor }}
+                                </div>
+                                <div>
+                                    <span class="text-[11px] text-slate-400 font-medium">Nomor Periode: </span>
+                                    <span class="text-xs font-bold text-slate-900">Periode {{ nextNomor }}</span>
+                                </div>
                             </div>
-                            <div>
-                                <p class="text-xs text-slate-500">Nomor Periode</p>
-                                <p class="text-sm font-bold text-slate-900">Periode {{ nextNomor }}</p>
-                            </div>
-                            <span class="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-200 rounded px-1.5 py-0.5">Otomatis</span>
+                            <span class="text-[10px] font-semibold text-slate-500 bg-slate-200/80 rounded px-2 py-0.5">Otomatis Terurut</span>
                         </div>
+
+                        <!-- Backend Error Alert if any -->
+                        <div
+                            v-if="formTambah.errors.tanggal_mulai || formTambah.errors.tanggal_selesai"
+                            class="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700"
+                        >
+                            <AlertTriangle class="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
+                            <div>
+                                <p class="font-semibold">Penyimpanan Gagal</p>
+                                <p>{{ formTambah.errors.tanggal_mulai || formTambah.errors.tanggal_selesai }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Calendar Picker -->
+                        <PeriodeCalendarPicker
+                            v-model="calendarRangeTambah"
+                            :existing-periodes="periodes"
+                            :latest-periode="latestPeriode"
+                            @change="onRangeTambahChange"
+                        />
                     </div>
 
-                    <!-- Form -->
-                    <form @submit.prevent="submitTambah" class="px-6 py-5 space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Tanggal Mulai <span class="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    v-model="formTambah.tanggal_mulai"
-                                    type="date"
-                                    required
-                                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
-                                />
-                                <p v-if="formTambah.errors.tanggal_mulai" class="mt-1 text-xs text-rose-500">{{ formTambah.errors.tanggal_mulai }}</p>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Tanggal Selesai <span class="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    v-model="formTambah.tanggal_selesai"
-                                    type="date"
-                                    :min="formTambah.tanggal_mulai"
-                                    :disabled="!formTambah.tanggal_mulai"
-                                    required
-                                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <p v-if="formTambah.errors.tanggal_selesai" class="mt-1 text-xs text-rose-500">{{ formTambah.errors.tanggal_selesai }}</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-3">
-                            <button type="button" @click="showTambah = false"
-                                class="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
-                                Batal
-                            </button>
-                            <button type="submit" :disabled="formTambah.processing"
-                                class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 transition">
-                                <Save class="h-4 w-4" />
-                                Simpan
-                            </button>
-                        </div>
-                    </form>
+                    <!-- Footer Action Buttons -->
+                    <div class="border-t border-slate-100 bg-slate-50/80 px-6 py-4 flex items-center justify-between gap-3 shrink-0">
+                        <button
+                            type="button"
+                            @click="showTambah = false"
+                            class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 transition shadow-2xs"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            @click="submitTambah"
+                            :disabled="formTambah.processing || !formTambah.tanggal_mulai || !formTambah.tanggal_selesai"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm shadow-primary/30 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                            <Save class="h-4 w-4" />
+                            Simpan Periode Baru
+                        </button>
+                    </div>
                 </div>
             </div>
         </Teleport>
 
         <!-- ═══════════════════ MODAL EDIT ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="editTarget" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="editTarget = null" />
-                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+            <div v-if="editTarget" class="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="editTarget = null" />
+                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
                         <div class="flex items-center gap-3">
-                            <div class="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                                <Pencil class="h-4 w-4" />
+                            <div class="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                <Pencil class="h-4.5 w-4.5" />
                             </div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-sm">Edit Periode {{ editTarget?.nomor_periode }}</h3>
-                                <p class="text-xs text-slate-500">Ubah rentang tanggal periode</p>
+                                <p class="text-xs text-slate-500">Ubah rentang tanggal periode operasional</p>
                             </div>
                         </div>
-                        <button @click="editTarget = null" class="text-slate-400 hover:text-slate-600 transition-colors">
+                        <button
+                            type="button"
+                            @click="editTarget = null"
+                            class="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
                             <X class="h-5 w-5" />
                         </button>
                     </div>
 
-                    <!-- Nomor Periode (read-only) -->
-                    <div class="px-6 pt-5">
-                        <div class="flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
-                            <div class="h-8 w-8 rounded-lg bg-blue-600 text-white text-sm font-extrabold flex items-center justify-center shrink-0">
-                                {{ editTarget?.nomor_periode }}
+                    <!-- Modal Body (Scrollable) -->
+                    <div class="overflow-y-auto px-6 py-5 space-y-4">
+                        <!-- Top Info Badge -->
+                        <div class="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/80 px-4 py-2.5">
+                            <div class="flex items-center gap-3">
+                                <div class="h-7 w-7 rounded-lg bg-amber-500 text-white text-xs font-black flex items-center justify-center shrink-0">
+                                    {{ editTarget?.nomor_periode }}
+                                </div>
+                                <div>
+                                    <span class="text-[11px] text-slate-400 font-medium">Nomor Periode: </span>
+                                    <span class="text-xs font-bold text-slate-900">Periode {{ editTarget?.nomor_periode }}</span>
+                                </div>
                             </div>
-                            <div>
-                                <p class="text-xs text-slate-500">Nomor Periode</p>
-                                <p class="text-sm font-bold text-slate-900">Periode {{ editTarget?.nomor_periode }}</p>
-                            </div>
-                            <span class="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-200 rounded px-1.5 py-0.5">Terkunci</span>
+                            <span class="text-[10px] font-semibold text-slate-500 bg-slate-200/80 rounded px-2 py-0.5">Terkunci</span>
                         </div>
+
+                        <!-- Backend Error Alert if any -->
+                        <div
+                            v-if="formEdit.errors.tanggal_mulai || formEdit.errors.tanggal_selesai"
+                            class="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700"
+                        >
+                            <AlertTriangle class="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
+                            <div>
+                                <p class="font-semibold">Perubahan Gagal</p>
+                                <p>{{ formEdit.errors.tanggal_mulai || formEdit.errors.tanggal_selesai }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Calendar Picker -->
+                        <PeriodeCalendarPicker
+                            v-model="calendarRangeEdit"
+                            :existing-periodes="periodes"
+                            :current-periode-id="editTarget?.id"
+                            :latest-periode="latestPeriode"
+                            @change="onRangeEditChange"
+                        />
                     </div>
 
-                    <form @submit.prevent="submitEdit" class="px-6 py-5 space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Tanggal Mulai <span class="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    v-model="formEdit.tanggal_mulai"
-                                    type="date"
-                                    required
-                                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
-                                />
-                                <p v-if="formEdit.errors.tanggal_mulai" class="mt-1 text-xs text-rose-500">{{ formEdit.errors.tanggal_mulai }}</p>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
-                                    Tanggal Selesai <span class="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    v-model="formEdit.tanggal_selesai"
-                                    type="date"
-                                    :min="formEdit.tanggal_mulai"
-                                    :disabled="!formEdit.tanggal_mulai"
-                                    required
-                                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <p v-if="formEdit.errors.tanggal_selesai" class="mt-1 text-xs text-rose-500">{{ formEdit.errors.tanggal_selesai }}</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-3">
-                            <button type="button" @click="editTarget = null"
-                                class="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
-                                Batal
-                            </button>
-                            <button type="submit" :disabled="formEdit.processing"
-                                class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 transition">
-                                <Save class="h-4 w-4" />
-                                Perbarui
-                            </button>
-                        </div>
-                    </form>
+                    <!-- Footer Action Buttons -->
+                    <div class="border-t border-slate-100 bg-slate-50/80 px-6 py-4 flex items-center justify-between gap-3 shrink-0">
+                        <button
+                            type="button"
+                            @click="editTarget = null"
+                            class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 transition shadow-2xs"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            @click="submitEdit"
+                            :disabled="formEdit.processing || !formEdit.tanggal_mulai || !formEdit.tanggal_selesai"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                            <Save class="h-4 w-4" />
+                            Simpan Perubahan
+                        </button>
+                    </div>
                 </div>
             </div>
         </Teleport>
@@ -476,24 +529,39 @@ function doDelete() {
         <!-- ═══════════════════ MODAL HAPUS ═══════════════════ -->
         <Teleport to="body">
             <div v-if="deleteTarget" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="deleteTarget = null" />
-                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="deleteTarget = null" />
+                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                     <div class="p-6 text-center">
-                        <div class="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4">
+                        <div class="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
                             <AlertTriangle class="h-6 w-6" />
                         </div>
                         <h3 class="font-bold text-slate-900 text-base mb-1">
                             Hapus Periode {{ deleteTarget?.nomor_periode }}?
                         </h3>
-                        <p class="text-sm text-slate-500 mb-6">Tindakan ini tidak dapat dibatalkan.</p>
-                        <div class="flex gap-3">
-                            <button @click="deleteTarget = null"
-                                class="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                        <p class="text-xs text-slate-500 mb-2">
+                            Rentang: {{ formatRange(deleteTarget?.tanggal_mulai, deleteTarget?.tanggal_selesai) }}
+                        </p>
+                        <div class="bg-rose-50 border border-rose-100 rounded-xl p-2.5 mb-5 text-[11px] text-rose-600 font-medium leading-relaxed">
+                            Data periode ini akan dihapus secara permanen dari sistem.
+                        </div>
+                        <div class="flex gap-2.5">
+                            <button
+                                type="button"
+                                @click="deleteTarget = null"
+                                :disabled="isDeleting"
+                                class="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition shadow-2xs"
+                            >
                                 Batal
                             </button>
-                            <button @click="doDelete"
-                                class="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition">
-                                Ya, Hapus
+                            <button
+                                type="button"
+                                @click="doDelete"
+                                :disabled="isDeleting"
+                                class="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 shadow-sm shadow-rose-600/30 disabled:opacity-60 transition"
+                            >
+                                <Trash2 v-if="!isDeleting" class="h-4 w-4" />
+                                <span v-if="isDeleting">Menghapus...</span>
+                                <span v-else>Ya, Hapus</span>
                             </button>
                         </div>
                     </div>
