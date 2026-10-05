@@ -35,14 +35,14 @@ defineProps({
 </script>
 
 <template>
-    <!-- ================= 5 RINGKASAN UTAMA METRIC CARDS ================= -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+    <!-- ================= 5 RINGKASAN UTAMA METRIC CARDS (Responsive 2 Kolom di HP) ================= -->
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         <!-- 1. Total Kelompok -->
         <Card
             className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
         >
             <CardContent
-                className="p-4 sm:p-5 flex items-center justify-between gap-3"
+                className="p-3.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3"
             >
                 <div class="min-w-0 flex-1">
                     <p class="text-xs font-medium text-slate-500 truncate">
@@ -221,12 +221,12 @@ defineProps({
             </CardContent>
         </Card>
 
-        <!-- 5. Total Penerima -->
+        <!-- 5. Total Penerima (Span 2 Kolom di HP) -->
         <Card
-            className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+            className="bg-white border-slate-200/80 shadow-xs hover:shadow-md transition-shadow col-span-2 lg:col-span-1"
         >
             <CardContent
-                className="p-4 sm:p-5 flex items-center justify-between gap-3"
+                className="p-3.5 sm:p-5 flex items-center justify-between gap-3"
             >
                 <div class="min-w-0 flex-1">
                     <p class="text-xs font-medium text-slate-500 truncate">

@@ -485,10 +485,10 @@ function executeDelete() {
                         </CardDescription>
                     </div>
 
-                    <div class="shrink-0 pl-10.5 sm:pl-0">
+                    <div class="shrink-0 w-full sm:w-auto pl-10.5 sm:pl-0">
                         <Link
                             :href="route('penerima-manfaat.create')"
-                            class="inline-flex items-center gap-2 h-10 px-4 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-xs transition-colors cursor-pointer"
+                            class="inline-flex items-center justify-center gap-2 h-10 px-4 w-full sm:w-auto text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-xs transition-colors cursor-pointer"
                         >
                             <Plus class="h-4 w-4 stroke-[3]" />
                             <span>Tambah Kelompok</span>

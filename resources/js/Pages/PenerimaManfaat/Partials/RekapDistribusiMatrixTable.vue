@@ -154,9 +154,9 @@ function getColTotalPorsi(col) {
                         <th class="py-2.5 px-3 min-w-[200px] sticky left-9 z-20 bg-slate-100 border-r border-slate-200">
                             Kelompok & NPSN
                         </th>
-                        <!-- Sticky Kolom 3: Kategori & PIC -->
-                        <th class="py-2.5 px-3 min-w-[150px] sticky left-[236px] z-20 bg-slate-100 border-r border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
-                            PIC & Sasaran Jiwa
+                        <!-- Sticky Kolom 3: Kategori & PIC (Sticky di Desktop, Normal di Mobile agar mudah swipe tanggal) -->
+                        <th class="py-2.5 px-3 min-w-[140px] sm:min-w-[150px] static sm:sticky sm:left-[236px] z-10 sm:z-20 bg-slate-100 border-r border-slate-300 shadow-none sm:shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
+                            PIC & Sasaran PM
                         </th>
 
                         <!-- Dinamis Kolom Tanggal (Header bisa diklik untuk toggle 1 kolom) -->
@@ -218,14 +218,14 @@ function getColTotalPorsi(col) {
                             </div>
                         </td>
 
-                        <!-- Sticky 3: PIC & Sasaran -->
-                        <td class="py-2 px-3 sticky left-[236px] z-10 bg-white group-hover:bg-slate-50 border-r border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
+                        <!-- Kolom 3: PIC & Sasaran PM (Sticky di Desktop, Normal di Mobile) -->
+                        <td class="py-2 px-3 static sm:sticky sm:left-[236px] z-0 sm:z-10 bg-white group-hover:bg-slate-50 border-r border-slate-300 shadow-none sm:shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
                             <div class="flex items-center gap-1.5">
                                 <span :class="['px-1.5 py-0.2 rounded text-[10px] font-bold border', getCategoryBadge(item.kategori)]">
                                     {{ item.kategori }}
                                 </span>
                                 <span class="font-extrabold text-slate-800 text-[11px]">
-                                    {{ formatNumber(item.total_penerima) }} Jiwa
+                                    {{ formatNumber(item.total_penerima) }} PM
                                 </span>
                             </div>
                             <div class="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">

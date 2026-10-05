@@ -131,7 +131,7 @@ function printReceipt() {
                     <div class="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/80 text-[11px] space-y-1">
                         <div class="font-bold text-emerald-950">Rincian Perhitungan Resmi BGN:</div>
                         <div class="text-emerald-900 font-mono">
-                            • Sasaran PM: {{ item.total_penerima }} Jiwa ({{ item.skema_tier }})<br>
+                            • Sasaran PM: {{ item.total_penerima }} PM ({{ item.skema_tier }})<br>
                             • Tarif Harian: {{ item.deskripsi_tarif }} × {{ item.hari_operasional }} Hari Operasional = <b>{{ formatRupiah(item.amount) }}</b>
                         </div>
                     </div>

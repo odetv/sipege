@@ -362,19 +362,27 @@ const computedSummary = computed(() => {
     const totalPorsiBesar = list.reduce((sum, it) => sum + (Number(it.porsi_besar_harian) || 0), 0);
     const totalPorsiHarian = list.reduce((sum, it) => sum + (Number(it.total_porsi_harian) || 0), 0);
     
-    // Hitung total akumulasi riil dari data matrix
+    // Hitung total akumulasi riil dari data matrix & persentase layanan
     let totalPorsiAkumulasi = 0;
+    let totalSlotTerkirim = 0;
+    const totalHariKerja = dateColumns.value.filter(col => !col.isSunday).length || dateColumns.value.length || 1;
+    const totalSlotHarusKirim = list.length * totalHariKerja;
+
     list.forEach(it => {
         let hariKirim = 0;
         dateColumns.value.forEach(col => {
             if (matrixDistribusi.value[it.id]?.[col.dateStr] === "T") {
                 hariKirim++;
+                totalSlotTerkirim++;
             }
         });
         totalPorsiAkumulasi += (Number(it.total_porsi_harian) || 0) * hariKirim;
     });
 
     const totalPenerima = list.reduce((sum, it) => sum + (Number(it.total_penerima) || 0), 0);
+    const persentaseLayanan = totalSlotHarusKirim > 0
+        ? Math.min(100, Math.round((totalSlotTerkirim / totalSlotHarusKirim) * 100))
+        : 100;
 
     return {
         total_kelompok: list.length,
@@ -386,7 +394,7 @@ const computedSummary = computed(() => {
         total_porsi_harian: totalPorsiHarian,
         total_porsi_akumulasi: totalPorsiAkumulasi,
         total_hari: dateColumns.value.length,
-        persentase_layanan: 100,
+        persentase_layanan: persentaseLayanan,
         rata_rata_porsi_per_kelompok: list.length > 0 ? Math.round(totalPorsiHarian / list.length) : 0,
     };
 });
@@ -404,11 +412,14 @@ function openExportModal(mode = "current") {
 async function handleDownloadExcel(customStart = null, customEnd = null) {
     try {
         isExporting.value = true;
-        const sDate = customStart || tanggalMulai.value;
-        const eDate = customEnd || tanggalSelesai.value;
+        // Tangkal jika dipanggil dari DOM event object (bukan string tanggal)
+        const sDate = (typeof customStart === "string" && customStart.length >= 8) ? customStart : tanggalMulai.value;
+        const eDate = (typeof customEnd === "string" && customEnd.length >= 8) ? customEnd : tanggalSelesai.value;
 
         await downloadRekapDistribusiExcel({
             distribusiList: filteredItems.value,
+            matrixDistribusi: matrixDistribusi.value,
+            dateColumns: dateColumns.value,
             stats: computedSummary.value,
             startDate: sDate,
             endDate: eDate,
@@ -416,9 +427,10 @@ async function handleDownloadExcel(customStart = null, customEnd = null) {
             unitSppg: props.unitSppg,
         });
         showExportModal.value = false;
+        showToast("Laporan Excel Rekap Distribusi berhasil diunduh.");
     } catch (err) {
         console.error("Gagal export Excel:", err);
-        alert("Terjadi kesalahan saat mengekspor Excel.");
+        alert("Terjadi kesalahan saat mengekspor Excel: " + (err?.message || err));
     } finally {
         isExporting.value = false;
     }
@@ -496,7 +508,12 @@ function showToast(msg) {
             />
 
             <!-- ─── Komponen 2: KPI Statistics Cards (6 Cards) ────────────────── -->
-            <RekapDistribusiKpiCards :stats="computedSummary" />
+            <RekapDistribusiKpiCards
+                :summary="computedSummary"
+                :stats="computedSummary"
+                :dateColumns="dateColumns"
+                :modeSkala="modeSkala"
+            />
 
             <!-- ─── Komponen 3: Matriks Harian Distribusi (Identik Presensi) ───── -->
             <RekapDistribusiMatrixTable
@@ -512,14 +529,20 @@ function showToast(msg) {
 
         <!-- ─── Modal Dialog Ekspor Excel ───────────────────────────────────── -->
         <RekapDistribusiExportModal
+            :show="showExportModal"
             :isOpen="showExportModal"
+            :mode="exportModalMode"
             :initialMode="exportModalMode"
+            :startDate="tanggalMulai"
+            :endDate="tanggalSelesai"
             :tanggalMulai="tanggalMulai"
             :tanggalSelesai="tanggalSelesai"
             :todayStr="todayStr"
             :periodes="periodes"
+            :totalDays="dateColumns.length"
             :isExporting="isExporting"
             @close="showExportModal = false"
+            @confirmExport="handleDownloadExcel"
             @confirm="handleDownloadExcel"
         />
     </AppLayout>

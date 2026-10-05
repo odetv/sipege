@@ -96,7 +96,7 @@ function onApplyDateRange(newRange) {
             </div>
 
             <!-- Tombol Aksi Kanan: Simpan Data & Ekspor Excel -->
-            <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <div class="flex items-center gap-2 self-stretch sm:self-auto flex-wrap justify-start sm:justify-end">
                 <!-- Tombol Simpan Presensi/Distribusi (Identik Rekap Kehadiran) -->
                 <button
                     type="button"
@@ -308,14 +308,14 @@ function onApplyDateRange(newRange) {
                         <button
                             type="button"
                             @click="isDatePickerOpen = !isDatePickerOpen"
-                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 transition-all cursor-pointer group shadow-2xs"
+                            class="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-300 hover:border-emerald-500 text-[11px] sm:text-xs font-bold text-slate-800 transition-all cursor-pointer group shadow-2xs"
                             title="Klik untuk membuka kalender rentang tanggal"
                         >
-                            <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                            <span class="text-emerald-800 font-extrabold">{{ formatTanggalIndo(tanggalMulai) }}</span>
+                            <Calendar class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span class="text-emerald-800 font-extrabold truncate max-w-[120px] sm:max-w-none">{{ formatTanggalIndo(tanggalMulai) }}</span>
                             <span class="text-emerald-500 font-black">➜</span>
-                            <span class="text-emerald-800 font-extrabold">{{ formatTanggalIndo(tanggalSelesai) }}</span>
-                            <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform" :class="{ 'rotate-180': isDatePickerOpen }" />
+                            <span class="text-emerald-800 font-extrabold truncate max-w-[120px] sm:max-w-none">{{ formatTanggalIndo(tanggalSelesai) }}</span>
+                            <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0" :class="{ 'rotate-180': isDatePickerOpen }" />
                         </button>
 
                         <div

@@ -824,11 +824,11 @@ function copyRowRekening(id, text) {
                 </div>
 
                 <!-- Right Action Buttons -->
-                <div class="flex items-center gap-2.5 flex-wrap">
+                <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
                     <button
                         type="button"
                         @click="openPreviewModal"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer flex-1 sm:flex-none"
                         title="Lihat isi format file CSV BNI Direct"
                     >
                         <Eye class="h-4 w-4 text-slate-500" />
@@ -841,7 +841,7 @@ function copyRowRekening(id, text) {
                         @click="triggerDownloadExcel"
                         :disabled="isDownloadingExcel || totalSelectedCount === 0"
                         title="Download template .xls resmi BNI Direct dengan hanya mengisi data di 3 kolom (Rek. Tujuan, Nama, Amount) tanpa mengubah format template"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                        class="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none"
                     >
                         <FileSpreadsheet class="h-4 w-4" />
                         <span v-if="isDownloadingExcel">Menyiapkan .xls...</span>
@@ -853,7 +853,7 @@ function copyRowRekening(id, text) {
                         type="button"
                         @click="triggerDownloadCsv"
                         :disabled="isDownloading || totalSelectedCount === 0"
-                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                        class="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto"
                     >
                         <Download class="h-4 w-4" />
                         <span>Download CSV BNI Direct</span>
@@ -1116,36 +1116,36 @@ function copyRowRekening(id, text) {
                 </div>
             </div>
 
-            <!-- ─── KPI Summary Cards (5 Kolom Presisi) ───────────────────── -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            <!-- ─── KPI Summary Cards (Responsive 2 Kolom di HP) ───────────── -->
+            <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
                 <!-- Card 1: Penerima Terpilih -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                        <Users class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                        <Users class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                             Penerima Terpilih
                         </p>
-                        <p class="text-xl font-black text-slate-900 leading-tight">
+                        <p class="text-base sm:text-xl font-black text-slate-900 leading-tight">
                             {{ totalSelectedCount }} <span class="text-xs font-normal text-slate-400">/ {{ rows.length }}</span>
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Personil masuk batch payroll
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Personil payroll
                         </p>
                     </div>
                 </div>
 
-                <!-- Card 2: Total Nominal Payroll -->
-                <div class="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex items-center gap-3.5 lg:col-span-2">
-                    <div class="p-3 rounded-lg bg-emerald-600 text-white shrink-0 shadow-xs">
-                        <DollarSign class="h-6 w-6" />
+                <!-- Card 2: Total Nominal Payroll (Span 2 Kolom di HP) -->
+                <div class="p-3.5 sm:p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 col-span-2 lg:col-span-2">
+                    <div class="p-2.5 sm:p-3 rounded-lg bg-emerald-600 text-white shrink-0 shadow-xs">
+                        <DollarSign class="h-5 w-5 sm:h-6 sm:w-6" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
                             Total Gaji BGN (Tanpa Bonus Mitra)
                         </p>
-                        <p class="text-2xl font-black text-emerald-950 leading-tight truncate">
+                        <p class="text-xl sm:text-2xl font-black text-emerald-950 leading-tight truncate">
                             {{ formatRupiah(totalPayrollAmount) }}
                         </p>
                         <p class="text-[10px] text-emerald-700 mt-0.5">
@@ -1155,40 +1155,40 @@ function copyRowRekening(id, text) {
                 </div>
 
                 <!-- Card 3: Status Rekening BNI -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
-                        <CreditCard class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+                        <CreditCard class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Rekening BNI Valid
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Rekening BNI
                         </p>
-                        <p class="text-lg font-bold text-slate-900 leading-tight">
+                        <p class="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                             <span class="text-emerald-600 font-extrabold">{{ readyBniCount }}</span> Siap
                         </p>
-                        <p v-if="missingRekeningCount > 0" class="text-[10px] text-rose-600 font-semibold mt-0.5">
-                            {{ missingRekeningCount }} belum ada rekening!
+                        <p v-if="missingRekeningCount > 0" class="text-[9.5px] sm:text-[10px] text-rose-600 font-semibold mt-0.5 truncate">
+                            {{ missingRekeningCount }} belum rekening!
                         </p>
-                        <p v-else class="text-[10px] text-slate-500 mt-0.5">
-                            Semua rekening terisi lengkap
+                        <p v-else class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Semua terisi lengkap
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 4: Rata-rata Honor -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
-                        <Clock class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
+                        <Clock class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                             Rata-Rata Gaji
                         </p>
-                        <p class="text-base font-bold text-slate-900 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-slate-900 leading-tight truncate">
                             {{ formatRupiah(averagePayroll) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Per personil terpilih
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Per personil
                         </p>
                     </div>
                 </div>

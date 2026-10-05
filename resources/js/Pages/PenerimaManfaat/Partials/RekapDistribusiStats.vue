@@ -24,21 +24,21 @@ function formatNumber(num) {
 </script>
 
 <template>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Card 1: Total Sasaran Jiwa -->
-        <div class="relative overflow-hidden rounded-2xl bg-white p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow group">
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <!-- Card 1: Total Sasaran PM -->
+        <div class="relative overflow-hidden rounded-2xl bg-white p-3.5 sm:p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow group">
             <div class="flex items-center justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
                     Total Sasaran PM
                 </span>
-                <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Users class="h-5 w-5" />
+                <div class="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Users class="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
             </div>
-            <div class="mt-3">
-                <div class="text-2xl font-extrabold text-slate-900 tracking-tight">
+            <div class="mt-2 sm:mt-3">
+                <div class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
                     {{ formatNumber(stats.total_penerima) }}
-                    <span class="text-xs font-semibold text-slate-500">Jiwa</span>
+                    <span class="text-xs font-semibold text-slate-500">PM</span>
                 </div>
                 <div class="mt-1 flex items-center gap-2 text-xs text-slate-500">
                     <span class="inline-flex items-center gap-1 font-medium text-blue-600">

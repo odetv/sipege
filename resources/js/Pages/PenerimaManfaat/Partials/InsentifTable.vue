@@ -170,7 +170,7 @@ function getCategoryBadge(kategori) {
                         <!-- Sasaran PM -->
                         <td class="py-3 px-3 text-right">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 font-extrabold text-slate-800 text-xs">
-                                {{ formatNumber(item.total_penerima) }} Jiwa
+                                {{ formatNumber(item.total_penerima) }} PM
                             </span>
                         </td>
 
@@ -271,7 +271,7 @@ function getCategoryBadge(kategori) {
                             Total Alokasi Insentif Tunai:
                         </td>
                         <td class="py-2.5 px-3 text-right font-extrabold text-slate-900">
-                            {{ formatNumber(items.reduce((s, it) => s + (Number(it.total_penerima) || 0), 0)) }} Jiwa
+                            {{ formatNumber(items.reduce((s, it) => s + (Number(it.total_penerima) || 0), 0)) }} PM
                         </td>
                         <td colspan="2" class="py-2.5 px-3 text-center text-slate-500">
                             {{ items.length }} Titik Terdaftar

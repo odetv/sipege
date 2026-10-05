@@ -59,7 +59,7 @@ function formatNumber(num) {
                     <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Sasaran</div>
                         <div class="text-lg font-extrabold text-slate-800 mt-0.5">{{ formatNumber(item.total_penerima) }}</div>
-                        <div class="text-[10px] text-slate-500">Jiwa</div>
+                        <div class="text-[10px] text-slate-500">PM</div>
                     </div>
                     <div class="p-3 rounded-xl bg-emerald-50/70 border border-emerald-100 text-center">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Porsi Kecil</div>

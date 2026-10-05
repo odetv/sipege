@@ -749,11 +749,11 @@ watch(
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2.5">
+                <div class="flex items-center gap-2.5 w-full sm:w-auto">
                     <button
                         type="button"
                         @click="openCreateModal"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        class="inline-flex items-center justify-center gap-2 px-3.5 py-2 w-full sm:w-auto rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
                         <Plus class="h-4 w-4" />
                         <span>Tambah Petugas</span>
@@ -796,113 +796,112 @@ watch(
                 </button>
             </div>
 
-            <!-- ─── KPI / Summary Cards ───────────────────────────────────── -->
-            <!-- ─── KPI / Summary Cards (6 Kolom Presisi) ───────────────────── -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+            <!-- ─── KPI / Summary Cards (Responsive 2 Kolom di HP) ───────────── -->
+            <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3.5">
                 <!-- Card 1: Total Petugas -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                        <Users class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                        <Users class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                             Total Personil
                         </p>
-                        <p class="text-xl font-bold text-slate-900 leading-tight">
+                        <p class="text-base sm:text-xl font-bold text-slate-900 leading-tight">
                             {{ summary.total_petugas ?? 0 }} <span class="text-xs font-normal text-slate-500">orang</span>
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            {{ summary.total_laki ?? 0 }} Laki • {{ summary.total_perempuan ?? 0 }} Perempuan
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            {{ summary.total_laki ?? 0 }} L • {{ summary.total_perempuan ?? 0 }} P
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 2: Gaji Harian BGN -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
-                        <DollarSign class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+                        <DollarSign class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                             Gaji Harian BGN
                         </p>
-                        <p class="text-base font-bold text-slate-900 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-slate-900 leading-tight truncate">
                             {{ formatRupiah(summary.total_gaji_harian_bgn) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Per hari kerja operasional
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Per hari kerja
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 3: Bonus Harian Mitra -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
-                        <BadgePercent class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
+                        <BadgePercent class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Bonus Harian Mitra
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Bonus Mitra
                         </p>
-                        <p class="text-base font-bold text-slate-900 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-slate-900 leading-tight truncate">
                             {{ formatRupiah(summary.total_bonus_harian_mitra) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Subsidi insentif harian
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Subsidi insentif
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 4: Iuran BPJS TK -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-violet-50 text-violet-600 shrink-0">
-                        <Shield class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-violet-50 text-violet-600 shrink-0">
+                        <Shield class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Iuran BPJS TK Total
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Iuran BPJS TK
                         </p>
-                        <p class="text-base font-bold text-slate-900 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-slate-900 leading-tight truncate">
                             {{ formatRupiah(summary.total_bpjs_tk) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Jaminan kecelakaan & kematian
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Total iuran premi
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 5: Estimasi Periodik (14 Hari) -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-teal-50 text-teal-600 shrink-0">
-                        <Calendar class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-teal-50 text-teal-600 shrink-0">
+                        <Calendar class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Estimasi Gaji Periodik
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Gaji Periodik
                         </p>
-                        <p class="text-base font-bold text-teal-700 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-teal-700 leading-tight truncate">
                             {{ formatRupiah(summary.total_pengeluaran_periodik) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Standar 14 hari kerja (periodik)
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Standar 14 hari
                         </p>
                     </div>
                 </div>
 
                 <!-- Card 6: Estimasi Biaya Bulanan Standar BGN (20 Hari) -->
-                <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3.5">
-                    <div class="p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                        <Clock class="h-5 w-5" />
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                    <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                        <Clock class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Gaji Bulanan BGN
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Gaji Bulanan
                         </p>
-                        <p class="text-base font-bold text-emerald-700 leading-tight truncate">
+                        <p class="text-xs sm:text-base font-bold text-emerald-700 leading-tight truncate">
                             {{ formatRupiah(summary.total_pengeluaran_bulanan_20 || (summary.total_pengeluaran_harian * 20)) }}
                         </p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">
-                            Standar 20 hari kerja BGN (Excel)
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Standar 20 hari
                         </p>
                     </div>
                 </div>

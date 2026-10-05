@@ -85,11 +85,11 @@ function onApplyDateRange(newRange) {
             </div>
 
             <!-- Tombol Aksi Cepat: Ekspor Excel & Cetak Kuitansi -->
-            <div class="flex items-center gap-2 self-start sm:self-auto">
+            <div class="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
                 <button
                     type="button"
                     @click="$emit('printAllReceipts')"
-                    class="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                    class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs flex-1 sm:flex-none"
                     title="Cetak formulir tanda terima tunai"
                 >
                     <Printer class="h-4 w-4" />
@@ -100,7 +100,7 @@ function onApplyDateRange(newRange) {
                     type="button"
                     @click="$emit('exportExcel')"
                     :disabled="isExporting"
-                    class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                    class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs disabled:opacity-50 flex-1 sm:flex-none"
                     title="Unduh Excel lengkap dengan kolom tanda tangan"
                 >
                     <FileSpreadsheet class="h-4 w-4" />
@@ -166,14 +166,14 @@ function onApplyDateRange(newRange) {
                         <button
                             type="button"
                             @click="isDatePickerOpen = !isDatePickerOpen"
-                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 transition-all cursor-pointer group shadow-2xs"
+                            class="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-300 hover:border-emerald-500 text-[11px] sm:text-xs font-bold text-slate-800 transition-all cursor-pointer group shadow-2xs"
                             title="Klik untuk membuka pemilih rentang tanggal kalender"
                         >
-                            <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                            <span class="text-emerald-800 font-extrabold">{{ formatTanggalIndo(tanggalMulai) }}</span>
+                            <Calendar class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span class="text-emerald-800 font-extrabold truncate max-w-[120px] sm:max-w-none">{{ formatTanggalIndo(tanggalMulai) }}</span>
                             <span class="text-emerald-500 font-black">➜</span>
-                            <span class="text-emerald-800 font-extrabold">{{ formatTanggalIndo(tanggalSelesai) }}</span>
-                            <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform" :class="{ 'rotate-180': isDatePickerOpen }" />
+                            <span class="text-emerald-800 font-extrabold truncate max-w-[120px] sm:max-w-none">{{ formatTanggalIndo(tanggalSelesai) }}</span>
+                            <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0" :class="{ 'rotate-180': isDatePickerOpen }" />
                         </button>
 
                         <div
