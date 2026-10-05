@@ -57,5 +57,8 @@ class DatabaseSeeder extends Seeder
 
         // 6. Seeder Supplier Rekanan (11 Supplier)
         $this->call(SupplierSeeder::class);
+
+        // 7. Seeder Petugas SPPG (44 Personil Lengkap)
+        $this->call(PetugasSeeder::class);
     }
 }

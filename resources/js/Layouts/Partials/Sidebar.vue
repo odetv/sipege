@@ -6,6 +6,7 @@ import {
     LayoutDashboard,
     LogOut,
     Users,
+    UserCheck,
     UtensilsCrossed,
     Wallet,
     Tag,
@@ -35,6 +36,7 @@ import {
     FileText,
     FolderKanban,
     Calendar,
+    CalendarCheck,
     PieChart,
     Store,
     Truck,
@@ -72,6 +74,14 @@ const props = defineProps({
 const emit = defineEmits(["update:isMobileOpen", "update:isCollapsed"]);
 
 const page = usePage();
+
+const isPetugasActive = computed(() => {
+    try {
+        return route().current("petugas.*");
+    } catch {
+        return false;
+    }
+});
 
 const isGiziActive = computed(() => {
     try {
@@ -179,6 +189,7 @@ const isLaporanSppgActive = computed(() => {
 });
 
 function getInitialMenu() {
+    if (isPetugasActive.value) return "petugas";
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
     if (isLaporanSppgActive.value) return "laporan-sppg";
@@ -198,6 +209,9 @@ function getInitialKeuanganSubMenu() {
 const activeExpandedMenu = ref(getInitialMenu());
 const activeKeuanganSubMenu = ref(getInitialKeuanganSubMenu());
 
+const isPetugasExpanded = computed(
+    () => activeExpandedMenu.value === "petugas",
+);
 const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
 const isKeuanganExpanded = computed(
     () => activeExpandedMenu.value === "keuangan",
@@ -221,7 +235,9 @@ const isLaporanExpanded = computed(
 watch(
     () => page.url,
     () => {
-        if (isGiziActive.value) {
+        if (isPetugasActive.value) {
+            activeExpandedMenu.value = "petugas";
+        } else if (isGiziActive.value) {
             activeExpandedMenu.value = "gizi";
         } else if (isKeuanganActive.value) {
             activeExpandedMenu.value = "keuangan";
@@ -246,6 +262,14 @@ watch(
         }
     },
 );
+
+function togglePetugasMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "petugas" ? null : "petugas";
+}
 
 function toggleSpjMenu() {
     activeKeuanganSubMenu.value =
@@ -453,7 +477,112 @@ function logout() {
                     ></div>
                 </Link>
 
-                <!-- 2. Menu Penerima Manfaat -->
+                <!-- 2. Menu Petugas (Accordion with Submenu: Daftar Petugas & Rekap Kehadiran) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Petugas Button -->
+                    <button
+                        type="button"
+                        @click="togglePetugasMenu"
+                        :title="isCollapsed ? 'Petugas' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isPetugasActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <UserCheck class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Petugas</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isPetugasExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Daftar Petugas & Rekap Kehadiran -->
+                    <div
+                        v-if="!isCollapsed && isPetugasExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Daftar Petugas -->
+                        <Link
+                            :href="route('petugas.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                (route().current('petugas.index') || route().current('petugas.*')) &&
+                                !route().current('petugas.rekap-kehadiran') &&
+                                !route().current('petugas.kehadiran')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Users class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Daftar Petugas</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Rekap Kehadiran -->
+                        <Link
+                            :href="route('petugas.rekap-kehadiran')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petugas.rekap-kehadiran') ||
+                                route().current('petugas.kehadiran')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarCheck class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rekap Kehadiran</span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 3. Menu Supplier Rekanan -->
+                <Link
+                    :href="route('supplier.index')"
+                    :title="isCollapsed ? 'Supplier' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('supplier.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Store class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Supplier</span
+                    >
+                    <div
+                        v-if="route().current('supplier.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 4. Menu Penerima Manfaat -->
                 <Link
                     :href="route('penerima-manfaat.index')"
                     :title="isCollapsed ? 'Penerima Manfaat' : ''"
@@ -1162,40 +1291,9 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 6. Menu Supplier Rekanan -->
-                <Link
-                    :href="route('supplier.index')"
-                    :title="isCollapsed ? 'Supplier' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('supplier.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Store class="h-4 w-4 shrink-0" />
-                    <span
-                        :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Supplier</span
-                    >
-                    <div
-                        v-if="route().current('supplier.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
-                            isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
-                        ]"
-                    ></div>
-                </Link>
 
-                <!-- 6. Menu Periode -->
+
+                <!-- 8. Menu Periode -->
                 <Link
                     :href="route('periode.index')"
                     :title="isCollapsed ? 'Periode' : ''"

@@ -61,4 +61,12 @@ class UnitSppg extends Model
     {
         return $this->hasOne(SettingKopDokumen::class);
     }
+
+    /**
+     * Get all petugas for the unit SPPG.
+     */
+    public function petugas(): HasMany
+    {
+        return $this->hasMany(Petugas::class, 'unit_sppg_id');
+    }
 }

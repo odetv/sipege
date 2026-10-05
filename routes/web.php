@@ -8,6 +8,7 @@ use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PeriodeController;
+use App\Http\Controllers\PetugasController;
 use App\Http\Controllers\PetunjukController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WilayahController;
@@ -96,6 +97,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Supplier Rekanan SPPG
     Route::resource('supplier', SupplierController::class);
+
+    // Petugas SPPG (Daftar Petugas & Rekap Kehadiran)
+    Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
+    Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
+    Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');
+    Route::resource('petugas', PetugasController::class);
 
     // Label SPPG
     Route::prefix('label')->name('label.')->group(function () {
