@@ -4696,12 +4696,41 @@ function findAlergiDetail(jenisName) {
         rekapAlergiDetailPm.value.find((r) => {
             const rClean = r.jenis_alergi.toLowerCase().trim();
             const rCleanNoPrefix = rClean.replace(/^alergi\s+/, "");
-            return (
-                rClean === clean ||
-                rCleanNoPrefix === cleanNoPrefix ||
-                matchWordBoundary(cleanNoPrefix, rCleanNoPrefix) ||
-                matchWordBoundary(rCleanNoPrefix, cleanNoPrefix)
-            );
+
+            // 1. Exact match (prioritas utama)
+            if (rClean === clean || rCleanNoPrefix === cleanNoPrefix) {
+                return true;
+            }
+
+            // 2. Cegah percampuran Telur Ayam/Biasa vs Telur Puyuh
+            if (
+                (cleanNoPrefix === "telur" && rCleanNoPrefix.includes("puyuh")) ||
+                (cleanNoPrefix.includes("puyuh") && rCleanNoPrefix === "telur")
+            ) {
+                return false;
+            }
+
+            // 3. Cegah percampuran Hati Ayam vs Daging Ayam
+            if (
+                (cleanNoPrefix === "daging ayam" && rCleanNoPrefix.includes("hati")) ||
+                (cleanNoPrefix.includes("hati") && rCleanNoPrefix === "daging ayam")
+            ) {
+                return false;
+            }
+
+            // 4. Normalisasi sebutan umum yang ekuivalen
+            if (
+                (cleanNoPrefix === "telur" && rCleanNoPrefix === "telur ayam") ||
+                (cleanNoPrefix === "telur ayam" && rCleanNoPrefix === "telur") ||
+                (cleanNoPrefix === "ayam" && rCleanNoPrefix === "daging ayam") ||
+                (cleanNoPrefix === "daging ayam" && rCleanNoPrefix === "ayam") ||
+                (cleanNoPrefix === "sapi" && rCleanNoPrefix === "daging sapi") ||
+                (cleanNoPrefix === "daging sapi" && rCleanNoPrefix === "sapi")
+            ) {
+                return true;
+            }
+
+            return false;
         }) || null
     );
 }

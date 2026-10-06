@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\KelompokPenerimaManfaat;
+use App\Models\Periode;
 use App\Models\SavedLabel;
 use App\Models\WorkOrder;
 use Illuminate\Http\RedirectResponse;
@@ -45,6 +46,7 @@ class LabelController extends Controller
                         'total_porsi' => (int)$wo->total_pm,
                         'porsi_pk' => (int)$wo->total_pk,
                         'porsi_pb' => (int)$wo->total_pb,
+                        'total_alergi' => (int)($wo->total_alergi ?: 0),
                         'sub_menu_1' => $wo->sub_menu_1,
                         'sub_menu_2' => $wo->sub_menu_2,
                         'sub_menu_3' => $wo->sub_menu_3,
@@ -60,6 +62,7 @@ class LabelController extends Controller
                         ])),
                         'akg_pk' => $wo->akg_pk,
                         'akg_pb' => $wo->akg_pb,
+                        'akg_alergi' => $this->calculateAkgAlergiForWo($wo),
                         'food_cost_pk' => (float)$wo->food_cost_pk,
                         'food_cost_pb' => (float)$wo->food_cost_pb,
                         'items' => $wo->items->map(function ($it) {
@@ -72,11 +75,17 @@ class LabelController extends Controller
                                 'id' => $it->id,
                                 'nama' => $it->nama,
                                 'kategori' => $it->kategori,
+                                'tipe_porsi' => $it->tipe_porsi,
+                                'jenis_alergi' => $it->jenis_alergi,
+                                'alergen' => $it->alergen,
+                                'sub_menu_key' => $it->sub_menu_key,
                                 'gram_pk' => $gramPk,
                                 'gram_pb' => $gramPb,
                                 'harga_master' => $hargaMaster,
                                 'cost_pk' => $costPk,
                                 'cost_pb' => $costPb,
+                                'nutrisi_pk' => $it->nutrisi_pk,
+                                'nutrisi_pb' => $it->nutrisi_pb,
                             ];
                         }),
                         'kelompoks' => $wo->kelompoks->map(function ($wk) {
@@ -116,6 +125,18 @@ class LabelController extends Controller
                 ->get();
         }
 
+        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
+            $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+            return [
+                'id' => $p->id,
+                'nomor_periode' => $p->nomor_periode,
+                'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
+            ];
+        });
+
         return [
             'user' => $user,
             'unitSppg' => $unitSppg,
@@ -123,6 +144,7 @@ class LabelController extends Controller
             'workOrders' => $workOrders,
             'initialActiveWo' => $activeWorkOrder,
             'savedLabels' => $savedLabels,
+            'periodes' => $periodes,
             'activeSubMenu' => $request->query('tab') ?: $activeSubMenu,
             'editLabelId' => $request->query('edit_id'),
         ];
@@ -328,5 +350,122 @@ class LabelController extends Controller
         $savedLabel->delete();
 
         return redirect()->route('label.daftar')->with('success', "Label {$nomor} berhasil dihapus.");
+    }
+
+    /**
+     * Hitung nilai AKG spesifik per jenis alergi berdasarkan bahan substitusi di Work Order
+     */
+    private function calculateAkgAlergiForWo(WorkOrder $wo): array
+    {
+        $items = $wo->items;
+        $rawAlergi = $wo->sub_menu_alergi ?: [];
+
+        $configuredAllergies = [];
+        if (is_array($rawAlergi)) {
+            foreach ($rawAlergi as $subKey => $arr) {
+                if (is_array($arr)) {
+                    foreach ($arr as $rep) {
+                        $j = trim($rep['jenis_alergi'] ?? '');
+                        if ($j && !in_array($j, $configuredAllergies)) {
+                            $configuredAllergies[] = $j;
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($items as $it) {
+            if ($it->tipe_porsi === 'alergi' && !empty($it->jenis_alergi)) {
+                $j = trim($it->jenis_alergi);
+                if ($j && !in_array($j, $configuredAllergies)) {
+                    $configuredAllergies[] = $j;
+                }
+            }
+        }
+
+        $result = [];
+        foreach ($configuredAllergies as $jenis) {
+            $replacedSubMenuKeys = [];
+            if (is_array($rawAlergi)) {
+                foreach ($rawAlergi as $subKey => $arr) {
+                    if (is_array($arr)) {
+                        foreach ($arr as $rep) {
+                            if (strcasecmp(trim($rep['jenis_alergi'] ?? ''), $jenis) === 0) {
+                                $replacedSubMenuKeys[] = $subKey;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $akgPB = ['energi' => 0, 'protein' => 0, 'lemak' => 0, 'karbohidrat' => 0, 'serat' => 0];
+            $akgPK = ['energi' => 0, 'protein' => 0, 'lemak' => 0, 'karbohidrat' => 0, 'serat' => 0];
+
+            foreach ($items as $it) {
+                if ($it->tipe_porsi === 'normal') {
+                    if (in_array($it->sub_menu_key, $replacedSubMenuKeys)) {
+                        continue;
+                    }
+                    if (!empty($it->alergen) && $this->matchesAllergenExact($it->alergen, $jenis)) {
+                        continue;
+                    }
+
+                    $npb = $it->nutrisi_pb ?: [];
+                    $npk = $it->nutrisi_pk ?: [];
+                    foreach (['energi', 'protein', 'lemak', 'karbohidrat', 'serat'] as $nut) {
+                        $akgPB[$nut] += (float)($npb[$nut] ?? 0);
+                        $akgPK[$nut] += (float)($npk[$nut] ?? 0);
+                    }
+                }
+            }
+
+            foreach ($items as $it) {
+                if ($it->tipe_porsi === 'alergi' && strcasecmp(trim($it->jenis_alergi ?? ''), $jenis) === 0) {
+                    $npb = $it->nutrisi_pb ?: [];
+                    $npk = $it->nutrisi_pk ?: [];
+                    foreach (['energi', 'protein', 'lemak', 'karbohidrat', 'serat'] as $nut) {
+                        $akgPB[$nut] += (float)($npb[$nut] ?? 0);
+                        $akgPK[$nut] += (float)($npk[$nut] ?? 0);
+                    }
+                }
+            }
+
+            foreach (['energi', 'protein', 'lemak', 'karbohidrat', 'serat'] as $nut) {
+                $akgPB[$nut] = round($akgPB[$nut], 1);
+                $akgPK[$nut] = round($akgPK[$nut], 1);
+            }
+
+            $result[$jenis] = [
+                'akg_pb' => $akgPB,
+                'akg_pk' => $akgPK,
+            ];
+        }
+
+        return $result;
+    }
+
+    private function matchesAllergenExact(string $text, string $jenis): bool
+    {
+        $textLower = strtolower(trim($text));
+        $jenisLower = strtolower(trim($jenis));
+        if ($jenisLower === 'telur' || $jenisLower === 'telur ayam') {
+            if (str_contains($textLower, 'puyuh')) {
+                return false;
+            }
+            return (bool)preg_match('/\b(telur|egg|dadar|ceplok|omelet)\b/i', $textLower);
+        }
+        if ($jenisLower === 'telur puyuh') {
+            return str_contains($textLower, 'puyuh');
+        }
+        if ($jenisLower === 'daging ayam' || $jenisLower === 'ayam') {
+            if (str_contains($textLower, 'hati') || str_contains($textLower, 'ati')) {
+                return false;
+            }
+            return (bool)preg_match('/\b(ayam|chicken)\b/i', $textLower);
+        }
+        if ($jenisLower === 'hati ayam') {
+            return str_contains($textLower, 'hati') || str_contains($textLower, 'ati');
+        }
+        return stripos($textLower, $jenisLower) !== false;
     }
 }

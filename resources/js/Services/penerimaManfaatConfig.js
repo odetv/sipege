@@ -37,9 +37,15 @@ export const JENIS_PORSI_OPTIONS = [
 export const ALERGI_OPTIONS = [
     { value: "Nasi/Beras", label: "Nasi/Beras" },
     { value: "Telur", label: "Telur" },
+    { value: "Telur Puyuh", label: "Telur Puyuh" },
     { value: "Daging Ayam", label: "Daging Ayam" },
+    { value: "Hati Ayam", label: "Hati Ayam" },
     { value: "Daging Sapi", label: "Daging Sapi" },
     { value: "Ikan", label: "Ikan" },
+    { value: "Ikan Tongkol", label: "Ikan Tongkol" },
+    { value: "Ikan Laut", label: "Ikan Laut" },
+    { value: "Ikan Teri", label: "Ikan Teri" },
+    { value: "Ikan Asin", label: "Ikan Asin" },
     { value: "Udang", label: "Udang" },
     { value: "Cumi-cumi", label: "Cumi-cumi" },
     { value: "Kerang", label: "Kerang" },
@@ -58,11 +64,17 @@ export const ALERGI_OPTIONS = [
     { value: "Kacang-kacangan lainnya", label: "Kacang-kacangan lainnya" },
     { value: "Gandum/Tepung Terigu", label: "Gandum/Tepung Terigu" },
     { value: "Gluten", label: "Gluten" },
+    { value: "Mie", label: "Mie" },
+    { value: "Sosis", label: "Sosis" },
+    { value: "Nugget", label: "Nugget" },
     { value: "Wijen", label: "Wijen" },
     { value: "Jagung", label: "Jagung" },
     { value: "Tomat", label: "Tomat" },
     { value: "Wortel", label: "Wortel" },
     { value: "Kentang", label: "Kentang" },
+    { value: "Jamur", label: "Jamur" },
+    { value: "Santan", label: "Santan" },
+    { value: "Saos", label: "Saos" },
     { value: "Stroberi", label: "Stroberi" },
     { value: "Nanas", label: "Nanas" },
     { value: "Mangga", label: "Mangga" },
@@ -73,6 +85,7 @@ export const ALERGI_OPTIONS = [
     { value: "Buah Naga", label: "Buah Naga" },
     { value: "Cokelat/Kakao", label: "Cokelat/Kakao" },
     { value: "Madu", label: "Madu" },
+    { value: "Minuman Kemasan", label: "Minuman Kemasan" },
     { value: "Lainnya", label: "Lainnya" },
 ];
 
@@ -86,11 +99,16 @@ export const ALLERGEN_KEYWORDS = {
         "omelet",
         "mayones",
         "mayonnaise",
-        "telur puyuh",
+        "telur ayam",
         "telur bebek",
         "telur asin",
         "telor",
         "martabak telur",
+    ],
+    "Telur Puyuh": [
+        "telur puyuh",
+        "telur burung puyuh",
+        "puyuh",
     ],
     "Daging Ayam": [
         "ayam",
@@ -236,14 +254,32 @@ export const ALLERGEN_KEYWORDS = {
     "Buah Naga": ["buah naga", "dragon fruit", "pitaya"],
     "Cokelat/Kakao": ["cokelat", "chocolate", "coklat", "kakao", "cocoa", "chocochip"],
     Madu: ["madu", "honey"],
+    "Hati Ayam": ["hati ayam", "ati ayam", "ampela ayam", "hati dan ampela"],
+    "Ikan Tongkol": ["tongkol", "ikan tongkol", "pindang tongkol", "cakalang"],
+    "Ikan Laut": ["ikan laut", "tenggiri", "kakap", "bawal", "salmon", "tuna", "dori"],
+    "Ikan Teri": ["teri", "ikan teri", "teri nasi", "teri medan"],
+    "Ikan Asin": ["ikan asin", "asin peda", "ikan asin jambal", "ikan gabus asin", "teri asin"],
+    Mie: ["mie", "bakmi", "mie kuning", "mie basah", "mie instan", "bihun"],
+    Sosis: ["sosis", "sausage"],
+    Nugget: ["nugget", "nagget"],
+    Jamur: ["jamur", "mushroom", "jamur tiram", "jamur kancing", "jamur kuping"],
+    Santan: ["santan", "santan kelapa", "kara", "santan cair", "santan kental"],
+    Saos: ["saos", "saus", "saos tomat", "saos sambal", "saos tiram", "saus tiram"],
+    "Minuman Kemasan": ["minuman kemasan", "teh kemasan", "jus kemasan", "susu kotak"],
 };
 
 export const REKOMENDASI_SUBSTITUSI = {
     "Nasi/Beras": "Jagung Pipil, Kentang Rebus, Ubi Manis, Singkong, atau Roti Bebas Gluten",
     Telur: "Tahu Sutra, Tempe Goreng/Bacem, Daging Ayam, Ikan Fillet, atau Daging Sapi",
+    "Telur Puyuh": "Telur Ayam, Tahu Sutra, Tempe, Daging Ayam Fillet, atau Daging Sapi",
     "Daging Ayam": "Ikan Fillet, Daging Sapi, Telur, Tahu, atau Tempe",
+    "Hati Ayam": "Daging Ayam Fillet, Telur, Daging Sapi, atau Tempe",
     "Daging Sapi": "Daging Ayam Fillet, Ikan Segar, Telur, Tahu, atau Tempe",
     Ikan: "Fillet Daging Ayam, Daging Sapi, Telur, Tahu, atau Tempe",
+    "Ikan Tongkol": "Ayam Fillet, Telur, Tempe, atau Daging Sapi",
+    "Ikan Laut": "Ayam Fillet, Telur, Tempe, atau Daging Sapi",
+    "Ikan Teri": "Tempe Kering Renyah, Kacang Kedelai, atau Telur Dadar Iris",
+    "Ikan Asin": "Tempe Goreng Asin Gurih, Tahu Bumbu Kuning, atau Telur Dadar",
     Udang: "Daging Ayam Fillet, Daging Sapi, Ikan Fillet, atau Telur",
     "Cumi-cumi": "Daging Ayam Fillet, Ikan Fillet, atau Telur",
     Kerang: "Daging Ayam Fillet, Ikan Fillet, atau Daging Sapi",
@@ -262,11 +298,17 @@ export const REKOMENDASI_SUBSTITUSI = {
     "Kacang-kacangan lainnya": "Saus Rempah Alami Non-Kacang",
     "Gandum/Tepung Terigu": "Nasi Putih, Bihun Beras, Kentang, Ubi Jalar, Jagung, atau Tepung Beras",
     Gluten: "Nasi Beras, Tepung Beras, Tepung Tapioka, atau Jagung Pipil",
+    Mie: "Bihun Beras, Nasi Putih, Kentang, atau Ubi Jalar",
+    Sosis: "Daging Ayam Asli, Daging Sapi Suwir, Telur Dadar, atau Tahu",
+    Nugget: "Ayam Fillet Goreng Tepung Bebas Alergen, Tahu Goreng, atau Tempe",
     Wijen: "Bawang Goreng atau Minyak Sayur Nabati",
     Jagung: "Beras/Nasi, Kentang, Ubi Jalar, atau Singkong",
     Tomat: "Kecap Manis Rempah, Bumbu Kuning Gurih, atau Saus Asam Manis Alami",
     Wortel: "Labu Siam, Buncis Manis, Labu Kuning, atau Jagung Manis",
     Kentang: "Nasi Beras, Ubi Jalar Manis, Singkong, atau Jagung",
+    Jamur: "Sayuran Hijau Segar, Buncis, Labu Siam, atau Wortel",
+    Santan: "Susu Kedelai, Susu Almond, Kaldu Ayam Murni, atau Air Kelapa Segar",
+    Saos: "Kecap Manis Rempah, Bumbu Kuning Alami, atau Tomat Segar Halus",
     Stroberi: "Pisang Ambon, Apel Manis, Jeruk Segar, atau Semangka",
     Nanas: "Pepaya Manis, Melon Segar, Semangka, Pisang, atau Apel",
     Mangga: "Pepaya Manis, Melon Segar, Jeruk Manis, atau Pisang",
@@ -277,6 +319,7 @@ export const REKOMENDASI_SUBSTITUSI = {
     "Buah Naga": "Semangka Merah, Pepaya Manis, Melon, atau Pisang",
     "Cokelat/Kakao": "Perasa Vanila Alami, Gula Aren, atau Selai Buah",
     Madu: "Gula Aren Asli, Sirup Maple, atau Gula Tebu",
+    "Minuman Kemasan": "Air Mineral Higienis, Air Kelapa Murni, atau Jus Buah Segar Alami",
 };
 
 /**
@@ -294,6 +337,8 @@ export function matchWordBoundary(text, keyword) {
 
 /**
  * Cek apakah sebuah teks menu/bahan cocok dengan jenis alergi tertentu
+ * Menerapkan pakem baku nama alergi secara ketat:
+ * Misal: alergi "Telur Puyuh" TIDAK BOLEH dicocokkan dengan "Telur" (ayam), dan sebaliknya.
  */
 export function checkTextMatchesAllergen(text, allergenName) {
     if (!text || typeof text !== "string" || !allergenName) return false;
@@ -301,30 +346,52 @@ export function checkTextMatchesAllergen(text, allergenName) {
     const cleanAllergen = allergenName.trim();
     if (!cleanText || !cleanAllergen) return false;
 
-    // 1. Direct word-boundary match against the allergen name itself / parts
-    const subNames = cleanAllergen.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
-    for (const sub of subNames) {
-        if (matchWordBoundary(cleanText, sub)) {
-            return true;
+    const lowerAllergen = cleanAllergen.toLowerCase();
+    const lowerText = cleanText.toLowerCase();
+
+    // Aturan Khusus 1: Telur Puyuh vs Telur Ayam / Biasa
+    if (lowerAllergen === "telur puyuh" || lowerAllergen === "telur burung puyuh") {
+        return matchWordBoundary(cleanText, "telur puyuh") || matchWordBoundary(cleanText, "puyuh");
+    }
+    if (lowerAllergen === "telur" || lowerAllergen === "telur ayam") {
+        if (lowerText.includes("puyuh")) {
+            return false;
         }
     }
 
-    // 2. Lookup in ALLERGEN_KEYWORDS
-    const lowerAllergen = cleanAllergen.toLowerCase();
-    for (const [key, keywords] of Object.entries(ALLERGEN_KEYWORDS)) {
-        const lowerKey = key.toLowerCase();
-        const isMatchingCategory =
-            lowerKey === lowerAllergen ||
-            lowerKey.includes(lowerAllergen) ||
-            lowerAllergen.includes(lowerKey) ||
-            subNames.some(sub => lowerKey.includes(sub.toLowerCase()) || sub.toLowerCase().includes(lowerKey));
+    // Aturan Khusus 2: Hati Ayam vs Daging Ayam
+    if (lowerAllergen === "hati ayam") {
+        return matchWordBoundary(cleanText, "hati ayam") || matchWordBoundary(cleanText, "ati ayam");
+    }
+    if (lowerAllergen === "daging ayam" || lowerAllergen === "ayam") {
+        if (lowerText.includes("hati") || lowerText.includes("ati")) {
+            return false;
+        }
+    }
 
-        if (isMatchingCategory) {
+    // 1. Direct word-boundary match against the allergen name itself
+    if (matchWordBoundary(cleanText, cleanAllergen)) {
+        return true;
+    }
+
+    // 2. Lookup in ALLERGEN_KEYWORDS
+    if (ALLERGEN_KEYWORDS[cleanAllergen]) {
+        for (const kw of ALLERGEN_KEYWORDS[cleanAllergen]) {
+            if (matchWordBoundary(cleanText, kw)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    for (const [key, keywords] of Object.entries(ALLERGEN_KEYWORDS)) {
+        if (key.toLowerCase() === lowerAllergen) {
             for (const kw of keywords) {
                 if (matchWordBoundary(cleanText, kw)) {
                     return true;
                 }
             }
+            return false;
         }
     }
 

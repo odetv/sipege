@@ -31,6 +31,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    periodes: {
+        type: Array,
+        default: () => [],
+    },
     activeSubMenu: {
         type: String,
         default: "buat", // 'buat' | 'daftar'
@@ -158,10 +162,7 @@ function handleGoToBuat() {
                         </button>
                     </div>
 
-                    <!-- Badge Info Standar Resmi -->
-                    <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-900 font-bold">
-                        <span>🏛️ Format Standar Resmi Badan Gizi Nasional (BGN)</span>
-                    </div>
+
                 </div>
             </div>
 
@@ -184,6 +185,7 @@ function handleGoToBuat() {
                     :user="user"
                     :unit-sppg="unitSppg"
                     :saved-labels="savedLabels"
+                    :periodes="periodes"
                     @go-to-buat="handleGoToBuat"
                     @edit-label="handleEditLabel"
                 />

@@ -82,18 +82,34 @@ async function preRenderUniqueTemplates({
                   tagAlergi: "",
               }));
 
+    function makeTemplateKey(itemOrKelompok) {
+        if (!itemOrKelompok) return "fallback_key";
+        const isItem =
+            typeof itemOrKelompok === "object" &&
+            ("tipeLabel" in itemOrKelompok || "kelompok" in itemOrKelompok);
+        const k = isItem ? itemOrKelompok.kelompok : itemOrKelompok;
+        const tipe = isItem ? itemOrKelompok.tipeLabel || "normal" : "normal";
+        const alergi = isItem ? itemOrKelompok.jenisAlergi || "" : "";
+        const tag = isItem ? itemOrKelompok.tagAlergi || "" : "";
+        const kId = k?.id !== undefined && k?.id !== null ? k.id : (k?.nama_kelompok || k?.nama || "0");
+        const menuSignature = isItem && Array.isArray(itemOrKelompok.menuItems)
+            ? itemOrKelompok.menuItems.join("|")
+            : "";
+        const giziSignature = isItem && itemOrKelompok.giziData
+            ? `${itemOrKelompok.giziData.energi_pb || ''}_${itemOrKelompok.giziData.energi_pk || ''}_${itemOrKelompok.giziData.prot_pb || ''}_${itemOrKelompok.giziData.prot_pk || ''}`
+            : "";
+        return `${kId}_${tipe}_${alergi}_${tag}_${menuSignature}_${giziSignature}`;
+    }
+
     const uniqueMap = new Map();
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        const k = item.kelompok;
-        const tipe = item.tipeLabel || "normal";
-        const alergi = item.jenisAlergi || "";
-        const key = `${k?.id || i}_${tipe}_${alergi}_${k?.nama_kelompok || k?.nama || ""}`;
+        const key = makeTemplateKey(item);
         if (!uniqueMap.has(key)) {
             uniqueMap.set(key, {
                 key,
                 renderItem: item,
-                kelompok: k,
+                kelompok: item.kelompok,
                 alias: `tpl_${uniqueMap.size}`,
             });
         }
@@ -152,11 +168,7 @@ async function preRenderUniqueTemplates({
     return {
         getTemplate: (itemOrKelompok, idx) => {
             if (!itemOrKelompok) return fallback;
-            const isItem = typeof itemOrKelompok === "object" && ("tipeLabel" in itemOrKelompok || "kelompok" in itemOrKelompok);
-            const k = isItem ? itemOrKelompok.kelompok : itemOrKelompok;
-            const tipe = isItem ? (itemOrKelompok.tipeLabel || "normal") : "normal";
-            const alergi = isItem ? (itemOrKelompok.jenisAlergi || "") : "";
-            const key = `${k?.id || idx}_${tipe}_${alergi}_${k?.nama_kelompok || k?.nama || ""}`;
+            const key = makeTemplateKey(itemOrKelompok);
             return renderedTemplates.get(key) || fallback;
         },
     };
@@ -473,7 +485,29 @@ export async function downloadPdfA4GridMode({
     const gapY = 3.5;
     const startY = 11.5; // (210 - (60*3 + 3.5*2)) / 2 = 11.5mm
     const labelsPerPage = 9;
-    const totalPages = Math.ceil(total / labelsPerPage);
+
+    // Hitung total halaman dengan pemisahan lembar khusus untuk Porsi Alergi
+    // (Agar label porsi alergi terisolasi pada lembar stiker tersendiri, tidak bercampur dengan normal)
+    let simPages = 1;
+    let simSlot = 0;
+    for (let i = 0; i < total; i++) {
+        const curr = list[i % list.length];
+        const prev = i > 0 ? list[(i - 1) % list.length] : null;
+        const isTransitionToAlergi =
+            prev &&
+            prev.tipeLabel === "normal" &&
+            curr?.tipeLabel === "alergi";
+
+        if (isTransitionToAlergi && simSlot !== 0) {
+            simPages++;
+            simSlot = 0;
+        } else if (simSlot >= labelsPerPage) {
+            simPages++;
+            simSlot = 0;
+        }
+        simSlot++;
+    }
+    const totalPages = Math.max(1, simPages);
 
     const startTime = Date.now();
 
@@ -498,6 +532,9 @@ export async function downloadPdfA4GridMode({
         Math.min(18, Math.floor(total / 40)),
     ); // Update every 1-2 pages
 
+    let currentSlot = 0;
+    let currentPage = 1;
+
     for (let i = 0; i < total; i++) {
         if (isCancelled && isCancelled()) {
             const err = new Error("Proses dibatalkan.");
@@ -506,17 +543,28 @@ export async function downloadPdfA4GridMode({
         }
 
         const item = list[i % list.length];
-        const template = getTemplate(item, i);
+        const prevItem = i > 0 ? list[(i - 1) % list.length] : null;
+        const isTransitionToAlergi =
+            prevItem &&
+            prevItem.tipeLabel === "normal" &&
+            item?.tipeLabel === "alergi";
 
-        const pageIndex = Math.floor(i / labelsPerPage);
-        const slotIndex = i % labelsPerPage;
-
-        if (pageIndex > 0 && slotIndex === 0) {
+        // Pisahkan ke lembar A4 baru jika masuk ke porsi alergi pertama kali
+        // atau jika 1 lembar (9 slot) sudah penuh
+        if (isTransitionToAlergi && currentSlot !== 0) {
             doc.addPage("a4", "landscape");
+            currentSlot = 0;
+            currentPage++;
+        } else if (currentSlot >= labelsPerPage) {
+            doc.addPage("a4", "landscape");
+            currentSlot = 0;
+            currentPage++;
         }
 
-        const col = slotIndex % 3;
-        const row = Math.floor(slotIndex / 3);
+        const template = getTemplate(item, i);
+
+        const col = currentSlot % 3;
+        const row = Math.floor(currentSlot / 3);
 
         const x = startX + col * (labelW + gapX);
         const y = startY + row * (labelH + gapY);
@@ -532,6 +580,8 @@ export async function downloadPdfA4GridMode({
             "FAST",
         );
 
+        currentSlot++;
+
         if (i % updateInterval === 0 || i === total - 1) {
             const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
             const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
@@ -541,7 +591,9 @@ export async function downloadPdfA4GridMode({
                 95,
                 75 + Math.round(((i + 1) / total) * 20),
             );
-            const currentPage = Math.floor(i / labelsPerPage) + 1;
+
+            const isAlergiPhase = item.tipeLabel === "alergi";
+            const phaseNote = isAlergiPhase ? " (Lembar Alergi)" : "";
 
             onProgress({
                 phase: "assembly",
@@ -552,7 +604,7 @@ export async function downloadPdfA4GridMode({
                 percentage,
                 etaText: formatDetailedEta(etaSec),
                 speedText: `${Math.round(speed)} label/dtk`,
-                message: `Menyusun lembar A4 label ${i + 1} dari ${total} (Hal. ${currentPage}/${totalPages})...`,
+                message: `Menyusun lembar A4 label ${i + 1} dari ${total} (Hal. ${currentPage}/${totalPages}${phaseNote})...`,
             });
 
             // Yield to event loop to keep browser animations silky smooth

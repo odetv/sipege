@@ -771,8 +771,38 @@ class GiziController extends Controller
 
     private function detectFtaAllergen(string $nl): ?string
     {
-        if ($this->matchAllergenKeywords($nl, ['telur', 'egg', 'dadar', 'ceplok', 'omelet', 'mayones', 'mayonnaise', 'telur puyuh', 'telur bebek', 'telur asin', 'telor'])) {
+        if ($this->matchAllergenKeywords($nl, ['telur puyuh', 'puyuh'])) {
+            return 'Telur Puyuh';
+        }
+        if ($this->matchAllergenKeywords($nl, ['telur', 'egg', 'dadar', 'ceplok', 'omelet', 'mayones', 'mayonnaise', 'telur bebek', 'telur asin', 'telor'])) {
             return 'Telur';
+        }
+        if ($this->matchAllergenKeywords($nl, ['hati ayam', 'ati ayam'])) {
+            return 'Hati Ayam';
+        }
+        if ($this->matchAllergenKeywords($nl, ['ikan tongkol', 'tongkol'])) {
+            return 'Ikan Tongkol';
+        }
+        if ($this->matchAllergenKeywords($nl, ['ikan teri', 'teri nasi', 'teri medan', 'teri'])) {
+            return 'Ikan Teri';
+        }
+        if ($this->matchAllergenKeywords($nl, ['ikan asin', 'asin peda'])) {
+            return 'Ikan Asin';
+        }
+        if ($this->matchAllergenKeywords($nl, ['sosis', 'sausage'])) {
+            return 'Sosis';
+        }
+        if ($this->matchAllergenKeywords($nl, ['nugget', 'nagget'])) {
+            return 'Nugget';
+        }
+        if ($this->matchAllergenKeywords($nl, ['jamur', 'mushroom'])) {
+            return 'Jamur';
+        }
+        if ($this->matchAllergenKeywords($nl, ['santan', 'kara'])) {
+            return 'Santan';
+        }
+        if ($this->matchAllergenKeywords($nl, ['saos', 'saus'])) {
+            return 'Saos';
         }
         if ($this->matchAllergenKeywords($nl, ['udang', 'shrimp', 'prawn', 'ebi', 'rebon'])) {
             return 'Udang';
@@ -786,7 +816,7 @@ class GiziController extends Controller
         if ($this->matchAllergenKeywords($nl, ['kerang', 'clam', 'mussel', 'scallop', 'tiram', 'remis', 'kupang'])) {
             return 'Kerang';
         }
-        if ($this->matchAllergenKeywords($nl, ['ikan', 'fish', 'tuna', 'tongkol', 'bandeng', 'teri', 'belut', 'lele', 'gurame', 'gurami', 'nila', 'kakap', 'tenggiri', 'kembung', 'pindang', 'dori', 'salmon', 'patin', 'bawal', 'cakalang', 'mujair', 'ikan mas', 'gabus'])) {
+        if ($this->matchAllergenKeywords($nl, ['ikan', 'fish', 'tuna', 'bandeng', 'belut', 'lele', 'gurame', 'gurami', 'nila', 'kakap', 'tenggiri', 'kembung', 'pindang', 'dori', 'salmon', 'patin', 'bawal', 'cakalang', 'mujair', 'ikan mas', 'gabus'])) {
             return 'Ikan';
         }
         if ($this->matchAllergenKeywords($nl, ['susu', 'milk', 'dairy', 'laktosa', 'yogurt', 'yoghurt', 'butter', 'mentega', 'krim', 'cream', 'lactogen', 'sgm'])) {

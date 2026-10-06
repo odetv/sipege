@@ -425,22 +425,38 @@ function findAlergiDetail(jenisName) {
             if (!da || !da.jenis_alergi) continue;
             const rClean = da.jenis_alergi.toLowerCase().trim();
             const rCleanNoPrefix = rClean.replace(/^alergi\s+/, "");
+
+            // Cegah percampuran Telur Ayam vs Telur Puyuh
             if (
+                (cleanNoPrefix === "telur" && rCleanNoPrefix.includes("puyuh")) ||
+                (cleanNoPrefix.includes("puyuh") && rCleanNoPrefix === "telur")
+            ) {
+                continue;
+            }
+
+            // Cegah percampuran Hati Ayam vs Daging Ayam
+            if (
+                (cleanNoPrefix === "daging ayam" && rCleanNoPrefix.includes("hati")) ||
+                (cleanNoPrefix.includes("hati") && rCleanNoPrefix === "daging ayam")
+            ) {
+                continue;
+            }
+
+            const isMatch =
                 rClean === clean ||
                 rCleanNoPrefix === cleanNoPrefix ||
-                matchWordBoundary(cleanNoPrefix, rCleanNoPrefix) ||
-                matchWordBoundary(rCleanNoPrefix, cleanNoPrefix) ||
-                checkTextMatchesAllergen(da.jenis_alergi, jenisName) ||
-                checkTextMatchesAllergen(jenisName, da.jenis_alergi)
-            ) {
+                (cleanNoPrefix === "telur" && rCleanNoPrefix === "telur ayam") ||
+                (cleanNoPrefix === "telur ayam" && rCleanNoPrefix === "telur") ||
+                (cleanNoPrefix === "ayam" && rCleanNoPrefix === "daging ayam") ||
+                (cleanNoPrefix === "daging ayam" && rCleanNoPrefix === "ayam") ||
+                (cleanNoPrefix === "sapi" && rCleanNoPrefix === "daging sapi") ||
+                (cleanNoPrefix === "daging sapi" && rCleanNoPrefix === "sapi");
+
+            if (isMatch) {
                 pmPK += Number(da.porsi_kecil) || 0;
                 pmPB += Number(da.porsi_besar) || 0;
             }
         }
-    }
-    if (pmPK === 0 && pmPB === 0) {
-        pmPK = totalPKAlergi.value || 0;
-        pmPB = totalPBAlergi.value || 0;
     }
     return {
         porsi_kecil: pmPK,

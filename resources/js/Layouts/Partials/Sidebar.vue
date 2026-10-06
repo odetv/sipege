@@ -586,38 +586,6 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 3. Menu Supplier Rekanan -->
-                <Link
-                    :href="route('supplier.index')"
-                    :title="isCollapsed ? 'Supplier' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('supplier.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Store class="h-4 w-4 shrink-0" />
-                    <span
-                        :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Supplier</span
-                    >
-                    <div
-                        v-if="route().current('supplier.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
-                            isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
-                        ]"
-                    ></div>
-                </Link>
 
                 <!-- 4. Menu Penerima Manfaat (Accordion with 3 Sub-menus: Daftar PM, Rekap Distribusi, Pembayaran Insentif) -->
                 <div class="space-y-0.5">
@@ -1380,7 +1348,38 @@ function logout() {
                     </div>
                 </div>
 
-
+                <!-- 7. Menu Supplier Rekanan -->
+                <Link
+                    :href="route('supplier.index')"
+                    :title="isCollapsed ? 'Supplier' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('supplier.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Store class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Supplier</span
+                    >
+                    <div
+                        v-if="route().current('supplier.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
 
                 <!-- 8. Menu Periode -->
                 <Link
