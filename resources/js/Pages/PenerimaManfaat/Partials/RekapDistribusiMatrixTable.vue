@@ -137,7 +137,7 @@ function getColTotalPorsi(col) {
                             :colspan="dateColumns.length"
                             class="py-1 px-2 text-center bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-[11px] font-black tracking-wider uppercase border-r border-emerald-600 shadow-inner"
                         >
-                            Rentang Kalender Terpilih: {{ formatTanggalIndo(tanggalMulai) }} – {{ formatTanggalIndo(tanggalSelesai) }} ({{ dateColumns.length }} Hari Kerja)
+                            Rentang Tanggal: {{ formatTanggalIndo(tanggalMulai) }} – {{ formatTanggalIndo(tanggalSelesai) }}
                         </th>
                         <th colspan="5" class="py-1 px-2 text-center bg-slate-800 text-slate-200 text-[10px] font-bold uppercase tracking-wider">
                             Rekapitulasi Akumulasi Porsi

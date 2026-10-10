@@ -31,10 +31,8 @@ const totalHariDisplay = computed(() => {
 
 const modeLabelDisplay = computed(() => {
     const count = totalHariDisplay.value;
-    if (count === 28) return "Bulanan (28 Hari)";
-    if (count === 14) return "Periodik (14 Hari)";
-    if (count === 1) return "Harian (1 Hari Kerja)";
-    return `Rentang ${count} Hari Kerja`;
+    if (count === 1) return "Harian";
+    return `Rentang ${count} Hari`;
 });
 
 function formatNumber(num) {

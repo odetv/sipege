@@ -39,6 +39,10 @@ const props = defineProps({
         type: String,
         default: "anggaran",
     },
+    periodes: {
+        type: Array,
+        default: () => [],
+    },
     verifikasiPoList: {
         type: Array,
         default: () => [],
@@ -447,6 +451,7 @@ function formatTanggalIndo(tgl) {
             <KeuanganVerifikasiPoTab
                 v-if="activeTab === 'verifikasi_po'"
                 :verifikasi-po-list="props.verifikasiPoList || []"
+                :periodes="props.periodes || []"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
             />
@@ -456,6 +461,7 @@ function formatTanggalIndo(tgl) {
                 v-if="activeTab === 'daftar_po'"
                 :po-list="poList"
                 :suppliers="suppliers"
+                :periodes="props.periodes || []"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
             />

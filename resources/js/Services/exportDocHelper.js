@@ -517,6 +517,69 @@ export function buildWorkOrderFullExportData(wo) {
         });
     });
 
+    // 9. Porsi Tambahan Produksi (Organoleptik, Sampel, Buffer)
+    let ptRaw = wo.porsi_tambahan || raw.porsi_tambahan || {};
+    if (typeof ptRaw === 'string') {
+        try { ptRaw = JSON.parse(ptRaw); } catch { ptRaw = {}; }
+    }
+    const ptOrganoleptikPK = Number(ptRaw.organoleptik?.pk) || 0;
+    const ptOrganoleptikPB = Number(ptRaw.organoleptik?.pb) || 0;
+    const ptOrganoleptikTotal = ptOrganoleptikPK + ptOrganoleptikPB;
+
+    const ptSampelPK = Number(ptRaw.sampel?.pk) || 0;
+    const ptSampelPB = Number(ptRaw.sampel?.pb) || 0;
+    const ptSampelTotal = ptSampelPK + ptSampelPB;
+
+    const ptBufferPK = Number(ptRaw.buffer?.pk) || 0;
+    const ptBufferPB = Number(ptRaw.buffer?.pb) || 0;
+    const ptBufferTotal = ptBufferPK + ptBufferPB;
+
+    const totalPtPK = ptOrganoleptikPK + ptSampelPK + ptBufferPK;
+    const totalPtPB = ptOrganoleptikPB + ptSampelPB + ptBufferPB;
+    const grandTotalPt = totalPtPK + totalPtPB;
+
+    const totalProduksiPK = totalPK + totalPtPK;
+    const totalProduksiPB = totalPB + totalPtPB;
+    const grandTotalProduksi = totalPM + grandTotalPt;
+
+    const porsiTambahanData = {
+        organoleptik: { pk: ptOrganoleptikPK, pb: ptOrganoleptikPB, total: ptOrganoleptikTotal },
+        sampel: { pk: ptSampelPK, pb: ptSampelPB, total: ptSampelTotal },
+        buffer: { pk: ptBufferPK, pb: ptBufferPB, total: ptBufferTotal },
+        totalPK: totalPtPK,
+        totalPB: totalPtPB,
+        grandTotal: grandTotalPt,
+        totalProduksiPK,
+        totalProduksiPB,
+        grandTotalProduksi,
+    };
+
+    // 10. Jadwal Waktu Kegiatan Operasional SPPG (6 Tahapan)
+    let jadwalRaw = wo.jadwal_operasional || raw.jadwal_operasional || wo.catatan?.jadwal_operasional || {};
+    if (typeof jadwalRaw === 'string') {
+        try { jadwalRaw = JSON.parse(jadwalRaw); } catch { jadwalRaw = {}; }
+    }
+    const defaultJadwalConfig = [
+        { key: 'persiapan', no: 1, nama: 'Persiapan', defMulai: '19:00', defSelesai: '03:00', deskripsi: 'Persiapan bahan baku, sortasi & bumbu' },
+        { key: 'pengolahan', no: 2, nama: 'Pengolahan', defMulai: '02:00', defSelesai: '10:00', deskripsi: 'Pengolahan & pemasakan seluruh menu' },
+        { key: 'pemorsian', no: 3, nama: 'Pemorsian', defMulai: '04:00', defSelesai: '12:00', deskripsi: 'Pengepakan & pemorsian ke ompreng' },
+        { key: 'uji_organolaptik', no: 4, nama: 'Uji Organolaptik', defMulai: '05:00', defSelesai: '06:00', deskripsi: 'Uji sensori mutu rasa, aroma, tekstur & suhu' },
+        { key: 'distribusi', no: 5, nama: 'Distribusi', defMulai: '06:00', defSelesai: '14:00', deskripsi: 'Pengantaran makanan ke kelompok sasaran' },
+        { key: 'pencucian_ompreng', no: 6, nama: 'Pencucian Ompreng', defMulai: '12:00', defSelesai: '20:00', deskripsi: 'Penerimaan kembali & sanitasi ompreng' },
+    ];
+    const jadwalOperasionalRows = defaultJadwalConfig.map(cfg => {
+        const item = jadwalRaw[cfg.key] || {};
+        return {
+            key: cfg.key,
+            no: cfg.no,
+            nama: cfg.nama,
+            mulai: item.mulai || cfg.defMulai,
+            selesai: item.selesai || cfg.defSelesai,
+            rentang: `${item.mulai || cfg.defMulai} - ${item.selesai || cfg.defSelesai}`,
+            deskripsi: cfg.deskripsi,
+        };
+    });
+
     return {
         noWO,
         namaMenu,
@@ -530,6 +593,8 @@ export function buildWorkOrderFullExportData(wo) {
         totalPK,
         totalPB,
         totalPM,
+        porsiTambahan: porsiTambahanData,
+        jadwalOperasional: jadwalOperasionalRows,
         kpmMenerima,
         kpmTidakMenerima,
         rekapMenerima,
@@ -1010,60 +1075,231 @@ export async function exportWorkOrderExcel(wo) {
 
     sheet1.addRow([]); // Gap Baris Kosong
 
-    // Tabel 4: Batas Pagu Anggaran
-    const rT4Head = sheet1.addRow(['Tabel 4. Perhitungan Mencari Batas Pagu Anggaran (PK Rp 8.000 dan PB Rp 10.000)']);
+    // Tabel 4: Porsi Tambahan Produksi (PK & PB)
+    const rT4Head = sheet1.addRow(['Tabel 4. Alokasi Porsi Tambahan Produksi (PK & PB)']);
     sheet1.mergeCells(`A${rT4Head.number}:H${rT4Head.number}`);
-    rT4Head.getCell(1).font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+    rT4Head.getCell(1).font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FFB45309' } };
 
-    const rT4Cols = sheet1.addRow(['No', 'Kategori Sasaran Porsi', '', 'Jumlah PM', 'Pagu / Porsi', 'Rumus Pagu', '', 'Total Pagu Anggaran']);
+    const rT4Cols = sheet1.addRow([
+        'No',
+        'Kategori Porsi Tambahan',
+        '',
+        'Peruntukan & Deskripsi',
+        'Porsi Kecil (PK)',
+        'Porsi Besar (PB)',
+        'Total Tambahan',
+        'Keterangan Anggaran'
+    ]);
     sheet1.mergeCells(`B${rT4Cols.number}:C${rT4Cols.number}`);
-    sheet1.mergeCells(`F${rT4Cols.number}:G${rT4Cols.number}`);
     rT4Cols.font = { bold: true };
     rT4Cols.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        cell.border = borderThin;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    const ptRows = [
+        {
+            no: 1,
+            nama: 'Uji Organoleptik',
+            desc: 'Uji sensori mutu rasa, aroma, tekstur & suhu sebelum distribusi',
+            pk: data.porsiTambahan.organoleptik.pk,
+            pb: data.porsiTambahan.organoleptik.pb,
+            total: data.porsiTambahan.organoleptik.total,
+            anggaran: 'Di luar pagu anggaran (Bahan diperhitungkan)'
+        },
+        {
+            no: 2,
+            nama: 'Sampel Makanan',
+            desc: 'Sampel uji retensi keamanan pangan (24 jam) & inspeksi berkala',
+            pk: data.porsiTambahan.sampel.pk,
+            pb: data.porsiTambahan.sampel.pb,
+            total: data.porsiTambahan.sampel.total,
+            anggaran: 'Di luar pagu anggaran (Bahan diperhitungkan)'
+        },
+        {
+            no: 3,
+            nama: 'Buffer Produksi',
+            desc: 'Cadangan darurat / tumpah / toleransi proses pemorsian',
+            pk: data.porsiTambahan.buffer.pk,
+            pb: data.porsiTambahan.buffer.pb,
+            total: data.porsiTambahan.buffer.total,
+            anggaran: 'Di luar pagu anggaran (Bahan diperhitungkan)'
+        },
+    ];
+
+    ptRows.forEach(pt => {
+        const row = sheet1.addRow([
+            pt.no,
+            pt.nama,
+            '',
+            pt.desc,
+            pt.pk,
+            pt.pb,
+            pt.total,
+            pt.anggaran
+        ]);
+        sheet1.mergeCells(`B${row.number}:C${row.number}`);
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(2).font = { bold: true };
+        row.getCell(2).alignment = { vertical: 'middle' };
+        row.getCell(4).alignment = { wrapText: true, vertical: 'middle' };
+        row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(7).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(7).font = { bold: true };
+        row.getCell(8).alignment = { wrapText: true, vertical: 'middle' };
+        row.eachCell(cell => { cell.border = borderThin; });
+    });
+
+    // Baris Total Porsi Tambahan
+    const rPtTot = sheet1.addRow([
+        'Total Porsi Tambahan Produksi:', '', '', '',
+        data.porsiTambahan.totalPK,
+        data.porsiTambahan.totalPB,
+        data.porsiTambahan.grandTotal,
+        'Otomatis Masuk Kebutuhan Belanja PO'
+    ]);
+    sheet1.mergeCells(`A${rPtTot.number}:D${rPtTot.number}`);
+    rPtTot.font = { bold: true };
+    rPtTot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+    rPtTot.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtTot.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtTot.getCell(7).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtTot.getCell(7).font = { bold: true, color: { argb: 'FFB45309' } };
+    rPtTot.getCell(8).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtTot.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        cell.border = borderThin;
+    });
+
+    // Baris Grand Total Produksi Fisik
+    const rPtGrand = sheet1.addRow([
+        'Grand Total Porsi Fisik Dimasak (Bahan Baku):', '', '', '',
+        data.porsiTambahan.totalProduksiPK,
+        data.porsiTambahan.totalProduksiPB,
+        data.porsiTambahan.grandTotalProduksi,
+        'Sasaran PM Reguler + Porsi Tambahan'
+    ]);
+    sheet1.mergeCells(`A${rPtGrand.number}:D${rPtGrand.number}`);
+    rPtGrand.font = { bold: true };
+    rPtGrand.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+    rPtGrand.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtGrand.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtGrand.getCell(7).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtGrand.getCell(7).font = { bold: true, color: { argb: 'FF047857' } };
+    rPtGrand.getCell(8).alignment = { horizontal: 'center', vertical: 'middle' };
+    rPtGrand.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+        cell.border = borderThin;
+    });
+
+    sheet1.addRow([]); // Gap Baris Kosong
+
+    // Tabel 5: Batas Pagu Anggaran
+    const rT5Head = sheet1.addRow(['Tabel 5. Perhitungan Mencari Batas Pagu Anggaran (PK Rp 8.000 dan PB Rp 10.000)']);
+    sheet1.mergeCells(`A${rT5Head.number}:H${rT5Head.number}`);
+    rT5Head.getCell(1).font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+
+    const rT5Cols = sheet1.addRow(['No', 'Kategori Sasaran Porsi', '', 'Jumlah PM', 'Pagu / Porsi', 'Rumus Pagu', '', 'Total Pagu Anggaran']);
+    sheet1.mergeCells(`B${rT5Cols.number}:C${rT5Cols.number}`);
+    sheet1.mergeCells(`F${rT5Cols.number}:G${rT5Cols.number}`);
+    rT5Cols.font = { bold: true };
+    rT5Cols.eachCell(cell => {
         cell.fill = headerFill;
         cell.border = borderThin;
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
 
-    const rT4Pk = sheet1.addRow([1, 'Porsi Kecil (PK - PAUD/TK & SD 1-3)', '', data.totalPK, 8000, `${data.totalPK} PM Ã— Rp 8.000`, '', data.paguNominalPK]);
-    sheet1.mergeCells(`B${rT4Pk.number}:C${rT4Pk.number}`);
-    sheet1.mergeCells(`F${rT4Pk.number}:G${rT4Pk.number}`);
-    rT4Pk.getCell(1).alignment = { horizontal: 'center' };
-    rT4Pk.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
-    rT4Pk.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
-    rT4Pk.getCell(5).numFmt = '"Rp "#,##0';
-    rT4Pk.getCell(6).alignment = { horizontal: 'center' };
-    rT4Pk.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
-    rT4Pk.getCell(8).font = { bold: true };
-    rT4Pk.getCell(8).numFmt = '"Rp "#,##0';
-    rT4Pk.eachCell(cell => { cell.border = borderThin; });
+    const rT5Pk = sheet1.addRow([1, 'Porsi Kecil (PK - PAUD/TK & SD 1-3)', '', data.totalPK, 8000, `${data.totalPK} PM × Rp 8.000`, '', data.paguNominalPK]);
+    sheet1.mergeCells(`B${rT5Pk.number}:C${rT5Pk.number}`);
+    sheet1.mergeCells(`F${rT5Pk.number}:G${rT5Pk.number}`);
+    rT5Pk.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pk.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pk.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Pk.getCell(5).numFmt = '"Rp "#,##0';
+    rT5Pk.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pk.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Pk.getCell(8).font = { bold: true };
+    rT5Pk.getCell(8).numFmt = '"Rp "#,##0';
+    rT5Pk.eachCell(cell => { cell.border = borderThin; });
 
-    const rT4Pb = sheet1.addRow([2, 'Porsi Besar (PB - SD 4-6, SMP, SMA, Tendik)', '', data.totalPB, 10000, `${data.totalPB} PM Ã— Rp 10.000`, '', data.paguNominalPB]);
-    sheet1.mergeCells(`B${rT4Pb.number}:C${rT4Pb.number}`);
-    sheet1.mergeCells(`F${rT4Pb.number}:G${rT4Pb.number}`);
-    rT4Pb.getCell(1).alignment = { horizontal: 'center' };
-    rT4Pb.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
-    rT4Pb.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
-    rT4Pb.getCell(5).numFmt = '"Rp "#,##0';
-    rT4Pb.getCell(6).alignment = { horizontal: 'center' };
-    rT4Pb.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
-    rT4Pb.getCell(8).font = { bold: true };
-    rT4Pb.getCell(8).numFmt = '"Rp "#,##0';
-    rT4Pb.eachCell(cell => { cell.border = borderThin; });
+    const rT5Pb = sheet1.addRow([2, 'Porsi Besar (PB - SD 4-6, SMP, SMA, Tendik)', '', data.totalPB, 10000, `${data.totalPB} PM × Rp 10.000`, '', data.paguNominalPB]);
+    sheet1.mergeCells(`B${rT5Pb.number}:C${rT5Pb.number}`);
+    sheet1.mergeCells(`F${rT5Pb.number}:G${rT5Pb.number}`);
+    rT5Pb.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pb.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pb.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Pb.getCell(5).numFmt = '"Rp "#,##0';
+    rT5Pb.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Pb.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Pb.getCell(8).font = { bold: true };
+    rT5Pb.getCell(8).numFmt = '"Rp "#,##0';
+    rT5Pb.eachCell(cell => { cell.border = borderThin; });
 
-    const rT4Tot = sheet1.addRow(['Total Batas Pagu Anggaran MBG:', '', '', data.totalPM, '', 'Pagu PK + Pagu PB', '', data.paguTotal]);
-    sheet1.mergeCells(`A${rT4Tot.number}:C${rT4Tot.number}`);
-    sheet1.mergeCells(`F${rT4Tot.number}:G${rT4Tot.number}`);
-    rT4Tot.font = { bold: true };
-    rT4Tot.getCell(1).alignment = { horizontal: 'right' };
-    rT4Tot.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
-    rT4Tot.getCell(6).alignment = { horizontal: 'center' };
-    rT4Tot.getCell(8).alignment = { horizontal: 'right' };
-    rT4Tot.getCell(8).font = { bold: true, color: { argb: 'FF1E3A8A' } };
-    rT4Tot.getCell(8).numFmt = '"Rp "#,##0';
-    rT4Tot.eachCell(cell => {
+    const rT5Tot = sheet1.addRow(['Total Batas Pagu Anggaran MBG:', '', '', data.totalPM, '', 'Pagu PK + Pagu PB', '', data.paguTotal]);
+    sheet1.mergeCells(`A${rT5Tot.number}:C${rT5Tot.number}`);
+    sheet1.mergeCells(`F${rT5Tot.number}:G${rT5Tot.number}`);
+    rT5Tot.font = { bold: true };
+    rT5Tot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Tot.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Tot.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    rT5Tot.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+    rT5Tot.getCell(8).font = { bold: true, color: { argb: 'FF1E3A8A' } };
+    rT5Tot.getCell(8).numFmt = '"Rp "#,##0';
+    rT5Tot.eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
         cell.border = borderThin;
+    });
+
+    sheet1.addRow([]); // Gap Baris Kosong
+
+    // Tabel 6: Jadwal Waktu Kegiatan Operasional SPPG
+    const rT6Head = sheet1.addRow(['Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (6 Tahapan Kerja)']);
+    sheet1.mergeCells(`A${rT6Head.number}:H${rT6Head.number}`);
+    rT6Head.getCell(1).font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF312E81' } };
+
+    const rT6Cols = sheet1.addRow([
+        'No',
+        'Tahapan Kegiatan Operasional',
+        '',
+        'Jam Mulai',
+        'Jam Selesai',
+        'Rentang Jam Operasional',
+        'Deskripsi Kegiatan Kerja',
+        ''
+    ]);
+    sheet1.mergeCells(`B${rT6Cols.number}:C${rT6Cols.number}`);
+    sheet1.mergeCells(`G${rT6Cols.number}:H${rT6Cols.number}`);
+    rT6Cols.font = { bold: true };
+    rT6Cols.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+        cell.border = borderThin;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    (data.jadwalOperasional || []).forEach(j => {
+        const row = sheet1.addRow([
+            j.no,
+            j.nama,
+            '',
+            j.mulai,
+            j.selesai,
+            `${j.mulai} - ${j.selesai}`,
+            j.deskripsi,
+            ''
+        ]);
+        sheet1.mergeCells(`B${row.number}:C${row.number}`);
+        sheet1.mergeCells(`G${row.number}:H${row.number}`);
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(2).font = { bold: true };
+        row.getCell(2).alignment = { vertical: 'middle' };
+        row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(6).font = { bold: true, color: { argb: 'FF312E81' } };
+        row.getCell(7).alignment = { wrapText: true, vertical: 'middle' };
+        row.eachCell(cell => { cell.border = borderThin; });
     });
 
 

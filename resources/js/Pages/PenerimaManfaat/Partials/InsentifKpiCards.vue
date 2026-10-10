@@ -110,7 +110,7 @@ function formatNumber(num) {
                     {{ formatRupiah(displaySekolah) }}
                 </p>
                 <p class="text-[9.5px] sm:text-[10px] text-blue-600 font-medium mt-0.5 truncate">
-                    14 Satuan Pendidikan
+                    {{ props.stats?.total_sekolah ?? 0 }} Satuan Pendidikan
                 </p>
             </div>
         </div>
@@ -128,7 +128,7 @@ function formatNumber(num) {
                     {{ formatRupiah(displayPosyandu) }}
                 </p>
                 <p class="text-[9.5px] sm:text-[10px] text-pink-600 font-medium mt-0.5 truncate">
-                    4 Posyandu (Balita & Bumil)
+                    {{ props.stats?.total_posyandu ?? 0 }} Posyandu (Balita & Bumil)
                 </p>
             </div>
         </div>

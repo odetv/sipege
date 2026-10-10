@@ -9,6 +9,7 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 import GiziWorkOrderDetailModal from "./GiziWorkOrderDetailModal.vue";
 import WorkOrderManualEditModal from "@/Pages/WorkOrder/Partials/WorkOrderManualEditModal.vue";
 import {
@@ -104,6 +105,11 @@ const emit = defineEmits(["openRancangMenu"]);
 
 const searchDaftarMenu = ref("");
 const statusFilterDaftarMenu = ref("semua");
+const filterStartDate = ref("");
+const filterEndDate = ref("");
+const filterDateMode = ref("hari_ini");
+const filterPeriodeId = ref("all");
+const isFilterAllTime = ref(false);
 
 // State Modal Detail
 const showDetailModal = ref(false);
@@ -514,7 +520,15 @@ const filteredDaftarMenu = computed(() => {
             m.status_wo
                 .toLowerCase()
                 .includes(statusFilterDaftarMenu.value.toLowerCase());
-        return matchSearch && matchStatus;
+
+        let matchDate = true;
+        if (!isFilterAllTime.value) {
+            const tgl = String(m.tanggal || "").substring(0, 10);
+            if (filterStartDate.value && tgl < filterStartDate.value) matchDate = false;
+            if (filterEndDate.value && tgl > filterEndDate.value) matchDate = false;
+        }
+
+        return matchSearch && matchStatus && matchDate;
     });
 });
 
@@ -988,6 +1002,15 @@ function executeDuplicateWo() {
                 </CardContent>
             </Card>
         </div>
+
+        <!-- Filter Waktu: Reusable PeriodDateFilterBar -->
+        <PeriodDateFilterBar
+            v-model:startDate="filterStartDate"
+            v-model:endDate="filterEndDate"
+            v-model:mode="filterDateMode"
+            v-model:periodeId="filterPeriodeId"
+            v-model:isAllTime="isFilterAllTime"
+        />
 
         <!-- Toolbar Kontrol & Tombol Aksi Rancang Menu -->
         <div

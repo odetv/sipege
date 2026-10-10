@@ -37,8 +37,8 @@ const emit = defineEmits([
 
 const modeButtons = [
     { id: "hari_ini", label: "Hari Ini" },
-    { id: "periodik", label: "Periodik (14 Hari)" },
-    { id: "bulanan", label: "Bulanan (28 Hari)" },
+    { id: "periodik", label: "Periodik" },
+    { id: "bulanan", label: "Bulanan" },
     { id: "custom", label: "Rentang Khusus" },
 ];
 

@@ -9,6 +9,7 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 import {
     exportPoExcel,
     exportPoWord,
@@ -56,6 +57,10 @@ const props = defineProps({
         default: () => [],
     },
     suppliers: {
+        type: Array,
+        default: () => [],
+    },
+    periodes: {
         type: Array,
         default: () => [],
     },
@@ -125,9 +130,25 @@ const searchQuery = ref("");
 const filterJenisTransaksi = ref("all");
 const filterSupplier = ref("all");
 
+// Filter Waktu (PeriodDateFilterBar)
+const filterStartDate = ref("");
+const filterEndDate = ref("");
+const filterDateMode = ref("");
+const filterPeriodeId = ref("");
+const isFilterAllTime = ref(false);
+
 const filteredPoList = computed(() => {
     const list = Array.isArray(props.poList) ? props.poList : [];
     return list.filter((po) => {
+        // Filter Rentang Tanggal / Periode
+        if (!isFilterAllTime.value) {
+            const tgl = String(po.tanggal || po.tanggal_po || po.tanggal_distribusi || "").substring(0, 10);
+            if (tgl) {
+                if (filterStartDate.value && tgl < filterStartDate.value) return false;
+                if (filterEndDate.value && tgl > filterEndDate.value) return false;
+            }
+        }
+
         const q = searchQuery.value.toLowerCase().trim();
         const matchesQuery =
             !q ||
@@ -428,6 +449,16 @@ async function exportAllPosExcel() {
 
 <template>
     <div class="space-y-6">
+        <!-- ─── FILTER WAKTU: REUSABLE PERIODDATEFILTERBAR ───────────────── -->
+        <PeriodDateFilterBar
+            v-model:startDate="filterStartDate"
+            v-model:endDate="filterEndDate"
+            v-model:mode="filterDateMode"
+            v-model:periodeId="filterPeriodeId"
+            v-model:isAllTime="isFilterAllTime"
+            :periodes="periodes"
+        />
+
         <!-- ─── TOOLBAR PENCARIAN & FILTER ─────────────────────────────────── -->
         <div
             class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col lg:flex-row gap-3 items-center justify-between"

@@ -84,15 +84,6 @@ const rentangHariCount = computed(() => {
     return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
 });
 
-const labelSiklus = computed(() => {
-    const matched = props.periodes?.find(p => String(p.id) === String(selectedPeriodeId.value));
-    if (matched) {
-        return `Siklus: Periode ${matched.nomor_periode} (${rentangHariCount.value} Hari Kerja)`;
-    }
-    if (rentangHariCount.value === 14) return "Siklus: Periodik (14 Hari Kerja)";
-    if (rentangHariCount.value === 28) return "Siklus: Bulanan (28 Hari Kerja)";
-    return `Siklus: Kustom (${rentangHariCount.value} Hari Kerja)`;
-});
 
 // ─── Editable Items State (Dengan Titik Pembilang & Custom Edit Warning) ──────
 function mapInitialItems(list) {
@@ -251,6 +242,30 @@ function applyFilterTanggal() {
     );
 }
 
+function onDateFilterChange(filter) {
+    if (!filter) return;
+    tanggalMulai.value = filter.start;
+    tanggalSelesai.value = filter.end;
+    modeSkala.value = filter.mode;
+    selectedPeriodeId.value = filter.periodeId;
+
+    router.get(
+        route("penerima-manfaat.pembayaran-insentif"),
+        {
+            mode: filter.mode,
+            tanggal_mulai: filter.start,
+            tanggal_selesai: filter.end,
+            periode_id: filter.periodeId,
+            kategori: selectedKategoriFilter.value,
+            search: searchQuery.value,
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+        }
+    );
+}
+
 function onApplyDateRange(newRange) {
     if (newRange && newRange.start && newRange.end) {
         tanggalMulai.value = newRange.start;
@@ -259,17 +274,10 @@ function onApplyDateRange(newRange) {
         const matched = findMatchingPeriode(newRange.start, newRange.end);
         if (matched) {
             selectedPeriodeId.value = String(matched.id);
-            modeSkala.value = "periodik";
+            modeSkala.value = "periode";
         } else {
             selectedPeriodeId.value = "all";
-            const diffDays =
-                Math.round(
-                    (new Date(newRange.end + "T00:00:00") - new Date(newRange.start + "T00:00:00")) /
-                        (1000 * 60 * 60 * 24)
-                ) + 1;
-            if (diffDays === 14) modeSkala.value = "periodik";
-            else if (diffDays === 28) modeSkala.value = "bulanan";
-            else modeSkala.value = "custom";
+            modeSkala.value = "rentang";
         }
 
         applyFilterTanggal();
@@ -363,6 +371,7 @@ async function handleExportExcel() {
                 :labelSiklus="labelSiklus"
                 :unitSppg="unitSppg"
                 :isExporting="isExporting"
+                @dateFilterChange="onDateFilterChange"
                 @changeModeSkala="changeModeSkala"
                 @selectPeriode="selectPeriode"
                 @applyDateRange="onApplyDateRange"

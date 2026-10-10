@@ -9,6 +9,7 @@ use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Models\WorkOrderKelompok;
 use App\Models\Periode;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -590,16 +591,27 @@ class GiziController extends Controller
 
         $needsFullTkpi = in_array($activeTab, ['database-pangan', 'tkpi', 'rancang-menu', 'buat-menu']);
 
-        $ftaData = $needsFullTkpi ? Cache::rememberForever('tkpi_fta_data_parsed', function () {
-            return file_exists(database_path('data/indo.fta')) ? $this->parseFtaData(database_path('data/indo.fta')) : [];
+        // Katalog seluruh database NutriSurvey (.fta / .dat) internasional
+        $nutrisurveyCatalog = $this->getNutrisurveyFileCatalog();
+        $selectedFta = $request->query('fta', 'indo.fta');
+        $validFtaFiles = array_column($nutrisurveyCatalog, 'filename');
+        if (!in_array($selectedFta, $validFtaFiles)) {
+            $selectedFta = 'indo.fta';
+        }
+
+        $ftaPath = $this->getNutrisurveyPath($selectedFta);
+        $ftaData = $needsFullTkpi ? Cache::rememberForever("tkpi_fta_data_parsed_v2_{$selectedFta}", function () use ($ftaPath) {
+            return file_exists($ftaPath) ? $this->parseFtaData($ftaPath) : [];
         }) : [];
 
-        $csvData = $needsFullTkpi ? Cache::rememberForever('tkpi_csv_data_parsed', function () {
-            return file_exists(database_path('data/tkpi2020.csv')) ? $this->parseCsvData(database_path('data/tkpi2020.csv')) : [];
+        $csvPath = $this->getTkpiCsvPath();
+        $csvData = $needsFullTkpi ? Cache::rememberForever('tkpi_csv_data_parsed_v2', function () use ($csvPath) {
+            return file_exists($csvPath) ? $this->parseCsvData($csvPath) : [];
         }) : [];
 
-        $xlsxData = $needsFullTkpi ? Cache::rememberForever('tkpi_xlsx_data_parsed', function () {
-            return file_exists(database_path('data/TKPI2020.xlsx')) ? $this->parseXlsxData(database_path('data/TKPI2020.xlsx')) : [];
+        $xlsxPath = $this->getTkpiXlsxPath();
+        $xlsxData = $needsFullTkpi ? Cache::rememberForever('tkpi_xlsx_data_parsed_v2', function () use ($xlsxPath) {
+            return file_exists($xlsxPath) ? $this->parseXlsxData($xlsxPath) : [];
         }) : [];
 
         $fatsecretService = app(\App\Services\FatSecretService::class);
@@ -640,6 +652,8 @@ class GiziController extends Controller
                 'xlsx' => $xlsxData,
                 'fatsecret' => $fatsecretData,
             ],
+            'nutrisurveyFiles' => $nutrisurveyCatalog,
+            'selectedFtaFile' => $selectedFta,
             'activeTab' => $activeTab,
             'initialStep' => $step,
             'workOrdersList' => $workOrders,
@@ -658,24 +672,24 @@ class GiziController extends Controller
     }
 
     /**
-     * Membaca dan mem-parsing data resmi TKPI dari database/data/indo.fta (NutriSurvey Indonesian Food Composition Table)
-     * dengan fallback ke database/data/tkpi2020.csv jika file .fta tidak ditemukan.
+     * Membaca dan mem-parsing data resmi TKPI dari database/data/database-pangan/nutrisurvey/indo.fta (NutriSurvey Indonesian Food Composition Table)
+     * dengan fallback ke CSV/XLSX jika file .fta tidak ditemukan.
      *
      * @return array<int, array<string, mixed>>
      */
     private function getTkpiData(): array
     {
-        $ftaPath = database_path('data/indo.fta');
+        $ftaPath = $this->getNutrisurveyPath('indo.fta');
         if (file_exists($ftaPath)) {
             return $this->parseFtaData($ftaPath);
         }
 
-        $csvPath = database_path('data/tkpi2020.csv');
+        $csvPath = $this->getTkpiCsvPath();
         if (file_exists($csvPath)) {
             return $this->parseCsvData($csvPath);
         }
 
-        $xlsxPath = database_path('data/TKPI2020.xlsx');
+        $xlsxPath = $this->getTkpiXlsxPath();
         if (file_exists($xlsxPath)) {
             return $this->parseXlsxData($xlsxPath);
         }
@@ -700,17 +714,35 @@ class GiziController extends Controller
         $total = (int)(strlen($data) / $recordSize);
         $items = [];
         $tkpiBddMap = $this->getTkpiBddLookup();
+        $seenCodes = [];
 
         for ($r = 0; $r < $total; $r++) {
             $rec = substr($data, $r * $recordSize, $recordSize);
 
             $codeLen = ord($rec[0]);
             $code = substr($rec, 1, $codeLen);
+            if (!mb_check_encoding($code, 'UTF-8')) {
+                $code = mb_convert_encoding($code, 'UTF-8', 'Windows-1252');
+            }
+            $code = trim(iconv('UTF-8', 'UTF-8//IGNORE', $code));
 
             $nameLen = ord($rec[8]);
-            $name = trim(substr($rec, 9, $nameLen));
+            $name = substr($rec, 9, $nameLen);
+            if (!mb_check_encoding($name, 'UTF-8')) {
+                $name = mb_convert_encoding($name, 'UTF-8', 'Windows-1252');
+            }
+            $name = trim(iconv('UTF-8', 'UTF-8//IGNORE', $name));
             if ($name === '') {
                 continue;
+            }
+
+            // Jamin keunikan ID jika kode makanan di database FTA ada yang duplikat
+            $uniqueId = $code;
+            if (isset($seenCodes[$code])) {
+                $seenCodes[$code]++;
+                $uniqueId = $code . '_' . $seenCodes[$code];
+            } else {
+                $seenCodes[$code] = 1;
             }
 
             $energyKj = unpack('f', substr($rec, 210, 4))[1] ?? 0;
@@ -748,18 +780,19 @@ class GiziController extends Controller
             $zinc = $unpackFloat(350);
             $copper = $unpackFloat(354);
 
-            $nameLower = ' ' . strtolower($name) . ' ';
+            $namaFormatted = mb_convert_case(mb_strtolower($name, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+            $nameLower = ' ' . mb_strtolower($name, 'UTF-8') . ' ';
             $kategori = $this->categorizeFtaFood($nameLower);
             $alergen = $this->detectFtaAllergen($nameLower);
             $bdd = $this->resolveFtaBdd($name, $tkpiBddMap);
 
             $items[] = [
-                'id' => $code,
+                'id' => $uniqueId,
                 'code' => $code,
-                'nama' => ucwords(strtolower($name)),
+                'nama' => $namaFormatted,
                 'kategori' => $kategori,
                 'kategori_raw' => $kategori,
-                'sumber' => 'NutriSurvey (indo.fta)',
+                'sumber' => 'NutriSurvey (' . basename($ftaPath) . ')',
                 'air' => null,
                 'energi' => $energy,
                 'protein' => $protein,
@@ -1285,7 +1318,7 @@ class GiziController extends Controller
      */
     private function getTkpiBddLookup(): array
     {
-        $csvPath = database_path('data/tkpi2020.csv');
+        $csvPath = $this->getTkpiCsvPath();
         if (!file_exists($csvPath)) {
             return [];
         }
@@ -1501,5 +1534,145 @@ class GiziController extends Controller
             'success' => true,
             'data' => $food,
         ]);
+    }
+
+    /**
+     * Resolusi path file CSV TKPI
+     */
+    private function getTkpiCsvPath(): string
+    {
+        $newPath = database_path('data/database-pangan/tkpi/tkpi2020.csv');
+        return file_exists($newPath) ? $newPath : database_path('data/tkpi2020.csv');
+    }
+
+    /**
+     * Resolusi path file Excel XLSX TKPI
+     */
+    private function getTkpiXlsxPath(): string
+    {
+        $candidates = [
+            database_path('data/database-pangan/tkpi/tkpi2020.xlsx'),
+            database_path('data/database-pangan/tkpi/TKPI2020.xlsx'),
+            database_path('data/TKPI2020.xlsx'),
+            database_path('data/tkpi2020.xlsx'),
+        ];
+        foreach ($candidates as $p) {
+            if (file_exists($p)) {
+                return $p;
+            }
+        }
+        return $candidates[0];
+    }
+
+    /**
+     * Resolusi path file database NutriSurvey (.fta / .dat)
+     */
+    private function getNutrisurveyPath(string $filename = 'indo.fta'): string
+    {
+        $clean = basename($filename);
+        $newPath = database_path("data/database-pangan/nutrisurvey/{$clean}");
+        if (file_exists($newPath)) {
+            return $newPath;
+        }
+        $oldPath = database_path("data/{$clean}");
+        if (file_exists($oldPath)) {
+            return $oldPath;
+        }
+        return $newPath;
+    }
+
+    /**
+     * Mengambil katalog seluruh file database NutriSurvey (.fta / .dat) dari berbagai negara
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getNutrisurveyFileCatalog(): array
+    {
+        $dir = database_path('data/database-pangan/nutrisurvey');
+        if (!is_dir($dir)) {
+            $dir = database_path('data');
+        }
+
+        $meta = [
+            'indo.fta' => ['country' => 'Indonesia', 'label' => 'Indonesia (DKBM / TKPI)', 'flag' => '🇮🇩'],
+            'usda_sr28.fta' => ['country' => 'Amerika Serikat', 'label' => 'Amerika Serikat (USDA SR28)', 'flag' => '🇺🇸'],
+            'blsges.fta' => ['country' => 'Jerman', 'label' => 'Jerman (Bundeslebensmittelschlüssel / BLS)', 'flag' => '🇩🇪'],
+            'brasil.fta' => ['country' => 'Brasil', 'label' => 'Brasil (Tabela Brasileira)', 'flag' => '🇧🇷'],
+            'peru.fta' => ['country' => 'Peru', 'label' => 'Peru (Tablas Peruanas)', 'flag' => '🇵🇪'],
+            'french_bls.dat' => ['country' => 'Prancis', 'label' => 'Prancis (French BLS / CIQUAL)', 'flag' => '🇫🇷'],
+            'guatemala.fta' => ['country' => 'Guatemala', 'label' => 'Guatemala (INCAP / Amerika Tengah)', 'flag' => '🇬🇹'],
+            'bolivia.fta' => ['country' => 'Bolivia', 'label' => 'Bolivia', 'flag' => '🇧🇴'],
+            'vietnam.fta' => ['country' => 'Vietnam', 'label' => 'Vietnam', 'flag' => '🇻🇳'],
+            'mali.fta' => ['country' => 'Mali', 'label' => 'Mali (Afrika Barat)', 'flag' => '🇲🇱'],
+            'thai.fta' => ['country' => 'Thailand', 'label' => 'Thailand', 'flag' => '🇹🇭'],
+            'mexico.fta' => ['country' => 'Meksiko', 'label' => 'Meksiko (INNSZ)', 'flag' => '🇲🇽'],
+            'senegal.fta' => ['country' => 'Senegal', 'label' => 'Senegal', 'flag' => '🇸🇳'],
+            'egypt.fta' => ['country' => 'Mesir', 'label' => 'Mesir (Egypt FCT)', 'flag' => '🇪🇬'],
+            'fao-ml.fta' => ['country' => 'FAO', 'label' => 'FAO (Food and Agriculture Organization)', 'flag' => '🌐'],
+            'kenya.fta' => ['country' => 'Kenya', 'label' => 'Kenya', 'flag' => '🇰🇪'],
+            'india.fta' => ['country' => 'India', 'label' => 'India (NIN / ICMR)', 'flag' => '🇮🇳'],
+        ];
+
+        $files = is_dir($dir) ? scandir($dir) : [];
+        $catalog = [];
+
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            if ($ext !== 'fta' && $ext !== 'dat') continue;
+
+            $fullPath = $dir . DIRECTORY_SEPARATOR . $file;
+            $sizeBytes = filesize($fullPath);
+            $recordCount = (int) ($sizeBytes / 1156);
+            $info = $meta[$file] ?? [
+                'country' => ucfirst(pathinfo($file, PATHINFO_FILENAME)),
+                'label' => ucfirst(pathinfo($file, PATHINFO_FILENAME)),
+                'flag' => '🌐',
+            ];
+
+            $catalog[] = [
+                'filename' => $file,
+                'country' => $info['country'],
+                'label' => $info['label'],
+                'flag' => $info['flag'],
+                'count' => $recordCount,
+                'size_formatted' => $sizeBytes >= 1048576 
+                    ? round($sizeBytes / 1048576, 1) . ' MB' 
+                    : round($sizeBytes / 1024, 0) . ' KB',
+            ];
+        }
+
+        // Urutkan: indo.fta selalu pertama, lalu abjad nama negara
+        usort($catalog, function ($a, $b) {
+            if ($a['filename'] === 'indo.fta') return -1;
+            if ($b['filename'] === 'indo.fta') return 1;
+            return strcmp($a['country'], $b['country']);
+        });
+
+        return $catalog;
+    }
+
+    /**
+     * API untuk memuat data database NutriSurvey secara dinamis berdasarkan file yang dipilih
+     */
+    public function getNutrisurveyData(Request $request): JsonResponse
+    {
+        $file = basename($request->query('file', 'indo.fta'));
+        $path = $this->getNutrisurveyPath($file);
+        if (!file_exists($path)) {
+            return response()->json(['success' => false, 'message' => 'File tidak ditemukan', 'data' => []], 404);
+        }
+
+        $cacheKey = "tkpi_fta_data_parsed_unique_v2_{$file}";
+        $data = Cache::rememberForever($cacheKey, function () use ($path) {
+            return $this->parseFtaData($path);
+        });
+
+        return response()->json([
+            'success' => true,
+            'filename' => $file,
+            'count' => count($data),
+            'data' => $data,
+        ], 200, ['Content-Type' => 'application/json; charset=utf-8'], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }

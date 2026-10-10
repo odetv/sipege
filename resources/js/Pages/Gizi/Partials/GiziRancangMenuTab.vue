@@ -10,6 +10,7 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import DateRangePicker from "@/Components/DateRangePicker.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 import WorkOrderManualEditor from "@/Pages/WorkOrder/Partials/WorkOrderManualEditor.vue";
 import {
     SATUAN_LIST,
@@ -74,6 +75,7 @@ import {
     Zap,
     FlaskConical,
     PlusCircle,
+    ChefHat,
 } from "lucide-vue-next";
 import {
     ALERGI_OPTIONS,
@@ -147,9 +149,17 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    nutrisurveyFiles: {
+        type: Array,
+        default: () => [],
+    },
+    selectedFta: {
+        type: String,
+        default: "indo.fta",
+    },
 });
 
-const emit = defineEmits(["update-source"]);
+const emit = defineEmits(["update-source", "update-fta"]);
 
 // State Tampilan Info / Edukasi Rumus Perhitungan Gizi & Biaya (Default Hidden)
 const showRumusBahan = ref(false);
@@ -615,6 +625,12 @@ const hasActiveSistemWo = computed(() => {
 });
 
 const woPickerSearch = ref("");
+const woPickerStartDate = ref("");
+const woPickerEndDate = ref("");
+const woPickerMode = ref("hari_ini");
+const woPickerPeriodeId = ref("all");
+const isWoPickerAllTime = ref(false);
+
 const sistemWorkOrdersList = computed(() => {
     return (props.workOrdersList || []).filter((w) => {
         return w && (w.metode_wo === "sistem" || !w.metode_wo);
@@ -622,17 +638,28 @@ const sistemWorkOrdersList = computed(() => {
 });
 
 const filteredSistemWorkOrders = computed(() => {
-    if (!woPickerSearch.value.trim()) {
-        return sistemWorkOrdersList.value;
+    let list = sistemWorkOrdersList.value;
+    if (woPickerSearch.value.trim()) {
+        const q = woPickerSearch.value.toLowerCase().trim();
+        list = list.filter((w) => {
+            return (
+                (w.nomor_wo && w.nomor_wo.toLowerCase().includes(q)) ||
+                (w.nama_menu && w.nama_menu.toLowerCase().includes(q)) ||
+                (w.tanggal_distribusi && String(w.tanggal_distribusi).includes(q))
+            );
+        });
     }
-    const q = woPickerSearch.value.toLowerCase().trim();
-    return sistemWorkOrdersList.value.filter((w) => {
-        return (
-            (w.nomor_wo && w.nomor_wo.toLowerCase().includes(q)) ||
-            (w.nama_menu && w.nama_menu.toLowerCase().includes(q)) ||
-            (w.tanggal_distribusi && String(w.tanggal_distribusi).includes(q))
-        );
-    });
+
+    if (!isWoPickerAllTime.value) {
+        if (woPickerStartDate.value) {
+            list = list.filter((w) => String(w.tanggal_distribusi || "").substring(0, 10) >= woPickerStartDate.value);
+        }
+        if (woPickerEndDate.value) {
+            list = list.filter((w) => String(w.tanggal_distribusi || "").substring(0, 10) <= woPickerEndDate.value);
+        }
+    }
+
+    return list;
 });
 
 function selectWorkOrderForRancangMenu(wo) {
@@ -903,13 +930,22 @@ watch(
     { immediate: true },
 );
 
-const woNo = computed(() => {
-    return (
-        "WO-MBG-" +
-        (tanggalRencana.value
-            ? tanggalRencana.value.replace(/-/g, "")
-            : new Date().toISOString().slice(0, 10).replace(/-/g, ""))
-    );
+const customWoNo = ref(null);
+
+const woNo = computed({
+    get() {
+        if (customWoNo.value) return customWoNo.value;
+        if (props.activeWorkOrder?.nomor_wo) return props.activeWorkOrder.nomor_wo;
+        return (
+            "WO-MBG-" +
+            (tanggalRencana.value
+                ? tanggalRencana.value.replace(/-/g, "")
+                : new Date().toISOString().slice(0, 10).replace(/-/g, ""))
+        );
+    },
+    set(val) {
+        customWoNo.value = val;
+    },
 });
 const namaMenuAktif = ref("");
 const subMenuKeys = ref([
@@ -2035,10 +2071,86 @@ function mergeFatsecretItems(newItems) {
     }
 }
 
+// State & Penanganan Pilihan Database NutriSurvey (.fta / .dat) di Rancang Menu
+const activeFtaChoice = ref(props.selectedFta || "indo.fta");
+const isFtaLoading = ref(false);
+const customFtaMap = ref({});
+
+const defaultFtaList = [
+    { filename: "indo.fta", country: "Indonesia", flag: "🇮🇩", count: 1105 },
+    { filename: "usda.fta", country: "USDA (Amerika Serikat)", flag: "🇺🇸", count: 8789 },
+    { filename: "germany.fta", country: "Jerman", flag: "🇩🇪", count: 10653 },
+    { filename: "peru.fta", country: "Peru", flag: "🇵🇪", count: 1493 },
+    { filename: "brasil.fta", country: "Brasil", flag: "🇧🇷", count: 1404 },
+    { filename: "guatemal.fta", country: "Guatemala", flag: "🇬🇹", count: 1168 },
+    { filename: "france.fta", country: "Prancis", flag: "🇫🇷", count: 1064 },
+    { filename: "bolivia.fta", country: "Bolivia", flag: "🇧🇴", count: 927 },
+    { filename: "vietnam.fta", country: "Vietnam", flag: "🇻🇳", count: 528 },
+    { filename: "mali.fta", country: "Mali", flag: "🇲🇱", count: 436 },
+    { filename: "thailand.fta", country: "Thailand", flag: "🇹🇭", count: 430 },
+    { filename: "mexico.fta", country: "Meksiko", flag: "🇲🇽", count: 354 },
+    { filename: "senegal.fta", country: "Senegal", flag: "🇸🇳", count: 310 },
+    { filename: "egypt.fta", country: "Mesir", flag: "🇪🇬", count: 290 },
+    { filename: "fao.fta", country: "FAO Internasional", flag: "🌐", count: 196 },
+    { filename: "kenya.fta", country: "Kenya", flag: "🇰🇪", count: 164 },
+    { filename: "india.fta", country: "India", flag: "🇮🇳", count: 122 },
+];
+
+watch(
+    () => props.selectedFta,
+    (newVal) => {
+        if (newVal) activeFtaChoice.value = newVal;
+    }
+);
+
+async function handleSelectFtaChange(filename) {
+    if (!filename || isFtaLoading.value) return;
+    activeFtaChoice.value = filename;
+
+    // Pastikan database beralih ke FTA jika sebelumnya memilih CSV/XLSX/FatSecret
+    if (props.selectedSource !== "fta") {
+        emit("update-source", "fta");
+    }
+
+    if (!customFtaMap.value[filename]) {
+        if (
+            filename === (props.selectedFta || "indo.fta") &&
+            props.tkpiDatasets?.fta &&
+            props.tkpiDatasets.fta.length > 0
+        ) {
+            customFtaMap.value[filename] = props.tkpiDatasets.fta;
+            emit("update-fta", filename, props.tkpiDatasets.fta);
+            return;
+        }
+
+        isFtaLoading.value = true;
+        try {
+            const res = await fetch(`/gizi/api/nutrisurvey/data?file=${encodeURIComponent(filename)}`);
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+                customFtaMap.value[filename] = json.data;
+                emit("update-fta", filename, json.data);
+            }
+        } catch (err) {
+            console.error("Gagal memuat dataset NutriSurvey FTA:", err);
+        } finally {
+            isFtaLoading.value = false;
+        }
+    } else {
+        emit("update-fta", filename, customFtaMap.value[filename]);
+    }
+}
+
 const tkpiItems = computed(() => {
     if (props.selectedSource === "fatsecret") {
         const base = props.tkpiDatasets?.fatsecret || props.tkpiList || [];
         return [...base, ...extraFatsecretItems.value];
+    }
+    if (props.selectedSource === "fta") {
+        if (customFtaMap.value[activeFtaChoice.value] && customFtaMap.value[activeFtaChoice.value].length > 0) {
+            return customFtaMap.value[activeFtaChoice.value];
+        }
+        return props.tkpiDatasets?.fta || props.tkpiList || [];
     }
     if (
         props.tkpiDatasets &&
@@ -6997,6 +7109,16 @@ watch(
                     </a>
                 </div>
 
+                <!-- Filter Waktu: Reusable PeriodDateFilterBar -->
+                <PeriodDateFilterBar
+                    v-model:startDate="woPickerStartDate"
+                    v-model:endDate="woPickerEndDate"
+                    v-model:mode="woPickerMode"
+                    v-model:periodeId="woPickerPeriodeId"
+                    v-model:isAllTime="isWoPickerAllTime"
+                    :periodes="periodes"
+                />
+
                 <!-- Search Bar & Status Summary -->
                 <div class="flex items-center justify-between flex-wrap gap-3 pt-4 border-t border-slate-100">
                     <div class="relative flex-1 min-w-[260px] max-w-md">
@@ -10082,25 +10204,53 @@ watch(
                                             : 'Pilih Database Acuan'
                                     "
                                 >
-                                    <button
-                                        type="button"
-                                        @click="
-                                            selectedBahanList.length === 0 &&
-                                            emit('update-source', 'fta')
-                                        "
-                                        :disabled="selectedBahanList.length > 0"
-                                        class="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all shrink-0"
+                                    <!-- Tab NutriSurvey dengan Dropdown Pemilihan File FTA -->
+                                    <div
+                                        class="inline-flex items-center rounded-md text-[10px] font-bold transition-all shrink-0 border"
                                         :class="[
                                             selectedSource === 'fta'
-                                                ? 'bg-white text-primary shadow-xs font-black'
-                                                : 'text-slate-600 hover:text-slate-900',
+                                                ? 'bg-white text-primary shadow-xs border-primary/30 font-black'
+                                                : 'border-transparent text-slate-600 hover:text-slate-900',
                                             selectedBahanList.length > 0
-                                                ? 'opacity-80 cursor-not-allowed'
-                                                : 'cursor-pointer',
+                                                ? 'opacity-80'
+                                                : '',
                                         ]"
                                     >
-                                        NutriSurvey (indo.fta)
-                                    </button>
+                                        <button
+                                            type="button"
+                                            @click="
+                                                selectedBahanList.length === 0 &&
+                                                (selectedSource !== 'fta' ? emit('update-source', 'fta') : null)
+                                            "
+                                            :disabled="selectedBahanList.length > 0"
+                                            class="px-2 py-1 flex items-center gap-1 cursor-pointer"
+                                            :class="selectedBahanList.length > 0 ? 'cursor-not-allowed' : ''"
+                                            title="Gunakan Database NutriSurvey"
+                                        >
+                                            <span
+                                                class="w-1.5 h-1.5 rounded-full"
+                                                :class="selectedSource === 'fta' ? 'bg-primary' : 'bg-slate-300'"
+                                            ></span>
+                                            <span>NutriSurvey</span>
+                                        </button>
+                                        <div class="pr-1 py-0.5">
+                                            <select
+                                                :value="activeFtaChoice"
+                                                @change="handleSelectFtaChange($event.target.value)"
+                                                :disabled="selectedBahanList.length > 0 || isFtaLoading"
+                                                class="text-[9.5px] font-bold py-0.5 px-1.5 rounded bg-slate-50 border border-slate-200 text-slate-700 outline-none cursor-pointer focus:ring-1 focus:ring-primary hover:border-slate-300 disabled:cursor-not-allowed max-w-[130px] sm:max-w-[165px] truncate"
+                                                title="Pilih Database NutriSurvey (.fta / .dat)"
+                                            >
+                                                <option
+                                                    v-for="fta in (nutrisurveyFiles && nutrisurveyFiles.length > 0 ? nutrisurveyFiles : defaultFtaList)"
+                                                    :key="fta.filename"
+                                                    :value="fta.filename"
+                                                >
+                                                    {{ fta.flag }} {{ fta.country }} ({{ fta.filename }})
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <button
                                         type="button"
                                         @click="
@@ -16883,25 +17033,63 @@ watch(
                             </p>
                         </div>
 
-                        <!-- Card 2: Total Target Sasaran PM -->
+                        <!-- Card 2: Total Target Sasaran PM & Fisik Dimasak -->
                         <div
-                            class="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-0.5"
+                            class="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1 flex flex-col justify-between"
                         >
-                            <p
-                                class="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider"
+                            <div>
+                                <div class="flex items-center justify-between gap-1">
+                                    <p
+                                        class="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider"
+                                    >
+                                        Total Sasaran PM
+                                    </p>
+                                    <span
+                                        v-if="totalPorsiTambahan > 0"
+                                        class="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/80"
+                                        :title="'Uji: ' + totalOrganoleptik + ', Sampel: ' + totalSampel + ', Buffer: ' + totalBuffer"
+                                    >
+                                        +{{ totalPorsiTambahan }} Tambahan
+                                    </span>
+                                </div>
+                                <div class="mt-1 flex items-baseline justify-between gap-2">
+                                    <div>
+                                        <p
+                                            class="text-sm sm:text-base font-black text-slate-900 leading-tight"
+                                        >
+                                            {{ (totalPK + totalPB).toLocaleString("id-ID") }}
+                                            <span class="text-[11px] font-bold text-slate-500">Porsi</span>
+                                        </p>
+                                        <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+                                            PM Riil: PK {{ totalPK.toLocaleString("id-ID") }} • PB {{ totalPB.toLocaleString("id-ID") }}
+                                        </p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <p
+                                            class="text-xs sm:text-sm font-black text-emerald-700 leading-tight"
+                                        >
+                                            {{ grandTotalProduksiSemua.toLocaleString("id-ID") }}
+                                            <span class="text-[10px] font-bold text-emerald-600">Porsi</span>
+                                        </p>
+                                        <p class="text-[10px] text-emerald-700/80 font-bold mt-0.5">
+                                            Total Dimasak
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                v-if="totalPorsiTambahan > 0"
+                                class="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500"
                             >
-                                Total Sasaran PM
-                            </p>
-                            <p
-                                class="text-sm sm:text-base font-black text-slate-900 mt-1"
+                                <span class="font-medium">Tambahan: +{{ totalPorsiTambahanPK }} PK • +{{ totalPorsiTambahanPB }} PB</span>
+                                <span class="text-slate-400 font-mono text-[9px]">(Org {{ totalOrganoleptik }} | Smp {{ totalSampel }} | Buf {{ totalBuffer }})</span>
+                            </div>
+                            <div
+                                v-else
+                                class="pt-1.5 border-t border-slate-100 text-[10px] text-slate-400 font-medium"
                             >
-                                {{ (totalPK + totalPB).toLocaleString("id-ID") }}
-                                Porsi
-                            </p>
-                            <p class="text-[11px] text-slate-500 mt-0.5 font-medium">
-                                PK: {{ totalPK.toLocaleString("id-ID") }} • PB:
-                                {{ totalPB.toLocaleString("id-ID") }}
-                            </p>
+                                Total fisik masak sama dengan kuota PM riil
+                            </div>
                         </div>
 
                         <!-- Card 3: Batas Total Pagu BGN -->
@@ -16958,52 +17146,108 @@ watch(
                     <div class="flex flex-wrap gap-3">
                         <!-- Card Sasaran PK Normal -->
                         <div
-                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-amber-200/80 shadow-2xs space-y-0.5"
+                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-amber-200/80 shadow-2xs space-y-1 flex flex-col justify-between"
                         >
-                            <p
-                                class="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider"
-                            >
-                                Sasaran PK (Normal)
-                            </p>
-                            <p
-                                class="text-sm sm:text-base font-black text-amber-950 mt-1"
-                            >
-                                {{
-                                    targetSasaranNormal.pk.toLocaleString(
-                                        "id-ID",
-                                    )
-                                }}
-                                Porsi
-                            </p>
-                            <p class="text-[11px] text-slate-700 mt-0.5">
-                                Food Cost:
-                                {{ formatRupiah(totalFoodCostPKNormal) }}
-                            </p>
+                            <div>
+                                <div class="flex items-center justify-between gap-1">
+                                    <p
+                                        class="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider"
+                                    >
+                                        Sasaran PK (Normal)
+                                    </p>
+                                    <span
+                                        v-if="totalPorsiTambahanPK > 0"
+                                        class="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200"
+                                    >
+                                        +{{ totalPorsiTambahanPK }} Tambahan
+                                    </span>
+                                </div>
+                                <div class="mt-1 flex items-baseline justify-between gap-2">
+                                    <div>
+                                        <p
+                                            class="text-sm sm:text-base font-black text-amber-950 leading-tight"
+                                        >
+                                            {{
+                                                targetSasaranNormal.pk.toLocaleString(
+                                                    "id-ID",
+                                                )
+                                            }}
+                                            <span class="text-[11px] font-bold text-amber-800">Porsi</span>
+                                        </p>
+                                        <p class="text-[10.5px] text-amber-800/80 font-medium mt-0.5">
+                                            PM Riil Normal
+                                        </p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <p
+                                            class="text-xs sm:text-sm font-black text-amber-900 leading-tight"
+                                        >
+                                            {{ (targetSasaranNormal.pk + totalPorsiTambahanPK).toLocaleString("id-ID") }}
+                                            <span class="text-[10px] font-bold text-amber-800">Porsi</span>
+                                        </p>
+                                        <p class="text-[10px] text-amber-800/80 font-bold mt-0.5">
+                                            Total PK Masak
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pt-1.5 border-t border-amber-100 flex items-center justify-between text-[11px] text-slate-700">
+                                <span>Food Cost:</span>
+                                <span class="font-bold text-amber-950">{{ formatRupiah(totalFoodCostPKNormal) }}</span>
+                            </div>
                         </div>
 
                         <!-- Card Sasaran PB Normal -->
                         <div
-                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-indigo-200/80 shadow-2xs space-y-0.5"
+                            class="flex-1 min-w-[200px] p-3.5 bg-white rounded-xl border border-indigo-200/80 shadow-2xs space-y-1 flex flex-col justify-between"
                         >
-                            <p
-                                class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
-                            >
-                                Sasaran PB (Normal)
-                            </p>
-                            <p
-                                class="text-sm sm:text-base font-black text-indigo-950 mt-1"
-                            >
-                                {{
-                                    targetSasaranNormal.pb.toLocaleString(
-                                        "id-ID",
-                                    )
-                                }}
-                                Porsi
-                            </p>
-                            <p class="text-[11px] text-indigo-800 mt-0.5">
-                                Food Cost:
-                                {{ formatRupiah(totalFoodCostPBNormal) }}
-                            </p>
+                            <div>
+                                <div class="flex items-center justify-between gap-1">
+                                    <p
+                                        class="text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider"
+                                    >
+                                        Sasaran PB (Normal)
+                                    </p>
+                                    <span
+                                        v-if="totalPorsiTambahanPB > 0"
+                                        class="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200"
+                                    >
+                                        +{{ totalPorsiTambahanPB }} Tambahan
+                                    </span>
+                                </div>
+                                <div class="mt-1 flex items-baseline justify-between gap-2">
+                                    <div>
+                                        <p
+                                            class="text-sm sm:text-base font-black text-indigo-950 leading-tight"
+                                        >
+                                            {{
+                                                targetSasaranNormal.pb.toLocaleString(
+                                                    "id-ID",
+                                                )
+                                            }}
+                                            <span class="text-[11px] font-bold text-indigo-800">Porsi</span>
+                                        </p>
+                                        <p class="text-[10.5px] text-indigo-800/80 font-medium mt-0.5">
+                                            PM Riil Normal
+                                        </p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <p
+                                            class="text-xs sm:text-sm font-black text-indigo-900 leading-tight"
+                                        >
+                                            {{ (targetSasaranNormal.pb + totalPorsiTambahanPB).toLocaleString("id-ID") }}
+                                            <span class="text-[10px] font-bold text-indigo-800">Porsi</span>
+                                        </p>
+                                        <p class="text-[10px] text-indigo-800/80 font-bold mt-0.5">
+                                            Total PB Masak
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pt-1.5 border-t border-indigo-100 flex items-center justify-between text-[11px] text-indigo-800">
+                                <span>Food Cost:</span>
+                                <span class="font-bold text-indigo-950">{{ formatRupiah(totalFoodCostPBNormal) }}</span>
+                            </div>
                         </div>
 
                         <!-- Card Sasaran Khusus Setiap Varian Alergi yang Ada -->
@@ -17076,22 +17320,6 @@ watch(
                                     </p>
                                 </div>
                             </div>
-
-                            <button
-                                type="button"
-                                @click="
-                                    buatMenuSubTab = 'rencana';
-                                    nextTick(() => {
-                                        const el = document.getElementById('section-jadwal-operasional');
-                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    });
-                                "
-                                class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer shrink-0"
-                                title="Kembali ke Perencanaan Menu untuk mengubah jam operasional"
-                            >
-                                <Edit3 class="h-3.5 w-3.5 text-slate-500" />
-                                <span>Ubah Jadwal Operasional</span>
-                            </button>
                         </div>
 
                         <!-- Grid 6 Kartu Tahapan Operasional -->
@@ -17141,6 +17369,169 @@ watch(
                                     >
                                         <AlertCircle class="h-3 w-3 text-rose-500 shrink-0" />
                                         <span>Belum diatur</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
+                    <!-- PORSI TAMBAHAN PRODUKSI (STEP REVIEW) -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-4 shadow-2xs"
+                    >
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100"
+                        >
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="h-8 w-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs"
+                                >
+                                    <UtensilsCrossed class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4
+                                            class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider"
+                                        >
+                                            Porsi Tambahan Produksi (PK &amp; PB)
+                                        </h4>
+                                        <span
+                                            v-if="!hasEmptyPorsiTambahan"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                        >
+                                            <CheckCircle2 class="h-3 w-3 text-emerald-600" />
+                                            Terisi Lengkap (+{{ totalPorsiTambahan }} Porsi)
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300"
+                                        >
+                                            <AlertCircle class="h-3 w-3 text-rose-600" />
+                                            Belum Lengkap
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        Porsi tambahan untuk Uji Organoleptik, Sampel Makanan, dan Buffer Produksi.
+                                        <span class="text-amber-700 font-bold">
+                                            (Di luar pagu sasaran, otomatis masuk kebutuhan belanja &amp; bahan baku).
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Grid 3 Kategori Porsi Tambahan -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <!-- 1. Organoleptik -->
+                            <div class="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="h-7 w-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 font-black text-xs">
+                                        <FlaskConical class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <h5 class="text-xs font-black text-slate-900">Uji Organoleptik</h5>
+                                        <p class="text-[10px] text-slate-500">Uji sensori mutu &amp; rasa</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200/60 text-center">
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PK</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.organoleptik.pk || 0 }}</span>
+                                    </div>
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PB</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.organoleptik.pb || 0 }}</span>
+                                    </div>
+                                    <div class="bg-emerald-50 p-1.5 rounded-lg border border-emerald-200">
+                                        <span class="text-[9.5px] text-emerald-700 font-bold block">Total</span>
+                                        <span class="text-xs font-black text-emerald-800">{{ totalOrganoleptik }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. Sampel Makanan -->
+                            <div class="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="h-7 w-7 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-black text-xs">
+                                        <Package class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <h5 class="text-xs font-black text-slate-900">Sampel Makanan</h5>
+                                        <p class="text-[10px] text-slate-500">Retensi keamanan pangan 24 jam</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200/60 text-center">
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PK</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.sampel.pk || 0 }}</span>
+                                    </div>
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PB</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.sampel.pb || 0 }}</span>
+                                    </div>
+                                    <div class="bg-blue-50 p-1.5 rounded-lg border border-blue-200">
+                                        <span class="text-[9.5px] text-blue-700 font-bold block">Total</span>
+                                        <span class="text-xs font-black text-blue-800">{{ totalSampel }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. Buffer Produksi -->
+                            <div class="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="h-7 w-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-black text-xs">
+                                        <Layers class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <h5 class="text-xs font-black text-slate-900">Buffer Produksi</h5>
+                                        <p class="text-[10px] text-slate-500">Cadangan darurat &amp; tumpah</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200/60 text-center">
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PK</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.buffer.pk || 0 }}</span>
+                                    </div>
+                                    <div class="bg-white p-1.5 rounded-lg border border-slate-200/70">
+                                        <span class="text-[9.5px] text-slate-500 font-bold block">PB</span>
+                                        <span class="text-xs font-black text-slate-800">{{ porsiTambahan.buffer.pb || 0 }}</span>
+                                    </div>
+                                    <div class="bg-amber-50 p-1.5 rounded-lg border border-amber-200">
+                                        <span class="text-[9.5px] text-amber-700 font-bold block">Total</span>
+                                        <span class="text-xs font-black text-amber-800">{{ totalBuffer }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rekapitulasi Baris Total Porsi Tambahan vs Sasaran PM -->
+                        <div class="p-3 sm:p-4 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-amber-300">⚡ Total Porsi Tambahan:</span>
+                                    <span class="font-mono font-black text-amber-200">{{ totalPorsiTambahan }} Porsi</span>
+                                    <span class="text-[10px] text-slate-300">
+                                        (PK: {{ totalPorsiTambahanPK }}, PB: {{ totalPorsiTambahanPB }})
+                                    </span>
+                                </div>
+                                <p class="text-[10px] text-slate-400">
+                                    Sasaran PM Reguler (Pagu):
+                                    <strong class="text-slate-200">{{ totalPM.toLocaleString("id-ID") }} Porsi</strong>
+                                    (PK: {{ totalPK.toLocaleString("id-ID") }}, PB: {{ totalPB.toLocaleString("id-ID") }})
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-3 sm:border-l sm:border-slate-800 sm:pl-4">
+                                <div>
+                                    <p class="text-[9.5px] uppercase tracking-wider text-slate-400 font-bold">
+                                        Total Fisik Dimasak (Bahan Baku)
+                                    </p>
+                                    <div class="text-base sm:text-lg font-black text-emerald-400">
+                                        {{ grandTotalProduksiSemua.toLocaleString("id-ID") }} Porsi
+                                        <span class="text-xs font-normal text-slate-300">
+                                            (PK: {{ grandTotalProduksiPK.toLocaleString("id-ID") }}, PB: {{ grandTotalProduksiPB.toLocaleString("id-ID") }})
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -19940,18 +20331,10 @@ watch(
                                 <Button
                                     type="button"
                                     @click="openModalDetailCatatan('persiapan')"
-                                    className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                    className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-3.5 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
                                 >
                                     <Eye class="w-3.5 h-3.5" />
                                     <span>Lihat Detail Catatan</span>
-                                </Button>
-                                <Button
-                                    type="button"
-                                    @click="handleSwitchSubTab('catatan_resep')"
-                                    className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3 h-8 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                                >
-                                    <Edit3 class="w-3.5 h-3.5 text-primary" />
-                                    <span>Edit Catatan</span>
                                 </Button>
                             </div>
                         </div>
@@ -20605,23 +20988,12 @@ watch(
 
                 <!-- Modal Footer -->
                 <div
-                    class="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3.5 border-t border-slate-200"
+                    class="flex items-center justify-end pt-3.5 border-t border-slate-200"
                 >
                     <Button
                         type="button"
-                        @click="
-                            showDetailCatatanModal = false;
-                            handleSwitchSubTab('catatan_resep');
-                        "
-                        className="w-full sm:w-auto bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-3.5 h-9 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                        <Edit3 class="w-3.5 h-3.5 text-primary" />
-                        <span>Edit Catatan Tim Produksi</span>
-                    </Button>
-                    <Button
-                        type="button"
                         @click="showDetailCatatanModal = false"
-                        className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-5 h-9 rounded-xl cursor-pointer"
+                        className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-6 h-9 rounded-xl cursor-pointer"
                     >
                         Tutup
                     </Button>

@@ -36,25 +36,9 @@ class LaporanController extends Controller
         }
         $allWorkOrders = $woQuery->orderBy('tanggal_distribusi', 'desc')->get(['id', 'uuid', 'nomor_wo', 'tanggal_distribusi', 'nama_menu', 'status', 'total_pm', 'total_pk', 'total_pb']);
 
-        // Tentukan tanggal yang dipilih (default: parameter query ?tanggal=..., atau hari ini jika ada WO hari ini, atau WO terbaru jika hari ini kosong, atau hari ini)
+        // Tentukan tanggal yang dipilih (default: hari ini, atau parameter query ?tanggal=...)
         $todayStr = Carbon::today()->format('Y-m-d');
-        $selectedDate = $request->query('tanggal');
-
-        if (!$selectedDate) {
-            // Cek apakah ada WO untuk hari ini
-            $hasTodayWo = $allWorkOrders->contains(function ($item) use ($todayStr) {
-                return Carbon::parse($item->tanggal_distribusi)->format('Y-m-d') === $todayStr;
-            });
-
-            if ($hasTodayWo) {
-                $selectedDate = $todayStr;
-            } elseif ($allWorkOrders->isNotEmpty()) {
-                // Default ke WO terbaru jika hari ini tidak ada WO
-                $selectedDate = Carbon::parse($allWorkOrders->first()->tanggal_distribusi)->format('Y-m-d');
-            } else {
-                $selectedDate = $todayStr;
-            }
-        }
+        $selectedDate = $request->query('tanggal') ?: $todayStr;
 
         // Ambil data detail Work Order untuk tanggal yang dipilih
         $workOrder = null;

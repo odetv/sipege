@@ -70,7 +70,7 @@ function onConfirmClick() {
                         <span class="font-bold text-slate-800">{{ formatTanggalIndo(effectiveStartDate) }} s/d {{ formatTanggalIndo(effectiveEndDate) }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-slate-500 font-medium">Jumlah Hari Kerja:</span>
+                        <span class="text-slate-500 font-medium">Jumlah Hari:</span>
                         <span class="font-bold text-emerald-700">{{ totalDays }} Hari</span>
                     </div>
                     <div class="flex items-center justify-between">

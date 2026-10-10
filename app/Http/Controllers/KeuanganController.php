@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\KelompokPenerimaManfaat;
+use App\Models\Periode;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SurveiHargaPasar;
@@ -775,11 +776,24 @@ class KeuanganController extends Controller
 
         $defaultSurveiItems = self::getDefaultSurveiItems();
 
+        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
+            $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+            return [
+                'id' => $p->id,
+                'nomor_periode' => $p->nomor_periode,
+                'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
+            ];
+        });
+
         return Inertia::render('Keuangan/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
             'activeTab' => $activeTab,
+            'periodes' => $periodes,
             'verifikasiPoList' => $verifikasiPoList ?? [],
             'poList' => $poList,
             'suppliers' => $suppliers ?? [],

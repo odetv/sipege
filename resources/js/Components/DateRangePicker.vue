@@ -209,26 +209,6 @@ function selectDate(dateStr) {
     }
 }
 
-function applyPreset(daysCount) {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const startStr = `${y}-${m}-${d}`;
-
-    const end = new Date(now);
-    end.setDate(now.getDate() + (daysCount - 1));
-    const ey = end.getFullYear();
-    const em = String(end.getMonth() + 1).padStart(2, "0");
-    const ed = String(end.getDate()).padStart(2, "0");
-    const endStr = `${ey}-${em}-${ed}`;
-
-    tempStart.value = startStr;
-    tempEnd.value = endStr;
-
-    currentMonth1.value = now.getMonth();
-    currentYear1.value = now.getFullYear();
-}
 
 function handleApply() {
     if (!tempStart.value) return;
@@ -483,63 +463,42 @@ const selectedDaysCount = computed(() => {
             </div>
         </div>
 
-        <!-- ─── FOOTER BAR (PRESET & AKSI) ────────────────────────────── -->
-        <div class="mt-4 pt-3 border-t border-slate-100 space-y-3">
-            <!-- Row 1: Presets -->
-            <div class="flex flex-wrap items-center gap-1.5 text-xs">
-                <span class="text-[11px] font-semibold text-slate-400 mr-0.5">Preset:</span>
-                <button
-                    type="button"
-                    @click="applyPreset(28)"
-                    class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold transition-colors cursor-pointer text-xs"
-                >
-                    Bulanan (28 Hari)
-                </button>
-                <button
-                    type="button"
-                    @click="applyPreset(14)"
-                    class="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold transition-colors cursor-pointer text-xs"
-                >
-                    Periodik (14 Hari)
-                </button>
+        <!-- ─── FOOTER BAR (AKSI) ────────────────────────────── -->
+        <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+            <!-- Status Info -->
+            <div class="flex items-center justify-between sm:justify-start gap-2 text-xs">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-slate-500 font-medium">Rentang:</span>
+                    <span
+                        v-if="selectedDaysCount > 0"
+                        class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+                    >
+                        {{ selectedDaysCount }} Hari Terpilih
+                    </span>
+                    <span v-else class="text-slate-400 italic">Pilih tanggal awal & akhir</span>
+                </div>
             </div>
 
-            <!-- Row 2: Status & Action Buttons (Mobile: Stacked, Desktop: Inline) -->
-            <div class="pt-2 border-t border-slate-100/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-                <!-- Status Info -->
-                <div class="flex items-center justify-between sm:justify-start gap-2 text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-slate-500 font-medium">Rentang:</span>
-                        <span
-                            v-if="selectedDaysCount > 0"
-                            class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
-                        >
-                            {{ selectedDaysCount }} Hari Terpilih
-                        </span>
-                        <span v-else class="text-slate-400 italic">Pilih tanggal awal & akhir</span>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="flex items-center gap-2 w-full sm:w-auto">
+                <!-- Action Buttons (Icon Saja) -->
+                <div class="flex items-center gap-1.5 w-auto">
                     <button
                         type="button"
                         @click="handleClose"
-                        class="flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer text-center"
+                        class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center justify-center shadow-2xs"
+                        title="Batal"
                     >
-                        Batal
+                        <X class="h-4 w-4" />
                     </button>
                     <button
                         type="button"
                         @click="handleApply"
                         :disabled="!tempStart"
-                        class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg bg-[#0e1f38] hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 text-center"
+                        class="p-2 rounded-xl bg-[#0e1f38] hover:bg-slate-800 text-white shadow-2xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                        title="Terapkan Rentang"
                     >
-                        <Check class="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                        <span>Terapkan Rentang</span>
+                        <Check class="h-4 w-4 text-emerald-400" />
                     </button>
                 </div>
             </div>
         </div>
-    </div>
 </template>

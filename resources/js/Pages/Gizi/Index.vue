@@ -70,6 +70,14 @@ const props = defineProps({
             kategori_breakdown: {},
         }),
     },
+    nutrisurveyFiles: {
+        type: Array,
+        default: () => [],
+    },
+    selectedFtaFile: {
+        type: String,
+        default: "indo.fta",
+    },
 });
 
 // Sumber Dataset TKPI Aktif (Default: 'tkpi2020' Modifikasi atau dari Work Order yang diedit)
@@ -78,6 +86,7 @@ const initialSource = (props.activeWorkOrder && props.activeWorkOrder.database_p
     : (props.defaultSource || (typeof window !== "undefined" ? localStorage.getItem("sipege_tkpi_source") || "tkpi2020" : "tkpi2020"));
 
 const selectedTkpiSource = ref(initialSource);
+const activeFtaFile = ref(props.selectedFtaFile || "indo.fta");
 
 watch(
     () => props.activeWorkOrder,
@@ -96,6 +105,13 @@ function handleTkpiSourceChange(newSource) {
     selectedTkpiSource.value = newSource;
     if (typeof window !== "undefined") {
         localStorage.setItem("sipege_tkpi_source", newSource);
+    }
+}
+
+function handleFtaFileChange(newFta, ftaData) {
+    activeFtaFile.value = newFta;
+    if (ftaData && Array.isArray(ftaData) && props.tkpiDatasets) {
+        props.tkpiDatasets.fta = ftaData;
     }
 }
 
@@ -138,7 +154,10 @@ function selectSubMenu(tabId) {
                 :tkpi-list="activeTkpiList"
                 :tkpi-datasets="tkpiDatasets"
                 :selected-source="selectedTkpiSource"
+                :nutrisurvey-files="nutrisurveyFiles"
+                :selected-fta="activeFtaFile"
                 @update-source="handleTkpiSourceChange"
+                @update-fta="handleFtaFileChange"
             />
 
             <!-- 2. SUB MENU 2: ANALISA PM -->
@@ -167,12 +186,15 @@ function selectSubMenu(tabId) {
                 :tkpi-list="activeTkpiList"
                 :tkpi-datasets="tkpiDatasets"
                 :selected-source="selectedTkpiSource"
+                :nutrisurvey-files="nutrisurveyFiles"
+                :selected-fta="activeFtaFile"
                 :stats="stats"
                 :initial-step="initialStep"
                 :work-orders-list="workOrdersList"
                 :active-work-order="activeWorkOrder"
                 :periodes="periodes"
                 @update-source="handleTkpiSourceChange"
+                @update-fta="handleFtaFileChange"
             />
 
             <!-- 5. SUB MENU 5: KALENDER MENU -->

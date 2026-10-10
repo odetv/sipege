@@ -569,12 +569,24 @@ class FatSecretService
     }
 
     /**
+     * Resolusi path file fatsecret.json lokal
+     */
+    public static function getFatsecretJsonPath(): string
+    {
+        $newPath = database_path('data/database-pangan/fatsecret/fatsecret.json');
+        if (file_exists($newPath)) {
+            return $newPath;
+        }
+        return database_path('data/fatsecret.json');
+    }
+
+    /**
      * Mengambil katalog lengkap 1.100+ bahan pangan FatSecret terverifikasi (Per 100g)
      */
     public function getPopularFoods(): array
     {
-        return Cache::rememberForever('fatsecret_catalog_data', function () {
-            $path = database_path('data/fatsecret.json');
+        return Cache::rememberForever('fatsecret_catalog_data_v2', function () {
+            $path = self::getFatsecretJsonPath();
             if (file_exists($path)) {
                 $content = file_get_contents($path);
                 $decoded = json_decode($content, true);

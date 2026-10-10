@@ -40,6 +40,15 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
             ],
             'unitSppg' => $user?->unitSppg,
+            'periodes' => fn () => $user ? \App\Models\Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+                return [
+                    'id'              => $p->id,
+                    'nomor_periode'   => $p->nomor_periode,
+                    'tanggal_mulai'   => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'status'          => $p->status,
+                ];
+            }) : [],
         ];
     }
 }

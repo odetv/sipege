@@ -61,6 +61,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [WorkOrderController::class, 'store'])->name('store');
         Route::put('/{id}/manual', [WorkOrderController::class, 'updateManual'])->name('update-manual');
         Route::post('/{id}/ajukan', [WorkOrderController::class, 'ajukanKeuangan'])->name('ajukan');
+        Route::delete('/bulk-delete', [WorkOrderController::class, 'bulkDestroy'])->name('bulk-destroy');
         Route::delete('/{id}', [WorkOrderController::class, 'destroy'])->name('destroy');
     });
 
@@ -84,6 +85,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // FatSecret API Proxy & Search
         Route::get('/api/fatsecret/search', [GiziController::class, 'searchFatSecret'])->name('fatsecret.search');
         Route::get('/api/fatsecret/food/{id}', [GiziController::class, 'getFatSecretFood'])->name('fatsecret.food');
+
+        // NutriSurvey Dynamic Database API
+        Route::get('/api/nutrisurvey/data', [GiziController::class, 'getNutrisurveyData'])->name('nutrisurvey.data');
     });
 
     // Keuangan SPPG (12 Sub-menu Lengkap)

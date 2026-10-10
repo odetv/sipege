@@ -44,47 +44,55 @@ function getDefaultEndDate(mode, startStr) {
     return `${y}-${m}-${d}`;
 }
 
+function normalizeModeDist(mode) {
+    if (!mode) return "";
+    const m = String(mode).toLowerCase();
+    if (m === "hari_ini" || m === "today") return "hari_ini";
+    if (m === "periode" || m === "periodik" || m === "period") return "periode";
+    if (m === "rentang" || m === "bulanan" || m === "range" || m === "custom") return "rentang";
+    return "";
+}
+
 // Helper default tanggal & periode:
-// Gunakan periode terbaru jika hari ini dalam rentangnya, atau fallback ke hari ini jika di luar rentang
+// Sesuai permintaan user: di rekap distribusi default dengan periode bukan hari ini
 function getInitialDateState() {
-    if (props.initialTanggalMulai && props.initialTanggalSelesai) {
-        return {
-            start: props.initialTanggalMulai,
-            end: props.initialTanggalSelesai,
-            mode: props.initialMode || "bulanan",
-            periodeId: props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all",
+    const today = todayStr.value;
+    const sorted = [...(props.periodes || [])].sort((a, b) => {
+        const noA = Number(a.nomor_periode) || 0;
+        const noB = Number(b.nomor_periode) || 0;
+        if (noB !== noA) return noB - noA;
+        return String(b.tanggal_mulai || "").localeCompare(String(a.tanggal_mulai || ""));
+    });
+    const latest = sorted[0];
+
+    let defaultPeriodeRes = null;
+    if (latest && latest.tanggal_mulai && latest.tanggal_selesai) {
+        defaultPeriodeRes = {
+            start: String(latest.tanggal_mulai).substring(0, 10),
+            end: String(latest.tanggal_selesai).substring(0, 10),
+            mode: "periode",
+            periodeId: String(latest.id),
+        };
+    } else {
+        defaultPeriodeRes = {
+            start: today,
+            end: today,
+            mode: "hari_ini",
+            periodeId: "all",
         };
     }
 
-    const today = todayStr.value;
-    if (props.periodes && props.periodes.length > 0) {
-        const sorted = [...props.periodes].sort((a, b) => {
-            const noA = Number(a.nomor_periode) || 0;
-            const noB = Number(b.nomor_periode) || 0;
-            if (noB !== noA) return noB - noA;
-            return String(b.tanggal_mulai || "").localeCompare(String(a.tanggal_mulai || ""));
-        });
-        const latest = sorted[0];
-        if (latest && latest.tanggal_mulai && latest.tanggal_selesai) {
-            const s = latest.tanggal_mulai.substring(0, 10);
-            const e = latest.tanggal_selesai.substring(0, 10);
-            if (today >= s && today <= e) {
-                return {
-                    start: s,
-                    end: e,
-                    mode: "periodik",
-                    periodeId: String(latest.id),
-                };
-            }
-        }
+    if (props.initialTanggalMulai && props.initialTanggalSelesai) {
+        const norm = normalizeModeDist(props.initialMode);
+        return {
+            start: props.initialTanggalMulai,
+            end: props.initialTanggalSelesai,
+            mode: norm || defaultPeriodeRes.mode,
+            periodeId: props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : defaultPeriodeRes.periodeId,
+        };
     }
 
-    return {
-        start: today,
-        end: getDefaultEndDate("bulanan", today),
-        mode: "bulanan",
-        periodeId: "all",
-    };
+    return defaultPeriodeRes;
 }
 
 // ─── State Filter & Mode Skala ────────────────────────────────────────────────
@@ -154,16 +162,6 @@ const dateColumns = computed(() => {
     return list;
 });
 
-// Helper Label Siklus
-const labelSiklus = computed(() => {
-    const matched = props.periodes?.find(p => String(p.id) === String(selectedPeriodeId.value));
-    if (matched) {
-        return `Siklus: Periode ${matched.nomor_periode} (${dateColumns.value.length} Hari Kerja)`;
-    }
-    if (dateColumns.value.length === 14) return "Siklus: Periodik (14 Hari Kerja)";
-    if (dateColumns.value.length === 28) return "Siklus: Bulanan (28 Hari Kerja)";
-    return `Siklus: Kustom (${dateColumns.value.length} Hari Kerja)`;
-});
 
 // ─── State Matriks Distribusi Harian (Interaktif) ──────────────────────────────
 const matrixDistribusi = ref({});
@@ -324,6 +322,30 @@ function applyFilterTanggal() {
     );
 }
 
+function onDateFilterChange(filter) {
+    if (!filter) return;
+    tanggalMulai.value = filter.start;
+    tanggalSelesai.value = filter.end;
+    modeSkala.value = filter.mode;
+    selectedPeriodeId.value = filter.periodeId;
+
+    router.get(
+        route("penerima-manfaat.rekap-distribusi"),
+        {
+            mode: filter.mode,
+            tanggal_mulai: filter.start,
+            tanggal_selesai: filter.end,
+            periode_id: filter.periodeId,
+            kategori: selectedKategoriFilter.value,
+            search: searchQuery.value,
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+        }
+    );
+}
+
 function onApplyDateRange(newRange) {
     if (newRange && newRange.start && newRange.end) {
         tanggalMulai.value = newRange.start;
@@ -332,17 +354,10 @@ function onApplyDateRange(newRange) {
         const matched = findMatchingPeriode(newRange.start, newRange.end);
         if (matched) {
             selectedPeriodeId.value = String(matched.id);
-            modeSkala.value = "periodik";
+            modeSkala.value = "periode";
         } else {
             selectedPeriodeId.value = "all";
-            const diffDays =
-                Math.round(
-                    (new Date(newRange.end + "T00:00:00") - new Date(newRange.start + "T00:00:00")) /
-                        (1000 * 60 * 60 * 24)
-                ) + 1;
-            if (diffDays === 14) modeSkala.value = "periodik";
-            else if (diffDays === 28) modeSkala.value = "bulanan";
-            else modeSkala.value = "custom";
+            modeSkala.value = "rentang";
         }
 
         applyFilterTanggal();
@@ -548,6 +563,7 @@ function showToast(msg) {
                 :isExporting="isExporting"
                 :isDirty="isDirty"
                 :isSaving="isSaving"
+                @dateFilterChange="onDateFilterChange"
                 @selectPeriode="selectPeriode"
                 @changeModeSkala="changeModeSkala"
                 @applyDateRange="onApplyDateRange"

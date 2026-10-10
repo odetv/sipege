@@ -9,6 +9,7 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 import {
     formatGrossQty,
     getGroupedUnitList,
@@ -44,6 +45,10 @@ import {
 
 const props = defineProps({
     verifikasiPoList: {
+        type: Array,
+        default: () => [],
+    },
+    periodes: {
         type: Array,
         default: () => [],
     },
@@ -157,6 +162,13 @@ const isReadOnlyMode = ref(false);
 const inputCatatanBaru = ref("");
 const searchQuery = ref("");
 const statusFilter = ref("semua");
+
+// Filter Waktu (PeriodDateFilterBar)
+const filterStartDate = ref("");
+const filterEndDate = ref("");
+const filterDateMode = ref("");
+const filterPeriodeId = ref("");
+const isFilterAllTime = ref(false);
 
 const mainTableRef = ref(null);
 const detailTableRef = ref(null);
@@ -293,6 +305,15 @@ const filteredList = computed(() => {
             return false;
         }
 
+        // Filter Rentang Tanggal / Periode
+        if (!isFilterAllTime.value) {
+            const tgl = String(po.tanggal || po.tanggal_po || po.tanggal_distribusi || "").substring(0, 10);
+            if (tgl) {
+                if (filterStartDate.value && tgl < filterStartDate.value) return false;
+                if (filterEndDate.value && tgl > filterEndDate.value) return false;
+            }
+        }
+
         // Search query
         if (searchQuery.value.trim()) {
             const q = searchQuery.value.toLowerCase().trim();
@@ -314,16 +335,16 @@ const filteredList = computed(() => {
     });
 });
 
-// Summary Metrics
-const totalPengajuanCount = computed(() => activeList.value.length);
+// Summary Metrics (sinkron dengan filteredList)
+const totalPengajuanCount = computed(() => filteredList.value.length);
 const totalSasaranPm = computed(() =>
-    activeList.value.reduce(
+    filteredList.value.reduce(
         (acc, po) => acc + (Number(po.total_porsi || po.total_pm) || 0),
         0,
     ),
 );
 const totalNominalMaster = computed(() =>
-    activeList.value.reduce(
+    filteredList.value.reduce(
         (acc, po) =>
             acc + (Number(po.total_nominal_master || po.total_nominal) || 0),
         0,
@@ -331,7 +352,7 @@ const totalNominalMaster = computed(() =>
 );
 const countMenunggu = computed(
     () =>
-        activeList.value.filter(
+        filteredList.value.filter(
             (po) =>
                 po.status_po === "Menunggu Verifikasi" ||
                 po.status_po === "Diajukan ke Keuangan",
@@ -339,11 +360,11 @@ const countMenunggu = computed(
 );
 const countDraft = computed(
     () =>
-        activeList.value.filter((po) => po.status_po === "Draft Verifikasi")
+        filteredList.value.filter((po) => po.status_po === "Draft Verifikasi")
             .length,
 );
 const countDitolak = computed(
-    () => activeList.value.filter((po) => po.status_po === "Ditolak").length,
+    () => filteredList.value.filter((po) => po.status_po === "Ditolak").length,
 );
 
 function openVerificationModal(po, readOnly = false) {
@@ -739,6 +760,16 @@ function rejectPo() {
                 </CardContent>
             </Card>
         </div>
+
+        <!-- Filter Waktu: Reusable PeriodDateFilterBar -->
+        <PeriodDateFilterBar
+            v-model:startDate="filterStartDate"
+            v-model:endDate="filterEndDate"
+            v-model:mode="filterDateMode"
+            v-model:periodeId="filterPeriodeId"
+            v-model:isAllTime="isFilterAllTime"
+            :periodes="periodes"
+        />
 
         <!-- Toolbar Filter & Pencarian -->
         <div

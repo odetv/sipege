@@ -106,8 +106,8 @@ class WorkOrderController extends Controller
         }
 
         $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
-            $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
-            $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+            $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->translatedFormat('d M Y') : '-';
+            $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->translatedFormat('d M Y') : '-';
             return [
                 'id' => $p->id,
                 'nomor_periode' => $p->nomor_periode,
@@ -369,7 +369,64 @@ class WorkOrderController extends Controller
     }
 
     /**
-     * Hapus Work Order (Hanya jika status Draft atau Dibatalkan)
+     * Hapus Banyak Work Order Sekaligus (Bulk Delete)
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->unitSppg;
+
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required'],
+        ]);
+
+        $ids = $request->input('ids', []);
+
+        $numericIds = array_values(array_filter($ids, 'is_numeric'));
+        $uuidList = array_values(array_filter($ids, fn($val) => !is_numeric($val) && is_string($val)));
+
+        $workOrders = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+            ->where(function ($query) use ($numericIds, $uuidList) {
+                if (!empty($numericIds) && !empty($uuidList)) {
+                    $query->whereIn('id', $numericIds)
+                        ->orWhereIn('uuid', $uuidList);
+                } elseif (!empty($numericIds)) {
+                    $query->whereIn('id', $numericIds);
+                } elseif (!empty($uuidList)) {
+                    $query->whereIn('uuid', $uuidList);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->get();
+
+        if ($workOrders->isEmpty()) {
+            return back()->with('error', 'Tidak ada Work Order yang ditemukan untuk dihapus.');
+        }
+
+        $deletedCount = 0;
+        $skippedCount = 0;
+
+        DB::transaction(function () use ($workOrders, &$deletedCount) {
+            foreach ($workOrders as $wo) {
+                // Hapus purchase order terkait jika ada
+                if ($wo->purchaseOrder) {
+                    $wo->purchaseOrder->items()->delete();
+                    $wo->purchaseOrder->delete();
+                }
+                $wo->items()->delete();
+                $wo->kelompoks()->delete();
+                $wo->delete();
+                $deletedCount++;
+            }
+        });
+
+        return back()->with('success', "{$deletedCount} Work Order berhasil dihapus sekaligus.");
+    }
+
+    /**
+     * Hapus Work Order
      */
     public function destroy(Request $request, $id): RedirectResponse
     {
@@ -377,16 +434,24 @@ class WorkOrderController extends Controller
         $unitSppg = $user->unitSppg;
 
         $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-            ->where('id', $id)
+            ->where(function ($query) use ($id) {
+                if (is_numeric($id)) {
+                    $query->where('id', $id);
+                } else {
+                    $query->where('uuid', $id);
+                }
+            })
             ->firstOrFail();
 
-        if (!in_array(strtolower($workOrder->status), ['draft', 'dibatalkan', 'ditolak ke gizi'])) {
-            return back()->with('error', "Work Order dengan status '{$workOrder->status}' tidak dapat dihapus.");
-        }
-
-        $workOrder->items()->delete();
-        $workOrder->kelompoks()->delete();
-        $workOrder->delete();
+        DB::transaction(function () use ($workOrder) {
+            if ($workOrder->purchaseOrder) {
+                $workOrder->purchaseOrder->items()->delete();
+                $workOrder->purchaseOrder->delete();
+            }
+            $workOrder->items()->delete();
+            $workOrder->kelompoks()->delete();
+            $workOrder->delete();
+        });
 
         return back()->with('success', "Work Order {$workOrder->nomor_wo} berhasil dihapus.");
     }

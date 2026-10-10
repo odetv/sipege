@@ -599,16 +599,13 @@ function openCreateModal() {
     form.status = "Aktif";
     form.keterangan = "-";
 
-    tipeJamKerja.value = "reguler";
+    tipeJamKerja.value = "normal";
     jamMulai.value = "07:00";
     jamSelesai.value = "16:00";
-    shift1Label.value = "Shift Pagi-Sore";
-    shift1Mulai.value = "05:00";
-    shift1Selesai.value = "13:00";
-    shift2Label.value = "Shift Sore-Malam";
-    shift2Mulai.value = "13:00";
-    shift2Selesai.value = "21:00";
-    customJamKerja.value = "";
+    customShifts.value = [
+        { mulai: "06:00", selesai: "15:00" },
+        { mulai: "17:00", selesai: "19:00" },
+    ];
     syncJamKerja();
 
     form.gaji_harian_bgn = 0;

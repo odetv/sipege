@@ -15,6 +15,9 @@ import {
     AlertTriangle,
     Loader2,
     Globe,
+    Layers,
+    X,
+    Check,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -35,9 +38,96 @@ const props = defineProps({
         type: String,
         default: "tkpi2020",
     },
+    nutrisurveyFiles: {
+        type: Array,
+        default: () => [],
+    },
+    selectedFta: {
+        type: String,
+        default: "indo.fta",
+    },
 });
 
-const emit = defineEmits(["update-source"]);
+const emit = defineEmits(["update-source", "update-fta"]);
+
+// State FTA NutriSurvey Dinamis (Multi-Negara)
+const activeFtaFile = ref(props.selectedFta || "indo.fta");
+const customFtaItemsMap = ref({});
+const isFtaLoading = ref(false);
+const isFtaModalOpen = ref(false);
+
+watch(
+    () => props.selectedFta,
+    (val) => {
+        if (val && val !== activeFtaFile.value) {
+            activeFtaFile.value = val;
+        }
+    },
+);
+
+// Detail metadata FTA yang sedang aktif
+const activeFtaInfo = computed(() => {
+    const list = props.nutrisurveyFiles || [];
+    const found = list.find((f) => f.filename === activeFtaFile.value);
+    return (
+        found || {
+            filename: activeFtaFile.value,
+            country: "Indonesia",
+            label: "Indonesia (DKBM / TKPI)",
+            flag: "🇮🇩",
+            count: props.tkpiDatasets?.fta?.length || 1105,
+        }
+    );
+});
+
+// Daftar item FTA yang aktif
+const activeFtaItems = computed(() => {
+    if (customFtaItemsMap.value[activeFtaFile.value]) {
+        return customFtaItemsMap.value[activeFtaFile.value];
+    }
+    if (
+        activeFtaFile.value === (props.selectedFta || "indo.fta") &&
+        props.tkpiDatasets?.fta &&
+        props.tkpiDatasets.fta.length > 0
+    ) {
+        return props.tkpiDatasets.fta;
+    }
+    return props.tkpiDatasets?.fta || [];
+});
+
+async function selectFtaFile(filename) {
+    if (!filename) return;
+    activeFtaFile.value = filename;
+    tkpiCurrentPage.value = 1;
+
+    // Jika belum di-cache secara lokal di vue state, panggil API
+    if (!customFtaItemsMap.value[filename]) {
+        if (
+            filename === (props.selectedFta || "indo.fta") &&
+            props.tkpiDatasets?.fta &&
+            props.tkpiDatasets.fta.length > 0
+        ) {
+            customFtaItemsMap.value[filename] = props.tkpiDatasets.fta;
+        } else {
+            isFtaLoading.value = true;
+            try {
+                const res = await fetch(
+                    `/gizi/api/nutrisurvey/data?file=${encodeURIComponent(filename)}`,
+                );
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    customFtaItemsMap.value[filename] = json.data;
+                }
+            } catch (err) {
+                console.error("Gagal memuat file FTA:", err);
+            } finally {
+                isFtaLoading.value = false;
+            }
+        }
+    }
+
+    emit("update-fta", filename, activeFtaItems.value);
+}
 
 // State Pencarian Live FatSecret API
 const fatsecretSearchResults = ref([]);
@@ -45,6 +135,9 @@ const isFatsecretSearching = ref(false);
 const fatsecretApiError = ref(null);
 
 const tkpiItems = computed(() => {
+    if (props.selectedSource === "fta") {
+        return activeFtaItems.value;
+    }
     if (props.selectedSource === "fatsecret") {
         if (fatsecretSearchResults.value && fatsecretSearchResults.value.length > 0) {
             return fatsecretSearchResults.value;
@@ -157,8 +250,19 @@ const avgBdd = computed(() => {
 });
 
 // Kalkulasi total bahan dari seluruh sumber database yang tersedia
+// Total kumulatif seluruh database NutriSurvey internasional (17 file .fta / .dat)
+const totalNutrisurveyBahan = computed(() => {
+    if (props.nutrisurveyFiles && props.nutrisurveyFiles.length > 0) {
+        return props.nutrisurveyFiles.reduce((acc, f) => acc + (Number(f.count) || 0), 0);
+    }
+    return 29447;
+});
+
 const countFta = computed(() => {
-    return props.tkpiDatasets?.fta?.length || (props.selectedSource === "fta" ? tkpiItems.value.length : 1105);
+    if (activeFtaItems.value && activeFtaItems.value.length > 0) {
+        return activeFtaItems.value.length;
+    }
+    return activeFtaInfo.value?.count || 1105;
 });
 const countCsv = computed(() => {
     return props.tkpiDatasets?.csv?.length || (props.selectedSource === "csv" ? tkpiItems.value.length : 1066);
@@ -170,8 +274,9 @@ const countFatsecret = computed(() => {
     return props.tkpiDatasets?.fatsecret?.length || (props.selectedSource === "fatsecret" ? tkpiItems.value.length : 1100);
 });
 
+// Total seluruh database pangan yang ada (Kumulatif NutriSurvey Global + Kemenkes CSV + Modifikasi XLSX + FatSecret)
 const totalBahanAllDatabases = computed(() => {
-    return countFta.value + countCsv.value + countTkpi2020.value + countFatsecret.value;
+    return totalNutrisurveyBahan.value + countCsv.value + countTkpi2020.value + countFatsecret.value;
 });
 
 function formatRupiah(val) {
@@ -203,21 +308,21 @@ function formatVal(val) {
                 className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50"
             >
                 <div
-                    class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    class="flex flex-col xl:flex-row xl:items-center justify-between gap-3.5"
                 >
-                    <div>
+                    <div class="min-w-0 flex-1">
                         <CardTitle
                             class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
                         >
-                            <Database class="h-5 w-5 text-primary" />
+                            <Database class="h-5 w-5 text-primary shrink-0" />
                             <span>Master Database Pangan</span>
                         </CardTitle>
-                        <CardDescription class="text-xs sm:text-sm mt-0.5">
+                        <CardDescription class="text-xs sm:text-sm mt-1 leading-relaxed text-slate-500">
                             Pilih sumber database acuan untuk seluruh modul
                             perencanaan & rancang formula menu:
-                            <strong class="text-slate-800">{{
+                            <strong class="text-slate-800 font-semibold">{{
                                 selectedSource === "fta"
-                                    ? `NutriSurvey (indo.fta - ${tkpiDatasets.fta?.length || (selectedSource === "fta" ? tkpiItems.length : 1105)} Bahan)`
+                                    ? `NutriSurvey (${activeFtaInfo.country} - ${activeFtaFile} - ${countFta.toLocaleString('id-ID')} Bahan)`
                                     : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
                                         ? `Modifikasi (tkpi2020.xlsx - ${tkpiDatasets.tkpi2020?.length || tkpiDatasets.xlsx?.length || (selectedSource === "tkpi2020" ? tkpiItems.length : 1158)} Bahan)`
                                         : (selectedSource === "fatsecret"
@@ -229,18 +334,18 @@ function formatVal(val) {
 
                     <!-- Source Dataset Switcher (4 Pilihan Database Pangan) -->
                     <div
-                        class="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto"
+                        class="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200 overflow-x-auto max-w-full shrink-0 self-start xl:self-center scrollbar-thin"
                     >
                         <button
                             type="button"
                             @click="emit('update-source', 'fta')"
                             :class="[
-                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0',
                                 selectedSource === 'fta'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
                             ]"
-                            title="Gunakan Database NutriSurvey (indo.fta)"
+                            title="Gunakan Database NutriSurvey Internasional"
                         >
                             <span
                                 class="w-2 h-2 rounded-full"
@@ -250,7 +355,7 @@ function formatVal(val) {
                                         : 'bg-slate-300'
                                 "
                             ></span>
-                            <span>NutriSurvey (indo.fta)</span>
+                            <span>NutriSurvey (Global)</span>
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                 :class="
@@ -259,12 +364,7 @@ function formatVal(val) {
                                         : 'bg-slate-200 text-slate-600'
                                 "
                             >
-                                {{
-                                    tkpiDatasets.fta?.length ||
-                                    (selectedSource === "fta"
-                                        ? tkpiItems.length
-                                        : 1105)
-                                }}
+                                {{ totalNutrisurveyBahan.toLocaleString('id-ID') }}
                             </span>
                         </button>
 
@@ -272,7 +372,7 @@ function formatVal(val) {
                             type="button"
                             @click="emit('update-source', 'csv')"
                             :class="[
-                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0',
                                 selectedSource === 'csv'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
@@ -309,7 +409,7 @@ function formatVal(val) {
                             type="button"
                             @click="emit('update-source', 'tkpi2020')"
                             :class="[
-                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0',
                                 selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
@@ -347,7 +447,7 @@ function formatVal(val) {
                             type="button"
                             @click="emit('update-source', 'fatsecret')"
                             :class="[
-                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0',
                                 selectedSource === 'fatsecret'
                                     ? 'bg-white text-primary shadow-xs border border-slate-200/80 font-black'
                                     : 'text-slate-600 hover:text-slate-900',
@@ -383,6 +483,80 @@ function formatVal(val) {
                 </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5 space-y-4">
+                <!-- Control Bar Khusus Database NutriSurvey Multi-Negara -->
+                <div
+                    v-if="selectedSource === 'fta'"
+                    class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-slate-50 border border-emerald-200 shadow-2xs space-y-2.5 overflow-hidden"
+                >
+                    <div
+                        class="flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                    >
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div
+                                class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                            >
+                                <Globe class="w-4 h-4" />
+                            </div>
+                            <div class="min-w-0">
+                                <div
+                                    class="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2 flex-wrap"
+                                >
+                                    <span>Database NutriSurvey Internasional</span>
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded-md bg-emerald-600 text-white font-bold shrink-0"
+                                    >
+                                        {{ nutrisurveyFiles.length || 17 }} Negara Tersedia
+                                    </span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 mt-0.5">
+                                    Pilih database komposisi pangan negara acuan (.fta / .dat):
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selector Dropdown & Tombol Katalog -->
+                        <div class="flex items-center gap-2 w-full lg:w-auto min-w-0">
+                            <select
+                                :value="activeFtaFile"
+                                @change="(e) => selectFtaFile(e.target.value)"
+                                :disabled="isFtaLoading"
+                                class="h-10 px-3.5 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 flex-1 lg:flex-initial lg:w-[320px] min-w-0 truncate"
+                            >
+                                <option
+                                    v-for="f in nutrisurveyFiles"
+                                    :key="f.filename"
+                                    :value="f.filename"
+                                >
+                                    {{ f.flag }} {{ f.country }} — {{ f.filename }} ({{ f.count.toLocaleString('id-ID') }} Bahan)
+                                </option>
+                            </select>
+
+                            <button
+                                type="button"
+                                @click="isFtaModalOpen = true"
+                                class="h-10 px-3.5 rounded-xl border border-emerald-300 hover:border-emerald-500 bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
+                                title="Lihat Daftar Lengkap Seluruh Database FTA"
+                            >
+                                <Layers class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Lihat Semua</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Loading Indicator saat ganti FTA -->
+                    <div
+                        v-if="isFtaLoading"
+                        class="flex items-center gap-2 text-xs font-bold text-emerald-700 animate-pulse pt-1"
+                    >
+                        <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                        <span
+                            >Memuat dan mem-parsing database {{ activeFtaInfo.country }} ({{
+                                activeFtaFile
+                            }})...</span
+                        >
+                    </div>
+                </div>
+
                 <!-- Alert Banner Khusus FatSecret IP Whitelist -->
                 <div
                     v-if="selectedSource === 'fatsecret' && fatsecretApiError"
@@ -406,77 +580,86 @@ function formatVal(val) {
 
                 <!-- Stat Summary Grid (Sejajar 4 Card) -->
                 <div
-                    class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"
+                    class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5"
                 >
                     <div
-                        class="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-center flex flex-col justify-center"
-                        :title="`Total Kumulatif Seluruh Database: ${totalBahanAllDatabases.toLocaleString('id-ID')} Bahan (${countTkpi2020} Modifikasi + ${countFta} NutriSurvey + ${countCsv} Kemenkes + ${countFatsecret} FatSecret)`"
+                        class="p-3 sm:p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 text-center flex flex-col justify-center"
+                        :title="`Total Kumulatif Seluruh Database: ${totalBahanAllDatabases.toLocaleString('id-ID')} Bahan (${countTkpi2020} Modifikasi + ${totalNutrisurveyBahan} NutriSurvey Global + ${countCsv} Kemenkes + ${countFatsecret} FatSecret)`"
                     >
                         <p
-                            class="text-[10px] font-bold text-blue-700 uppercase tracking-wider"
+                            class="text-[9.5px] sm:text-[10px] font-bold text-blue-700 uppercase tracking-wider truncate"
                         >
                             TOTAL BAHAN TERDAFTAR
                         </p>
-                        <h4 class="text-xl font-black text-blue-950 mt-1">
+                        <h4 class="text-lg sm:text-xl font-black text-blue-950 mt-1">
                             {{ totalBahanAllDatabases.toLocaleString("id-ID") }}
                             <span class="text-xs font-medium text-slate-500"
                                 >Bahan</span
                             >
                         </h4>
-                        <p class="text-[10px] text-blue-600/90 font-medium mt-0.5">
-                            Total dari 4 Database ({{ tkpiItems.length.toLocaleString("id-ID") }} Aktif)
+                        <p class="text-[9.5px] sm:text-[10px] text-blue-600/90 font-medium mt-0.5 truncate">
+                            Total dari Seluruh Database ({{ tkpiItems.length.toLocaleString("id-ID") }} Aktif)
                         </p>
                     </div>
                     <div
-                        class="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center flex flex-col justify-center"
+                        class="p-3 sm:p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center flex flex-col justify-center"
                     >
                         <p
-                            class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider"
+                            class="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider truncate"
                         >
                             KATEGORI PANGAN
                         </p>
-                        <h4 class="text-xl font-black text-emerald-950 mt-1">
+                        <h4 class="text-lg sm:text-xl font-black text-emerald-950 mt-1">
                             {{ tkpiCategoryList.length - 1 }}
                             <span class="text-xs font-medium text-slate-500"
                                 >Kelompok</span
                             >
                         </h4>
-                        <p class="text-[10px] text-emerald-600/90 font-medium mt-0.5">
+                        <p class="text-[9.5px] sm:text-[10px] text-emerald-600/90 font-medium mt-0.5 truncate">
                             Pada Database Terpilih
                         </p>
                     </div>
                     <div
-                        class="p-3.5 bg-amber-50/60 rounded-xl border border-amber-100 text-center flex flex-col justify-center"
+                        class="p-3 sm:p-3.5 bg-amber-50/60 rounded-xl border border-amber-100 text-center flex flex-col justify-center"
                     >
                         <p
-                            class="text-[10px] font-bold text-amber-700 uppercase tracking-wider"
+                            class="text-[9.5px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider truncate"
                         >
                             RATA-RATA BDD
                         </p>
-                        <h4 class="text-xl font-black text-amber-950 mt-1">
+                        <h4 class="text-lg sm:text-xl font-black text-amber-950 mt-1">
                             {{ avgBdd }}
                             <span class="text-xs font-medium text-slate-500"
                                 >Dapat Dimakan</span
                             >
                         </h4>
-                        <p class="text-[10px] text-amber-600/90 font-medium mt-0.5">
+                        <p class="text-[9.5px] sm:text-[10px] text-amber-600/90 font-medium mt-0.5 truncate">
                             Berat Bersih Konsumsi
                         </p>
                     </div>
                     <div
-                        class="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 text-center flex flex-col justify-center"
+                        class="p-3 sm:p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 text-center flex flex-col justify-center"
                     >
                         <p
-                            class="text-[10px] font-bold text-purple-700 uppercase tracking-wider"
+                            class="text-[9.5px] sm:text-[10px] font-bold text-purple-700 uppercase tracking-wider truncate"
                         >
                             SUMBER DATA
                         </p>
                         <h4
-                            class="text-sm sm:text-base font-black text-purple-950 mt-1 truncate"
+                            class="text-xs sm:text-sm font-black text-purple-950 mt-1 truncate"
+                            :title="
+                                selectedSource === 'fta'
+                                    ? `NutriSurvey (${activeFtaInfo.country})`
+                                    : (selectedSource === 'tkpi2020' || selectedSource === 'xlsx'
+                                        ? 'Modifikasi (tkpi2020.xlsx)'
+                                        : (selectedSource === 'fatsecret'
+                                            ? 'FatSecret (fatsecret.com)'
+                                            : 'Kemenkes (tkpi2020.csv)'))
+                            "
                         >
                             {{
                                 selectedSource === "fta"
-                                    ? "NutriSurvey (indo.fta)"
+                                    ? `NutriSurvey (${activeFtaInfo.country})`
                                     : (selectedSource === "tkpi2020" || selectedSource === "xlsx"
                                         ? "Modifikasi (tkpi2020.xlsx)"
                                         : (selectedSource === "fatsecret"
@@ -484,7 +667,7 @@ function formatVal(val) {
                                             : "Kemenkes (tkpi2020.csv)"))
                             }}
                         </h4>
-                        <p class="text-[10px] text-purple-600/90 font-medium mt-0.5">
+                        <p class="text-[9.5px] sm:text-[10px] text-purple-600/90 font-medium mt-0.5 truncate">
                             {{ tkpiItems.length.toLocaleString("id-ID") }} Bahan Digunakan
                         </p>
                     </div>
@@ -601,8 +784,8 @@ function formatVal(val) {
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-slate-800">
                         <tr
-                            v-for="item in paginatedTkpiList"
-                            :key="item.id"
+                            v-for="(item, idx) in paginatedTkpiList"
+                            :key="item.id ? `${item.id}-${idx}` : idx"
                             class="hover:bg-slate-50/80 transition-colors group"
                         >
                             <td
@@ -761,5 +944,116 @@ function formatVal(val) {
                 </div>
             </div>
         </div>
+
+        <!-- MODAL RINCIAN SELURUH DATABASE FTA NUTRISURVEY -->
+        <Teleport to="body">
+            <div
+                v-if="isFtaModalOpen"
+                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+                @click.self="isFtaModalOpen = false"
+            >
+                <div
+                    class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden my-auto"
+                >
+                <div
+                    class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60"
+                >
+                    <div class="flex items-center gap-2.5">
+                        <div
+                            class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                        >
+                            <Globe class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">
+                                Katalog Database NutriSurvey Internasional
+                            </h3>
+                            <p class="text-xs text-slate-500">
+                                Tersedia {{ nutrisurveyFiles.length || 17 }} basis data komposisi pangan dari berbagai negara
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="isFtaModalOpen = false"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div class="p-4 sm:p-5 overflow-y-auto space-y-3">
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5"
+                    >
+                        <div
+                            v-for="item in nutrisurveyFiles"
+                            :key="item.filename"
+                            @click="
+                                selectFtaFile(item.filename);
+                                isFtaModalOpen = false;
+                            "
+                            :class="[
+                                'p-3 rounded-xl border text-left transition-all cursor-pointer relative group flex flex-col justify-between',
+                                activeFtaFile === item.filename
+                                    ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                                    : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/80',
+                            ]"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">{{ item.flag }}</span>
+                                    <div>
+                                        <div
+                                            class="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors"
+                                        >
+                                            {{ item.country }}
+                                        </div>
+                                        <div
+                                            class="text-[10px] text-slate-500 font-mono"
+                                        >
+                                            {{ item.filename }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <span
+                                    v-if="activeFtaFile === item.filename"
+                                    class="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                                >
+                                    <Check class="w-3 h-3" />
+                                </span>
+                            </div>
+
+                            <div
+                                class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px]"
+                            >
+                                <span class="font-bold text-slate-700">
+                                    {{ item.count.toLocaleString("id-ID") }} Bahan
+                                </span>
+                                <span class="text-slate-400 font-mono text-[10px]">
+                                    {{ item.size_formatted }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    class="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500"
+                >
+                    <span class="text-[11px] text-slate-500">
+                        *Klik pada salah satu negara untuk mengaktifkan database komposisi pangannya.
+                    </span>
+                    <button
+                        type="button"
+                        @click="isFtaModalOpen = false"
+                        class="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold transition-all cursor-pointer"
+                    >
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
     </div>
 </template>

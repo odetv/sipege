@@ -639,72 +639,62 @@ class KelompokPenerimaManfaatController extends Controller
 
         $tglMulai = $request->input('tanggal_mulai');
         $tglSelesai = $request->input('tanggal_selesai');
-        $periodeId = $request->input('periode_id');
-        $mode = $request->input('mode', 'bulanan');
+        $periodeId = $request->input('periode_id', 'all');
+        $mode = $request->input('mode');
         $kategoriFilter = $request->input('kategori', 'all');
         $statusFilter = $request->input('status', 'all');
         $search = trim($request->input('search', ''));
 
-        if ($tglMulai && $tglSelesai) {
-            $startDate = Carbon::parse($tglMulai)->startOfDay();
-            $endDate = Carbon::parse($tglSelesai)->startOfDay();
-        } elseif ($periodeId && $periodeId !== 'all') {
+        // Normalisasi mode jika ada format lama
+        if ($mode === 'periodik') $mode = 'periode';
+        if ($mode === 'bulanan' || $mode === 'custom') $mode = 'rentang';
+
+        // 1. Jika mode eksplisit adalah 'hari_ini'
+        if ($mode === 'hari_ini') {
+            $startDate = Carbon::today();
+            $endDate = Carbon::today();
+            $periodeId = 'all';
+        }
+        // 2. Jika mode eksplisit adalah 'periode' dan periode_id valid
+        elseif ($mode === 'periode' && $periodeId && $periodeId !== 'all') {
             $p = Periode::find($periodeId);
             if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
                 $startDate = $p->tanggal_mulai->copy()->startOfDay();
                 $endDate = $p->tanggal_selesai->copy()->startOfDay();
+            }
+        }
+        // 3. Jika dikirim parameter tanggal_mulai dan tanggal_selesai (misal mode Rentang)
+        elseif ($tglMulai && $tglSelesai) {
+            $startDate = Carbon::parse($tglMulai)->startOfDay();
+            $endDate = Carbon::parse($tglSelesai)->startOfDay();
+            if (!$mode) {
+                $mode = $startDate->eq($endDate) ? 'hari_ini' : 'rentang';
+            }
+        }
+        // 4. Default saat pertama kali buka: Sesuai permintaan user, default dengan PERIODE bukan hari ini
+        else {
+            $defaultPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
+
+            if ($defaultPeriode && $defaultPeriode->tanggal_mulai && $defaultPeriode->tanggal_selesai) {
+                $startDate = $defaultPeriode->tanggal_mulai->copy()->startOfDay();
+                $endDate = $defaultPeriode->tanggal_selesai->copy()->startOfDay();
+                $mode = 'periode';
+                $periodeId = (string) $defaultPeriode->id;
             } else {
                 $startDate = Carbon::today();
-                $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
-            }
-        } else {
-            // Default: gunakan periode terbaru jika hari ini dalam rentang periode tersebut,
-            // bilamana periode terbaru tidak dalam rentang hari ini maka barulah gunakan hari ini.
-            $latestPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
-            $today = Carbon::today();
-
-            $targetPeriode = null;
-            if (
-                $latestPeriode &&
-                $latestPeriode->tanggal_mulai &&
-                $latestPeriode->tanggal_selesai &&
-                $today->between($latestPeriode->tanggal_mulai->copy()->startOfDay(), $latestPeriode->tanggal_selesai->copy()->startOfDay())
-            ) {
-                $targetPeriode = $latestPeriode;
-            } else {
-                // Alternatif jika ada periode aktif yang menaungi hari ini
-                $activePeriodeDb = Periode::whereDate('tanggal_mulai', '<=', $today->format('Y-m-d'))
-                    ->whereDate('tanggal_selesai', '>=', $today->format('Y-m-d'))
-                    ->orderBy('nomor_periode', 'desc')
-                    ->first();
-                if ($activePeriodeDb) {
-                    $targetPeriode = $activePeriodeDb;
-                }
-            }
-
-            if ($targetPeriode) {
-                $startDate = $targetPeriode->tanggal_mulai->copy()->startOfDay();
-                $endDate = $targetPeriode->tanggal_selesai->copy()->startOfDay();
-                $periodeId = (string) $targetPeriode->id;
-                $diffDays = $startDate->diffInDays($endDate) + 1;
-                $mode = $diffDays <= 14 ? 'periodik' : ($diffDays <= 28 ? 'bulanan' : 'custom');
-            } else {
-                $startDate = Carbon::today();
-                if ($mode === 'periodik') {
-                    $endDate = $startDate->copy()->addDays(13); // 14 hari kerja
-                } else {
-                    $endDate = $startDate->copy()->addDays(27); // 28 hari kerja (bulanan)
-                }
+                $endDate = Carbon::today();
+                $mode = 'hari_ini';
+                $periodeId = 'all';
             }
         }
 
         // Pastikan endDate >= startDate
         if ($endDate->lt($startDate)) {
-            $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+            $endDate = $startDate->copy();
         }
 
         // Sinkronisasi otomatis jika rentang tanggal cocok dengan salah satu periode
-        if (!$periodeId || $periodeId === 'all') {
+        if ((!$periodeId || $periodeId === 'all') && $startDate->ne($endDate)) {
             $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
                 ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
                 ->first();
@@ -953,35 +943,38 @@ class KelompokPenerimaManfaatController extends Controller
         $search = trim($request->input('search', ''));
         $kategoriFilter = $request->input('kategori', 'all');
 
-        if ($tglMulai && $tglSelesai) {
-            $startDate = Carbon::parse($tglMulai)->startOfDay();
-            $endDate = Carbon::parse($tglSelesai)->startOfDay();
-            if (!$mode) {
-                $diffDays = $startDate->diffInDays($endDate) + 1;
-                $mode = $diffDays == 1 ? 'hari_ini' : ($diffDays == 14 ? 'periodik' : ($diffDays == 28 ? 'bulanan' : 'custom'));
-            }
-        } elseif ($periodeId && $periodeId !== 'all') {
+        // Normalisasi mode jika ada format lama
+        if ($mode === 'periodik') $mode = 'periode';
+        if ($mode === 'bulanan' || $mode === 'custom') $mode = 'rentang';
+
+        // 1. Jika mode eksplisit adalah 'hari_ini'
+        if ($mode === 'hari_ini') {
+            $startDate = Carbon::today();
+            $endDate = Carbon::today();
+            $periodeId = 'all';
+        }
+        // 2. Jika mode eksplisit adalah 'periode' dan periodeId valid
+        elseif ($mode === 'periode' && $periodeId && $periodeId !== 'all') {
             $p = Periode::find($periodeId);
             if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
                 $startDate = $p->tanggal_mulai->copy()->startOfDay();
                 $endDate = $p->tanggal_selesai->copy()->startOfDay();
-                $mode = 'periodik';
-            } else {
-                $startDate = Carbon::today();
-                $endDate = $startDate->copy();
-                $mode = 'hari_ini';
             }
-        } elseif ($mode === 'bulanan') {
-            $startDate = Carbon::today();
-            $endDate = $startDate->copy()->addDays(27); // 28 hari (bulanan)
-        } elseif ($mode === 'periodik') {
-            $startDate = Carbon::today();
-            $endDate = $startDate->copy()->addDays(13); // 14 hari
-        } else {
-            // Default saat pertama kali dibuka adalah HARI INI (1 hari)
+        }
+        // 3. Jika dikirim parameter tanggal_mulai dan tanggal_selesai
+        elseif ($tglMulai && $tglSelesai) {
+            $startDate = Carbon::parse($tglMulai)->startOfDay();
+            $endDate = Carbon::parse($tglSelesai)->startOfDay();
+            if (!$mode) {
+                $mode = $startDate->eq($endDate) ? 'hari_ini' : 'rentang';
+            }
+        }
+        // 4. Default: Sesuai permintaan user, pembayaran insentif defaultnya HARI INI
+        else {
             $startDate = Carbon::today();
             $endDate = Carbon::today();
             $mode = 'hari_ini';
+            $periodeId = 'all';
         }
 
         // Pastikan endDate >= startDate (Mendukung 1 hari penuh jika startDate == endDate)
@@ -1036,7 +1029,7 @@ class KelompokPenerimaManfaatController extends Controller
 
         $allKelompok = $query->orderBy('kategori', 'asc')->orderBy('nama_kelompok', 'asc')->get();
 
-        $insentifList = $allKelompok->map(function ($kpm) use ($hariOperasional) {
+        $insentifList = $allKelompok->map(function ($kpm) use ($hariOperasional, $distribusiCountMap) {
             $isPosyandu = $kpm->kategori === 'Posyandu';
             $totalPm = (int) $kpm->total_penerima;
 
@@ -1078,7 +1071,10 @@ class KelompokPenerimaManfaatController extends Controller
                 $deskripsiTarif = "Rp " . number_format($tarifHarian, 0, ',', '.') . "/hari";
             }
 
-            $totalInsentif = $tarifHarian * $hariOperasional;
+            // Sesuai permintaan user: hari kerja disesuaikan dengan rekap distribusi yang terdistribusikan
+            $hariDistribusi = (int) ($distribusiCountMap[$kpm->id] ?? 0);
+            $hariKerjaRiil = $hariDistribusi;
+            $totalInsentif = $tarifHarian * $hariKerjaRiil;
 
             return [
                 'id' => $kpm->id,
@@ -1093,13 +1089,14 @@ class KelompokPenerimaManfaatController extends Controller
                 'skema_tier' => $skemaTier,
                 'deskripsi_tarif' => $deskripsiTarif,
                 'tarif_harian' => $tarifHarian,
-                'hari_operasional' => $hariOperasional,
-                'hari_distribusi' => $distribusiCountMap[$kpm->id] ?? 0,
+                'hari_operasional' => $hariKerjaRiil,
+                'hari_rentang' => $hariOperasional,
+                'hari_distribusi' => $hariDistribusi,
                 'amount' => $totalInsentif,
                 'metode_bayar' => 'Tunai Langsung',
                 'desa_kelurahan' => $kpm->desa_kelurahan,
                 'is_valid' => $totalInsentif > 0,
-                'status_label' => 'Siap Disalurkan (Tunai)',
+                'status_label' => $totalInsentif > 0 ? 'Siap Disalurkan (Tunai)' : 'Belum Ada Distribusi',
             ];
         });
 

@@ -184,18 +184,27 @@ function getCategoryBadge(kategori) {
                             </div>
                         </td>
 
-                        <!-- Hari Kerja -->
+                        <!-- Hari Kerja (Sesuai Rekap Distribusi Terdistribusikan) -->
                         <td class="py-3 px-3 text-center">
-                            <span class="font-bold text-slate-800">
-                                {{ item.hari_operasional }} Hari
-                            </span>
-                            <span
-                                v-if="item.hari_distribusi !== undefined && item.hari_distribusi > 0"
-                                class="block text-[10px] text-emerald-600 font-semibold"
-                                :title="`${item.hari_distribusi} hari tercatat terkirim di Rekap Distribusi`"
-                            >
-                                ✓ {{ item.hari_distribusi }} Hari Terkirim
-                            </span>
+                            <template v-if="(item.hari_distribusi ?? item.hari_operasional) > 0">
+                                <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    {{ item.hari_distribusi ?? item.hari_operasional }} Hari
+                                </span>
+                                <span
+                                    class="block text-[10px] text-emerald-600 font-semibold mt-0.5"
+                                    :title="`${item.hari_distribusi ?? item.hari_operasional} hari tercatat terkirim di Rekap Distribusi`"
+                                >
+                                    ✓ Terdistribusi
+                                </span>
+                            </template>
+                            <template v-else>
+                                <span class="font-medium text-slate-400">
+                                    0 Hari
+                                </span>
+                                <span class="block text-[10px] text-slate-400 mt-0.5">
+                                    Belum Terkirim
+                                </span>
+                            </template>
                         </td>
 
                         <!-- Total Insentif Tunai (Editable Inline dengan Titik Pembilang & Warning Diedit Manual) -->

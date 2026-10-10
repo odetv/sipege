@@ -87,7 +87,7 @@ class SyncFatSecretCommand extends Command
                 'oat', 'roti', 'salmon', 'tuna', 'cumi', 'bawang', 'cabai'
             ];
 
-        $jsonPath = database_path('data/fatsecret.json');
+        $jsonPath = \App\Services\FatSecretService::getFatsecretJsonPath();
         $existing = file_exists($jsonPath) ? json_decode(file_get_contents($jsonPath), true) : [];
         $existingMap = [];
         foreach ($existing as $item) {

@@ -74,8 +74,8 @@ class PetugasController extends Controller
      */
     public function rekapKehadiran(Request $request): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
 
         $petugas = [];
         $summary = [
@@ -475,13 +475,14 @@ class PetugasController extends Controller
         $presensiMap = [];
         $mandaysMap = [];
 
-        $mode = $request->input('mode', 'presensi'); // 'presensi' | 'bgn_20' | 'periodik_14' | 'bulanan_28'
+        $mode = $request->input('mode', 'hari_ini');
+        $filterMode = $request->input('filter_mode', $mode); // 'hari_ini' | 'periode' | 'rentang'
         $tglMulai = $request->input('tanggal_mulai');
         $tglSelesai = $request->input('tanggal_selesai');
-        $periodeId = $request->input('periode_id');
+        $periodeId = $request->input('periode_id', 'all');
 
-        // Tentukan rentang tanggal dengan resolusi dua arah yang sinkron
-        if ($periodeId && $periodeId !== 'all') {
+        // Jika mode eksplisit adalah 'periode' dan ada periode_id valid
+        if (($filterMode === 'periode' || $mode === 'periode') && $periodeId && $periodeId !== 'all') {
             $p = Periode::find($periodeId);
             if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
                 $startDate = $p->tanggal_mulai->copy()->startOfDay();
@@ -489,14 +490,17 @@ class PetugasController extends Controller
             }
         }
 
+        // Jika ada parameter tanggal_mulai dan tanggal_selesai (misal mode Rentang atau Hari Ini)
         if (!isset($startDate) || !isset($endDate)) {
             if ($tglMulai && $tglSelesai) {
                 $startDate = Carbon::parse($tglMulai)->startOfDay();
                 $endDate = Carbon::parse($tglSelesai)->startOfDay();
             } else {
-                // Saat pertama kali dibuka tanpa filter: hadapkan tanggal hari ini (Carbon::today())
+                // Default sesuai permintaan user: Pembayaran gaji defaultnya hari ini
                 $startDate = Carbon::today();
                 $endDate = Carbon::today();
+                $filterMode = 'hari_ini';
+                $periodeId = 'all';
             }
         }
 
@@ -505,7 +509,7 @@ class PetugasController extends Controller
         }
 
         // Sinkronisasi otomatis: jika rentang tanggal cocok persis dengan salah satu periode di DB
-        if (!$periodeId || $periodeId === 'all') {
+        if ((!$periodeId || $periodeId === 'all') && $startDate->ne($endDate)) {
             $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
                 ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
                 ->first();
@@ -605,7 +609,7 @@ class PetugasController extends Controller
             'daftarJabatan' => $daftarJabatan,
             'periodes' => $periodes,
             'unitSppg' => $unitSppg,
-            'initialMode' => $mode,
+            'initialMode' => $filterMode,
             'initialTanggalMulai' => $startDate->format('Y-m-d'),
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',

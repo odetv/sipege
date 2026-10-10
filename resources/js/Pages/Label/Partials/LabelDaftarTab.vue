@@ -9,7 +9,7 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import LabelCardItem from "./LabelCardItem.vue";
-import DateRangePicker from "@/Components/DateRangePicker.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 import {
     ClipboardList,
     Search,
@@ -67,172 +67,13 @@ const props = defineProps({
 
 const emit = defineEmits(["go-to-buat", "edit-label"]);
 
-// ─── Search & State Filter ──────────────────────────────────────────────────
+// ─── Filter & Search State ──────────────────────────────────────────────────
 const searchQuery = ref("");
-
-// Helper Tanggal Hari Ini (Today)
-const todayStr = computed(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-});
-
-function getDefaultStartDate() {
-    return todayStr.value;
-}
-
-function getDefaultEndDate(mode, startStr) {
-    const base = startStr ? new Date(startStr + "T00:00:00") : new Date();
-    const daysToAdd = mode === "periodik" ? 13 : 27; // 14 hari atau 28 hari
-    const end = new Date(base);
-    end.setDate(base.getDate() + daysToAdd);
-    const y = end.getFullYear();
-    const m = String(end.getMonth() + 1).padStart(2, "0");
-    const d = String(end.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-}
-
-// Mode Skala: 'bulanan' (28 Hari) atau 'periodik' (14 Hari) atau 'custom'
-const modeSkala = ref("bulanan");
-const tanggalMulai = ref(getDefaultStartDate());
-const tanggalSelesai = ref(getDefaultEndDate(modeSkala.value, tanggalMulai.value));
-const selectedPeriodeId = ref("all");
+const tanggalMulai = ref("");
+const tanggalSelesai = ref("");
+const filterDateMode = ref("");
+const selectedPeriodeId = ref("");
 const isFilterAllTime = ref(false);
-
-// Helper cari periode yang cocok dengan rentang tanggal
-function findMatchingPeriode(startStr, endStr) {
-    if (!props.periodes || !startStr || !endStr) return null;
-    const s = String(startStr).substring(0, 10);
-    const e = String(endStr).substring(0, 10);
-    return (
-        props.periodes.find((p) => {
-            const pStart = p.tanggal_mulai ? p.tanggal_mulai.substring(0, 10) : "";
-            const pEnd = p.tanggal_selesai ? p.tanggal_selesai.substring(0, 10) : "";
-            return pStart === s && pEnd === e;
-        }) || null
-    );
-}
-
-// Inisialisasi awal kecocokan periode jika ada
-const matchedInitial = findMatchingPeriode(tanggalMulai.value, tanggalSelesai.value);
-if (matchedInitial) {
-    selectedPeriodeId.value = String(matchedInitial.id);
-}
-
-// ─── State DateRangePicker (Dua Bulan Menyatu) ─────────────────────────────────
-const isDatePickerOpen = ref(false);
-const datePickerRange = ref({
-    start: tanggalMulai.value,
-    end: tanggalSelesai.value,
-});
-
-watch([tanggalMulai, tanggalSelesai], () => {
-    datePickerRange.value = {
-        start: tanggalMulai.value,
-        end: tanggalSelesai.value,
-    };
-});
-
-// ─── Dynamic Date Columns (Daftar Tanggal dalam Rentang) ───────────────────────
-const dateColumns = computed(() => {
-    if (!tanggalMulai.value || !tanggalSelesai.value) return [];
-    const list = [];
-    let cur = new Date(tanggalMulai.value + "T00:00:00");
-    const end = new Date(tanggalSelesai.value + "T00:00:00");
-    let count = 0;
-    while (cur <= end && count < 60) {
-        const y = cur.getFullYear();
-        const m = String(cur.getMonth() + 1).padStart(2, "0");
-        const d = String(cur.getDate()).padStart(2, "0");
-        list.push(`${y}-${m}-${d}`);
-        cur.setDate(cur.getDate() + 1);
-        count++;
-    }
-    return list;
-});
-
-const is14HariActive = computed(() => !isFilterAllTime.value && dateColumns.value.length === 14);
-const is28HariActive = computed(() => !isFilterAllTime.value && dateColumns.value.length === 28);
-
-const selectedPeriode = computed(() => {
-    if (!selectedPeriodeId.value || selectedPeriodeId.value === "all") return null;
-    return props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
-});
-
-const labelSiklus = computed(() => {
-    if (isFilterAllTime.value) return "Menampilkan Semua Arsip";
-    if (selectedPeriode.value) {
-        return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${dateColumns.value.length} Hari Kerja)`;
-    }
-    if (dateColumns.value.length === 14) return "Siklus: Periodik (14 Hari Kerja)";
-    if (dateColumns.value.length === 28) return "Siklus: Bulanan (28 Hari Kerja)";
-    return `Siklus: Kustom (${dateColumns.value.length} Hari Kerja)`;
-});
-
-function setModeSkala(newMode) {
-    isFilterAllTime.value = false;
-    modeSkala.value = newMode;
-    const newEnd = getDefaultEndDate(newMode, tanggalMulai.value);
-    tanggalSelesai.value = newEnd;
-
-    const matched = findMatchingPeriode(tanggalMulai.value, newEnd);
-    if (matched) {
-        selectedPeriodeId.value = String(matched.id);
-    } else {
-        selectedPeriodeId.value = "all";
-    }
-    currentPage.value = 1;
-}
-
-function onPeriodeSelectChange() {
-    if (selectedPeriodeId.value === "all") {
-        currentPage.value = 1;
-        return;
-    }
-    const p = props.periodes?.find((it) => String(it.id) === String(selectedPeriodeId.value));
-    if (p && p.tanggal_mulai && p.tanggal_selesai) {
-        isFilterAllTime.value = false;
-        tanggalMulai.value = p.tanggal_mulai.substring(0, 10);
-        tanggalSelesai.value = p.tanggal_selesai.substring(0, 10);
-        modeSkala.value = "periodik";
-        currentPage.value = 1;
-    }
-}
-
-function onApplyDateRange(newRange) {
-    if (newRange && newRange.start && newRange.end) {
-        isFilterAllTime.value = false;
-        tanggalMulai.value = newRange.start;
-        tanggalSelesai.value = newRange.end;
-
-        const matched = findMatchingPeriode(newRange.start, newRange.end);
-        if (matched) {
-            selectedPeriodeId.value = String(matched.id);
-            modeSkala.value = "periodik";
-        } else {
-            selectedPeriodeId.value = "all";
-            const diffDays =
-                Math.round(
-                    (new Date(newRange.end + "T00:00:00") - new Date(newRange.start + "T00:00:00")) /
-                        (1000 * 60 * 60 * 24)
-                ) + 1;
-            if (diffDays === 14) modeSkala.value = "periodik";
-            else if (diffDays === 28) modeSkala.value = "bulanan";
-            else modeSkala.value = "custom";
-        }
-
-        isDatePickerOpen.value = false;
-        currentPage.value = 1;
-    }
-}
-
-function resetFilterSemua() {
-    isFilterAllTime.value = true;
-    selectedPeriodeId.value = "all";
-    currentPage.value = 1;
-}
 
 // ─── Pagination State (Default 10 item per halaman) ───────────────────────────
 const currentPage = ref(1);
@@ -501,59 +342,25 @@ function formatTanggalIndo(dateStr) {
                     </Button>
                 </div>
 
-                <!-- Baris Kontrol: Switcher Skala (28H / 14H), Dropdown Periode SPPG, & Pencarian -->
-                <div class="pt-3 border-t border-slate-200/70 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-                    <!-- Left: Switcher Skala & Dropdown Periode SPPG -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Switcher Skala (Bulanan 28H vs Periodik 14H) -->
-                        <div class="inline-flex p-1 rounded-lg bg-slate-100 border border-slate-200/80">
-                            <button
-                                type="button"
-                                @click="setModeSkala('bulanan')"
-                                :class="[
-                                    'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    is28HariActive
-                                        ? 'bg-white text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                                        : 'text-slate-600 hover:text-slate-900',
-                                ]"
-                            >
-                                <Clock class="h-3.5 w-3.5" />
-                                <span class="hidden xs:inline">28 Hari</span>
-                                <span class="xs:hidden">28H</span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="setModeSkala('periodik')"
-                                :class="[
-                                    'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    is14HariActive
-                                        ? 'bg-white text-teal-700 shadow-xs ring-1 ring-teal-500/20'
-                                        : 'text-slate-600 hover:text-slate-900',
-                                ]"
-                            >
-                                <Calendar class="h-3.5 w-3.5" />
-                                <span class="hidden xs:inline">14 Hari</span>
-                                <span class="xs:hidden">14H</span>
-                            </button>
-                        </div>
+                <!-- Baris 2: PeriodDateFilterBar Reusable -->
+                <PeriodDateFilterBar
+                    v-model:startDate="tanggalMulai"
+                    v-model:endDate="tanggalSelesai"
+                    v-model:mode="filterDateMode"
+                    v-model:periodeId="selectedPeriodeId"
+                    v-model:isAllTime="isFilterAllTime"
+                    :periodes="periodes"
+                />
 
-                        <!-- Dropdown Periode SPPG -->
-                        <div class="relative flex-1 sm:flex-none">
-                            <select
-                                v-model="selectedPeriodeId"
-                                @change="onPeriodeSelectChange"
-                                class="w-full sm:w-auto pl-2.5 pr-8 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-white cursor-pointer"
-                            >
-                                <option value="all">Pilih Periode SPPG...</option>
-                                <option v-for="p in periodes" :key="p.id" :value="String(p.id)">
-                                    {{ p.label || ('Periode ' + p.nomor_periode) }}
-                                </option>
-                            </select>
-                        </div>
+                <!-- Baris 3: Toolbar Pencarian & Info Arsip -->
+                <div class="pt-3 border-t border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <span>Menampilkan <strong class="text-slate-900 font-extrabold">{{ filteredLabels.length }}</strong> label</span>
+                        <span v-if="isFilterAllTime" class="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px]">Semua Arsip</span>
                     </div>
 
                     <!-- Right: Search Input -->
-                    <div class="relative w-full md:w-72">
+                    <div class="relative w-full sm:w-80">
                         <Search class="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                             v-model="searchQuery"
@@ -567,83 +374,6 @@ function formatTanggalIndo(dateStr) {
                             class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
                         >
                             <X class="h-3 w-3" />
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Baris 2: Unified Date Range Picker Menyatu dengan Popover Kalender Dua Bulan -->
-                <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs">
-                    <!-- Left: Unified Range Capsule Button -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-xs font-bold text-emerald-950 flex items-center gap-1 shrink-0">
-                            <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                            <span class="hidden md:inline">Rentang Terpilih:</span>
-                        </span>
-
-                        <!-- Interactive Range Capsule Trigger & Popover -->
-                        <div class="relative">
-                            <button
-                                type="button"
-                                @click="isDatePickerOpen = !isDatePickerOpen"
-                                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 hover:border-emerald-500 shadow-2xs text-xs font-bold text-slate-800 transition-all cursor-pointer group"
-                                title="Klik untuk membuka pemilih rentang tanggal kalender"
-                            >
-                                <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalMulai) }}</span>
-                                <span class="text-emerald-500 font-black">➜</span>
-                                <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalSelesai) }}</span>
-                                <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform" :class="{ 'rotate-180': isDatePickerOpen }" />
-                            </button>
-
-                            <!-- Backdrop Click Outside -->
-                            <div
-                                v-if="isDatePickerOpen"
-                                class="fixed inset-0 z-40 bg-black/20 sm:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none transition-opacity"
-                                @click="isDatePickerOpen = false"
-                            ></div>
-
-                            <!-- Popover Kalender Dua Bulan Floating di Bawah Tombol Sesuai Rekap Kehadiran -->
-                            <div
-                                v-if="isDatePickerOpen"
-                                class="fixed inset-x-2 top-20 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 z-50 flex justify-center sm:block"
-                            >
-                                <DateRangePicker
-                                    v-model="datePickerRange"
-                                    :isOpen="isDatePickerOpen"
-                                    @apply="onApplyDateRange"
-                                    @close="isDatePickerOpen = false"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Badge Durasi Hari Kerja -->
-                        <span class="px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-black text-xs shadow-2xs whitespace-nowrap">
-                            {{ dateColumns.length }} Hari Kerja
-                        </span>
-                    </div>
-
-                    <!-- Right: Info Siklus & Opsi Lihat Semua Arsip -->
-                    <div class="flex items-center gap-2 text-[11px] font-semibold text-emerald-900/90">
-                        <div class="hidden lg:flex items-center gap-1.5">
-                            <Sparkles class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                            <span>{{ labelSiklus }}</span>
-                        </div>
-                        <button
-                            v-if="!isFilterAllTime"
-                            type="button"
-                            @click="resetFilterSemua"
-                            class="text-[11px] font-medium text-emerald-800 hover:text-emerald-950 underline cursor-pointer ml-auto sm:ml-0"
-                            title="Tampilkan semua data tanpa filter rentang tanggal"
-                        >
-                            Lihat Semua Arsip
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            @click="setModeSkala('bulanan')"
-                            class="text-[11px] font-medium text-emerald-800 hover:text-emerald-950 underline cursor-pointer ml-auto sm:ml-0"
-                            title="Kembalikan ke filter rentang aktif"
-                        >
-                            Terapkan Filter Rentang
                         </button>
                     </div>
                 </div>

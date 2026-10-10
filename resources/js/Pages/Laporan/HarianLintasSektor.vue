@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
-import { Head, router } from "@inertiajs/vue3";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { Head, router, usePage } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import {
     FileText,
@@ -26,6 +26,7 @@ import {
     ShieldAlert,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 
 const props = defineProps({
     unitSppg: {
@@ -138,8 +139,7 @@ const namaSppgUpper = computed(() => {
 
 const namaYayasanUpper = computed(() => {
     return (
-        props.kopConfig?.nama_instansi_2 ||
-        "YAYASAN PESANTREN MIFTAHUL ULUM"
+        props.kopConfig?.nama_instansi_2 || "YAYASAN PESANTREN MIFTAHUL ULUM"
     ).toUpperCase();
 });
 
@@ -216,7 +216,10 @@ const kelompokMenerima = computed(() => {
 // Helper untuk mengambil rincian penerima manfaat yang valid (prioritaskan yang memiliki angka > 0)
 function getValidRincian(k) {
     const kel = k.kelompok || {};
-    if (Array.isArray(k.rincian) && k.rincian.some((r) => Number(r.total || 0) > 0)) {
+    if (
+        Array.isArray(k.rincian) &&
+        k.rincian.some((r) => Number(r.total || 0) > 0)
+    ) {
         return k.rincian;
     }
     if (Array.isArray(kel.rincian) && kel.rincian.length > 0) {
@@ -269,7 +272,10 @@ const sekolahList = computed(() => {
                         sub.includes("penjaga")
                     ) {
                         tendik += tot;
-                    } else if (sub.includes("guru") || sub.includes("pendidik")) {
+                    } else if (
+                        sub.includes("guru") ||
+                        sub.includes("pendidik")
+                    ) {
                         guru += tot;
                     } else {
                         siswa += tot;
@@ -277,9 +283,8 @@ const sekolahList = computed(() => {
                 });
             }
 
-            const totalPorsi = Number(
-                k.total_penerima ?? siswa + guru + tendik,
-            ) || 0;
+            const totalPorsi =
+                Number(k.total_penerima ?? siswa + guru + tendik) || 0;
 
             // Fallback jika rincian belum terisi namun ada porsi kecil/besar
             if (siswa === 0 && guru === 0 && tendik === 0 && totalPorsi > 0) {
@@ -342,9 +347,8 @@ const posyanduList = computed(() => {
                 });
             }
 
-            const totalPorsi = Number(
-                k.total_penerima ?? bumil + busui + balita,
-            ) || 0;
+            const totalPorsi =
+                Number(k.total_penerima ?? bumil + busui + balita) || 0;
 
             // Fallback jika rincian belum terisi
             if (bumil === 0 && busui === 0 && balita === 0 && totalPorsi > 0) {
@@ -401,10 +405,16 @@ const subMenuNormalList = computed(() => {
 
 function hasNutrisi(gizi) {
     if (!gizi) return false;
-    const e = Number(gizi.energi ?? gizi.energy ?? gizi.energi_pk ?? gizi.energi_pb ?? 0);
-    const p = Number(gizi.protein ?? gizi.prot ?? gizi.prot_pk ?? gizi.prot_pb ?? 0);
+    const e = Number(
+        gizi.energi ?? gizi.energy ?? gizi.energi_pk ?? gizi.energi_pb ?? 0,
+    );
+    const p = Number(
+        gizi.protein ?? gizi.prot ?? gizi.prot_pk ?? gizi.prot_pb ?? 0,
+    );
     const l = Number(gizi.lemak ?? gizi.lmk ?? gizi.lmk_pk ?? gizi.lmk_pb ?? 0);
-    const k = Number(gizi.karbohidrat ?? gizi.karbo ?? gizi.karbo_pk ?? gizi.karbo_pb ?? 0);
+    const k = Number(
+        gizi.karbohidrat ?? gizi.karbo ?? gizi.karbo_pk ?? gizi.karbo_pb ?? 0,
+    );
     const s = Number(gizi.serat ?? gizi.serat_pk ?? gizi.serat_pb ?? 0);
     return (
         Math.abs(e) > 0.001 ||
@@ -417,9 +427,17 @@ function hasNutrisi(gizi) {
 
 function matchAllergyKey(objKey, targetKey) {
     if (!objKey || !targetKey) return false;
-    const cleanObj = String(objKey).toLowerCase().replace(/[^a-z0-9]/g, "");
-    const cleanTarget = String(targetKey).toLowerCase().replace(/[^a-z0-9]/g, "");
-    return cleanObj === cleanTarget || cleanObj.includes(cleanTarget) || cleanTarget.includes(cleanObj);
+    const cleanObj = String(objKey)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    const cleanTarget = String(targetKey)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    return (
+        cleanObj === cleanTarget ||
+        cleanObj.includes(cleanTarget) ||
+        cleanTarget.includes(cleanObj)
+    );
 }
 
 const akgPK = computed(() => {
@@ -482,9 +500,15 @@ const varianAlergiList = computed(() => {
             if (!j) return;
             if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
             const key = al.sub_menu_key || "sub_menu_2";
-            const penggantiStr = typeof al.menu_pengganti === "object" && al.menu_pengganti !== null
-                ? (al.menu_pengganti?.nama || al.menu_pengganti?.nama_menu || "")
-                : String(al.menu_pengganti || al.nama || al.nama_menu || "-");
+            const penggantiStr =
+                typeof al.menu_pengganti === "object" &&
+                al.menu_pengganti !== null
+                    ? al.menu_pengganti?.nama ||
+                      al.menu_pengganti?.nama_menu ||
+                      ""
+                    : String(
+                          al.menu_pengganti || al.nama || al.nama_menu || "-",
+                      );
             alergiMap[j].pengganti[key] = penggantiStr || "-";
         });
     } else if (typeof subAlergi === "object") {
@@ -494,10 +518,20 @@ const varianAlergiList = computed(() => {
                     if (!al) return;
                     const j = extractCleanJenis(al.jenis_alergi);
                     if (!j) return;
-                    if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
-                    const penggantiStr = typeof al.menu_pengganti === "object" && al.menu_pengganti !== null
-                        ? (al.menu_pengganti?.nama || al.menu_pengganti?.nama_menu || "")
-                        : String(al.menu_pengganti || al.nama || al.nama_menu || "-");
+                    if (!alergiMap[j])
+                        alergiMap[j] = { jenis: j, pengganti: {} };
+                    const penggantiStr =
+                        typeof al.menu_pengganti === "object" &&
+                        al.menu_pengganti !== null
+                            ? al.menu_pengganti?.nama ||
+                              al.menu_pengganti?.nama_menu ||
+                              ""
+                            : String(
+                                  al.menu_pengganti ||
+                                      al.nama ||
+                                      al.nama_menu ||
+                                      "-",
+                              );
                     alergiMap[j].pengganti[key] = penggantiStr || "-";
                 });
             }
@@ -526,81 +560,136 @@ const varianAlergiList = computed(() => {
         });
     }
 
-    return Object.values(alergiMap).map((al) => {
-        const baseItems = subMenuNormalList.value;
-        const menuList = baseItems
-            .map((baseName, idx) => {
-                const subKey = `sub_menu_${idx + 1}`;
-                return al.pengganti[subKey] || baseName || "";
-            })
-            .filter(Boolean);
+    return Object.values(alergiMap)
+        .map((al) => {
+            const baseItems = subMenuNormalList.value;
+            const menuList = baseItems
+                .map((baseName, idx) => {
+                    const subKey = `sub_menu_${idx + 1}`;
+                    return al.pengganti[subKey] || baseName || "";
+                })
+                .filter(Boolean);
 
-        let tempPK = null;
-        let tempPB = null;
-        let foundSpecific = false;
+            let tempPK = null;
+            let tempPB = null;
+            let foundSpecific = false;
 
-        if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
-            let specificAkg = wo.akg_alergi[al.jenis];
-            if (!specificAkg) {
-                const found = Object.entries(wo.akg_alergi).find(([k]) =>
-                    matchAllergyKey(k, al.jenis)
-                );
-                if (found) specificAkg = found[1];
-            }
-
-            if (specificAkg && typeof specificAkg === "object") {
-                foundSpecific = true;
-                const rawPK = specificAkg.akg_pk ?? (specificAkg.energi_pk !== undefined ? specificAkg : null);
-                const rawPB = specificAkg.akg_pb ?? (specificAkg.energi_pb !== undefined ? specificAkg : null);
-
-                if (rawPK && typeof rawPK === "object") {
-                    tempPK = {
-                        energi: Number(rawPK.energi ?? rawPK.energy ?? rawPK.energi_pk ?? 0),
-                        protein: Number(rawPK.protein ?? rawPK.prot ?? rawPK.prot_pk ?? 0),
-                        lemak: Number(rawPK.lemak ?? rawPK.lmk ?? rawPK.lmk_pk ?? 0),
-                        karbohidrat: Number(rawPK.karbohidrat ?? rawPK.karbo ?? rawPK.karbo_pk ?? 0),
-                        serat: Number(rawPK.serat ?? rawPK.serat_pk ?? 0),
-                    };
+            if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+                let specificAkg = wo.akg_alergi[al.jenis];
+                if (!specificAkg) {
+                    const found = Object.entries(wo.akg_alergi).find(([k]) =>
+                        matchAllergyKey(k, al.jenis),
+                    );
+                    if (found) specificAkg = found[1];
                 }
 
-                if (rawPB && typeof rawPB === "object") {
-                    tempPB = {
-                        energi: Number(rawPB.energi ?? rawPB.energy ?? rawPB.energi_pb ?? 0),
-                        protein: Number(rawPB.protein ?? rawPB.prot ?? rawPB.prot_pb ?? 0),
-                        lemak: Number(rawPB.lemak ?? rawPB.lmk ?? rawPB.lmk_pb ?? 0),
-                        karbohidrat: Number(rawPB.karbohidrat ?? rawPB.karbo ?? rawPB.karbo_pb ?? 0),
-                        serat: Number(rawPB.serat ?? rawPB.serat_pb ?? 0),
-                    };
+                if (specificAkg && typeof specificAkg === "object") {
+                    foundSpecific = true;
+                    const rawPK =
+                        specificAkg.akg_pk ??
+                        (specificAkg.energi_pk !== undefined
+                            ? specificAkg
+                            : null);
+                    const rawPB =
+                        specificAkg.akg_pb ??
+                        (specificAkg.energi_pb !== undefined
+                            ? specificAkg
+                            : null);
+
+                    if (rawPK && typeof rawPK === "object") {
+                        tempPK = {
+                            energi: Number(
+                                rawPK.energi ??
+                                    rawPK.energy ??
+                                    rawPK.energi_pk ??
+                                    0,
+                            ),
+                            protein: Number(
+                                rawPK.protein ??
+                                    rawPK.prot ??
+                                    rawPK.prot_pk ??
+                                    0,
+                            ),
+                            lemak: Number(
+                                rawPK.lemak ?? rawPK.lmk ?? rawPK.lmk_pk ?? 0,
+                            ),
+                            karbohidrat: Number(
+                                rawPK.karbohidrat ??
+                                    rawPK.karbo ??
+                                    rawPK.karbo_pk ??
+                                    0,
+                            ),
+                            serat: Number(rawPK.serat ?? rawPK.serat_pk ?? 0),
+                        };
+                    }
+
+                    if (rawPB && typeof rawPB === "object") {
+                        tempPB = {
+                            energi: Number(
+                                rawPB.energi ??
+                                    rawPB.energy ??
+                                    rawPB.energi_pb ??
+                                    0,
+                            ),
+                            protein: Number(
+                                rawPB.protein ??
+                                    rawPB.prot ??
+                                    rawPB.prot_pb ??
+                                    0,
+                            ),
+                            lemak: Number(
+                                rawPB.lemak ?? rawPB.lmk ?? rawPB.lmk_pb ?? 0,
+                            ),
+                            karbohidrat: Number(
+                                rawPB.karbohidrat ??
+                                    rawPB.karbo ??
+                                    rawPB.karbo_pb ??
+                                    0,
+                            ),
+                            serat: Number(rawPB.serat ?? rawPB.serat_pb ?? 0),
+                        };
+                    }
                 }
             }
-        }
 
-        // Jika tidak ada data spesifik akg_alergi sama sekali untuk alergen ini,
-        // gunakan nilai normal HANYA jika porsi normal tersebut memang memiliki nilai nutrisi (> 0)
-        if (!foundSpecific) {
-            if (hasNormalPK.value) {
-                tempPK = { ...akgPK.value };
+            // Jika tidak ada data spesifik akg_alergi sama sekali untuk alergen ini,
+            // gunakan nilai normal HANYA jika porsi normal tersebut memang memiliki nilai nutrisi (> 0)
+            if (!foundSpecific) {
+                if (hasNormalPK.value) {
+                    tempPK = { ...akgPK.value };
+                }
+                if (hasNormalPB.value) {
+                    tempPB = { ...akgPB.value };
+                }
             }
-            if (hasNormalPB.value) {
-                tempPB = { ...akgPB.value };
-            }
-        }
 
-        // Porsi hanya dianggap ada jika bernilai > 0 (jika nilainya 0 semua, maka hasPK/hasPB = false)
-        const hasPK = hasNutrisi(tempPK);
-        const hasPB = hasNutrisi(tempPB);
+            // Porsi hanya dianggap ada jika bernilai > 0 (jika nilainya 0 semua, maka hasPK/hasPB = false)
+            const hasPK = hasNutrisi(tempPK);
+            const hasPB = hasNutrisi(tempPB);
 
-        return {
-            jenis: al.jenis,
-            menuList:
-                menuList.length > 0 ? menuList : subMenuNormalList.value,
-            akgPK: tempPK || { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 },
-            akgPB: tempPB || { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 },
-            hasPK,
-            hasPB,
-        };
-    })
-    .filter((al) => al.hasPK || al.hasPB);
+            return {
+                jenis: al.jenis,
+                menuList:
+                    menuList.length > 0 ? menuList : subMenuNormalList.value,
+                akgPK: tempPK || {
+                    energi: 0,
+                    protein: 0,
+                    lemak: 0,
+                    karbohidrat: 0,
+                    serat: 0,
+                },
+                akgPB: tempPB || {
+                    energi: 0,
+                    protein: 0,
+                    lemak: 0,
+                    karbohidrat: 0,
+                    serat: 0,
+                },
+                hasPK,
+                hasPB,
+            };
+        })
+        .filter((al) => al.hasPK || al.hasPB);
 });
 
 // Generator Narasi Teks Otomatis Persis Format yang Diminta
@@ -610,7 +699,9 @@ const defaultNarasiText = computed(() => {
     );
 
     let lines = [];
-    lines.push(`*PENYALURAN MBG ${namaSppgUpper.value} ${namaYayasanUpper.value}*`);
+    lines.push(
+        `*PENYALURAN MBG ${namaSppgUpper.value} ${namaYayasanUpper.value}*`,
+    );
     lines.push(``);
     lines.push(``);
     lines.push(
@@ -662,7 +753,11 @@ const defaultNarasiText = computed(() => {
     lines.push(``);
 
     // 3. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)
-    if (hasNormalPK.value || hasNormalPB.value || varianAlergiList.value.length > 0) {
+    if (
+        hasNormalPK.value ||
+        hasNormalPB.value ||
+        varianAlergiList.value.length > 0
+    ) {
         lines.push(`*3.  Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)*`);
         lines.push(``);
 
@@ -714,7 +809,9 @@ const defaultNarasiText = computed(() => {
                     lines.push(`- Energi: ${al.akgPK.energi || 0} Kkal`);
                     lines.push(`- Protein: ${al.akgPK.protein || 0} gr`);
                     lines.push(`- Lemak: ${al.akgPK.lemak || 0} gr`);
-                    lines.push(`- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`);
+                    lines.push(
+                        `- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`,
+                    );
                     lines.push(`- Serat: ${al.akgPK.serat || 0} gr`);
                 }
 
@@ -730,7 +827,9 @@ const defaultNarasiText = computed(() => {
                     lines.push(`- Energi: ${al.akgPB.energi || 0} Kkal`);
                     lines.push(`- Protein: ${al.akgPB.protein || 0} gr`);
                     lines.push(`- Lemak: ${al.akgPB.lemak || 0} gr`);
-                    lines.push(`- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`);
+                    lines.push(
+                        `- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`,
+                    );
                     lines.push(`- Serat: ${al.akgPB.serat || 0} gr`);
                 }
             });
@@ -813,82 +912,70 @@ function downloadTxtFile() {
 }
 
 // =========================================================================
-// KALENDER PICKER INTERAKTIF SESUAI STYLE WORK ORDER
+// FILTER WAKTU & DISTRIBUSI WO (REUSABLE PERIODDATEFILTERBAR)
 // =========================================================================
-const showDatePickerPopover = ref(false);
-const datePickerContainerRef = ref(null);
+const page = usePage();
+const allPeriodes = computed(() => page?.props?.periodes || []);
 
-const NAMA_BULAN_PICKER = [
-    "Januari",
-    "Februari",
-    "Maret",
-    "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
-    "September",
-    "Oktober",
-    "November",
-    "Desember",
-];
+function findPeriodeForDate(dateStr) {
+    if (!dateStr || !allPeriodes.value || allPeriodes.value.length === 0) return null;
+    return (
+        allPeriodes.value.find((p) => {
+            const s = String(p.tanggal_mulai || "").substring(0, 10);
+            const e = String(p.tanggal_selesai || "").substring(0, 10);
+            return dateStr >= s && dateStr <= e;
+        }) || null
+    );
+}
 
-// Inisialisasi bulan & tahun picker dari selectedDate
-function getInitialYearMonth() {
-    if (props.selectedDate) {
-        const parts = props.selectedDate.split("-").map(Number);
-        if (parts[0] && parts[1]) {
-            return { year: parts[0], month: parts[1] - 1 };
+// Inisialisasi awal ID periode: cari berdasarkan selectedDate, jika tidak ada cari dari WO terbaru
+const initialPeriode =
+    findPeriodeForDate(props.selectedDate) ||
+    (props.calendarWorkOrders?.[0]?.tanggal
+        ? findPeriodeForDate(props.calendarWorkOrders[0].tanggal)
+        : null);
+
+const filterStartDate = ref(
+    props.selectedDate ||
+        (initialPeriode?.tanggal_mulai
+            ? String(initialPeriode.tanggal_mulai).substring(0, 10)
+            : props.todayDate) ||
+        "",
+);
+const filterEndDate = ref(
+    props.selectedDate ||
+        (initialPeriode?.tanggal_selesai
+            ? String(initialPeriode.tanggal_selesai).substring(0, 10)
+            : props.todayDate) ||
+        "",
+);
+const filterMode = ref(
+    props.selectedDate === props.todayDate ? "hari_ini" : "periode",
+);
+const filterPeriodeId = ref(initialPeriode ? String(initialPeriode.id) : "");
+const filterIsAllTime = ref(false);
+
+// Sinkronisasi jika props.selectedDate berubah dari luar/navigasi
+watch(
+    () => props.selectedDate,
+    (newDate) => {
+        if (!newDate) return;
+        if (filterMode.value === "hari_ini" && newDate !== props.todayDate) {
+            filterMode.value = "periode";
         }
-    }
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-}
-
-const initialYM = getInitialYearMonth();
-const pickerCalendarYear = ref(initialYM.year);
-const pickerCalendarMonth = ref(initialYM.month);
-
-const pickerMonthLabel = computed(() => {
-    return `${NAMA_BULAN_PICKER[pickerCalendarMonth.value]} ${pickerCalendarYear.value}`;
-});
-
-function syncPickerMonthWithSelected() {
-    if (props.selectedDate) {
-        const parts = props.selectedDate.split("-").map(Number);
-        if (parts[0] && parts[1]) {
-            pickerCalendarYear.value = parts[0];
-            pickerCalendarMonth.value = parts[1] - 1;
+        const p = findPeriodeForDate(newDate);
+        if (p) {
+            filterPeriodeId.value = String(p.id);
+            if (filterMode.value === "periode") {
+                filterStartDate.value = String(p.tanggal_mulai).substring(0, 10);
+                filterEndDate.value = String(p.tanggal_selesai).substring(0, 10);
+            }
         }
-    }
-}
+    },
+    { immediate: true },
+);
 
-function toggleDatePickerPopover() {
-    showDatePickerPopover.value = !showDatePickerPopover.value;
-    if (showDatePickerPopover.value) {
-        syncPickerMonthWithSelected();
-    }
-}
-
-function prevPickerMonth() {
-    if (pickerCalendarMonth.value === 0) {
-        pickerCalendarMonth.value = 11;
-        pickerCalendarYear.value -= 1;
-    } else {
-        pickerCalendarMonth.value -= 1;
-    }
-}
-
-function nextPickerMonth() {
-    if (pickerCalendarMonth.value === 11) {
-        pickerCalendarMonth.value = 0;
-        pickerCalendarYear.value += 1;
-    } else {
-        pickerCalendarMonth.value += 1;
-    }
-}
-
-// Map Work Order per tanggal untuk indikator kalender
+// Map Work Order per tanggal untuk lookup cepat
 const woMapByDate = computed(() => {
     const map = {};
     (props.calendarWorkOrders || []).forEach((cWo) => {
@@ -899,91 +986,111 @@ const woMapByDate = computed(() => {
     return map;
 });
 
-const pickerCalendarDays = computed(() => {
-    const year = pickerCalendarYear.value;
-    const month = pickerCalendarMonth.value;
+// Daftar Work Order yang aktif berdasarkan rentang waktu yang dipilih
+const filteredCalendarWorkOrders = computed(() => {
+    const allList = props.calendarWorkOrders || [];
+    if (allList.length === 0) return [];
+    if (filterIsAllTime.value) return allList;
 
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-
-    // Monday index 0, Sunday index 6
-    let startDayOfWeek = firstDay.getDay() - 1;
-    if (startDayOfWeek === -1) startDayOfWeek = 6;
-
-    const days = [];
-    const today = props.todayDate;
-    const selected = props.selectedDate;
-
-    // Previous month padding
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    for (let i = startDayOfWeek - 1; i >= 0; i--) {
-        const dayNum = prevMonthLastDay - i;
-        const prevDate = new Date(year, month - 1, dayNum);
-        const y = prevDate.getFullYear();
-        const m = String(prevDate.getMonth() + 1).padStart(2, "0");
-        const d = String(dayNum).padStart(2, "0");
-        const dateStr = `${y}-${m}-${d}`;
-        const woInfo = woMapByDate.value[dateStr] || null;
-
-        days.push({
-            dateStr,
-            dayNumber: dayNum,
-            isCurrentMonth: false,
-            isToday: dateStr === today,
-            isSelected: dateStr === selected,
-            hasWo: !!woInfo,
-            woInfo,
-        });
+    if (filterMode.value === "hari_ini") {
+        return allList.filter((cWo) => cWo.tanggal === props.todayDate);
     }
 
-    // Current month days
-    const totalDays = lastDay.getDate();
-    for (let dayNum = 1; dayNum <= totalDays; dayNum++) {
-        const y = year;
-        const m = String(month + 1).padStart(2, "0");
-        const d = String(dayNum).padStart(2, "0");
-        const dateStr = `${y}-${m}-${d}`;
-        const woInfo = woMapByDate.value[dateStr] || null;
+    const start = filterStartDate.value;
+    const end = filterEndDate.value;
+    if (!start && !end) return allList;
 
-        days.push({
-            dateStr,
-            dayNumber: dayNum,
-            isCurrentMonth: true,
-            isToday: dateStr === today,
-            isSelected: dateStr === selected,
-            hasWo: !!woInfo,
-            woInfo,
-        });
-    }
-
-    // Next month padding to complete grid
-    const remaining = (7 - (days.length % 7)) % 7;
-    for (let i = 1; i <= remaining; i++) {
-        const nextDate = new Date(year, month + 1, i);
-        const y = nextDate.getFullYear();
-        const m = String(nextDate.getMonth() + 1).padStart(2, "0");
-        const d = String(i).padStart(2, "0");
-        const dateStr = `${y}-${m}-${d}`;
-        const woInfo = woMapByDate.value[dateStr] || null;
-
-        days.push({
-            dateStr,
-            dayNumber: i,
-            isCurrentMonth: false,
-            isToday: dateStr === today,
-            isSelected: dateStr === selected,
-            hasWo: !!woInfo,
-            woInfo,
-        });
-    }
-
-    return days;
+    return allList.filter((cWo) => {
+        if (!cWo.tanggal) return false;
+        if (start && cWo.tanggal < start) return false;
+        if (end && cWo.tanggal > end) return false;
+        return true;
+    });
 });
 
-function handleSelectPickerDate(day) {
-    if (!day || !day.dateStr || !day.hasWo) return;
-    showDatePickerPopover.value = false;
-    handleSelectDate(day.dateStr);
+// Nilai terpilih untuk dropdown select WO (mencegah dropdown kosong jika props.selectedDate tidak ada di filter)
+const currentWoSelectValue = computed(() => {
+    const list = filteredCalendarWorkOrders.value;
+    if (!list || list.length === 0) return "";
+    const found = list.find((cWo) => cWo.tanggal === props.selectedDate);
+    return found ? found.tanggal : list[0].tanggal;
+});
+
+// Handler saat filter periode / rentang tanggal berubah
+function onDateFilterChange(filter) {
+    if (!filter) return;
+
+    const filterStart = filter.start || filter.startDate || "";
+    const filterEnd = filter.end || filter.endDate || "";
+
+    if (filter.mode === "hari_ini" && !filter.isAllTime) {
+        if (props.selectedDate !== props.todayDate) {
+            handleSelectDate(props.todayDate);
+        }
+        return;
+    }
+
+    if (filter.mode === "periode") {
+        // Cari seluruh WO yang ada di periode terpilih
+        const wosInPeriode = (props.calendarWorkOrders || []).filter((cWo) => {
+            if (!cWo.tanggal) return false;
+            if (filterStart && cWo.tanggal < filterStart) return false;
+            if (filterEnd && cWo.tanggal > filterEnd) return false;
+            return true;
+        });
+
+        if (wosInPeriode.length > 0) {
+            // WO terbaru di periode ini adalah index 0 (karena calendarWorkOrders urut descending)
+            const latestInPeriode = wosInPeriode[0];
+            // Jika tanggal yang terpilih saat ini bukan salah satu WO di periode ini,
+            // langsung arahkan ke WO terbaru di periode tersebut!
+            const isCurrentDateInPeriodeWo = wosInPeriode.some(
+                (w) => w.tanggal === props.selectedDate,
+            );
+            if (!isCurrentDateInPeriodeWo) {
+                handleSelectDate(latestInPeriode.tanggal);
+            }
+            return;
+        }
+
+        // Jika di periode yang dipilih BELUM ada WO sama sekali:
+        // Otomatis cari WO terbaru di database dan loncat ke periode tersebut
+        const allWos = props.calendarWorkOrders || [];
+        if (allWos.length > 0) {
+            const overallLatestWo = allWos[0];
+            const targetP = findPeriodeForDate(overallLatestWo.tanggal);
+            if (targetP) {
+                filterPeriodeId.value = String(targetP.id);
+                filterStartDate.value = String(targetP.tanggal_mulai).substring(0, 10);
+                filterEndDate.value = String(targetP.tanggal_selesai).substring(0, 10);
+            }
+            handleSelectDate(overallLatestWo.tanggal);
+            return;
+        }
+
+        // Fallback jika memang tidak ada data WO sama sekali di sistem
+        if (filterStart && props.selectedDate !== filterStart) {
+            handleSelectDate(filterStart);
+        }
+        return;
+    }
+
+    // Untuk mode Rentang / All Time
+    const wosInRange = (props.calendarWorkOrders || []).filter((cWo) => {
+        if (!cWo.tanggal) return false;
+        if (!filter.isAllTime && filterStart && cWo.tanggal < filterStart) return false;
+        if (!filter.isAllTime && filterEnd && cWo.tanggal > filterEnd) return false;
+        return true;
+    });
+
+    const isCurrentInWoList = wosInRange.some(
+        (w) => w.tanggal === props.selectedDate,
+    );
+    if (!isCurrentInWoList && wosInRange.length > 0) {
+        handleSelectDate(wosInRange[0].tanggal);
+    } else if (!isCurrentInWoList && filterStart) {
+        handleSelectDate(filterStart);
+    }
 }
 
 // Navigasi Pilihan Tanggal
@@ -996,24 +1103,6 @@ function handleSelectDate(date) {
     );
 }
 
-// Click outside handler untuk menutup popover kalender
-function handleClickOutside(event) {
-    if (
-        datePickerContainerRef.value &&
-        !datePickerContainerRef.value.contains(event.target)
-    ) {
-        showDatePickerPopover.value = false;
-    }
-}
-
-onMounted(() => {
-    document.addEventListener("click", handleClickOutside);
-});
-
-onUnmounted(() => {
-    document.removeEventListener("click", handleClickOutside);
-});
-
 // Tab Mode Tampilan: Narasi vs Visual Cards
 const activeTab = ref("narasi");
 </script>
@@ -1023,45 +1112,45 @@ const activeTab = ref("narasi");
         <Head title="Laporan Harian Lintas Sektor" />
 
         <div class="space-y-6 pb-12 max-w-7xl mx-auto">
-            <!-- HERO HEADER BANNER -->
+            <!-- HERO HEADER BANNER (SELARAS DENGAN RANCANG MENU MBG) -->
             <div
-                class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-primary/95 to-slate-950 p-6 sm:p-8 text-white shadow-xl border border-slate-800"
+                class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-5 sm:p-6 text-white shadow-sm border border-slate-800"
             >
                 <div
-                    class="absolute -right-10 -top-10 h-64 w-64 rounded-full bg-primary/20 blur-3xl pointer-events-none"
+                    class="absolute -right-10 -top-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none"
                 ></div>
                 <div
-                    class="absolute right-32 bottom-0 h-48 w-48 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none"
+                    class="absolute right-32 bottom-0 h-48 w-48 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none"
                 ></div>
 
                 <div
                     class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6"
                 >
-                    <div class="space-y-2.5 max-w-2xl">
-                        <div class="flex items-center gap-2.5 flex-wrap">
+                    <div class="space-y-2 max-w-2xl">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <span
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/10 text-emerald-300 border border-white/10 backdrop-blur-xs"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-xs"
                             >
                                 <FileText class="w-3.5 h-3.5" />
                                 <span>Laporan Resmi MBG</span>
                             </span>
                             <span
                                 v-if="workOrder"
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/30 text-white border border-primary/40"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30"
                             >
                                 <Utensils class="w-3.5 h-3.5" />
                                 <span>{{ workOrder.nama_menu }}</span>
                             </span>
                             <span
                                 v-else
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-500/20 text-amber-200 border border-amber-400/30"
                             >
                                 <AlertCircle class="w-3.5 h-3.5" />
                                 <span>Belum Ada WO di Tanggal Ini</span>
                             </span>
                         </div>
                         <h1
-                            class="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight"
+                            class="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight"
                         >
                             Laporan Harian Lintas Sektor
                         </h1>
@@ -1075,22 +1164,22 @@ const activeTab = ref("narasi");
                     </div>
 
                     <!-- Tombol Cepat Salin di Header -->
-                    <div class="flex items-center gap-3 shrink-0 flex-wrap">
+                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
                         <Button
                             type="button"
                             @click="copyToClipboard"
                             :class="[
-                                'h-11 px-5 rounded-xl font-black shadow-lg transition-all duration-200 gap-2 cursor-pointer',
+                                'h-10 px-4 rounded-xl font-bold shadow-xs transition-all duration-200 gap-2 cursor-pointer text-xs sm:text-sm',
                                 isCopied
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-emerald-900/30',
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-primary hover:bg-primary/90 text-white shadow-primary/20',
                             ]"
                         >
                             <Check
                                 v-if="isCopied"
-                                class="w-5 h-5 animate-in zoom-in-50 duration-200"
+                                class="w-4 h-4 animate-in zoom-in-50 duration-200"
                             />
-                            <Copy v-else class="w-5 h-5" />
+                            <Copy v-else class="w-4 h-4" />
                             <span>{{
                                 isCopied
                                     ? "Tersalin ke Clipboard!"
@@ -1102,10 +1191,10 @@ const activeTab = ref("narasi");
                             type="button"
                             variant="outline"
                             @click="shareToWhatsApp"
-                            class="h-11 px-4 rounded-xl font-bold bg-white/10 hover:bg-white/20 text-white border-white/20 cursor-pointer gap-2 backdrop-blur-xs"
+                            class="h-10 px-3.5 rounded-xl font-bold bg-white/10 hover:bg-white/15 text-white border-white/20 cursor-pointer gap-2 backdrop-blur-xs text-xs sm:text-sm"
                             title="Bagikan Teks Langsung ke WhatsApp"
                         >
-                            <Send class="w-4 h-4 text-emerald-400" />
+                            <Send class="w-3.5 h-3.5 text-emerald-400" />
                             <span class="hidden sm:inline">WhatsApp</span>
                         </Button>
 
@@ -1113,184 +1202,64 @@ const activeTab = ref("narasi");
                             type="button"
                             variant="outline"
                             @click="downloadTxtFile"
-                            class="h-11 px-4 rounded-xl font-bold bg-white/10 hover:bg-white/20 text-white border-white/20 cursor-pointer gap-2 backdrop-blur-xs"
+                            class="h-10 px-3.5 rounded-xl font-bold bg-white/10 hover:bg-white/15 text-white border-white/20 cursor-pointer gap-2 backdrop-blur-xs text-xs sm:text-sm"
                             title="Unduh Berkas .txt"
                         >
-                            <Download class="w-4 h-4 text-sky-400" />
+                            <Download class="w-3.5 h-3.5 text-sky-400" />
                             <span class="hidden sm:inline">Unduh TXT</span>
                         </Button>
                     </div>
                 </div>
             </div>
 
-            <!-- SELECTOR TANGGAL WORK ORDER DENGAN KALENDER CUSTOM STYLE WO -->
-            <div
-                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4"
+            <!-- FILTER WAKTU & DISTRIBUSI WO: REUSABLE PERIODDATEFILTERBAR -->
+            <PeriodDateFilterBar
+                v-model:startDate="filterStartDate"
+                v-model:endDate="filterEndDate"
+                v-model:mode="filterMode"
+                v-model:periodeId="filterPeriodeId"
+                v-model:isAllTime="filterIsAllTime"
+                :showArchive="false"
+                :autoInit="false"
+                @change="onDateFilterChange"
             >
-                <div class="flex items-center gap-3 flex-wrap">
-                    <!-- Tombol Cepat: Hari Ini -->
-                    <button
-                        type="button"
-                        @click="handleSelectDate(todayDate)"
-                        :class="[
-                            'px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5',
-                            selectedDate === todayDate
-                                ? 'bg-primary text-white border-primary shadow-xs'
-                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
-                        ]"
+                <template #right>
+                    <!-- Dropdown Pilihan WO yang Ada di Rentang/Periode Terpilih -->
+                    <div
+                        v-if="filteredCalendarWorkOrders.length > 0"
+                        class="flex items-center gap-2"
                     >
-                        <Calendar class="w-3.5 h-3.5" />
-                        <span>Hari Ini</span>
-                    </button>
-
-                    <!-- CUSTOM INTERACTIVE DATEPICKER SESUAI STYLE WORK ORDER -->
-                    <div ref="datePickerContainerRef" class="relative">
-                        <!-- Trigger Button -->
-                        <button
-                            type="button"
-                            @click.stop="toggleDatePickerPopover"
-                            class="h-10 px-3.5 bg-white border border-slate-300 hover:border-primary rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2.5 shadow-2xs transition-all cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-primary/20"
-                            title="Klik untuk membuka Kalender Distribusi MBG"
+                        <label
+                            for="laporanQuickSelectWo"
+                            class="text-xs font-bold text-slate-600 whitespace-nowrap hidden lg:inline"
                         >
-                            <div class="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
-                                <Calendar class="w-3.5 h-3.5" />
-                            </div>
-                            <span class="font-black text-slate-900 text-xs sm:text-[13px]">
-                                {{ formatTanggalIndo(selectedDate) }}
-                            </span>
-                            <span
-                                v-if="workOrder"
-                                class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            >
-                                WO: {{ workOrder.nama_menu }}
-                            </span>
-                            <span
-                                v-else
-                                class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-slate-100 text-slate-500"
-                            >
-                                Tidak Ada WO
-                            </span>
-                            <ChevronDown
-                                class="w-4 h-4 text-slate-400 transition-transform duration-200 ml-1"
-                                :class="showDatePickerPopover ? 'rotate-180 text-primary' : ''"
-                            />
-                        </button>
-
-                        <!-- POPOVER PANEL KALENDER STYLE WORK ORDER -->
-                        <div
-                            v-if="showDatePickerPopover"
-                            class="absolute z-50 top-full left-0 mt-2 w-[320px] sm:w-[350px] bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
+                            Daftar WO:
+                        </label>
+                        <select
+                            id="laporanQuickSelectWo"
+                            :value="currentWoSelectValue"
+                            @change="(e) => handleSelectDate(e.target.value)"
+                            class="h-9 sm:h-10 px-3 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs max-w-[240px] sm:max-w-[340px] truncate outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20"
                         >
-                            <!-- Header Navigasi Bulan -->
-                            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-                                <button
-                                    type="button"
-                                    @click.stop="prevPickerMonth"
-                                    class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-                                    title="Bulan Sebelumnya"
-                                >
-                                    <ChevronLeft class="h-4 w-4" />
-                                </button>
-                                <div class="text-xs font-black text-slate-900 tracking-wide flex items-center gap-1.5">
-                                    <Calendar class="w-3.5 h-3.5 text-primary" />
-                                    <span>{{ pickerMonthLabel }}</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    @click.stop="nextPickerMonth"
-                                    class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-                                    title="Bulan Berikutnya"
-                                >
-                                    <ChevronRight class="h-4 w-4" />
-                                </button>
-                            </div>
-
-                            <!-- Header Nama Hari (Sen - Min) -->
-                            <div class="grid grid-cols-7 gap-1 text-center text-[10.5px] font-bold text-slate-500 uppercase">
-                                <span class="py-1">Sen</span>
-                                <span class="py-1">Sel</span>
-                                <span class="py-1">Rab</span>
-                                <span class="py-1">Kam</span>
-                                <span class="py-1">Jum</span>
-                                <span class="py-1 text-amber-600">Sab</span>
-                                <span class="py-1 text-rose-600">Min</span>
-                            </div>
-
-                            <!-- Grid Tanggal -->
-                            <div class="grid grid-cols-7 gap-1 text-center">
-                                <button
-                                    v-for="(day, dIdx) in pickerCalendarDays"
-                                    :key="'picker-day-' + dIdx + '-' + day.dateStr"
-                                    type="button"
-                                    @click.stop="handleSelectPickerDate(day)"
-                                    :disabled="!day.hasWo"
-                                    :title="
-                                        day.hasWo
-                                            ? `ADA WO: ${day.woInfo.nama_menu} (${day.woInfo.total_pm} Porsi) - Klik untuk membuka`
-                                            : `Tidak ada data WO pada ${day.dateStr}`
-                                    "
-                                    class="h-9 relative rounded-xl text-xs font-bold transition flex flex-col items-center justify-center select-none"
-                                    :class="[
-                                        day.isSelected
-                                            ? 'bg-primary text-white font-black shadow-md z-10 cursor-pointer'
-                                            : day.hasWo
-                                              ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 font-black hover:bg-emerald-100 cursor-pointer shadow-2xs'
-                                              : 'text-slate-300 bg-slate-50/40 border border-transparent cursor-not-allowed opacity-35 pointer-events-none select-none',
-                                        day.isToday && !day.isSelected
-                                            ? 'ring-2 ring-primary/40 font-black'
-                                            : '',
-                                    ]"
-                                >
-                                    <span>{{ day.dayNumber }}</span>
-
-                                    <!-- Dot Indikator Ada WO -->
-                                    <span
-                                        v-if="day.hasWo && !day.isSelected"
-                                        class="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-emerald-600"
-                                    ></span>
-                                </button>
-                            </div>
-
-                            <!-- Legend / Petunjuk -->
-                            <div class="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-[10.5px] text-slate-500 font-medium">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-300"></span>
-                                    <span>Ada WO</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded bg-slate-200 opacity-60"></span>
-                                    <span>Tidak Ada WO (Nonaktif)</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded bg-primary"></span>
-                                    <span>Dipilih</span>
-                                </div>
-                            </div>
-                        </div>
+                            <option
+                                v-for="cWo in filteredCalendarWorkOrders"
+                                :key="cWo.id"
+                                :value="cWo.tanggal"
+                            >
+                                {{ formatTanggalIndo(cWo.tanggal) }} — {{ cWo.nama_menu }} ({{
+                                    cWo.total_pm
+                                }} Porsi)
+                            </option>
+                        </select>
                     </div>
-                </div>
-
-                <!-- Dropdown Cepat WO yang Terdata -->
-                <div v-if="calendarWorkOrders.length > 0" class="flex items-center gap-2">
-                    <label for="laporanQuickSelectWo" class="text-xs font-bold text-slate-500 whitespace-nowrap hidden sm:inline">
-                        Daftar WO:
-                    </label>
-                    <select
-                        id="laporanQuickSelectWo"
-                        :value="selectedDate"
-                        @change="(e) => handleSelectDate(e.target.value)"
-                        class="h-10 px-3 text-xs font-bold rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 bg-white shadow-2xs max-w-[280px] sm:max-w-[340px] truncate"
+                    <div
+                        v-else
+                        class="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200 whitespace-nowrap"
                     >
-                        <option
-                            v-for="cWo in calendarWorkOrders"
-                            :key="cWo.id"
-                            :value="cWo.tanggal"
-                        >
-                            {{ cWo.tanggal }} — {{ cWo.nama_menu }} ({{ cWo.total_pm }} Porsi)
-                        </option>
-                    </select>
-                </div>
-            </div>
+                        Tidak ada WO di rentang ini
+                    </div>
+                </template>
+            </PeriodDateFilterBar>
 
             <!-- TABS PILIHAN TAMPILAN: TEKS NARASI VS RINGKASAN VISUAL -->
             <div
@@ -1430,7 +1399,7 @@ const activeTab = ref("narasi");
                         ></textarea>
                         <div
                             v-else
-                            class="relative bg-slate-900 text-emerald-300 p-5 sm:p-7 rounded-2xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-wrap selection:bg-emerald-500 selection:text-slate-950 shadow-inner border border-slate-800"
+                            class="relative bg-slate-50/80 text-slate-800 p-5 sm:p-7 rounded-2xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-wrap selection:bg-primary/20 selection:text-slate-900 shadow-2xs border border-slate-200"
                         >
                             {{ activeNarasiText }}
                         </div>
@@ -1890,10 +1859,15 @@ const activeTab = ref("narasi");
 
                     <!-- Placeholder jika seluruh nutrisi normal bernilai 0 dan tidak ada alergi -->
                     <div
-                        v-if="!hasNormalPK && !hasNormalPB && varianAlergiList.length === 0"
+                        v-if="
+                            !hasNormalPK &&
+                            !hasNormalPB &&
+                            varianAlergiList.length === 0
+                        "
                         class="text-center py-6 text-slate-400 text-xs"
                     >
-                        Belum ada data porsi dan kandungan gizi yang tersedia untuk tanggal ini.
+                        Belum ada data porsi dan kandungan gizi yang tersedia
+                        untuk tanggal ini.
                     </div>
 
                     <!-- Porsi Khusus Menu Alergi (Jika Ada) -->
@@ -1910,7 +1884,10 @@ const activeTab = ref("narasi");
                             <h4
                                 class="text-xs font-black text-amber-950 uppercase tracking-wider"
                             >
-                                Varian Khusus Menu Alergi ({{ varianAlergiList.length }} Jenis)
+                                Varian Khusus Menu Alergi ({{
+                                    varianAlergiList.length
+                                }}
+                                Jenis)
                             </h4>
                         </div>
 
@@ -1919,12 +1896,20 @@ const activeTab = ref("narasi");
                             :key="al.jenis"
                             class="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3"
                         >
-                            <div class="flex items-center justify-between border-b border-amber-200/60 pb-2">
-                                <span class="text-xs font-black text-amber-950 flex items-center gap-1.5">
-                                    <ShieldAlert class="w-4 h-4 text-amber-600" />
+                            <div
+                                class="flex items-center justify-between border-b border-amber-200/60 pb-2"
+                            >
+                                <span
+                                    class="text-xs font-black text-amber-950 flex items-center gap-1.5"
+                                >
+                                    <ShieldAlert
+                                        class="w-4 h-4 text-amber-600"
+                                    />
                                     <span>Porsi Menu {{ al.jenis }}</span>
                                 </span>
-                                <span class="text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-800">
+                                <span
+                                    class="text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-800"
+                                >
                                     Menu Modifikasi Alergen
                                 </span>
                             </div>
@@ -1942,27 +1927,69 @@ const activeTab = ref("narasi");
                                     v-if="al.hasPK"
                                     class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5"
                                 >
-                                    <span class="text-xs font-black text-slate-900 block">
+                                    <span
+                                        class="text-xs font-black text-slate-900 block"
+                                    >
                                         Menu {{ al.jenis }} Porsi Kecil (PK)
                                     </span>
-                                    <div class="space-y-1 text-xs text-slate-700">
+                                    <div
+                                        class="space-y-1 text-xs text-slate-700"
+                                    >
                                         <div
                                             v-for="(sm, idx) in al.menuList"
                                             :key="idx"
                                             class="flex items-center gap-1.5"
                                         >
-                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                            <span
+                                                class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"
+                                            ></span>
                                             <span>{{ sm }}</span>
                                         </div>
                                     </div>
                                     <div
                                         class="pt-2 border-t border-slate-100 text-[11px] text-slate-600 grid grid-cols-3 sm:grid-cols-5 gap-1 font-medium"
                                     >
-                                        <span>Energi: <strong>{{ al.akgPK.energi || 0 }} Kkal</strong></span>
-                                        <span>Protein: <strong>{{ al.akgPK.protein || 0 }}g</strong></span>
-                                        <span>Lemak: <strong>{{ al.akgPK.lemak || 0 }}g</strong></span>
-                                        <span>Karbo: <strong>{{ al.akgPK.karbohidrat || 0 }}g</strong></span>
-                                        <span>Serat: <strong>{{ al.akgPK.serat || 0 }}g</strong></span>
+                                        <span
+                                            >Energi:
+                                            <strong
+                                                >{{
+                                                    al.akgPK.energi || 0
+                                                }}
+                                                Kkal</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Protein:
+                                            <strong
+                                                >{{
+                                                    al.akgPK.protein || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Lemak:
+                                            <strong
+                                                >{{
+                                                    al.akgPK.lemak || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Karbo:
+                                            <strong
+                                                >{{
+                                                    al.akgPK.karbohidrat || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Serat:
+                                            <strong
+                                                >{{
+                                                    al.akgPK.serat || 0
+                                                }}g</strong
+                                            ></span
+                                        >
                                     </div>
                                 </div>
 
@@ -1971,27 +1998,69 @@ const activeTab = ref("narasi");
                                     v-if="al.hasPB"
                                     class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5"
                                 >
-                                    <span class="text-xs font-black text-slate-900 block">
+                                    <span
+                                        class="text-xs font-black text-slate-900 block"
+                                    >
                                         Menu {{ al.jenis }} Porsi Besar (PB)
                                     </span>
-                                    <div class="space-y-1 text-xs text-slate-700">
+                                    <div
+                                        class="space-y-1 text-xs text-slate-700"
+                                    >
                                         <div
                                             v-for="(sm, idx) in al.menuList"
                                             :key="idx"
                                             class="flex items-center gap-1.5"
                                         >
-                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0"></span>
+                                            <span
+                                                class="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0"
+                                            ></span>
                                             <span>{{ sm }}</span>
                                         </div>
                                     </div>
                                     <div
                                         class="pt-2 border-t border-slate-100 text-[11px] text-slate-600 grid grid-cols-3 sm:grid-cols-5 gap-1 font-medium"
                                     >
-                                        <span>Energi: <strong>{{ al.akgPB.energi || 0 }} Kkal</strong></span>
-                                        <span>Protein: <strong>{{ al.akgPB.protein || 0 }}g</strong></span>
-                                        <span>Lemak: <strong>{{ al.akgPB.lemak || 0 }}g</strong></span>
-                                        <span>Karbo: <strong>{{ al.akgPB.karbohidrat || 0 }}g</strong></span>
-                                        <span>Serat: <strong>{{ al.akgPB.serat || 0 }}g</strong></span>
+                                        <span
+                                            >Energi:
+                                            <strong
+                                                >{{
+                                                    al.akgPB.energi || 0
+                                                }}
+                                                Kkal</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Protein:
+                                            <strong
+                                                >{{
+                                                    al.akgPB.protein || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Lemak:
+                                            <strong
+                                                >{{
+                                                    al.akgPB.lemak || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Karbo:
+                                            <strong
+                                                >{{
+                                                    al.akgPB.karbohidrat || 0
+                                                }}g</strong
+                                            ></span
+                                        >
+                                        <span
+                                            >Serat:
+                                            <strong
+                                                >{{
+                                                    al.akgPB.serat || 0
+                                                }}g</strong
+                                            ></span
+                                        >
                                     </div>
                                 </div>
                             </div>

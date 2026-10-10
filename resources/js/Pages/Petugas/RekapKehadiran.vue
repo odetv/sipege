@@ -30,6 +30,7 @@ import {
 } from "lucide-vue-next";
 import { downloadRekapAbsenGajiExcel, formatTanggalIndo } from "@/Services/exportPetugasHelper";
 import DateRangePicker from "@/Components/DateRangePicker.vue";
+import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 
 // ─── Props dari Backend ────────────────────────────────────────────────────────
 const props = defineProps({
@@ -68,51 +69,66 @@ function getDefaultEndDate(mode, startStr) {
     return `${y}-${m}-${d}`;
 }
 
-// Helper default tanggal & periode:
-// Gunakan periode terbaru jika hari ini dalam rentangnya, atau fallback ke hari ini jika di luar rentang
-function getInitialDateState() {
-    if (props.initialTanggalMulai && props.initialTanggalSelesai) {
-        return {
-            start: props.initialTanggalMulai,
-            end: props.initialTanggalSelesai,
-            mode: props.initialMode || "bulanan",
-            periodeId: props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all",
-        };
-    }
+function normalizeModeRekap(mode) {
+    if (!mode) return "";
+    const m = String(mode).toLowerCase();
+    if (m === "hari_ini" || m === "today") return "hari_ini";
+    if (m === "periode" || m === "periodik" || m === "period") return "periode";
+    if (m === "rentang" || m === "bulanan" || m === "range" || m === "custom") return "rentang";
+    return "";
+}
 
+// Helper default tanggal & periode:
+// Gunakan periode terakhir jika hari ini dalam rentangnya, atau bila sudah di luar periode maka gunakan hari ini
+function getInitialDateState() {
     const today = todayStr.value;
-    if (props.periodes && props.periodes.length > 0) {
-        const sorted = [...props.periodes].sort((a, b) => {
-            const noA = Number(a.nomor_periode) || 0;
-            const noB = Number(b.nomor_periode) || 0;
-            if (noB !== noA) return noB - noA;
-            return String(b.tanggal_mulai || "").localeCompare(String(a.tanggal_mulai || ""));
-        });
-        const latest = sorted[0];
-        if (latest && latest.tanggal_mulai && latest.tanggal_selesai) {
-            const s = latest.tanggal_mulai.substring(0, 10);
-            const e = latest.tanggal_selesai.substring(0, 10);
-            if (today >= s && today <= e) {
-                return {
-                    start: s,
-                    end: e,
-                    mode: "periodik",
-                    periodeId: String(latest.id),
-                };
-            }
+    const sorted = [...(props.periodes || [])].sort((a, b) => {
+        const noA = Number(a.nomor_periode) || 0;
+        const noB = Number(b.nomor_periode) || 0;
+        if (noB !== noA) return noB - noA;
+        return String(b.tanggal_mulai || "").localeCompare(String(a.tanggal_mulai || ""));
+    });
+    const latest = sorted[0];
+
+    // Default resolusi: periode terakhir yang memuat hari ini
+    let defaultRes = null;
+    if (latest && latest.tanggal_mulai && latest.tanggal_selesai) {
+        const s = String(latest.tanggal_mulai).substring(0, 10);
+        const e = String(latest.tanggal_selesai).substring(0, 10);
+        if (today >= s && today <= e) {
+            defaultRes = {
+                start: s,
+                end: e,
+                mode: "periode",
+                periodeId: String(latest.id),
+            };
         }
     }
 
-    return {
-        start: today,
-        end: getDefaultEndDate("bulanan", today),
-        mode: "bulanan",
-        periodeId: "all",
-    };
+    if (!defaultRes) {
+        defaultRes = {
+            start: today,
+            end: today,
+            mode: "hari_ini",
+            periodeId: "all",
+        };
+    }
+
+    if (props.initialTanggalMulai && props.initialTanggalSelesai) {
+        const norm = normalizeModeRekap(props.initialMode);
+        return {
+            start: props.initialTanggalMulai,
+            end: props.initialTanggalSelesai,
+            mode: norm || defaultRes.mode,
+            periodeId: props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : defaultRes.periodeId,
+        };
+    }
+
+    return defaultRes;
 }
 
 // ─── Mode Skala & Rentang Tanggal ─────────────────────────────────────────────
-// Mode: 'bulanan' (28 Hari) atau 'periodik' (14 Hari) atau 'custom'
+// Mode: 'hari_ini' | 'periode' | 'rentang'
 const initialDateState = getInitialDateState();
 const modeSkala = ref(initialDateState.mode);
 const tanggalMulai = ref(initialDateState.start);
@@ -121,6 +137,27 @@ const selectedPeriodeId = ref(initialDateState.periodeId);
 const selectedJabatanFilter = ref("all");
 const selectedStatusFilter = ref("all");
 const searchQuery = ref("");
+const isFilterAllTime = ref(false);
+
+function onDateFilterChange(filter) {
+    if (!filter) return;
+    tanggalMulai.value = filter.start;
+    tanggalSelesai.value = filter.end;
+    modeSkala.value = filter.mode;
+    selectedPeriodeId.value = filter.periodeId;
+    isFilterAllTime.value = !!filter.isAllTime;
+
+    router.get(
+        route("petugas.rekap-kehadiran"),
+        {
+            tanggal_mulai: filter.start,
+            tanggal_selesai: filter.end,
+            mode: filter.mode,
+            periode_id: filter.periodeId,
+        },
+        { preserveState: true, preserveScroll: true }
+    );
+}
 
 // ─── State DateRangePicker (Dua Bulan Menyatu) ─────────────────────────────────
 const isDatePickerOpen = ref(false);
@@ -986,65 +1023,22 @@ function closeDetailModal() {
                 </div>
             </div>
 
-            <!-- ─── Control Bar: Kalender Menyatu & Filter Interaktif ───────── -->
-            <div class="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                <!-- Baris 1: Mode Skala, Dropdown Periode & Quick Tools -->
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-                    <!-- Left: Switcher Skala (Bulanan 28H vs Periodik 14H) & Dropdown Periode -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Switcher Skala -->
-                        <div class="inline-flex p-1 rounded-lg bg-slate-100 border border-slate-200/80">
-                            <button
-                                type="button"
-                                @click="setModeSkala('bulanan')"
-                                :class="[
-                                    'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    is28HariActive
-                                        ? 'bg-white text-emerald-700 shadow-xs ring-1 ring-emerald-500/20'
-                                        : 'text-slate-600 hover:text-slate-900',
-                                ]"
-                            >
-                                <Clock class="h-3.5 w-3.5" />
-                                <span class="hidden xs:inline">Bulanan (28 Hari)</span>
-                                <span class="xs:hidden">28 Hari</span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="setModeSkala('periodik')"
-                                :class="[
-                                    'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
-                                    is14HariActive
-                                        ? 'bg-white text-teal-700 shadow-xs ring-1 ring-teal-500/20'
-                                        : 'text-slate-600 hover:text-slate-900',
-                                ]"
-                            >
-                                <Calendar class="h-3.5 w-3.5" />
-                                <span class="hidden xs:inline">Periodik (14 Hari)</span>
-                                <span class="xs:hidden">14 Hari</span>
-                            </button>
-                        </div>
-
-                        <!-- Dropdown Periode SPPG -->
-                        <div class="relative flex-1 sm:flex-none">
-                            <select
-                                v-model="selectedPeriodeId"
-                                @change="onPeriodeSelectChange"
-                                class="w-full sm:w-auto pl-2.5 pr-8 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden bg-white cursor-pointer"
-                            >
-                                <option value="all">Pilih Periode SPPG...</option>
-                                <option v-for="p in periodes" :key="p.id" :value="String(p.id)">
-                                    {{ p.label || ('Periode ' + p.nomor_periode) }}
-                                </option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Right: Quick Tools (Set Semua H, Kosongkan, Reset) dengan Icon & Responsive Text -->
+            <!-- ─── Control Bar: Reusable PeriodDateFilterBar & Filter Interaktif ───────── -->
+            <PeriodDateFilterBar
+                v-model:startDate="tanggalMulai"
+                v-model:endDate="tanggalSelesai"
+                v-model:mode="modeSkala"
+                v-model:periodeId="selectedPeriodeId"
+                v-model:isAllTime="isFilterAllTime"
+                :periodes="periodes"
+                @change="onDateFilterChange"
+            >
+                <template #right>
                     <div class="flex items-center gap-1.5 sm:gap-2">
                         <button
                             type="button"
                             @click="setSemuaHadirPenuh"
-                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold transition-colors cursor-pointer"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold transition-colors cursor-pointer"
                             title="Set seluruh personil aktif menjadi Hadir Penuh (H)"
                         >
                             <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600" />
@@ -1054,7 +1048,7 @@ function closeDetailModal() {
                         <button
                             type="button"
                             @click="kosongkanSemua"
-                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
                             title="Kosongkan seluruh presensi di rentang tanggal ini"
                         >
                             <X class="h-3.5 w-3.5 text-rose-500" />
@@ -1064,71 +1058,17 @@ function closeDetailModal() {
                         <button
                             type="button"
                             @click="resetPresensi"
-                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
                             title="Kembalikan nilai ke data tersimpan di database"
                         >
                             <RotateCcw class="h-3.5 w-3.5 text-slate-500" />
                             <span class="hidden sm:inline">Reset</span>
                         </button>
                     </div>
-                </div>
+                </template>
+            </PeriodDateFilterBar>
 
-                <!-- Baris 2: Unified Date Range Picker Menyatu dengan Popover Kalender Dua Bulan -->
-                <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs">
-                    <!-- Left: Unified Range Capsule Button & Calendar Popover -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-xs font-bold text-emerald-950 flex items-center gap-1 shrink-0">
-                            <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                            <span class="hidden md:inline">Rentang Terpilih:</span>
-                        </span>
-
-                        <!-- Interactive Range Capsule Trigger -->
-                        <div class="relative">
-                            <button
-                                type="button"
-                                @click="isDatePickerOpen = !isDatePickerOpen"
-                                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 hover:border-emerald-500 shadow-2xs text-xs font-bold text-slate-800 transition-all cursor-pointer group"
-                                title="Klik untuk membuka pemilih rentang tanggal kalender"
-                            >
-                                <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalMulai) }}</span>
-                                <span class="text-emerald-500 font-black">➜</span>
-                                <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalSelesai) }}</span>
-                                <ChevronDown class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform" :class="{ 'rotate-180': isDatePickerOpen }" />
-                            </button>
-
-                            <!-- Backdrop Click Outside -->
-                            <div
-                                v-if="isDatePickerOpen"
-                                class="fixed inset-0 z-40 bg-black/20 sm:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none transition-opacity"
-                                @click="isDatePickerOpen = false"
-                            ></div>
-
-                            <!-- Popover Kalender Dua Bulan Sesuai Desain Pengguna -->
-                            <div
-                                v-if="isDatePickerOpen"
-                                class="fixed inset-x-2 top-20 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 z-50 flex justify-center sm:block"
-                            >
-                                <DateRangePicker
-                                    v-model="datePickerRange"
-                                    :isOpen="isDatePickerOpen"
-                                    @apply="onApplyDateRange"
-                                    @close="isDatePickerOpen = false"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Badge Durasi Hari Kerja -->
-                        <span class="px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-black text-xs shadow-2xs whitespace-nowrap">
-                            {{ dateColumns.length }} Hari Kerja
-                        </span>
-                    </div>
-
-                    <!-- Right: Info Text Format Indo -->
-                    <div class="text-[11px] font-semibold text-emerald-900/90 hidden lg:flex items-center gap-1.5">
-                        <Sparkles class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>{{ labelSiklus }}</span>
-                    </div>
-                </div>
+            <div class="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
 
                 <!-- Baris 3: Secondary Filters (Search, Jabatan, Status) -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 pt-1 border-t border-slate-100">
