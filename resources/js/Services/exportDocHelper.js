@@ -85,8 +85,8 @@ export function buildWorkOrderFullExportData(wo) {
     // 1. Sub Menus & Rincian
     const subMenuMap = {};
     const subMenusList = [];
-    const rawSubMenu = raw.sub_menu || {};
-    for (let i = 1; i <= 5; i++) {
+    const maxSub = Array.isArray(wo.sub_menus) ? Math.max(5, wo.sub_menus.length) : 5;
+    for (let i = 1; i <= maxSub; i++) {
         const key = `sub_menu_${i}`;
         const val = (wo.sub_menus && wo.sub_menus[i - 1]) || raw[key] || rawSubMenu[key] || '';
         if (val) {

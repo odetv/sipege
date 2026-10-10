@@ -144,44 +144,41 @@ function formatGrossWeight(kg, satuan = "Kg") {
     return formatGrossQty(kg, satuan);
 }
 
-// Config 5 Sub Menu
-const subMenuKeysConfig = [
-    {
-        key: "sub_menu_1",
-        label: "Sub Menu 1",
-        defaultName: "Makanan Pokok",
-        dotColor: "bg-slate-700",
-        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
-    {
-        key: "sub_menu_2",
-        label: "Sub Menu 2",
-        defaultName: "Protein Hewani",
-        dotColor: "bg-rose-500",
-        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
-    {
-        key: "sub_menu_3",
-        label: "Sub Menu 3",
-        defaultName: "Protein Nabati",
-        dotColor: "bg-yellow-500",
-        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
-    {
-        key: "sub_menu_4",
-        label: "Sub Menu 4",
-        defaultName: "Sayuran",
-        dotColor: "bg-blue-500",
-        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
-    {
-        key: "sub_menu_5",
-        label: "Sub Menu 5",
-        defaultName: "Buah",
-        dotColor: "bg-emerald-500",
-        badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
-];
+// Config Sub Menu Dinamis (Mendukung >5 sub menu dari Work Order)
+const subMenuKeysConfig = computed(() => {
+    const raw = props.workOrder?.raw || props.workOrder || {};
+    let subMenuCount = 5;
+    if (Array.isArray(raw.sub_menus) && raw.sub_menus.length > 5) {
+        subMenuCount = raw.sub_menus.length;
+    } else if (Array.isArray(props.workOrder?.sub_menus) && props.workOrder.sub_menus.length > 5) {
+        subMenuCount = props.workOrder.sub_menus.length;
+    } else {
+        let maxK = 5;
+        for (let i = 6; i <= 20; i++) {
+            if (raw[`sub_menu_${i}`] || props.workOrder?.[`sub_menu_${i}`]) {
+                maxK = i;
+            }
+        }
+        subMenuCount = maxK;
+    }
+
+    const defaultNames = ["Makanan Pokok", "Protein Hewani", "Protein Nabati", "Sayuran", "Buah"];
+    const colors = [
+        "bg-slate-700", "bg-rose-500", "bg-yellow-500", "bg-blue-500", "bg-emerald-500",
+        "bg-purple-500", "bg-indigo-500", "bg-teal-500", "bg-cyan-500", "bg-amber-500"
+    ];
+    const configs = [];
+    for (let i = 1; i <= subMenuCount; i++) {
+        configs.push({
+            key: `sub_menu_${i}`,
+            label: `Sub Menu ${i}`,
+            defaultName: defaultNames[i - 1] || `Sub Menu ${i}`,
+            dotColor: colors[(i - 1) % colors.length],
+            badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
+        });
+    }
+    return configs;
+});
 
 // Data Binding & Parsing dari props.workOrder
 const woNo = computed(() => {
@@ -302,66 +299,44 @@ function isBahanContainsAlergen(b, jenisAlergi) {
     return checkTextMatchesAllergen(combinedText, jenisAlergi);
 }
 
-// Sub Menu Komponen dari Work Order
+// Sub Menu Komponen dari Work Order (Dinamis)
 const subMenuKomponen = computed(() => {
     const raw = props.workOrder?.raw || props.workOrder || {};
-    return {
-        sub_menu_1:
-            raw.sub_menu_1 ||
-            props.workOrder?.sub_menu_1 ||
-            props.workOrder?.sub_menus?.[0] ||
-            "",
-        sub_menu_2:
-            raw.sub_menu_2 ||
-            props.workOrder?.sub_menu_2 ||
-            props.workOrder?.sub_menus?.[1] ||
-            "",
-        sub_menu_3:
-            raw.sub_menu_3 ||
-            props.workOrder?.sub_menu_3 ||
-            props.workOrder?.sub_menus?.[2] ||
-            "",
-        sub_menu_4:
-            raw.sub_menu_4 ||
-            props.workOrder?.sub_menu_4 ||
-            props.workOrder?.sub_menus?.[3] ||
-            "",
-        sub_menu_5:
-            raw.sub_menu_5 ||
-            props.workOrder?.sub_menu_5 ||
-            props.workOrder?.sub_menus?.[4] ||
-            "",
-    };
+    const res = {};
+    const subMenusArr = Array.isArray(raw.sub_menus) ? raw.sub_menus : (Array.isArray(props.workOrder?.sub_menus) ? props.workOrder.sub_menus : []);
+    
+    subMenuKeysConfig.value.forEach((cfg, idx) => {
+        res[cfg.key] = raw[cfg.key] || props.workOrder?.[cfg.key] || subMenusArr[idx] || "";
+    });
+    return res;
 });
 
-// Sub Menu Alergi mapping
+// Sub Menu Alergi mapping (Dinamis)
 const subMenuAlergi = computed(() => {
     const rawAlergi =
         props.workOrder?.raw?.sub_menu_alergi ||
         props.workOrder?.sub_menu_alergi ||
         {};
-    const res = {
-        sub_menu_1: [],
-        sub_menu_2: [],
-        sub_menu_3: [],
-        sub_menu_4: [],
-        sub_menu_5: [],
-    };
+    const res = {};
+    subMenuKeysConfig.value.forEach((cfg) => {
+        res[cfg.key] = [];
+    });
     if (Array.isArray(rawAlergi)) {
         rawAlergi.forEach((al) => {
             if (typeof al === "object" && al !== null) {
                 const key = al.sub_menu_key || "sub_menu_1";
-                if (res[key]) {
-                    res[key].push({
-                        jenis_alergi: al.jenis_alergi || al.alergen || "Alergi",
-                        menu_pengganti:
-                            al.menu_pengganti || al.nama || al.nama_menu || "-",
-                    });
+                if (!res[key]) {
+                    res[key] = [];
                 }
+                res[key].push({
+                    jenis_alergi: al.jenis_alergi || al.alergen || "Alergi",
+                    menu_pengganti:
+                        al.menu_pengganti || al.nama || al.nama_menu || "-",
+                });
             }
         });
     } else if (typeof rawAlergi === "object" && rawAlergi !== null) {
-        Object.keys(res).forEach((key) => {
+        Object.keys(rawAlergi).forEach((key) => {
             if (Array.isArray(rawAlergi[key])) {
                 res[key] = rawAlergi[key];
             }
@@ -803,7 +778,7 @@ const foodCostSubMenuNormal = computed(() => {
     const totalPK = totalFoodCostPKNormal.value || 0;
     const totalPB = totalFoodCostPBNormal.value || 0;
 
-    return subMenuKeysConfig.map((sm) => {
+    return subMenuKeysConfig.value.map((sm) => {
         const menuName =
             (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
         const items = bahanCalculations.value.filter((b) => {
@@ -849,7 +824,7 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
     const totalPK = detail ? detail.cost_pk : 0;
     const totalPB = detail ? detail.cost_pb : 0;
 
-    return subMenuKeysConfig.map((sm) => {
+    return subMenuKeysConfig.value.map((sm) => {
         const normalMenuName =
             (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
 
@@ -932,7 +907,7 @@ function getFoodCostSubMenuForAlergi(jenisAlergi) {
 
 // Rincian Kandungan Gizi per Sub Menu untuk Porsi Normal (5 Komponen)
 const nutrisiSubMenuNormal = computed(() => {
-    return subMenuKeysConfig.map((sm) => {
+    return subMenuKeysConfig.value.map((sm) => {
         const menuName =
             (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
         const items = bahanCalculations.value.filter((b) => {
@@ -991,7 +966,7 @@ const nutrisiSubMenuNormal = computed(() => {
 
 // Helper Rincian Kandungan Gizi per Sub Menu Varian Alergi (5 Komponen)
 function getNutrisiSubMenuForAlergi(jenisAlergi) {
-    return subMenuKeysConfig.map((sm) => {
+    return subMenuKeysConfig.value.map((sm) => {
         const normalMenuName =
             (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
 
@@ -1444,12 +1419,10 @@ function getSubMenuLabelForBahan(it) {
                                     class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"
                                 >
                                     <UtensilsCrossed class="h-4 w-4 text-primary" />
-                                    <span>1. Menu & Komposisi 5 Sub Menu</span>
+                                    <span>1. Menu & Komposisi Sub Menu (Total: {{ subMenuKeysConfig.length }} Sub Menu)</span>
                                 </h4>
                                 <p class="text-xs text-slate-500 mt-0.5">
-                                    Rincian nama masakan per Sub Menu 1 hingga
-                                    Sub Menu 5 beserta konfigurasi varian menu
-                                    pengganti alergi.
+                                    Rincian nama masakan per Sub Menu (minimal 5 komponen MBG, dapat ditambah sesuai kebutuhan) beserta konfigurasi varian menu pengganti alergi.
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
@@ -1507,12 +1480,12 @@ function getSubMenuLabelForBahan(it) {
                             </div>
                         </div>
 
-                        <!-- Grid 5 Sub Menu Cards -->
+                        <!-- Grid Sub Menu Cards -->
                         <div
-                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+                            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3"
                         >
                             <div
-                                v-for="sm in subMenuKeysConfig"
+                                v-for="(sm, sIdx) in subMenuKeysConfig"
                                 :key="sm.key"
                                 class="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-2 hover:border-slate-300 transition-colors"
                             >

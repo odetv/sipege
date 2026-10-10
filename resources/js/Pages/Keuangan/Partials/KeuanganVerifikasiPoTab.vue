@@ -511,45 +511,23 @@ const totalAktualBiaya = computed(() => {
 // Sub Menu Komponen mapping
 const subMenuKomponen = computed(() => {
     const raw = selectedPo.value?.raw || selectedPo.value || {};
-    return {
-        sub_menu_1:
-            raw.sub_menu_1 ||
-            selectedPo.value?.sub_menu_1 ||
-            selectedPo.value?.raw?.work_order?.sub_menu_1 ||
-            "",
-        sub_menu_2:
-            raw.sub_menu_2 ||
-            selectedPo.value?.sub_menu_2 ||
-            selectedPo.value?.raw?.work_order?.sub_menu_2 ||
-            "",
-        sub_menu_3:
-            raw.sub_menu_3 ||
-            selectedPo.value?.sub_menu_3 ||
-            selectedPo.value?.raw?.work_order?.sub_menu_3 ||
-            "",
-        sub_menu_4:
-            raw.sub_menu_4 ||
-            selectedPo.value?.sub_menu_4 ||
-            selectedPo.value?.raw?.work_order?.sub_menu_4 ||
-            "",
-        sub_menu_5:
-            raw.sub_menu_5 ||
-            selectedPo.value?.sub_menu_5 ||
-            selectedPo.value?.raw?.work_order?.sub_menu_5 ||
-            "",
-    };
+    const wo = selectedPo.value?.raw?.work_order || selectedPo.value?.work_order || {};
+    const subMenusArr = Array.isArray(raw.sub_menus) ? raw.sub_menus : (Array.isArray(wo.sub_menus) ? wo.sub_menus : []);
+    const res = {};
+    const maxK = Math.max(5, subMenusArr.length);
+    for (let i = 1; i <= maxK; i++) {
+        const k = `sub_menu_${i}`;
+        res[k] = raw[k] || selectedPo.value?.[k] || wo[k] || subMenusArr[i - 1] || "";
+    }
+    return res;
 });
 
 function getSubMenuLabelForBahan(it) {
-    const keyMap = {
-        sub_menu_1: "Sub Menu 1",
-        sub_menu_2: "Sub Menu 2",
-        sub_menu_3: "Sub Menu 3",
-        sub_menu_4: "Sub Menu 4",
-        sub_menu_5: "Sub Menu 5",
-    };
     const rawKey = it.sub_menu_key || "sub_menu_1";
-    const label = keyMap[rawKey] || "Sub Menu 1";
+    let label = "Sub Menu 1";
+    if (rawKey.startsWith("sub_menu_")) {
+        label = `Sub Menu ${rawKey.replace("sub_menu_", "")}`;
+    }
     const namaMenu =
         it.nama_sub_menu ||
         subMenuKomponen.value[rawKey] ||

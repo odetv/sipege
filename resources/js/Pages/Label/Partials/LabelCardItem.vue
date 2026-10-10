@@ -288,6 +288,31 @@ const bannerBadgeText = computed(() => {
     }
     return "MENU";
 });
+
+const resolvedGizi = computed(() => {
+    const g = props.giziData || {};
+    const getVal = (...keys) => {
+        for (const k of keys) {
+            const v = g[k];
+            if (v !== undefined && v !== null && String(v).trim() !== "") {
+                return String(v).trim().replace(".", ",");
+            }
+        }
+        return null;
+    };
+    return {
+        energi_pk: getVal("energi_pk", "energy_pk") ?? "363,5",
+        energi_pb: getVal("energi_pb", "energy_pb") ?? "534",
+        karbo_pk: getVal("karbo_pk", "karbohidrat_pk") ?? "41,2",
+        karbo_pb: getVal("karbo_pb", "karbohidrat_pb") ?? "68",
+        prot_pk: getVal("prot_pk", "protein_pk") ?? "22,1",
+        prot_pb: getVal("prot_pb", "protein_pb") ?? "30,1",
+        lmk_pk: getVal("lmk_pk", "lemak_pk") ?? "12",
+        lmk_pb: getVal("lmk_pb", "lemak_pb") ?? "16,2",
+        serat_pk: getVal("serat_pk") ?? "2,6",
+        serat_pb: getVal("serat_pb") ?? "5,1",
+    };
+});
 </script>
 
 <template>
@@ -793,7 +818,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.energi_pk || "363,5"
+                                                resolvedGizi.energi_pk
                                             }}</span
                                         >
                                     </div>
@@ -830,7 +855,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.energi_pb || "534"
+                                                resolvedGizi.energi_pb
                                             }}</span
                                         >
                                     </div>
@@ -904,7 +929,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.karbo_pk || "41,2"
+                                                resolvedGizi.karbo_pk
                                             }}</span
                                         >
                                     </div>
@@ -941,7 +966,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.karbo_pb || "68"
+                                                resolvedGizi.karbo_pb
                                             }}</span
                                         >
                                     </div>
@@ -1015,9 +1040,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.prot_pk ||
-                                                giziData.protein_pk ||
-                                                "22,1"
+                                                resolvedGizi.prot_pk
                                             }}</span
                                         >
                                     </div>
@@ -1054,9 +1077,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.prot_pb ||
-                                                giziData.protein_pb ||
-                                                "30,1"
+                                                resolvedGizi.prot_pb
                                             }}</span
                                         >
                                     </div>
@@ -1130,9 +1151,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.lmk_pk ||
-                                                giziData.lemak_pk ||
-                                                "12"
+                                                resolvedGizi.lmk_pk
                                             }}</span
                                         >
                                     </div>
@@ -1169,9 +1188,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.lmk_pb ||
-                                                giziData.lemak_pb ||
-                                                "16,2"
+                                                resolvedGizi.lmk_pb
                                             }}</span
                                         >
                                     </div>
@@ -1245,7 +1262,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.serat_pk || "2,6"
+                                                resolvedGizi.serat_pk
                                             }}</span
                                         >
                                     </div>
@@ -1282,7 +1299,7 @@ const bannerBadgeText = computed(() => {
                                                 transform: translateY(-1.5px);
                                             "
                                             >{{
-                                                giziData.serat_pb || "5,1"
+                                                resolvedGizi.serat_pb
                                             }}</span
                                         >
                                     </div>

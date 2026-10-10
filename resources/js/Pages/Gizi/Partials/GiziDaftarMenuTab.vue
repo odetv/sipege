@@ -10,6 +10,7 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import GiziWorkOrderDetailModal from "./GiziWorkOrderDetailModal.vue";
+import WorkOrderManualEditModal from "@/Pages/WorkOrder/Partials/WorkOrderManualEditModal.vue";
 import {
     exportWorkOrderExcel,
     exportWorkOrderWord,
@@ -108,6 +109,10 @@ const statusFilterDaftarMenu = ref("semua");
 const showDetailModal = ref(false);
 const selectedMenu = ref(null);
 
+// State Modal Manual WO
+const showManualModal = ref(false);
+const selectedManualWo = ref(null);
+
 // State Modal Konfirmasi Hapus
 const showDeleteConfirmModal = ref(false);
 const menuToDelete = ref(null);
@@ -194,16 +199,42 @@ function formatGrossWeight(kg) {
     }
 }
 
+function extractCleanAlergiString(val) {
+    if (!val) return "";
+    if (typeof val === "string") return val.trim();
+    if (typeof val === "number") return String(val).trim();
+    if (Array.isArray(val)) {
+        return val.map(extractCleanAlergiString).filter(Boolean).join(", ");
+    }
+    if (typeof val === "object") {
+        const candidate =
+            val.jenis_alergi ||
+            val.alergen ||
+            val.nama ||
+            val.label ||
+            val.nama_alergi ||
+            val.name;
+        if (typeof candidate === "string") return candidate.trim();
+        if (candidate && typeof candidate === "object") {
+            return extractCleanAlergiString(candidate);
+        }
+        return "";
+    }
+    return String(val).trim();
+}
+
 // Helper ringkasan alergi per jenis dari kelompoks.detail_alergi
 // Hanya tampilkan jenis alergi yang benar-benar ada di bahan/sub menu menu ini
 function getAlergiRingkasan(menu) {
+    if (!menu) return [];
     // Kumpulkan jenis alergi yang benar-benar aktif/terdampak di menu ini
     const activeJenis = new Set();
 
     // 1. Dari items yang bertipe alergi
     (menu.items || []).forEach((it) => {
-        if (it.tipe_porsi === "alergi" && it.jenis_alergi) {
-            activeJenis.add(it.jenis_alergi.trim());
+        if (it?.tipe_porsi === "alergi" && it?.jenis_alergi) {
+            const clean = extractCleanAlergiString(it.jenis_alergi);
+            if (clean) activeJenis.add(clean);
         }
     });
 
@@ -212,15 +243,15 @@ function getAlergiRingkasan(menu) {
     if (rawAlergi) {
         if (Array.isArray(rawAlergi)) {
             rawAlergi.forEach((al) => {
-                const ja = typeof al === "object" ? al?.jenis_alergi || al?.alergen : (typeof al === "string" ? al : null);
-                if (ja) activeJenis.add(ja.trim());
+                const ja = extractCleanAlergiString(al);
+                if (ja) activeJenis.add(ja);
             });
         } else if (typeof rawAlergi === "object") {
             Object.values(rawAlergi).forEach((list) => {
                 if (Array.isArray(list)) {
                     list.forEach((al) => {
-                        const ja = typeof al === "object" ? al?.jenis_alergi || al?.alergen : (typeof al === "string" ? al : null);
-                        if (ja) activeJenis.add(ja.trim());
+                        const ja = extractCleanAlergiString(al);
+                        if (ja) activeJenis.add(ja);
                     });
                 }
             });
@@ -239,8 +270,9 @@ function getAlergiRingkasan(menu) {
         const detailAlergi = kel.detail_alergi || [];
         if (!Array.isArray(detailAlergi)) continue;
         for (const da of detailAlergi) {
-            if (!da || !da.jenis_alergi) continue;
-            const jenis = da.jenis_alergi.trim();
+            if (!da) continue;
+            const jenis = extractCleanAlergiString(da.jenis_alergi || da);
+            if (!jenis) continue;
             // Hanya jenis alergi yang memang terdampak di menu ini
             if (!activeJenis.has(jenis)) continue;
             const jumlah = (Number(da.porsi_kecil) || 0) + (Number(da.porsi_besar) || 0);
@@ -356,18 +388,22 @@ function formatDateTimeIndo(dt) {
 const daftarMenuList = computed(() => {
     if (props.workOrdersList && props.workOrdersList.length > 0) {
         return props.workOrdersList.map((wo, i) => {
-            const subMenus = [];
-            [
-                wo.sub_menu_1,
-                wo.sub_menu_2,
-                wo.sub_menu_3,
-                wo.sub_menu_4,
-                wo.sub_menu_5,
-            ].forEach((sm) => {
-                if (sm && typeof sm === "string" && sm.trim() !== "") {
-                    subMenus.push(sm.trim());
-                }
-            });
+            let subMenus = [];
+            if (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) {
+                subMenus = wo.sub_menus.filter(Boolean).map((s) => String(s).trim());
+            } else {
+                [
+                    wo.sub_menu_1,
+                    wo.sub_menu_2,
+                    wo.sub_menu_3,
+                    wo.sub_menu_4,
+                    wo.sub_menu_5,
+                ].forEach((sm) => {
+                    if (sm && typeof sm === "string" && sm.trim() !== "") {
+                        subMenus.push(sm.trim());
+                    }
+                });
+            }
 
             if (subMenus.length === 0 && wo.items && wo.items.length > 0) {
                 const uniqueSubNames = [
@@ -407,6 +443,7 @@ const daftarMenuList = computed(() => {
                 id: wo.nomor_wo,
                 db_id: wo.id,
                 uuid: wo.uuid || wo.id,
+                metode_wo: wo.metode_wo || "sistem",
                 nama: wo.nama_menu,
                 sub_menus: subMenus,
                 sub_menu_alergi: alergiSubMenus,
@@ -504,8 +541,14 @@ function handleEditWo(m) {
         );
         return;
     }
+    // Jika Work Order bertipe manual, arahkan ke tampilan edit-manual
+    if (m.metode_wo === "manual" || m.raw?.metode_wo === "manual") {
+        const targetId = m.uuid || m.raw?.uuid || m.db_id || m.raw?.id;
+        router.visit(route("work-order.edit-manual", { id: targetId }));
+        return;
+    }
     if (m.uuid || m.db_id) {
-        router.visit("/gizi/rancang-menu?wo_id=" + (m.uuid || m.db_id));
+        router.visit(route("gizi.rancang-menu", { id: m.uuid || m.db_id, step: "work_order" }));
     } else {
         emit("openRancangMenu");
     }
@@ -1838,5 +1881,13 @@ function executeDuplicateWo() {
                 </div>
             </template>
         </Teleport>
+
+        <!-- Modal Pop-Up Editor Manual Work Order -->
+        <WorkOrderManualEditModal
+            :show="showManualModal"
+            :work-order="selectedManualWo"
+            @close="showManualModal = false; selectedManualWo = null"
+            @saved="router.reload({ preserveScroll: true })"
+        />
     </div>
 </template>

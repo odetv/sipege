@@ -92,7 +92,7 @@ class KelompokPenerimaManfaat extends Model
         if (!$unitId) {
             return collect();
         }
-        return static::where('unit_sppg_id', $unitId)->orderBy('nama_kelompok', 'asc')->get();
+        return static::where('unit_sppg_id', $unitId)->with('rincian')->orderBy('nama_kelompok', 'asc')->get();
     }
 
     /**

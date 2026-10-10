@@ -12,6 +12,7 @@ use App\Http\Controllers\PetugasController;
 use App\Http\Controllers\PetunjukController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WilayahController;
+use App\Http\Controllers\WorkOrderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -46,6 +47,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/pembayaran-insentif/generate-csv', [KelompokPenerimaManfaatController::class, 'generateInsentifCsv'])->name('pembayaran-insentif.generate-csv');
     });
     Route::resource('penerima-manfaat', KelompokPenerimaManfaatController::class);
+
+    // Work Order SPPG (Menu Khusus Buat WO & Manajemen WO)
+    Route::prefix('work-order')->name('work-order.')->group(function () {
+        Route::get('/', [WorkOrderController::class, 'index'])->name('index');
+        Route::get('/buat', [WorkOrderController::class, 'perencanaan'])->name('buat');
+        Route::get('/edit-manual', [WorkOrderController::class, 'perencanaan'])->name('edit-manual');
+        Route::get('/edit-manual/{id}', function (\Illuminate\Http\Request $request, $id) {
+            return redirect()->route('work-order.edit-manual', array_merge(['id' => $id], $request->query()));
+        });
+        Route::get('/perencanaan', fn(\Illuminate\Http\Request $request) => redirect()->route('work-order.buat', $request->query()))->name('perencanaan');
+        Route::get('/daftar', [WorkOrderController::class, 'daftar'])->name('daftar');
+        Route::post('/', [WorkOrderController::class, 'store'])->name('store');
+        Route::put('/{id}/manual', [WorkOrderController::class, 'updateManual'])->name('update-manual');
+        Route::post('/{id}/ajukan', [WorkOrderController::class, 'ajukanKeuangan'])->name('ajukan');
+        Route::delete('/{id}', [WorkOrderController::class, 'destroy'])->name('destroy');
+    });
 
     // Gizi SPPG (dengan sub-menu Database Pangan, Analisa PM, Daftar Menu, Buat Menu)
     Route::prefix('gizi')->name('gizi.')->group(function () {

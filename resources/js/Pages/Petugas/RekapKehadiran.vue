@@ -57,11 +57,6 @@ const todayStr = computed(() => {
     return `${y}-${m}-${d}`;
 });
 
-// Helper default tanggal: default saat pertama kali dibuka adalah PER HARI INI
-function getDefaultStartDate() {
-    return todayStr.value;
-}
-
 function getDefaultEndDate(mode, startStr) {
     const base = startStr ? new Date(startStr + "T00:00:00") : new Date();
     const daysToAdd = mode === "periodik" ? 13 : 27; // 14 hari atau 28 hari
@@ -73,12 +68,56 @@ function getDefaultEndDate(mode, startStr) {
     return `${y}-${m}-${d}`;
 }
 
+// Helper default tanggal & periode:
+// Gunakan periode terbaru jika hari ini dalam rentangnya, atau fallback ke hari ini jika di luar rentang
+function getInitialDateState() {
+    if (props.initialTanggalMulai && props.initialTanggalSelesai) {
+        return {
+            start: props.initialTanggalMulai,
+            end: props.initialTanggalSelesai,
+            mode: props.initialMode || "bulanan",
+            periodeId: props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all",
+        };
+    }
+
+    const today = todayStr.value;
+    if (props.periodes && props.periodes.length > 0) {
+        const sorted = [...props.periodes].sort((a, b) => {
+            const noA = Number(a.nomor_periode) || 0;
+            const noB = Number(b.nomor_periode) || 0;
+            if (noB !== noA) return noB - noA;
+            return String(b.tanggal_mulai || "").localeCompare(String(a.tanggal_mulai || ""));
+        });
+        const latest = sorted[0];
+        if (latest && latest.tanggal_mulai && latest.tanggal_selesai) {
+            const s = latest.tanggal_mulai.substring(0, 10);
+            const e = latest.tanggal_selesai.substring(0, 10);
+            if (today >= s && today <= e) {
+                return {
+                    start: s,
+                    end: e,
+                    mode: "periodik",
+                    periodeId: String(latest.id),
+                };
+            }
+        }
+    }
+
+    return {
+        start: today,
+        end: getDefaultEndDate("bulanan", today),
+        mode: "bulanan",
+        periodeId: "all",
+    };
+}
+
 // ─── Mode Skala & Rentang Tanggal ─────────────────────────────────────────────
 // Mode: 'bulanan' (28 Hari) atau 'periodik' (14 Hari) atau 'custom'
-const modeSkala = ref(props.initialMode || "bulanan");
-const tanggalMulai = ref(props.initialTanggalMulai || getDefaultStartDate());
-const tanggalSelesai = ref(props.initialTanggalSelesai || getDefaultEndDate(modeSkala.value, tanggalMulai.value));
-const selectedPeriodeId = ref(props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all");
+const initialDateState = getInitialDateState();
+const modeSkala = ref(initialDateState.mode);
+const tanggalMulai = ref(initialDateState.start);
+const tanggalSelesai = ref(initialDateState.end);
+const selectedPeriodeId = ref(initialDateState.periodeId);
 const selectedJabatanFilter = ref("all");
 const selectedStatusFilter = ref("all");
 const searchQuery = ref("");

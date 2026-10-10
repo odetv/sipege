@@ -644,7 +644,7 @@ function handleCellClick(cell) {
 
 function handleOpenMenuInRancang(item) {
     if (item && (item.uuid || item.db_id)) {
-        router.visit("/gizi/rancang-menu?wo_id=" + (item.uuid || item.db_id));
+        router.visit("/gizi/rancang-menu?id=" + (item.uuid || item.db_id));
     } else {
         emit("openRancangMenu");
     }

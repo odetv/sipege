@@ -21,8 +21,24 @@ class GiziController extends Controller
     /**
      * Tampilkan halaman utama gizi (default ke sub menu Database Pangan).
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
+        $tab = $request->query('tab');
+        if ($tab === 'rancang-menu' || $tab === 'buat-menu') {
+            return $this->rancangMenu($request);
+        }
+        if ($tab === 'daftar-menu') {
+            return $this->daftarMenu($request);
+        }
+        if ($tab === 'analisa-pm') {
+            return $this->analisaPm($request);
+        }
+        if ($tab === 'kalender-menu') {
+            return $this->kalenderMenu($request);
+        }
+        if ($tab) {
+            return $this->renderGiziView($request, $tab);
+        }
         return $this->renderGiziView($request, 'database-pangan');
     }
 
@@ -61,15 +77,53 @@ class GiziController extends Controller
     /**
      * Sub-menu 4: Rancang Menu (Perencanaan Produksi & Formulasi Gizi).
      */
-    public function rancangMenu(Request $request): Response
+    public function rancangMenu(Request $request): Response|RedirectResponse
     {
+        $rawTarget = $request->query('id') ?: ($request->query('uuid') ?: $request->query('wo_id'));
+
+        // Jika ada target WO (id, uuid, wo_id) atau tanggal, pastikan redirect serentak ke ?id=[uuid nya]
+        if ($rawTarget || $request->has('tanggal')) {
+            $user = $request->user();
+            $unitSppg = $user?->getCachedUnitSppg();
+            if ($unitSppg) {
+                $query = WorkOrder::where('unit_sppg_id', $unitSppg->id);
+                if ($rawTarget) {
+                    $rawTargetStr = (string) $rawTarget;
+                    $query->where(function ($q) use ($rawTargetStr) {
+                        if (is_numeric($rawTargetStr)) {
+                            $q->where('id', (int) $rawTargetStr)->orWhere('uuid', $rawTargetStr)->orWhere('nomor_wo', $rawTargetStr);
+                        } else {
+                            $q->where('uuid', $rawTargetStr)->orWhere('nomor_wo', $rawTargetStr);
+                        }
+                    });
+                } elseif ($request->has('tanggal')) {
+                    $query->where('tanggal_distribusi', $request->query('tanggal'));
+                }
+                $targetWo = $query->first();
+                if ($targetWo) {
+                    if (empty($targetWo->uuid)) {
+                        $targetWo->uuid = (string) \Illuminate\Support\Str::uuid();
+                        $targetWo->saveQuietly();
+                    }
+                    // Jika URL saat ini belum menggunakan ?id=[uuid], redirect serentak ke ?id=[uuid nya]
+                    if ($request->query('id') !== $targetWo->uuid) {
+                        $params = ['id' => $targetWo->uuid];
+                        if ($request->has('step')) {
+                            $params['step'] = $request->query('step');
+                        }
+                        return redirect()->route('gizi.rancang-menu', $params);
+                    }
+                }
+            }
+        }
+
         return $this->renderGiziView($request, 'rancang-menu', $request->query('step'));
     }
 
     /**
      * Alias Buat Menu.
      */
-    public function buatMenu(Request $request): Response
+    public function buatMenu(Request $request): Response|RedirectResponse
     {
         return $this->rancangMenu($request);
     }
@@ -101,6 +155,7 @@ class GiziController extends Controller
             'siklus_ke' => ['nullable', 'integer'],
             'status' => ['required', 'string'],
             'database_pangan' => ['nullable', 'string', 'max:30'],
+            'sub_menus' => ['nullable', 'array'],
             'sub_menu_1' => ['nullable', 'string'],
             'sub_menu_2' => ['nullable', 'string'],
             'sub_menu_3' => ['nullable', 'string'],
@@ -127,6 +182,7 @@ class GiziController extends Controller
             'kelompoks' => ['nullable', 'array'],
             'catatan' => ['nullable'],
             'jadwal_operasional' => ['nullable', 'array'],
+            'porsi_tambahan' => ['nullable', 'array'],
         ]);
 
         // Validasi 1 Work Order per 1 Tanggal Distribusi dalam unit SPPG
@@ -139,6 +195,17 @@ class GiziController extends Controller
         }
 
         DB::transaction(function () use ($unitSppg, $validated) {
+            $subMenus = $validated['sub_menus'] ?? [];
+            if (empty($subMenus)) {
+                $subMenus = array_values(array_filter([
+                    $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
+                    $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
+                    $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
+                    $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
+                    $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
+                ]));
+            }
+
             // Find existing or new WorkOrder by nomor_wo or unit & tanggal
             $workOrder = WorkOrder::updateOrCreate(
                 [
@@ -152,11 +219,12 @@ class GiziController extends Controller
                     'status' => $validated['status'],
                     'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
                     'current_step' => $validated['current_step'] ?? 1,
-                    'sub_menu_1' => $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
-                    'sub_menu_2' => $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
-                    'sub_menu_3' => $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
-                    'sub_menu_4' => $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
-                    'sub_menu_5' => $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
+                    'sub_menus' => $subMenus,
+                    'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
+                    'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
+                    'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
+                    'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
+                    'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
                     'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
                     'total_pm' => $validated['total_pm'],
                     'total_pk' => $validated['total_pk'],
@@ -170,6 +238,7 @@ class GiziController extends Controller
                     'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
                     'catatan' => $validated['catatan'] ?? null,
                     'jadwal_operasional' => $validated['jadwal_operasional'] ?? null,
+                    'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
                 ]
             );
 
@@ -410,7 +479,7 @@ class GiziController extends Controller
         });
 
         if ($request->boolean('redirect_to_edit', true)) {
-            return redirect()->route('gizi.rancang-menu', ['wo_id' => $newWo->uuid])
+            return redirect()->route('gizi.rancang-menu', ['id' => $newWo->uuid])
                 ->with('success', 'Menu berhasil diduplikat sebagai Draft (' . $newWo->nomor_wo . '). Anda dapat langsung mengeditnya.');
         }
 
@@ -489,26 +558,33 @@ class GiziController extends Controller
                 ->orderBy('tanggal_distribusi', 'desc')
                 ->get();
 
-            // Load active work order if requested via query
-            if ($request->query('wo_id')) {
-                $woQuery = (string) $request->query('wo_id');
+            // Load active work order if requested via query (support id, uuid, wo_id, or tanggal)
+            $woQuery = $request->query('id') ?: ($request->query('uuid') ?: $request->query('wo_id'));
+            if ($woQuery) {
+                $woQueryStr = (string) $woQuery;
                 $activeWorkOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                    ->where(function ($q) use ($woQuery) {
-                        if (is_numeric($woQuery)) {
-                            $q->where('id', (int) $woQuery)
-                                ->orWhere('nomor_wo', $woQuery);
+                    ->where(function ($q) use ($woQueryStr) {
+                        if (is_numeric($woQueryStr)) {
+                            $q->where('id', (int) $woQueryStr)
+                                ->orWhere('uuid', $woQueryStr)
+                                ->orWhere('nomor_wo', $woQueryStr);
                         } else {
-                            $q->where('uuid', $woQuery)
-                                ->orWhere('nomor_wo', $woQuery);
+                            $q->where('uuid', $woQueryStr)
+                                ->orWhere('nomor_wo', $woQueryStr);
                         }
                     })
-                    ->with(['items', 'kelompoks'])
+                    ->with(['items', 'kelompoks', 'purchaseOrder'])
                     ->first();
             } elseif ($request->query('tanggal')) {
                 $activeWorkOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
                     ->where('tanggal_distribusi', $request->query('tanggal'))
-                    ->with(['items', 'kelompoks'])
+                    ->with(['items', 'kelompoks', 'purchaseOrder'])
                     ->first();
+            }
+
+            if ($activeWorkOrder && empty($activeWorkOrder->uuid)) {
+                $activeWorkOrder->uuid = (string) \Illuminate\Support\Str::uuid();
+                $activeWorkOrder->saveQuietly();
             }
         }
 

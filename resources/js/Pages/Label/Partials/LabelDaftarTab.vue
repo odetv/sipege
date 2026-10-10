@@ -475,9 +475,9 @@ function formatTanggalIndo(dateStr) {
 
 <template>
     <div class="space-y-4 sm:space-y-5">
-        <!-- Main Card List & Table -->
-        <Card className="bg-white border-slate-200/80 shadow-xs overflow-hidden">
-            <CardHeader className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 space-y-3.5">
+        <!-- ─── Control Bar Card: Header, Filter & Rentang Kalender ─────────────────── -->
+        <Card className="bg-white border-slate-200/80 shadow-xs relative z-30">
+            <CardHeader className="p-4 sm:p-5 space-y-3.5">
                 <!-- Baris 1: Judul & Tombol Buat Label Baru -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
@@ -571,16 +571,16 @@ function formatTanggalIndo(dateStr) {
                     </div>
                 </div>
 
-                <!-- Baris 2: Unified Date Range Picker Menyatu dengan Popover Kalender Dua Bulan (Sesuai Desain Pengguna) -->
+                <!-- Baris 2: Unified Date Range Picker Menyatu dengan Popover Kalender Dua Bulan -->
                 <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs">
-                    <!-- Left: Unified Range Capsule Button & Calendar Popover -->
+                    <!-- Left: Unified Range Capsule Button -->
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="text-xs font-bold text-emerald-950 flex items-center gap-1 shrink-0">
                             <Calendar class="h-3.5 w-3.5 text-emerald-600" />
                             <span class="hidden md:inline">Rentang Terpilih:</span>
                         </span>
 
-                        <!-- Interactive Range Capsule Trigger -->
+                        <!-- Interactive Range Capsule Trigger & Popover -->
                         <div class="relative">
                             <button
                                 type="button"
@@ -601,7 +601,7 @@ function formatTanggalIndo(dateStr) {
                                 @click="isDatePickerOpen = false"
                             ></div>
 
-                            <!-- Popover Kalender Dua Bulan -->
+                            <!-- Popover Kalender Dua Bulan Floating di Bawah Tombol Sesuai Rekap Kehadiran -->
                             <div
                                 v-if="isDatePickerOpen"
                                 class="fixed inset-x-2 top-20 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 z-50 flex justify-center sm:block"
@@ -648,7 +648,10 @@ function formatTanggalIndo(dateStr) {
                     </div>
                 </div>
             </CardHeader>
+        </Card>
 
+        <!-- ─── Table Card: Daftar Label & Paginasi ─────────────────────── -->
+        <Card className="bg-white border-slate-200/80 shadow-xs overflow-hidden relative z-10">
             <CardContent className="p-0">
                 <!-- Empty State -->
                 <div

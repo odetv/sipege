@@ -110,12 +110,43 @@ class PetugasController extends Controller
                 $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
             }
         } else {
-            // Default rentang tanggal saat pertama kali dibuka adalah per hari ini (Carbon::today())
-            $startDate = Carbon::today();
-            if ($mode === 'periodik') {
-                $endDate = $startDate->copy()->addDays(13); // 14 hari kerja
+            // Default: gunakan periode terbaru jika hari ini dalam rentang periode tersebut,
+            // bilamana periode terbaru tidak dalam rentang hari ini maka barulah gunakan hari ini.
+            $latestPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
+            $today = Carbon::today();
+
+            $targetPeriode = null;
+            if (
+                $latestPeriode &&
+                $latestPeriode->tanggal_mulai &&
+                $latestPeriode->tanggal_selesai &&
+                $today->between($latestPeriode->tanggal_mulai->copy()->startOfDay(), $latestPeriode->tanggal_selesai->copy()->startOfDay())
+            ) {
+                $targetPeriode = $latestPeriode;
             } else {
-                $endDate = $startDate->copy()->addDays(27); // 28 hari kerja (bulanan)
+                // Alternatif jika ada periode aktif yang menaungi hari ini
+                $activePeriodeDb = Periode::whereDate('tanggal_mulai', '<=', $today->format('Y-m-d'))
+                    ->whereDate('tanggal_selesai', '>=', $today->format('Y-m-d'))
+                    ->orderBy('nomor_periode', 'desc')
+                    ->first();
+                if ($activePeriodeDb) {
+                    $targetPeriode = $activePeriodeDb;
+                }
+            }
+
+            if ($targetPeriode) {
+                $startDate = $targetPeriode->tanggal_mulai->copy()->startOfDay();
+                $endDate = $targetPeriode->tanggal_selesai->copy()->startOfDay();
+                $periodeId = (string) $targetPeriode->id;
+                $diffDays = $startDate->diffInDays($endDate) + 1;
+                $mode = $diffDays <= 14 ? 'periodik' : ($diffDays <= 28 ? 'bulanan' : 'custom');
+            } else {
+                $startDate = Carbon::today();
+                if ($mode === 'periodik') {
+                    $endDate = $startDate->copy()->addDays(13); // 14 hari kerja
+                } else {
+                    $endDate = $startDate->copy()->addDays(27); // 28 hari kerja (bulanan)
+                }
             }
         }
 
@@ -130,7 +161,7 @@ class PetugasController extends Controller
                 ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
                 ->first();
             if ($matchedPeriode) {
-                $periodeId = $matchedPeriode->id;
+                $periodeId = (string) $matchedPeriode->id;
             }
         }
 
@@ -161,6 +192,7 @@ class PetugasController extends Controller
                     'nomor_periode' => $p->nomor_periode,
                     'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
                     'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'status' => $p->status,
                     'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
                 ];
             });

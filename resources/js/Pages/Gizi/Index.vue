@@ -171,6 +171,7 @@ function selectSubMenu(tabId) {
                 :initial-step="initialStep"
                 :work-orders-list="workOrdersList"
                 :active-work-order="activeWorkOrder"
+                :periodes="periodes"
                 @update-source="handleTkpiSourceChange"
             />
 

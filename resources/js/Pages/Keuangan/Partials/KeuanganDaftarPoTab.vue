@@ -366,15 +366,11 @@ function getUniqueJenisTransaksi(po) {
 }
 
 function getSubMenuLabelForBahan(it) {
-    const keyMap = {
-        sub_menu_1: "Sub Menu 1",
-        sub_menu_2: "Sub Menu 2",
-        sub_menu_3: "Sub Menu 3",
-        sub_menu_4: "Sub Menu 4",
-        sub_menu_5: "Sub Menu 5",
-    };
     const key = it.sub_menu_key || "sub_menu_1";
-    const label = keyMap[key] || "Sub Menu 1";
+    let label = "Sub Menu 1";
+    if (key.startsWith("sub_menu_")) {
+        label = `Sub Menu ${key.replace("sub_menu_", "")}`;
+    }
 
     let namaMenu = it.nama_sub_menu || "";
     if (!namaMenu && editingPo.value) {

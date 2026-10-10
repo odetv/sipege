@@ -162,7 +162,7 @@ const namaKepalaSppg = computed(() => {
 // Jadwal Kegiatan Operasional (6 Tahapan)
 const defaultJadwal = [
     { nama: "Persiapan", mulai: "19.00", selesai: "03.00" },
-    { nama: "Pengolahan", mulai: "02.00", selesai: "10.00" },
+    { nama: "Pengolahan", mulai: "01.00", selesai: "09.00" },
     { nama: "Pemorsian", mulai: "04.00", selesai: "12.00" },
     { nama: "Uji Organolaptik", mulai: "05.00", selesai: "06.00" },
     { nama: "Distribusi", mulai: "06.00", selesai: "14.00" },
@@ -382,6 +382,9 @@ const totalPorsiKeseluruhan = computed(() => {
 // Menu MBG & Kandungan Gizi
 const subMenuNormalList = computed(() => {
     const wo = props.workOrder || {};
+    if (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) {
+        return wo.sub_menus.filter(Boolean);
+    }
     const items = [
         wo.sub_menu_1,
         wo.sub_menu_2,
@@ -395,6 +398,29 @@ const subMenuNormalList = computed(() => {
           ? [wo.nama_menu]
           : ["Nasi Putih", "Lauk Utama", "Lauk Pendamping", "Sayur", "Buah"];
 });
+
+function hasNutrisi(gizi) {
+    if (!gizi) return false;
+    const e = Number(gizi.energi ?? gizi.energy ?? gizi.energi_pk ?? gizi.energi_pb ?? 0);
+    const p = Number(gizi.protein ?? gizi.prot ?? gizi.prot_pk ?? gizi.prot_pb ?? 0);
+    const l = Number(gizi.lemak ?? gizi.lmk ?? gizi.lmk_pk ?? gizi.lmk_pb ?? 0);
+    const k = Number(gizi.karbohidrat ?? gizi.karbo ?? gizi.karbo_pk ?? gizi.karbo_pb ?? 0);
+    const s = Number(gizi.serat ?? gizi.serat_pk ?? gizi.serat_pb ?? 0);
+    return (
+        Math.abs(e) > 0.001 ||
+        Math.abs(p) > 0.001 ||
+        Math.abs(l) > 0.001 ||
+        Math.abs(k) > 0.001 ||
+        Math.abs(s) > 0.001
+    );
+}
+
+function matchAllergyKey(objKey, targetKey) {
+    if (!objKey || !targetKey) return false;
+    const cleanObj = String(objKey).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanTarget = String(targetKey).toLowerCase().replace(/[^a-z0-9]/g, "");
+    return cleanObj === cleanTarget || cleanObj.includes(cleanTarget) || cleanTarget.includes(cleanObj);
+}
 
 const akgPK = computed(() => {
     return (
@@ -420,6 +446,26 @@ const akgPB = computed(() => {
     );
 });
 
+const hasNormalPK = computed(() => hasNutrisi(akgPK.value));
+const hasNormalPB = computed(() => hasNutrisi(akgPB.value));
+
+function extractCleanJenis(val) {
+    if (!val) return "";
+    if (typeof val === "object" && val !== null) {
+        return String(val.value || val.label || "").trim();
+    }
+    const str = String(val).trim();
+    if (str.startsWith("{") && str.endsWith("}")) {
+        try {
+            const parsed = JSON.parse(str);
+            return String(parsed.value || parsed.label || "").trim();
+        } catch {
+            return str;
+        }
+    }
+    return str;
+}
+
 // Varian Khusus Alergi
 const varianAlergiList = computed(() => {
     const wo = props.workOrder;
@@ -431,56 +477,130 @@ const varianAlergiList = computed(() => {
 
     if (Array.isArray(subAlergi)) {
         subAlergi.forEach((al) => {
-            if (!al || !al.jenis_alergi) return;
-            const j = al.jenis_alergi.trim();
+            if (!al) return;
+            const j = extractCleanJenis(al.jenis_alergi);
+            if (!j) return;
             if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
             const key = al.sub_menu_key || "sub_menu_2";
-            alergiMap[j].pengganti[key] =
-                al.menu_pengganti || al.nama || al.nama_menu || "-";
+            const penggantiStr = typeof al.menu_pengganti === "object" && al.menu_pengganti !== null
+                ? (al.menu_pengganti?.nama || al.menu_pengganti?.nama_menu || "")
+                : String(al.menu_pengganti || al.nama || al.nama_menu || "-");
+            alergiMap[j].pengganti[key] = penggantiStr || "-";
         });
     } else if (typeof subAlergi === "object") {
         Object.entries(subAlergi).forEach(([key, list]) => {
             if (Array.isArray(list)) {
                 list.forEach((al) => {
-                    if (!al || !al.jenis_alergi) return;
-                    const j = al.jenis_alergi.trim();
-                    if (!alergiMap[j])
-                        alergiMap[j] = { jenis: j, pengganti: {} };
-                    alergiMap[j].pengganti[key] =
-                        al.menu_pengganti || al.nama || al.nama_menu || "-";
+                    if (!al) return;
+                    const j = extractCleanJenis(al.jenis_alergi);
+                    if (!j) return;
+                    if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
+                    const penggantiStr = typeof al.menu_pengganti === "object" && al.menu_pengganti !== null
+                        ? (al.menu_pengganti?.nama || al.menu_pengganti?.nama_menu || "")
+                        : String(al.menu_pengganti || al.nama || al.nama_menu || "-");
+                    alergiMap[j].pengganti[key] = penggantiStr || "-";
                 });
             }
         });
     }
 
     items.forEach((it) => {
-        if (it.tipe_porsi === "alergi" && it.jenis_alergi) {
-            const j = it.jenis_alergi.trim();
-            if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
-            const key = it.sub_menu_key || "sub_menu_2";
-            if (it.nama_sub_menu && !alergiMap[j].pengganti[key]) {
-                alergiMap[j].pengganti[key] = it.nama_sub_menu;
+        if (it.tipe_porsi === "alergi") {
+            const j = extractCleanJenis(it.jenis_alergi);
+            if (j) {
+                if (!alergiMap[j]) alergiMap[j] = { jenis: j, pengganti: {} };
+                const key = it.sub_menu_key || "sub_menu_2";
+                if (it.nama_sub_menu && !alergiMap[j].pengganti[key]) {
+                    alergiMap[j].pengganti[key] = it.nama_sub_menu;
+                }
             }
         }
     });
 
+    if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+        Object.keys(wo.akg_alergi).forEach((k) => {
+            const j = extractCleanJenis(k);
+            if (j && !alergiMap[j]) {
+                alergiMap[j] = { jenis: j, pengganti: {} };
+            }
+        });
+    }
+
     return Object.values(alergiMap).map((al) => {
-        const menuList = [
-            al.pengganti["sub_menu_1"] || wo.sub_menu_1 || "",
-            al.pengganti["sub_menu_2"] || wo.sub_menu_2 || "",
-            al.pengganti["sub_menu_3"] || wo.sub_menu_3 || "",
-            al.pengganti["sub_menu_4"] || wo.sub_menu_4 || "",
-            al.pengganti["sub_menu_5"] || wo.sub_menu_5 || "",
-        ].filter(Boolean);
+        const baseItems = subMenuNormalList.value;
+        const menuList = baseItems
+            .map((baseName, idx) => {
+                const subKey = `sub_menu_${idx + 1}`;
+                return al.pengganti[subKey] || baseName || "";
+            })
+            .filter(Boolean);
+
+        let tempPK = null;
+        let tempPB = null;
+        let foundSpecific = false;
+
+        if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+            let specificAkg = wo.akg_alergi[al.jenis];
+            if (!specificAkg) {
+                const found = Object.entries(wo.akg_alergi).find(([k]) =>
+                    matchAllergyKey(k, al.jenis)
+                );
+                if (found) specificAkg = found[1];
+            }
+
+            if (specificAkg && typeof specificAkg === "object") {
+                foundSpecific = true;
+                const rawPK = specificAkg.akg_pk ?? (specificAkg.energi_pk !== undefined ? specificAkg : null);
+                const rawPB = specificAkg.akg_pb ?? (specificAkg.energi_pb !== undefined ? specificAkg : null);
+
+                if (rawPK && typeof rawPK === "object") {
+                    tempPK = {
+                        energi: Number(rawPK.energi ?? rawPK.energy ?? rawPK.energi_pk ?? 0),
+                        protein: Number(rawPK.protein ?? rawPK.prot ?? rawPK.prot_pk ?? 0),
+                        lemak: Number(rawPK.lemak ?? rawPK.lmk ?? rawPK.lmk_pk ?? 0),
+                        karbohidrat: Number(rawPK.karbohidrat ?? rawPK.karbo ?? rawPK.karbo_pk ?? 0),
+                        serat: Number(rawPK.serat ?? rawPK.serat_pk ?? 0),
+                    };
+                }
+
+                if (rawPB && typeof rawPB === "object") {
+                    tempPB = {
+                        energi: Number(rawPB.energi ?? rawPB.energy ?? rawPB.energi_pb ?? 0),
+                        protein: Number(rawPB.protein ?? rawPB.prot ?? rawPB.prot_pb ?? 0),
+                        lemak: Number(rawPB.lemak ?? rawPB.lmk ?? rawPB.lmk_pb ?? 0),
+                        karbohidrat: Number(rawPB.karbohidrat ?? rawPB.karbo ?? rawPB.karbo_pb ?? 0),
+                        serat: Number(rawPB.serat ?? rawPB.serat_pb ?? 0),
+                    };
+                }
+            }
+        }
+
+        // Jika tidak ada data spesifik akg_alergi sama sekali untuk alergen ini,
+        // gunakan nilai normal HANYA jika porsi normal tersebut memang memiliki nilai nutrisi (> 0)
+        if (!foundSpecific) {
+            if (hasNormalPK.value) {
+                tempPK = { ...akgPK.value };
+            }
+            if (hasNormalPB.value) {
+                tempPB = { ...akgPB.value };
+            }
+        }
+
+        // Porsi hanya dianggap ada jika bernilai > 0 (jika nilainya 0 semua, maka hasPK/hasPB = false)
+        const hasPK = hasNutrisi(tempPK);
+        const hasPB = hasNutrisi(tempPB);
 
         return {
             jenis: al.jenis,
             menuList:
                 menuList.length > 0 ? menuList : subMenuNormalList.value,
-            akgPK: akgPK.value,
-            akgPB: akgPB.value,
+            akgPK: tempPK || { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 },
+            akgPB: tempPB || { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 },
+            hasPK,
+            hasPB,
         };
-    });
+    })
+    .filter((al) => al.hasPK || al.hasPB);
 });
 
 // Generator Narasi Teks Otomatis Persis Format yang Diminta
@@ -513,7 +633,7 @@ const defaultNarasiText = computed(() => {
 
     // 2. Rincian Pembagian MBG (3B: Bumil, Busui, Balita)
     lines.push(
-        `*2.  Adapun rincian pembagian MBG sebanyak ${totalPorsiSekolah.value} porsi untuk ${sekolahList.value.length} Sekolah dan ${totalPorsiPosyandu.value} untuk ${posyanduList.value.length} Posyandu 3B (Bumil, Busui, Balita) dengan total ${totalPorsiKeseluruhan.value} Penerima Manfaat dan rincian sebagai berikut:*`,
+        `*2.  Adapun rincian pembagian MBG sebanyak ${totalPorsiSekolah.value} porsi untuk ${sekolahList.value.length} Sekolah dan ${totalPorsiPosyandu.value} porsi untuk ${posyanduList.value.length} Posyandu 3B (Bumil, Busui, Balita) dengan total ${totalPorsiKeseluruhan.value} Penerima Manfaat dan rincian sebagai berikut:*`,
     );
     lines.push(``);
 
@@ -542,62 +662,79 @@ const defaultNarasiText = computed(() => {
     lines.push(``);
 
     // 3. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)
-    lines.push(`*3.  Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)*`);
-    lines.push(``);
-    lines.push(`*Porsi Menu Normal*`);
-    lines.push(`*Menu Normal Porsi Kecil:*`);
-    subMenuNormalList.value.forEach((sm) => {
-        lines.push(`- ${sm}`);
-    });
-    lines.push(`*Kandungan Gizi Menu Normal Porsi Kecil:*`);
-    lines.push(`- Energi: ${akgPK.value.energi || 0} Kkal`);
-    lines.push(`- Protein: ${akgPK.value.protein || 0} gr`);
-    lines.push(`- Lemak: ${akgPK.value.lemak || 0} gr`);
-    lines.push(`- Karbohidrat: ${akgPK.value.karbohidrat || 0} gr`);
-    lines.push(`- Serat: ${akgPK.value.serat || 0} gr`);
+    if (hasNormalPK.value || hasNormalPB.value || varianAlergiList.value.length > 0) {
+        lines.push(`*3.  Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)*`);
+        lines.push(``);
 
-    lines.push(`*Menu Normal Porsi Besar:*`);
-    subMenuNormalList.value.forEach((sm) => {
-        lines.push(`- ${sm}`);
-    });
-    lines.push(`*Kandungan Gizi Menu Normal Porsi Besar:*`);
-    lines.push(`- Energi: ${akgPB.value.energi || 0} Kkal`);
-    lines.push(`- Protein: ${akgPB.value.protein || 0} gr`);
-    lines.push(`- Lemak: ${akgPB.value.lemak || 0} gr`);
-    lines.push(`- Karbohidrat: ${akgPB.value.karbohidrat || 0} gr`);
-    lines.push(`- Serat: ${akgPB.value.serat || 0} gr`);
+        if (hasNormalPK.value || hasNormalPB.value) {
+            lines.push(`*Porsi Menu Normal*`);
 
-    // Porsi Menu Alergi Jika Ada
-    if (varianAlergiList.value.length > 0) {
-        varianAlergiList.value.forEach((al) => {
-            lines.push(``);
-            lines.push(`*Porsi Menu Alergi ${al.jenis}*`);
-            lines.push(`*Menu Alergi ${al.jenis} Porsi Kecil:*`);
-            al.menuList.forEach((sm) => {
-                lines.push(`- ${sm}`);
+            if (hasNormalPK.value) {
+                lines.push(`*Menu Normal Porsi Kecil:*`);
+                subMenuNormalList.value.forEach((sm) => {
+                    lines.push(`- ${sm}`);
+                });
+                lines.push(`*Kandungan Gizi Menu Normal Porsi Kecil:*`);
+                lines.push(`- Energi: ${akgPK.value.energi || 0} Kkal`);
+                lines.push(`- Protein: ${akgPK.value.protein || 0} gr`);
+                lines.push(`- Lemak: ${akgPK.value.lemak || 0} gr`);
+                lines.push(`- Karbohidrat: ${akgPK.value.karbohidrat || 0} gr`);
+                lines.push(`- Serat: ${akgPK.value.serat || 0} gr`);
+            }
+
+            if (hasNormalPB.value) {
+                if (hasNormalPK.value) lines.push(``);
+                lines.push(`*Menu Normal Porsi Besar:*`);
+                subMenuNormalList.value.forEach((sm) => {
+                    lines.push(`- ${sm}`);
+                });
+                lines.push(`*Kandungan Gizi Menu Normal Porsi Besar:*`);
+                lines.push(`- Energi: ${akgPB.value.energi || 0} Kkal`);
+                lines.push(`- Protein: ${akgPB.value.protein || 0} gr`);
+                lines.push(`- Lemak: ${akgPB.value.lemak || 0} gr`);
+                lines.push(`- Karbohidrat: ${akgPB.value.karbohidrat || 0} gr`);
+                lines.push(`- Serat: ${akgPB.value.serat || 0} gr`);
+            }
+        }
+
+        // Porsi Menu Alergi Jika Ada
+        if (varianAlergiList.value.length > 0) {
+            varianAlergiList.value.forEach((al) => {
+                lines.push(``);
+                lines.push(`*Porsi Menu Alergi ${al.jenis}*`);
+
+                if (al.hasPK) {
+                    lines.push(`*Menu Alergi ${al.jenis} Porsi Kecil:*`);
+                    al.menuList.forEach((sm) => {
+                        lines.push(`- ${sm}`);
+                    });
+                    lines.push(
+                        `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Kecil:*`,
+                    );
+                    lines.push(`- Energi: ${al.akgPK.energi || 0} Kkal`);
+                    lines.push(`- Protein: ${al.akgPK.protein || 0} gr`);
+                    lines.push(`- Lemak: ${al.akgPK.lemak || 0} gr`);
+                    lines.push(`- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`);
+                    lines.push(`- Serat: ${al.akgPK.serat || 0} gr`);
+                }
+
+                if (al.hasPB) {
+                    if (al.hasPK) lines.push(``);
+                    lines.push(`*Menu Alergi ${al.jenis} Porsi Besar:*`);
+                    al.menuList.forEach((sm) => {
+                        lines.push(`- ${sm}`);
+                    });
+                    lines.push(
+                        `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Besar:*`,
+                    );
+                    lines.push(`- Energi: ${al.akgPB.energi || 0} Kkal`);
+                    lines.push(`- Protein: ${al.akgPB.protein || 0} gr`);
+                    lines.push(`- Lemak: ${al.akgPB.lemak || 0} gr`);
+                    lines.push(`- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`);
+                    lines.push(`- Serat: ${al.akgPB.serat || 0} gr`);
+                }
             });
-            lines.push(
-                `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Kecil:*`,
-            );
-            lines.push(`- Energi: ${al.akgPK.energi || 0} Kkal`);
-            lines.push(`- Protein: ${al.akgPK.protein || 0} gr`);
-            lines.push(`- Lemak: ${al.akgPK.lemak || 0} gr`);
-            lines.push(`- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`);
-            lines.push(`- Serat: ${al.akgPK.serat || 0} gr`);
-
-            lines.push(`*Menu Alergi ${al.jenis} Porsi Besar:*`);
-            al.menuList.forEach((sm) => {
-                lines.push(`- ${sm}`);
-            });
-            lines.push(
-                `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Besar:*`,
-            );
-            lines.push(`- Energi: ${al.akgPB.energi || 0} Kkal`);
-            lines.push(`- Protein: ${al.akgPB.protein || 0} gr`);
-            lines.push(`- Lemak: ${al.akgPB.lemak || 0} gr`);
-            lines.push(`- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`);
-            lines.push(`- Serat: ${al.akgPB.serat || 0} gr`);
-        });
+        }
     }
 
     lines.push(``);
@@ -1625,9 +1762,18 @@ const activeTab = ref("narasi");
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div
+                        v-if="hasNormalPK || hasNormalPB"
+                        :class="[
+                            'grid gap-4',
+                            hasNormalPK && hasNormalPB
+                                ? 'grid-cols-1 md:grid-cols-2'
+                                : 'grid-cols-1',
+                        ]"
+                    >
                         <!-- Menu Normal PK -->
                         <div
+                            v-if="hasNormalPK"
                             class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
                         >
                             <span
@@ -1685,6 +1831,7 @@ const activeTab = ref("narasi");
 
                         <!-- Menu Normal PB -->
                         <div
+                            v-if="hasNormalPB"
                             class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
                         >
                             <span
@@ -1741,6 +1888,14 @@ const activeTab = ref("narasi");
                         </div>
                     </div>
 
+                    <!-- Placeholder jika seluruh nutrisi normal bernilai 0 dan tidak ada alergi -->
+                    <div
+                        v-if="!hasNormalPK && !hasNormalPB && varianAlergiList.length === 0"
+                        class="text-center py-6 text-slate-400 text-xs"
+                    >
+                        Belum ada data porsi dan kandungan gizi yang tersedia untuk tanggal ini.
+                    </div>
+
                     <!-- Porsi Khusus Menu Alergi (Jika Ada) -->
                     <div
                         v-if="varianAlergiList.length > 0"
@@ -1774,9 +1929,19 @@ const activeTab = ref("narasi");
                                 </span>
                             </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div
+                                :class="[
+                                    'grid gap-4',
+                                    al.hasPK && al.hasPB
+                                        ? 'grid-cols-1 md:grid-cols-2'
+                                        : 'grid-cols-1',
+                                ]"
+                            >
                                 <!-- Menu Alergi PK -->
-                                <div class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5">
+                                <div
+                                    v-if="al.hasPK"
+                                    class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5"
+                                >
                                     <span class="text-xs font-black text-slate-900 block">
                                         Menu {{ al.jenis }} Porsi Kecil (PK)
                                     </span>
@@ -1802,7 +1967,10 @@ const activeTab = ref("narasi");
                                 </div>
 
                                 <!-- Menu Alergi PB -->
-                                <div class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5">
+                                <div
+                                    v-if="al.hasPB"
+                                    class="p-3.5 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2.5"
+                                >
                                     <span class="text-xs font-black text-slate-900 block">
                                         Menu {{ al.jenis }} Porsi Besar (PB)
                                     </span>

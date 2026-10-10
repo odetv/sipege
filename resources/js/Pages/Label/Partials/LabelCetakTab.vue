@@ -276,6 +276,39 @@ const activeKelompokList = computed(() => {
     });
 });
 
+// Helper normalisasi nama alergi untuk pencocokan toleran prefix "Alergi:" dan case
+function normalizeAllergyName(name) {
+    if (!name) return "";
+    let s = String(
+        typeof name === "object"
+            ? (name.value || name.label || name.jenis_alergi || "")
+            : name
+    );
+    return s
+        .trim()
+        .replace(/^alergi\s*[:\-]?\s*/i, "")
+        .trim()
+        .toLowerCase();
+}
+
+function matchAllergyKey(k1, k2) {
+    if (!k1 || !k2) return false;
+    const s1 = String(
+        typeof k1 === "object"
+            ? (k1.value || k1.label || k1.jenis_alergi || "")
+            : k1
+    ).trim().toLowerCase();
+    const s2 = String(
+        typeof k2 === "object"
+            ? (k2.value || k2.label || k2.jenis_alergi || "")
+            : k2
+    ).trim().toLowerCase();
+    if (s1 === s2) return true;
+    const n1 = normalizeAllergyName(s1);
+    const n2 = normalizeAllergyName(s2);
+    return n1.length > 0 && n1 === n2;
+}
+
 // Daftar Jenis Alergi yang Terdeteksi (Hanya yang terdampak pada Work Order saat Mode Otomatis)
 const detectedAlergiList = computed(() => {
     const list = new Set();
@@ -284,7 +317,16 @@ const detectedAlergiList = computed(() => {
         const wo = activeWorkOrder.value;
         if (!wo) return [];
 
-        // 1. Ambil dari sub_menu_alergi di WO (Menu pengganti diet khusus yang sudah diset)
+        // 1. Ambil dari akg_alergi yang tersimpan di WO (Kandungan gizi alergi rill)
+        if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+            Object.keys(wo.akg_alergi).forEach((k) => {
+                if (k && typeof k === "string" && k.trim()) {
+                    list.add(k.trim());
+                }
+            });
+        }
+
+        // 2. Ambil dari sub_menu_alergi di WO (Menu pengganti diet khusus yang sudah diset)
         if (wo.sub_menu_alergi) {
             let subMenus = [];
             if (Array.isArray(wo.sub_menu_alergi)) {
@@ -295,10 +337,9 @@ const detectedAlergiList = computed(() => {
             for (const sm of subMenus) {
                 if (sm) {
                     const val =
-                        sm.jenis_alergi ||
-                        sm.alergen ||
-                        sm.nama_alergi ||
-                        (typeof sm === "string" ? sm : null);
+                        typeof sm === "object"
+                            ? (sm.jenis_alergi?.value || sm.jenis_alergi || sm.alergen || sm.nama_alergi)
+                            : sm;
                     if (
                         val &&
                         typeof val === "string" &&
@@ -311,7 +352,7 @@ const detectedAlergiList = computed(() => {
             }
         }
 
-        // 2. Ambil dari items / bahan WO yang memiliki tipe_porsi 'alergi'
+        // 3. Ambil dari items / bahan WO yang memiliki tipe_porsi 'alergi'
         if (Array.isArray(wo.items)) {
             for (const it of wo.items) {
                 if (
@@ -325,7 +366,7 @@ const detectedAlergiList = computed(() => {
             }
         }
 
-        // 3. Fallback jika list masih kosong tetapi ada total_alergi pada WO
+        // 4. Fallback jika list masih kosong tetapi ada total_alergi pada WO
         if (list.size === 0 && Number(wo.total_alergi || 0) > 0) {
             const groups = activeKelompokList.value || [];
             for (const g of groups) {
@@ -349,9 +390,16 @@ const detectedAlergiList = computed(() => {
             }
         }
 
-        // Mode otomatis HANYA menampilkan alergi yang memang memiliki konfigurasi sub menu ATAU memiliki porsi > 0
+        // Mode otomatis HANYA menampilkan alergi yang memang memiliki konfigurasi sub menu, AKG khusus, ATAU memiliki porsi > 0
         const validList = Array.from(list).filter((jenis) => {
             if (!jenis) return false;
+            // Jika ada nilai AKG khusus di akg_alergi WO, wajib tampilkan
+            if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+                if (wo.akg_alergi[jenis] || Object.keys(wo.akg_alergi).some((k) => matchAllergyKey(k, jenis))) {
+                    return true;
+                }
+            }
+
             let inSubMenu = false;
             if (wo.sub_menu_alergi) {
                 const subMenus = Array.isArray(wo.sub_menu_alergi)
@@ -359,12 +407,14 @@ const detectedAlergiList = computed(() => {
                     : typeof wo.sub_menu_alergi === "object"
                     ? Object.values(wo.sub_menu_alergi).flat()
                     : [];
-                inSubMenu = subMenus.some(
-                    (sm) =>
-                        sm &&
-                        ((sm.jenis_alergi || sm.alergen || sm.nama_alergi) === jenis ||
-                         (typeof sm === "string" && sm === jenis))
-                );
+                inSubMenu = subMenus.some((sm) => {
+                    if (!sm) return false;
+                    const smVal =
+                        typeof sm === "object"
+                            ? (sm.jenis_alergi?.value || sm.jenis_alergi || sm.alergen || sm.nama_alergi)
+                            : sm;
+                    return matchAllergyKey(smVal, jenis);
+                });
             }
             if (inSubMenu) return true;
 
@@ -377,13 +427,13 @@ const detectedAlergiList = computed(() => {
                     for (const d of details) {
                         if (typeof d === "object") {
                             const j = (d.jenis_alergi || d.nama || "").trim();
-                            if (j.toLowerCase() === jenis.toLowerCase()) {
+                            if (matchAllergyKey(j, jenis)) {
                                 count +=
                                     (Number(d.porsi_kecil) || 0) +
                                     (Number(d.porsi_besar) || 0) +
                                     (Number(d.jumlah) || 0);
                             }
-                        } else if (typeof d === "string" && d.trim().toLowerCase() === jenis.toLowerCase()) {
+                        } else if (typeof d === "string" && matchAllergyKey(d.trim(), jenis)) {
                             count += 1;
                         }
                     }
@@ -858,9 +908,9 @@ function getAllergyPorsiBreakdown(jenis) {
                     const isTarget =
                         !jenis || jenis === "Semua Alergi"
                             ? affectedList.length > 0
-                                ? affectedList.includes(j)
+                                ? affectedList.some((al) => matchAllergyKey(al, j))
                                 : true
-                            : j.toLowerCase() === jenis.toLowerCase();
+                            : matchAllergyKey(j, jenis);
 
                     if (isTarget) {
                         pk += Number(d.porsi_kecil) || 0;
@@ -874,9 +924,9 @@ function getAllergyPorsiBreakdown(jenis) {
                     const isTarget =
                         !jenis || jenis === "Semua Alergi"
                             ? affectedList.length > 0
-                                ? affectedList.includes(j)
+                                ? affectedList.some((al) => matchAllergyKey(al, j))
                                 : true
-                            : j.toLowerCase() === jenis.toLowerCase();
+                            : matchAllergyKey(j, jenis);
 
                     if (isTarget) {
                         pb += 1;
@@ -916,7 +966,7 @@ function getKelompokAlergiBreakdown(k) {
                 if (
                     isAuto &&
                     affectedList.length > 0 &&
-                    !affectedList.includes(j)
+                    !affectedList.some((al) => matchAllergyKey(al, j))
                 ) {
                     continue;
                 }
@@ -932,7 +982,7 @@ function getKelompokAlergiBreakdown(k) {
                 if (
                     isAuto &&
                     affectedList.length > 0 &&
-                    !affectedList.includes(j)
+                    !affectedList.some((al) => matchAllergyKey(al, j))
                 ) {
                     continue;
                 }
@@ -956,9 +1006,8 @@ function getKelompokAlergiCount(k) {
     ) {
         return items.reduce((acc, it) => acc + it.count, 0);
     }
-    const found = items.find(
-        (it) =>
-            it.jenis.toLowerCase() === selectedJenisAlergi.value.toLowerCase(),
+    const found = items.find((it) =>
+        matchAllergyKey(it.jenis, selectedJenisAlergi.value),
     );
     return found ? found.count : 0;
 }
@@ -973,9 +1022,8 @@ function hasKelompokImpactedAlergi(k) {
     ) {
         return true;
     }
-    return items.some(
-        (it) =>
-            it.jenis.toLowerCase() === selectedJenisAlergi.value.toLowerCase(),
+    return items.some((it) =>
+        matchAllergyKey(it.jenis, selectedJenisAlergi.value),
     );
 }
 
@@ -1010,44 +1058,51 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
     const configs = { ...autoAllergyConfigs.value };
     const affectedList = detectedAlergiList.value;
 
+    const pb = wo.akg_pb || {};
+    const pk = wo.akg_pk || {};
+
     const baseGizi = {
-        energi_pb: String(wo.akg_pb?.energi || giziData.value?.energi_pb || "624"),
-        prot_pb: String(wo.akg_pb?.protein || giziData.value?.prot_pb || "25.2"),
-        lmk_pb: String(wo.akg_pb?.lemak || giziData.value?.lmk_pb || "17.7"),
-        karbo_pb: String(wo.akg_pb?.karbohidrat || giziData.value?.karbo_pb || "69.6"),
-        serat_pb: String(wo.akg_pb?.serat || giziData.value?.serat_pb || "3.8"),
-        energi_pk: String(wo.akg_pk?.energi || giziData.value?.energi_pk || "384.2"),
-        prot_pk: String(wo.akg_pk?.protein || giziData.value?.prot_pk || "21.4"),
-        lmk_pk: String(wo.akg_pk?.lemak || giziData.value?.lmk_pk || "14.2"),
-        karbo_pk: String(wo.akg_pk?.karbohidrat || giziData.value?.karbo_pk || "45.7"),
-        serat_pk: String(wo.akg_pk?.serat || giziData.value?.serat_pk || "2.6"),
+        energi_pb: String(pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624"),
+        prot_pb: String(pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2"),
+        lmk_pb: String(pb.lemak ?? pb.lmk ?? giziData.value?.lmk_pb ?? "17.7"),
+        karbo_pb: String(pb.karbohidrat ?? pb.karbo ?? giziData.value?.karbo_pb ?? "69.6"),
+        serat_pb: String(pb.serat ?? giziData.value?.serat_pb ?? "3.8"),
+        energi_pk: String(pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2"),
+        prot_pk: String(pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4"),
+        lmk_pk: String(pk.lemak ?? pk.lmk ?? giziData.value?.lmk_pk ?? "14.2"),
+        karbo_pk: String(pk.karbohidrat ?? pk.karbo ?? giziData.value?.karbo_pk ?? "45.7"),
+        serat_pk: String(pk.serat ?? giziData.value?.serat_pk ?? "2.6"),
     };
 
     affectedList.forEach((jenis) => {
         const existing = configs[jenis];
 
         // Cari nilai AKG spesifik alergi dari Work Order
-        const akgSpecific =
-            wo.akg_alergi?.[jenis] ||
-            (wo.akg_alergi
-                ? Object.entries(wo.akg_alergi).find(
-                      ([k]) => k.toLowerCase() === jenis.toLowerCase(),
-                  )?.[1]
-                : null);
+        let akgSpecific = null;
+        if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+            if (wo.akg_alergi[jenis]) {
+                akgSpecific = wo.akg_alergi[jenis];
+            } else {
+                const foundEntry = Object.entries(wo.akg_alergi).find(([k]) => matchAllergyKey(k, jenis));
+                if (foundEntry) akgSpecific = foundEntry[1];
+            }
+        }
 
         let specificGizi = { ...baseGizi };
         if (akgSpecific && (akgSpecific.akg_pb || akgSpecific.akg_pk)) {
+            const specPb = akgSpecific.akg_pb || {};
+            const specPk = akgSpecific.akg_pk || {};
             specificGizi = {
-                energi_pb: String(akgSpecific.akg_pb?.energi ?? baseGizi.energi_pb),
-                prot_pb: String(akgSpecific.akg_pb?.protein ?? baseGizi.prot_pb),
-                lmk_pb: String(akgSpecific.akg_pb?.lemak ?? baseGizi.lmk_pb),
-                karbo_pb: String(akgSpecific.akg_pb?.karbohidrat ?? baseGizi.karbo_pb),
-                serat_pb: String(akgSpecific.akg_pb?.serat ?? baseGizi.serat_pb),
-                energi_pk: String(akgSpecific.akg_pk?.energi ?? baseGizi.energi_pk),
-                prot_pk: String(akgSpecific.akg_pk?.protein ?? baseGizi.prot_pk),
-                lmk_pk: String(akgSpecific.akg_pk?.lemak ?? baseGizi.lmk_pk),
-                karbo_pk: String(akgSpecific.akg_pk?.karbohidrat ?? baseGizi.karbo_pk),
-                serat_pk: String(akgSpecific.akg_pk?.serat ?? baseGizi.serat_pk),
+                energi_pb: String(specPb.energi ?? specPb.energy ?? baseGizi.energi_pb),
+                prot_pb: String(specPb.protein ?? specPb.prot ?? baseGizi.prot_pb),
+                lmk_pb: String(specPb.lemak ?? specPb.lmk ?? baseGizi.lmk_pb),
+                karbo_pb: String(specPb.karbohidrat ?? specPb.karbo ?? baseGizi.karbo_pb),
+                serat_pb: String(specPb.serat ?? baseGizi.serat_pb),
+                energi_pk: String(specPk.energi ?? specPk.energy ?? baseGizi.energi_pk),
+                prot_pk: String(specPk.protein ?? specPk.prot ?? baseGizi.prot_pk),
+                lmk_pk: String(specPk.lemak ?? specPk.lmk ?? baseGizi.lmk_pk),
+                karbo_pk: String(specPk.karbohidrat ?? specPk.karbo ?? baseGizi.karbo_pk),
+                serat_pk: String(specPk.serat ?? baseGizi.serat_pk),
             };
         }
 
@@ -1056,9 +1111,7 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
                 existing?.menuItems && existing.menuItems.length > 0
                     ? [...existing.menuItems]
                     : getAllergyMenuItemsForTarget(jenis, wo),
-            giziData: existing?.giziData
-                ? { ...existing.giziData }
-                : { ...specificGizi },
+            giziData: { ...specificGizi },
             tagAlergi:
                 existing?.tagAlergi ||
                 `⚠️ KHUSUS ALERGI: ${jenis.toUpperCase()}`,
@@ -1073,27 +1126,38 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
             ? selectedJenisAlergi.value
             : (currentAutoEditingAllergy.value || affectedList[0]);
 
-    if (targetAllergy && configs[targetAllergy]?.giziData) {
-        giziDataAlergi.value = { ...configs[targetAllergy].giziData };
+    let targetCfg = targetAllergy ? configs[targetAllergy] : null;
+    if (!targetCfg && targetAllergy) {
+        const found = Object.entries(configs).find(([k]) => matchAllergyKey(k, targetAllergy));
+        if (found) targetCfg = found[1];
+    }
+
+    if (targetCfg?.giziData) {
+        giziDataAlergi.value = { ...targetCfg.giziData };
     }
 }
 
-// Helper mengambil menu pengganti alergi berdasarkan sub_menu 1-5 dan sub_menu_alergi di WO
+// Helper mengambil menu pengganti alergi berdasarkan sub_menu 1-5 (atau lebih) dan sub_menu_alergi di WO
 function getAllergyMenuItemsForTarget(
     targetAlergi,
     wo = activeWorkOrder.value,
 ) {
     if (!wo) return menuItemsAlergi.value;
 
-    const normal1 = menuItems.value[0] || wo.sub_menu_1 || "";
-    const normal2 = menuItems.value[1] || wo.sub_menu_2 || "";
-    const normal3 = menuItems.value[2] || wo.sub_menu_3 || "";
-    const normal4 = menuItems.value[3] || wo.sub_menu_4 || "";
-    const normal5 = menuItems.value[4] || wo.sub_menu_5 || "";
+    let baseList = [];
+    if (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) {
+        baseList = wo.sub_menus.filter(Boolean);
+    } else {
+        const normal1 = menuItems.value[0] || wo.sub_menu_1 || "";
+        const normal2 = menuItems.value[1] || wo.sub_menu_2 || "";
+        const normal3 = menuItems.value[2] || wo.sub_menu_3 || "";
+        const normal4 = menuItems.value[3] || wo.sub_menu_4 || "";
+        const normal5 = menuItems.value[4] || wo.sub_menu_5 || "";
+        baseList = [normal1, normal2, normal3, normal4, normal5].filter(
+            Boolean,
+        );
+    }
 
-    const baseList = [normal1, normal2, normal3, normal4, normal5].filter(
-        Boolean,
-    );
     if (baseList.length === 0) {
         return menuItemsAlergi.value;
     }
@@ -1105,8 +1169,8 @@ function getAllergyMenuItemsForTarget(
 
     const result = [...baseList];
 
-    // Cek sub_menu_1 sampai sub_menu_5 untuk mencari menu pengganti
-    for (let i = 1; i <= 5; i++) {
+    // Cek sub_menu_1 sampai sub_menu_N untuk mencari menu pengganti
+    for (let i = 1; i <= result.length; i++) {
         const key = `sub_menu_${i}`;
         const replacements = rawAlergi[key];
         if (Array.isArray(replacements) && replacements.length > 0) {
@@ -1120,7 +1184,7 @@ function getAllergyMenuItemsForTarget(
                     replName &&
                     (!targetAlergi ||
                         targetAlergi === "Semua Alergi" ||
-                        targetAlergi.toLowerCase() === j.toLowerCase() ||
+                        matchAllergyKey(targetAlergi, j) ||
                         j === "")
                 ) {
                     if (result[i - 1] !== undefined) {
@@ -1140,14 +1204,17 @@ function syncDataFromWorkOrder(wo) {
     tanggalProduksi.value = wo.tanggal || todayStr;
     tanggalExpired.value = wo.tanggal || todayStr;
 
-    // 1. Sinkronisasi komponen menu normal (Sub Menu 1 sampai 5 dari WO)
-    const normalSubMenus = [
-        wo.sub_menu_1,
-        wo.sub_menu_2,
-        wo.sub_menu_3,
-        wo.sub_menu_4,
-        wo.sub_menu_5,
-    ].filter(Boolean);
+    // 1. Sinkronisasi komponen menu normal (Sub Menu dari WO)
+    const normalSubMenus =
+        Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0
+            ? wo.sub_menus.filter(Boolean)
+            : [
+                  wo.sub_menu_1,
+                  wo.sub_menu_2,
+                  wo.sub_menu_3,
+                  wo.sub_menu_4,
+                  wo.sub_menu_5,
+              ].filter(Boolean);
 
     if (normalSubMenus.length > 0) {
         menuItems.value = normalSubMenus;
@@ -1167,18 +1234,20 @@ function syncDataFromWorkOrder(wo) {
     }
 
     // 3. Sinkronisasi AKG Normal
-    if (wo.akg_pb && wo.akg_pk) {
+    const pb = wo.akg_pb || {};
+    const pk = wo.akg_pk || {};
+    if (wo.akg_pb || wo.akg_pk) {
         giziData.value = {
-            energi_pb: String(wo.akg_pb.energi || "624"),
-            prot_pb: String(wo.akg_pb.protein || "25.2"),
-            lmk_pb: String(wo.akg_pb.lemak || "17.7"),
-            karbo_pb: String(wo.akg_pb.karbohidrat || "69.6"),
-            serat_pb: String(wo.akg_pb.serat || "3.8"),
-            energi_pk: String(wo.akg_pk.energi || "384.2"),
-            prot_pk: String(wo.akg_pk.protein || "21.4"),
-            lmk_pk: String(wo.akg_pk.lemak || "14.2"),
-            karbo_pk: String(wo.akg_pk.karbohidrat || "45.7"),
-            serat_pk: String(wo.akg_pk.serat || "2.6"),
+            energi_pb: String(pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624"),
+            prot_pb: String(pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2"),
+            lmk_pb: String(pb.lemak ?? pb.lmk ?? giziData.value?.lmk_pb ?? "17.7"),
+            karbo_pb: String(pb.karbohidrat ?? pb.karbo ?? giziData.value?.karbo_pb ?? "69.6"),
+            serat_pb: String(pb.serat ?? giziData.value?.serat_pb ?? "3.8"),
+            energi_pk: String(pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2"),
+            prot_pk: String(pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4"),
+            lmk_pk: String(pk.lemak ?? pk.lmk ?? giziData.value?.lmk_pk ?? "14.2"),
+            karbo_pk: String(pk.karbohidrat ?? pk.karbo ?? giziData.value?.karbo_pk ?? "45.7"),
+            serat_pk: String(pk.serat ?? giziData.value?.serat_pk ?? "2.6"),
         };
     }
 
@@ -1191,10 +1260,16 @@ function syncDataFromWorkOrder(wo) {
             ? selectedJenisAlergi.value
             : (currentAutoEditingAllergy.value || detectedAlergiList.value[0]);
 
-    if (targetAllergy && autoAllergyConfigs.value[targetAllergy]) {
-        menuItemsAlergi.value = [...autoAllergyConfigs.value[targetAllergy].menuItems];
-        if (autoAllergyConfigs.value[targetAllergy].giziData) {
-            giziDataAlergi.value = { ...autoAllergyConfigs.value[targetAllergy].giziData };
+    let targetCfg = targetAllergy ? autoAllergyConfigs.value[targetAllergy] : null;
+    if (!targetCfg && targetAllergy) {
+        const found = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, targetAllergy));
+        if (found) targetCfg = found[1];
+    }
+
+    if (targetCfg) {
+        menuItemsAlergi.value = [...targetCfg.menuItems];
+        if (targetCfg.giziData) {
+            giziDataAlergi.value = { ...targetCfg.giziData };
         }
     } else {
         menuItemsAlergi.value = getAllergyMenuItemsForTarget(
@@ -1254,10 +1329,15 @@ watch([currentAutoEditingAllergy, selectedJenisAlergi], ([currAuto, selJenis]) =
             selJenis && selJenis !== "Semua Alergi"
                 ? selJenis
                 : currAuto || detectedAlergiList.value[0];
-        if (target && autoAllergyConfigs.value[target]) {
-            menuItemsAlergi.value = [...autoAllergyConfigs.value[target].menuItems];
-            if (autoAllergyConfigs.value[target].giziData) {
-                giziDataAlergi.value = { ...autoAllergyConfigs.value[target].giziData };
+        let foundCfg = target ? autoAllergyConfigs.value[target] : null;
+        if (!foundCfg && target) {
+            const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, target));
+            if (entry) foundCfg = entry[1];
+        }
+        if (foundCfg) {
+            menuItemsAlergi.value = [...foundCfg.menuItems];
+            if (foundCfg.giziData) {
+                giziDataAlergi.value = { ...foundCfg.giziData };
             }
         } else {
             menuItemsAlergi.value = getAllergyMenuItemsForTarget(
@@ -1515,7 +1595,7 @@ const printableItems = computed(() => {
                 if (
                     isAuto &&
                     affectedAlergiList.length > 0 &&
-                    !affectedAlergiList.includes(j)
+                    !affectedAlergiList.some((al) => matchAllergyKey(al, j))
                 ) {
                     continue;
                 }
@@ -1532,7 +1612,7 @@ const printableItems = computed(() => {
                 if (
                     isAuto &&
                     affectedAlergiList.length > 0 &&
-                    !affectedAlergiList.includes(j)
+                    !affectedAlergiList.some((al) => matchAllergyKey(al, j))
                 ) {
                     continue;
                 }
@@ -1562,9 +1642,13 @@ const printableItems = computed(() => {
                 if (
                     filterCetakTipe.value === "semua" ||
                     selectedJenisAlergi.value === "Semua Alergi" ||
-                    selectedJenisAlergi.value === ab.jenis
+                    matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
                 ) {
-                    const cfg = autoAllergyConfigs.value[ab.jenis];
+                    let cfg = autoAllergyConfigs.value[ab.jenis];
+                    if (!cfg) {
+                        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, ab.jenis));
+                        if (entry) cfg = entry[1];
+                    }
                     const menuList =
                         cfg && Array.isArray(cfg.menuItems) && cfg.menuItems.length > 0
                             ? [...cfg.menuItems]
@@ -1576,7 +1660,7 @@ const printableItems = computed(() => {
                     const tagItem =
                         cfg?.tagAlergi ||
                         (customTagAlergi.value &&
-                        selectedJenisAlergi.value === ab.jenis
+                        matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
                             ? customTagAlergi.value
                             : `⚠️ KHUSUS ALERGI: ${ab.jenis.toUpperCase()}`);
 
@@ -2023,8 +2107,14 @@ const currentPreviewMenuItems = computed(() => {
     }
     // Mode Otomatis
     const jenis = currentPreviewJenisAlergi.value;
-    if (jenis && autoAllergyConfigs.value[jenis]?.menuItems) {
-        return autoAllergyConfigs.value[jenis].menuItems;
+    if (jenis) {
+        if (autoAllergyConfigs.value[jenis]?.menuItems) {
+            return autoAllergyConfigs.value[jenis].menuItems;
+        }
+        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, jenis));
+        if (entry && entry[1]?.menuItems) {
+            return entry[1].menuItems;
+        }
     }
     return getAllergyMenuItemsForTarget(jenis || "Semua Alergi");
 });
@@ -2043,8 +2133,14 @@ const currentPreviewGiziData = computed(() => {
     }
     // Mode Otomatis
     const jenis = currentPreviewJenisAlergi.value;
-    if (jenis && autoAllergyConfigs.value[jenis]?.giziData) {
-        return autoAllergyConfigs.value[jenis].giziData;
+    if (jenis) {
+        if (autoAllergyConfigs.value[jenis]?.giziData) {
+            return autoAllergyConfigs.value[jenis].giziData;
+        }
+        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, jenis));
+        if (entry && entry[1]?.giziData) {
+            return entry[1].giziData;
+        }
     }
     return giziDataAlergi.value;
 });

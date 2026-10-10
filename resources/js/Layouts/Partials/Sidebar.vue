@@ -91,6 +91,14 @@ const isPenerimaManfaatActive = computed(() => {
     }
 });
 
+const isWorkOrderActive = computed(() => {
+    try {
+        return route().current("work-order.*");
+    } catch {
+        return false;
+    }
+});
+
 const isGiziActive = computed(() => {
     try {
         return route().current("gizi.*");
@@ -199,6 +207,7 @@ const isLaporanSppgActive = computed(() => {
 function getInitialMenu() {
     if (isPetugasActive.value) return "petugas";
     if (isPenerimaManfaatActive.value) return "penerima-manfaat";
+    if (isWorkOrderActive.value) return "work-order";
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
     if (isLaporanSppgActive.value) return "laporan-sppg";
@@ -223,6 +232,9 @@ const isPetugasExpanded = computed(
 );
 const isPenerimaManfaatExpanded = computed(
     () => activeExpandedMenu.value === "penerima-manfaat",
+);
+const isWorkOrderExpanded = computed(
+    () => activeExpandedMenu.value === "work-order",
 );
 const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
 const isKeuanganExpanded = computed(
@@ -251,6 +263,8 @@ watch(
             activeExpandedMenu.value = "petugas";
         } else if (isPenerimaManfaatActive.value) {
             activeExpandedMenu.value = "penerima-manfaat";
+        } else if (isWorkOrderActive.value) {
+            activeExpandedMenu.value = "work-order";
         } else if (isGiziActive.value) {
             activeExpandedMenu.value = "gizi";
         } else if (isKeuanganActive.value) {
@@ -291,6 +305,14 @@ function togglePenerimaManfaatMenu() {
     }
     activeExpandedMenu.value =
         activeExpandedMenu.value === "penerima-manfaat" ? null : "penerima-manfaat";
+}
+
+function toggleWorkOrderMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "work-order" ? null : "work-order";
 }
 
 function toggleSpjMenu() {
@@ -672,7 +694,76 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 3. Menu Gizi (Accordion with Submenu) -->
+                <!-- 4. Menu Khusus Work Order (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Work Order Button -->
+                    <button
+                        type="button"
+                        @click="toggleWorkOrderMenu"
+                        :title="isCollapsed ? 'Work Order' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            route().current('work-order.*')
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <ClipboardList class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Work Order</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isWorkOrderExpanded ? 'rotate-180 text-primary' : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Perencanaan Produksi & Daftar WO -->
+                    <div
+                        v-if="!isCollapsed && isWorkOrderExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Buat WO -->
+                        <Link
+                            :href="route('work-order.buat')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('work-order.buat*') || route().current('work-order.edit-manual*') || route().current('work-order.perencanaan*') || (route().current('work-order.index') && !route().current('work-order.daftar*'))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarCheck class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Buat WO</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Daftar WO -->
+                        <Link
+                            :href="route('work-order.daftar')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('work-order.daftar*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <FileSpreadsheet class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Daftar WO</span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 5. Menu Gizi (Accordion with Submenu) -->
                 <div class="space-y-0.5">
                     <!-- Parent Gizi Button -->
                     <button

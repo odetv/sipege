@@ -40,58 +40,82 @@ const props = defineProps({
 const page = usePage();
 const flash = computed(() => page.props.flash ?? {});
 
-// ─── Preset Jam Kerja per Divisi (Mendukung Reguler, Rolling Shift, & Jadwal Khusus) ──
+// ─── Preset Jam Kerja per Divisi (Mendukung Normal 1 Rentang & Kustom Multi-Shift) ──
 const presetJamDivisi = {
-    "Kepala SPPG": { type: "reguler", mulai: "07:00", selesai: "16:00" },
-    "PLOG": { type: "reguler", mulai: "03:00", selesai: "12:00" },
-    "PLOK": { type: "reguler", mulai: "07:00", selesai: "16:00" },
+    "Kepala SPPG": { type: "normal", mulai: "07:00", selesai: "16:00" },
+    "PLOG": { type: "normal", mulai: "03:00", selesai: "12:00" },
+    "PLOK": { type: "normal", mulai: "07:00", selesai: "16:00" },
     "Koordinator Lapangan": {
-        type: "custom",
-        text: "06.00 - 15.00 & 17.00 - 19.00 & 02.00 - 03.00",
-        mulai: "06:00",
-        selesai: "15:00",
+        type: "kustom",
+        shifts: [
+            { mulai: "06:00", selesai: "15:00" },
+            { mulai: "17:00", selesai: "19:00" },
+            { mulai: "02:00", selesai: "03:00" },
+        ],
     },
     "Kepala Lapangan": {
-        type: "custom",
-        text: "06.00 - 15.00 & 17.00 - 19.00 & 02.00 - 03.00",
-        mulai: "06:00",
-        selesai: "15:00",
+        type: "kustom",
+        shifts: [
+            { mulai: "06:00", selesai: "15:00" },
+            { mulai: "17:00", selesai: "19:00" },
+            { mulai: "02:00", selesai: "03:00" },
+        ],
     },
-    "Chef": { type: "reguler", mulai: "01:00", selesai: "10:00" },
-    "Kepala Juru Masak (Chef)": { type: "reguler", mulai: "01:00", selesai: "10:00" },
-    "Pengolahan (Koordinator)": { type: "reguler", mulai: "02:00", selesai: "10:00" },
-    "Pengolahan": { type: "reguler", mulai: "02:00", selesai: "10:00" },
-    "Juru Masak": { type: "reguler", mulai: "02:00", selesai: "10:00" },
-    "Persiapan (Koordinator)": { type: "reguler", mulai: "17:00", selesai: "01:00" },
-    "Persiapan": { type: "reguler", mulai: "17:00", selesai: "01:00" },
-    "Pemorsian (Koordinator)": { type: "reguler", mulai: "04:00", selesai: "12:00" },
-    "Pemorsian": { type: "reguler", mulai: "04:00", selesai: "12:00" },
-    "Pengemudi (Koordinator 1)": { type: "reguler", mulai: "06:00", selesai: "14:00" },
-    "Pengemudi (Koordinator 2)": { type: "reguler", mulai: "06:00", selesai: "14:00" },
-    "Pengemudi": { type: "reguler", mulai: "06:00", selesai: "14:00" },
-    "Distribusi": { type: "reguler", mulai: "06:00", selesai: "14:00" },
-    "Cuci Ompreng (Koordinator)": { type: "reguler", mulai: "11:00", selesai: "19:00" },
-    "Cuci Ompreng": { type: "reguler", mulai: "11:00", selesai: "19:00" },
-    "Cuci Ompreng (a.k.a Admin)": { type: "reguler", mulai: "11:00", selesai: "19:00" },
+    "Chef": {
+        type: "kustom",
+        shifts: [
+            { mulai: "01:00", selesai: "11:00" },
+            { mulai: "17:00", selesai: "19:00" },
+        ],
+    },
+    "Kepala Juru Masak (Chef)": {
+        type: "kustom",
+        shifts: [
+            { mulai: "01:00", selesai: "11:00" },
+            { mulai: "17:00", selesai: "19:00" },
+        ],
+    },
+    "Pengolahan (Koordinator)": { type: "normal", mulai: "01:00", selesai: "09:00" },
+    "Pengolahan": { type: "normal", mulai: "01:00", selesai: "09:00" },
+    "Juru Masak": { type: "normal", mulai: "01:00", selesai: "09:00" },
+    "Persiapan (Koordinator)": { type: "normal", mulai: "19:00", selesai: "03:00" },
+    "Persiapan": { type: "normal", mulai: "19:00", selesai: "03:00" },
+    "Pemorsian (Koordinator)": { type: "normal", mulai: "04:00", selesai: "12:00" },
+    "Pemorsian": { type: "normal", mulai: "04:00", selesai: "12:00" },
+    "Pengemudi (Koordinator 1)": { type: "normal", mulai: "06:00", selesai: "14:00" },
+    "Pengemudi (Koordinator 2)": { type: "normal", mulai: "06:00", selesai: "14:00" },
+    "Pengemudi": { type: "normal", mulai: "06:00", selesai: "14:00" },
+    "Distribusi": { type: "normal", mulai: "06:00", selesai: "14:00" },
+    "Cuci Ompreng (Koordinator)": { type: "normal", mulai: "12:00", selesai: "20:00" },
+    "Cuci Ompreng": { type: "normal", mulai: "12:00", selesai: "20:00" },
+    "Cuci Ompreng (a.k.a Admin)": { type: "normal", mulai: "12:00", selesai: "20:00" },
     "Kebersihan": {
-        type: "rolling",
-        shift1: { label: "Shift Pagi-Sore", mulai: "05:00", selesai: "13:00" },
-        shift2: { label: "Shift Sore-Malam", mulai: "13:00", selesai: "21:00" },
+        type: "kustom",
+        shifts: [
+            { mulai: "05:00", selesai: "13:00" },
+            { mulai: "13:00", selesai: "21:00" },
+        ],
     },
     "Petugas Kebersihan": {
-        type: "rolling",
-        shift1: { label: "Shift Pagi-Sore", mulai: "05:00", selesai: "13:00" },
-        shift2: { label: "Shift Sore-Malam", mulai: "13:00", selesai: "21:00" },
+        type: "kustom",
+        shifts: [
+            { mulai: "05:00", selesai: "13:00" },
+            { mulai: "13:00", selesai: "21:00" },
+        ],
     },
     "Keamanan": {
-        type: "rolling",
-        shift1: { label: "Shift Pagi-Malam", mulai: "06:00", selesai: "18:00" },
-        shift2: { label: "Shift Malam-Pagi", mulai: "18:00", selesai: "06:00" },
+        type: "kustom",
+        shifts: [
+            { mulai: "06:00", selesai: "18:00" },
+            { mulai: "18:00", selesai: "06:00" },
+        ],
     },
     "Petugas Keamanan": {
-        type: "rolling",
-        shift1: { label: "Shift Pagi-Malam", mulai: "06:00", selesai: "18:00" },
-        shift2: { label: "Shift Malam-Pagi", mulai: "18:00", selesai: "06:00" },
+        type: "kustom",
+        shifts: [
+            { mulai: "06:00", selesai: "18:00" },
+            { mulai: "18:00", selesai: "06:00" },
+        ],
     },
 };
 
@@ -270,24 +294,18 @@ const form = useForm({
     keterangan: "-",
 });
 
-// ─── State Jam Kerja (Mendukung Reguler 1 Shift, Rolling Shift 2 Pilihan, & Khusus) ──
-const tipeJamKerja = ref("reguler"); // 'reguler' | 'rolling' | 'custom'
+// ─── State Jam Kerja (Hanya 2 Pilihan: Normal & Kustom) ──────────────────────
+const tipeJamKerja = ref("normal"); // 'normal' | 'kustom'
 
-// Reguler (1 Shift)
+// Normal (1 Rentang Jadwal berformat waktu)
 const jamMulai = ref("07:00");
 const jamSelesai = ref("16:00");
 
-// Rolling Shift (2 Shift Bergilir)
-const shift1Label = ref("Shift Pagi-Sore");
-const shift1Mulai = ref("05:00");
-const shift1Selesai = ref("13:00");
-
-const shift2Label = ref("Shift Sore-Malam");
-const shift2Mulai = ref("13:00");
-const shift2Selesai = ref("21:00");
-
-// Jadwal Khusus / Multi-Shift
-const customJamKerja = ref("");
+// Kustom (Multi-Shift Dinamis berformat waktu)
+const customShifts = ref([
+    { mulai: "06:00", selesai: "15:00" },
+    { mulai: "17:00", selesai: "19:00" },
+]);
 
 // Helper jam berformat titik (05.00) sesuai data excel / database
 function toDotTime(str) {
@@ -297,14 +315,15 @@ function toDotTime(str) {
 
 // Update string form.jam_kerja otomatis
 function syncJamKerja() {
-    if (tipeJamKerja.value === "rolling") {
-        const l1 = shift1Label.value.trim() || "Shift 1";
-        const l2 = shift2Label.value.trim() || "Shift 2";
-        const s1 = `${l1} = ${toDotTime(shift1Mulai.value)} - ${toDotTime(shift1Selesai.value)}`;
-        const s2 = `${l2} = ${toDotTime(shift2Mulai.value)} - ${toDotTime(shift2Selesai.value)}`;
-        form.jam_kerja = `${s1} / ${s2}`;
-    } else if (tipeJamKerja.value === "custom") {
-        form.jam_kerja = customJamKerja.value.trim();
+    if (tipeJamKerja.value === "kustom") {
+        const valid = (customShifts.value || []).filter((s) => s.mulai && s.selesai);
+        if (valid.length > 0) {
+            form.jam_kerja = valid
+                .map((s) => `${toDotTime(s.mulai)} - ${toDotTime(s.selesai)}`)
+                .join(" & ");
+        } else {
+            form.jam_kerja = "";
+        }
     } else {
         form.jam_kerja = `${toDotTime(jamMulai.value)} - ${toDotTime(jamSelesai.value)}`;
     }
@@ -312,6 +331,31 @@ function syncJamKerja() {
     if (form.jam_kerja && clientErrors.value.jam_kerja) {
         delete clientErrors.value.jam_kerja;
     }
+}
+
+function addCustomShift() {
+    customShifts.value.push({ mulai: "08:00", selesai: "16:00" });
+    syncJamKerja();
+}
+
+function removeCustomShift(idx) {
+    if (customShifts.value.length > 1) {
+        customShifts.value.splice(idx, 1);
+        syncJamKerja();
+    }
+}
+
+function switchTipeJamKerja(tipe) {
+    tipeJamKerja.value = tipe;
+    if (tipe === "kustom") {
+        if (!customShifts.value || customShifts.value.length === 0) {
+            customShifts.value = [
+                { mulai: jamMulai.value || "07:00", selesai: jamSelesai.value || "16:00" },
+                { mulai: "17:00", selesai: "19:00" },
+            ];
+        }
+    }
+    syncJamKerja();
 }
 
 // Helper ekstraksi waktu HH:mm atau HH.mm
@@ -326,61 +370,59 @@ function parseTimes(str, cb) {
     }
 }
 
-// Parsing string jam kerja ke input form (Reguler, Rolling Shift, atau Custom)
+// Parsing string jam kerja ke input form (Normal vs Kustom)
 function parseJamKerjaToInputs(str) {
-    if (!str) {
-        tipeJamKerja.value = "reguler";
+    if (!str || str.toLowerCase().includes("menyesuaikan")) {
+        tipeJamKerja.value = "normal";
         jamMulai.value = "07:00";
         jamSelesai.value = "16:00";
+        customShifts.value = [
+            { mulai: "07:00", selesai: "16:00" },
+            { mulai: "17:00", selesai: "19:00" },
+        ];
         return;
     }
 
-    if (str.includes("/") || str.toLowerCase().includes("shift")) {
-        tipeJamKerja.value = "rolling";
-        const parts = str.split("/");
-        const p1 = parts[0] ? parts[0].trim() : "";
-        const p2 = parts[1] ? parts[1].trim() : "";
+    // Cek apakah multi-shift (mengandung '&' atau '/')
+    if (str.includes("&") || str.includes("/") || str.toLowerCase().includes("shift")) {
+        tipeJamKerja.value = "kustom";
+        const delimiter = str.includes("&") ? "&" : (str.includes("/") ? "/" : "&");
+        const parts = str.split(delimiter).map((p) => p.trim()).filter(Boolean);
+        const parsedShifts = [];
 
-        // Parse Shift 1
-        if (p1.includes("=")) {
-            const [lbl, timePart] = p1.split("=").map((s) => s.trim());
-            shift1Label.value = lbl || "Shift 1";
-            parseTimes(timePart, (m, s) => {
-                shift1Mulai.value = m;
-                shift1Selesai.value = s;
-            });
-        } else {
-            shift1Label.value = "Shift 1";
-            parseTimes(p1, (m, s) => {
-                shift1Mulai.value = m;
-                shift1Selesai.value = s;
-            });
-        }
-
-        // Parse Shift 2
-        if (p2.includes("=")) {
-            const [lbl, timePart] = p2.split("=").map((s) => s.trim());
-            shift2Label.value = lbl || "Shift 2";
-            parseTimes(timePart, (m, s) => {
-                shift2Mulai.value = m;
-                shift2Selesai.value = s;
-            });
-        } else {
-            shift2Label.value = "Shift 2";
-            parseTimes(p2, (m, s) => {
-                shift2Mulai.value = m;
-                shift2Selesai.value = s;
-            });
-        }
-    } else if (str.includes("&")) {
-        tipeJamKerja.value = "custom";
-        customJamKerja.value = str;
-    } else {
-        tipeJamKerja.value = "reguler";
-        parseTimes(str, (m, s) => {
-            jamMulai.value = m;
-            jamSelesai.value = s;
+        parts.forEach((part) => {
+            const matches = part.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/g);
+            if (matches && matches.length >= 2) {
+                parsedShifts.push({
+                    mulai: matches[0].replace(".", ":").padStart(5, "0"),
+                    selesai: matches[1].replace(".", ":").padStart(5, "0"),
+                });
+            }
         });
+
+        if (parsedShifts.length > 0) {
+            customShifts.value = parsedShifts;
+        } else {
+            customShifts.value = [
+                { mulai: "07:00", selesai: "16:00" },
+                { mulai: "17:00", selesai: "19:00" },
+            ];
+        }
+    } else {
+        // Mode Normal (1 rentang)
+        tipeJamKerja.value = "normal";
+        const matches = str.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/g);
+        if (matches && matches.length >= 2) {
+            jamMulai.value = matches[0].replace(".", ":").padStart(5, "0");
+            jamSelesai.value = matches[1].replace(".", ":").padStart(5, "0");
+        } else {
+            jamMulai.value = "07:00";
+            jamSelesai.value = "16:00";
+        }
+        customShifts.value = [
+            { mulai: jamMulai.value, selesai: jamSelesai.value },
+            { mulai: "17:00", selesai: "19:00" },
+        ];
     }
 }
 
@@ -391,20 +433,11 @@ function onJabatanChange() {
 
     const preset = presetJamDivisi[form.jabatan];
     if (preset) {
-        if (preset.type === "rolling") {
-            tipeJamKerja.value = "rolling";
-            shift1Label.value = preset.shift1.label;
-            shift1Mulai.value = preset.shift1.mulai;
-            shift1Selesai.value = preset.shift1.selesai;
-
-            shift2Label.value = preset.shift2.label;
-            shift2Mulai.value = preset.shift2.mulai;
-            shift2Selesai.value = preset.shift2.selesai;
-        } else if (preset.type === "custom") {
-            tipeJamKerja.value = "custom";
-            customJamKerja.value = preset.text;
+        if (preset.type === "kustom") {
+            tipeJamKerja.value = "kustom";
+            customShifts.value = JSON.parse(JSON.stringify(preset.shifts));
         } else {
-            tipeJamKerja.value = "reguler";
+            tipeJamKerja.value = "normal";
             jamMulai.value = preset.mulai;
             jamSelesai.value = preset.selesai;
         }
@@ -516,17 +549,18 @@ function validateForm() {
         errors.nomor_rekening = "Nomor rekening bank wajib diisi (hanya angka).";
     }
 
-    if (tipeJamKerja.value === "reguler") {
+    if (tipeJamKerja.value === "normal") {
         if (!jamMulai.value || !jamSelesai.value) {
             errors.jam_kerja = "Jam mulai dan jam selesai wajib ditentukan.";
         }
-    } else if (tipeJamKerja.value === "rolling") {
-        if (!shift1Mulai.value || !shift1Selesai.value || !shift2Mulai.value || !shift2Selesai.value) {
-            errors.jam_kerja = "Semua jam shift 1 dan shift 2 wajib diisi lengkap.";
-        }
-    } else if (tipeJamKerja.value === "custom") {
-        if (!customJamKerja.value || customJamKerja.value.trim().length === 0) {
-            errors.jam_kerja = "Jadwal khusus jam kerja wajib diisi.";
+    } else if (tipeJamKerja.value === "kustom") {
+        if (!customShifts.value || customShifts.value.length === 0) {
+            errors.jam_kerja = "Minimal 1 rentang waktu / shift harus diisi.";
+        } else {
+            const hasEmpty = customShifts.value.some((s) => !s.mulai || !s.selesai);
+            if (hasEmpty) {
+                errors.jam_kerja = "Semua jam mulai dan jam selesai shift wajib diisi lengkap.";
+            }
         }
     }
 
@@ -1489,55 +1523,43 @@ watch(
                                     </p>
                                 </div>
 
-                                <!-- Jam Kerja: Pilihan Mode (Reguler vs Rolling Shift vs Khusus) -->
+                                <!-- Jam Kerja: Pilihan Mode (Normal vs Kustom) -->
                                 <div class="sm:col-span-2">
                                     <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                                         <label class="block text-xs font-semibold text-slate-700">
                                             Sistem Jam Kerja Operasional <span class="text-rose-500">*</span>
                                         </label>
-                                        <!-- Switch Mode Buttons -->
+                                        <!-- Switch Mode Buttons (Normal vs Kustom) -->
                                         <div class="inline-flex rounded-lg p-0.5 bg-slate-100 border border-slate-200">
                                             <button
                                                 type="button"
-                                                @click="() => { tipeJamKerja = 'reguler'; syncJamKerja(); }"
+                                                @click="switchTipeJamKerja('normal')"
                                                 :class="[
-                                                    'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer',
-                                                    tipeJamKerja === 'reguler'
+                                                    'px-3 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer',
+                                                    tipeJamKerja === 'normal'
                                                         ? 'bg-white text-emerald-700 shadow-xs'
                                                         : 'text-slate-500 hover:text-slate-800'
                                                 ]"
                                             >
-                                                Reguler (1 Shift)
+                                                Normal
                                             </button>
                                             <button
                                                 type="button"
-                                                @click="() => { tipeJamKerja = 'rolling'; syncJamKerja(); }"
+                                                @click="switchTipeJamKerja('kustom')"
                                                 :class="[
-                                                    'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer',
-                                                    tipeJamKerja === 'rolling'
+                                                    'px-3 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer',
+                                                    tipeJamKerja === 'kustom'
                                                         ? 'bg-white text-emerald-700 shadow-xs'
                                                         : 'text-slate-500 hover:text-slate-800'
                                                 ]"
                                             >
-                                                Rolling Shift (2 Pilihan)
-                                            </button>
-                                            <button
-                                                type="button"
-                                                @click="() => { tipeJamKerja = 'custom'; syncJamKerja(); }"
-                                                :class="[
-                                                    'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer',
-                                                    tipeJamKerja === 'custom'
-                                                        ? 'bg-white text-emerald-700 shadow-xs'
-                                                        : 'text-slate-500 hover:text-slate-800'
-                                                ]"
-                                            >
-                                                Jadwal Khusus
+                                                Kustom
                                             </button>
                                         </div>
                                     </div>
 
-                                    <!-- Mode 1: Reguler (1 Shift) -->
-                                    <div v-if="tipeJamKerja === 'reguler'" class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                    <!-- Mode 1: Normal (1 Rentang Jadwal) -->
+                                    <div v-if="tipeJamKerja === 'normal'" class="p-3 rounded-xl bg-slate-50 border border-slate-200">
                                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                                             <div class="flex items-center gap-2">
                                                 <div class="relative w-full">
@@ -1566,118 +1588,71 @@ watch(
                                         </div>
                                     </div>
 
-                                    <!-- Mode 2: Rolling Shift (2 Pilihan Jam Kerja Bergilir) -->
-                                    <div v-else-if="tipeJamKerja === 'rolling'" class="p-3.5 rounded-xl bg-teal-50/40 border border-teal-200 space-y-3">
+                                    <!-- Mode 2: Kustom (Multi-Shift Dinamis Berformat Waktu) -->
+                                    <div v-else-if="tipeJamKerja === 'kustom'" class="p-3.5 rounded-xl bg-teal-50/40 border border-teal-200 space-y-3">
                                         <div class="flex items-center justify-between pb-1 border-b border-teal-100">
                                             <span class="text-[11px] font-bold text-teal-800 flex items-center gap-1.5">
-                                                <RefreshCw class="h-3.5 w-3.5 text-teal-600" />
-                                                <span>Rolling Shift (2 Pilihan Jam Kerja Bergilir)</span>
+                                                <Clock class="h-3.5 w-3.5 text-teal-600" />
+                                                <span>Rentang Waktu Kerja / Shift</span>
                                             </span>
-                                            <span class="text-[10px] text-teal-600 font-medium">Contoh: Shift Pagi & Sore/Malam</span>
+                                            <button
+                                                type="button"
+                                                @click="addCustomShift"
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white hover:bg-teal-100 rounded-lg border border-teal-300 shadow-2xs transition-colors cursor-pointer"
+                                            >
+                                                <Plus class="h-3.5 w-3.5" />
+                                                <span>Tambah Shift</span>
+                                            </button>
                                         </div>
 
-                                        <!-- Shift 1 -->
-                                        <div class="p-2.5 rounded-lg bg-white border border-teal-200 shadow-2xs">
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
-                                                <div class="sm:col-span-1">
-                                                    <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                        Nama Shift 1
-                                                    </label>
-                                                    <input
-                                                        v-model="shift1Label"
-                                                        @input="syncJamKerja"
-                                                        type="text"
-                                                        placeholder="Contoh: Shift Pagi-Sore"
-                                                        class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                                                    />
+                                        <div class="space-y-2.5">
+                                            <div
+                                                v-for="(shift, idx) in customShifts"
+                                                :key="idx"
+                                                class="p-2.5 rounded-xl bg-white border border-teal-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                                            >
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <span class="inline-flex items-center justify-center h-6 px-2.5 rounded-md bg-teal-100 text-teal-800 text-[10px] font-black uppercase tracking-wider">
+                                                        Shift {{ idx + 1 }}
+                                                    </span>
                                                 </div>
-                                                <div class="sm:col-span-2 grid grid-cols-2 gap-2 items-center">
-                                                    <div>
-                                                        <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                            Mulai
-                                                        </label>
+
+                                                <div class="grid grid-cols-2 gap-2 grow items-center">
+                                                    <div class="relative w-full">
+                                                        <span class="text-[10px] text-slate-500 uppercase font-bold block mb-0.5">Jam Mulai</span>
                                                         <input
-                                                            v-model="shift1Mulai"
+                                                            v-model="shift.mulai"
                                                             @input="syncJamKerja"
                                                             type="time"
                                                             required
-                                                            class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                                                            class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
                                                         />
                                                     </div>
-                                                    <div>
-                                                        <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                            Selesai
-                                                        </label>
+                                                    <div class="relative w-full">
+                                                        <span class="text-[10px] text-slate-500 uppercase font-bold block mb-0.5">Jam Selesai</span>
                                                         <input
-                                                            v-model="shift1Selesai"
+                                                            v-model="shift.selesai"
                                                             @input="syncJamKerja"
                                                             type="time"
                                                             required
-                                                            class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                                                            class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
                                                         />
                                                     </div>
+                                                </div>
+
+                                                <div class="shrink-0 flex items-center justify-end">
+                                                    <button
+                                                        v-if="customShifts.length > 1"
+                                                        type="button"
+                                                        @click="removeCustomShift(idx)"
+                                                        class="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer mt-2 sm:mt-0"
+                                                        title="Hapus Shift"
+                                                    >
+                                                        <Trash2 class="h-4 w-4" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <!-- Shift 2 -->
-                                        <div class="p-2.5 rounded-lg bg-white border border-teal-200 shadow-2xs">
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
-                                                <div class="sm:col-span-1">
-                                                    <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                        Nama Shift 2
-                                                    </label>
-                                                    <input
-                                                        v-model="shift2Label"
-                                                        @input="syncJamKerja"
-                                                        type="text"
-                                                        placeholder="Contoh: Shift Sore-Malam"
-                                                        class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                                                    />
-                                                </div>
-                                                <div class="sm:col-span-2 grid grid-cols-2 gap-2 items-center">
-                                                    <div>
-                                                        <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                            Mulai
-                                                        </label>
-                                                        <input
-                                                            v-model="shift2Mulai"
-                                                            @input="syncJamKerja"
-                                                            type="time"
-                                                            required
-                                                            class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                                            Selesai
-                                                        </label>
-                                                        <input
-                                                            v-model="shift2Selesai"
-                                                            @input="syncJamKerja"
-                                                            type="time"
-                                                            required
-                                                            class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Mode 3: Custom / Multi Shift -->
-                                    <div v-else-if="tipeJamKerja === 'custom'" class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                                        <label class="text-[10px] font-bold text-slate-600 uppercase block mb-1">
-                                            Jadwal Khusus / Multi-Shift (Contoh: Koordinator Lapangan)
-                                        </label>
-                                        <input
-                                            v-model="customJamKerja"
-                                            @input="syncJamKerja"
-                                            type="text"
-                                            required
-                                            placeholder="Contoh: 06.00 - 15.00 & 17.00 - 19.00 & 02.00 - 03.00"
-                                            class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold focus:ring-1 focus:ring-primary focus:border-primary bg-white"
-                                        />
                                     </div>
 
                                     <!-- Preview Format Yang Tersimpan -->
