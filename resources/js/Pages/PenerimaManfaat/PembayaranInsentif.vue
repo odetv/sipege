@@ -84,6 +84,20 @@ const rentangHariCount = computed(() => {
     return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
 });
 
+const selectedPeriode = computed(() => {
+    if (!selectedPeriodeId.value || selectedPeriodeId.value === "all") return null;
+    return props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+});
+
+const labelSiklus = computed(() => {
+    if (selectedPeriode.value) {
+        return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${rentangHariCount.value} Hari Kerja)`;
+    }
+    if (rentangHariCount.value === 14) return "Siklus: Periodik (14 Hari Kerja)";
+    if (rentangHariCount.value === 28) return "Siklus: Bulanan (28 Hari Kerja)";
+    return `Siklus: Kustom (${rentangHariCount.value} Hari Kerja)`;
+});
+
 
 // ─── Editable Items State (Dengan Titik Pembilang & Custom Edit Warning) ──────
 function mapInitialItems(list) {

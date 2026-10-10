@@ -162,6 +162,20 @@ const dateColumns = computed(() => {
     return list;
 });
 
+const selectedPeriode = computed(() => {
+    if (!selectedPeriodeId.value || selectedPeriodeId.value === "all") return null;
+    return props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+});
+
+const labelSiklus = computed(() => {
+    if (selectedPeriode.value) {
+        return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${dateColumns.value.length} Hari Kerja)`;
+    }
+    if (dateColumns.value.length === 14) return "Siklus: Periodik (14 Hari Kerja)";
+    if (dateColumns.value.length === 28) return "Siklus: Bulanan (28 Hari Kerja)";
+    return `Siklus: Kustom (${dateColumns.value.length} Hari Kerja)`;
+});
+
 
 // ─── State Matriks Distribusi Harian (Interaktif) ──────────────────────────────
 const matrixDistribusi = ref({});
