@@ -465,79 +465,111 @@ onMounted(() => {
 
 <template>
     <div
-        class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs"
+        class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs w-full max-w-full"
         :class="{ 'p-2 sm:p-2.5': compact }"
     >
         <!-- Sisi Kiri: Switcher 3 Opsi + Dropdown Periode / Capsule Rentang -->
-        <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto min-w-0">
             <!-- Slot tambahan kiri (opsional) -->
             <slot name="left" />
 
-            <!-- Switcher Segmented 3 Opsi -->
-            <div
-                class="inline-flex items-center p-1 rounded-xl bg-white border border-emerald-200/90 shadow-2xs"
-                :class="compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10'"
-            >
-                <!-- 1. Hari Ini -->
-                <button
-                    type="button"
-                    @click="pilihFilterMode('hari_ini')"
-                    :class="[
-                        'h-full px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5',
-                        activeFilterMode === 'hari_ini' && !isFilterAllTime
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
-                    ]"
-                    title="Tampilkan data untuk hari ini saja"
+            <!-- Baris Atas Mobile / Bagian Kiri Desktop: Segmented Switcher + Archive Button di Mobile jika tidak ada slot right -->
+            <div class="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+                <!-- Switcher Segmented 3 Opsi -->
+                <div
+                    class="grid grid-cols-3 sm:inline-flex items-center p-1 rounded-xl bg-white border border-emerald-200/90 shadow-2xs flex-1 sm:flex-initial"
+                    :class="compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10'"
                 >
-                    <Clock class="h-3.5 w-3.5" />
-                    <span>Hari Ini</span>
-                </button>
+                    <!-- 1. Hari Ini -->
+                    <button
+                        type="button"
+                        @click="pilihFilterMode('hari_ini')"
+                        :class="[
+                            'h-full px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 sm:gap-1.5 select-none',
+                            activeFilterMode === 'hari_ini' && !isFilterAllTime
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+                        ]"
+                        title="Tampilkan data untuk hari ini saja"
+                    >
+                        <Clock class="h-3.5 w-3.5 shrink-0" />
+                        <span class="truncate">Hari Ini</span>
+                    </button>
 
-                <!-- 2. Periode -->
-                <button
-                    type="button"
-                    @click="pilihFilterMode('periode')"
-                    :class="[
-                        'h-full px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5',
-                        activeFilterMode === 'periode' && !isFilterAllTime
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
-                    ]"
-                    title="Filter berdasarkan siklus periode SPPG"
-                >
-                    <Sparkles class="h-3.5 w-3.5" />
-                    <span>Periode</span>
-                </button>
+                    <!-- 2. Periode -->
+                    <button
+                        type="button"
+                        @click="pilihFilterMode('periode')"
+                        :class="[
+                            'h-full px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 sm:gap-1.5 select-none',
+                            activeFilterMode === 'periode' && !isFilterAllTime
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+                        ]"
+                        title="Filter berdasarkan siklus periode SPPG"
+                    >
+                        <Sparkles class="h-3.5 w-3.5 shrink-0" />
+                        <span class="truncate">Periode</span>
+                    </button>
 
-                <!-- 3. Rentang -->
-                <button
-                    type="button"
-                    @click="pilihFilterMode('rentang')"
-                    :class="[
-                        'h-full px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5',
-                        activeFilterMode === 'rentang' && !isFilterAllTime
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
-                    ]"
-                    title="Filter berdasarkan rentang tanggal kalender"
-                >
-                    <CalendarDays class="h-3.5 w-3.5" />
-                    <span>Rentang</span>
-                </button>
+                    <!-- 3. Rentang -->
+                    <button
+                        type="button"
+                        @click="pilihFilterMode('rentang')"
+                        :class="[
+                            'h-full px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 sm:gap-1.5 select-none',
+                            activeFilterMode === 'rentang' && !isFilterAllTime
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+                        ]"
+                        title="Filter berdasarkan rentang tanggal kalender"
+                    >
+                        <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                        <span class="truncate">Rentang</span>
+                    </button>
+                </div>
+
+                <!-- Tombol Arsip khusus Mobile saat tidak ada slot right (menghindari tombol arsip sendirian di bawah) -->
+                <div v-if="showArchive && !$slots.right" class="sm:hidden shrink-0">
+                    <button
+                        v-if="!isFilterAllTime"
+                        type="button"
+                        @click="resetFilterSemua"
+                        :class="[
+                            'rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 text-slate-700 hover:text-emerald-800 shadow-2xs flex items-center justify-center transition-all cursor-pointer group',
+                            compact ? 'h-8 w-8' : 'h-9 w-9',
+                        ]"
+                        title="Lihat semua arsip yang ada"
+                    >
+                        <Archive class="h-4 w-4 text-emerald-700 group-hover:scale-110 transition-transform" />
+                    </button>
+                    <button
+                        v-else
+                        type="button"
+                        @click="kembalikanFilterSemula"
+                        :class="[
+                            'rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs flex items-center justify-center transition-all cursor-pointer group',
+                            compact ? 'h-8 w-8' : 'h-9 w-9',
+                        ]"
+                        title="Kembalikan ke semula"
+                    >
+                        <RotateCcw class="h-4 w-4 group-hover:-rotate-45 transition-transform" />
+                    </button>
+                </div>
             </div>
 
+            <!-- Kontrol Pemilih Aktif (Dropdown Periode / Kapsul Rentang / Kapsul Hari Ini) -->
             <!-- Dropdown Periode (Tampil saat mode Periode aktif) -->
             <div
                 v-if="activeFilterMode === 'periode' && !isFilterAllTime"
-                class="flex items-center gap-2 animate-in fade-in duration-200"
+                class="w-full sm:w-auto min-w-0 flex items-center animate-in fade-in duration-200"
             >
-                <div class="relative">
+                <div class="relative w-full sm:w-auto min-w-0">
                     <select
                         v-model="selectedPeriodeId"
                         @change="onPeriodeSelectChange"
                         :class="[
-                            'pl-3 pr-8 rounded-xl border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none cursor-pointer shadow-2xs transition-all max-w-full sm:max-w-xs md:max-w-md truncate',
+                            'w-full sm:w-auto min-w-0 pl-3 pr-8 rounded-xl border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none cursor-pointer shadow-2xs transition-all max-w-full sm:max-w-xs md:max-w-md truncate block',
                             compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10',
                         ]"
                     >
@@ -555,24 +587,26 @@ onMounted(() => {
             <!-- Capsule Range Tanggal (Tampil saat mode Rentang aktif, memicu kalender muncul dari kapsul ini) -->
             <div
                 v-else-if="activeFilterMode === 'rentang' && !isFilterAllTime"
-                class="relative flex items-center animate-in fade-in duration-200"
+                class="relative w-full sm:w-auto min-w-0 flex items-center animate-in fade-in duration-200"
             >
                 <button
                     type="button"
                     @click="isDatePickerOpen = !isDatePickerOpen"
                     :class="[
-                        'inline-flex items-center gap-2 px-3.5 rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 shadow-2xs text-xs font-bold text-slate-800 transition-all cursor-pointer group',
+                        'w-full sm:w-auto min-w-0 inline-flex items-center justify-between sm:justify-start gap-2 px-3.5 rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 shadow-2xs text-xs font-bold text-slate-800 transition-all cursor-pointer group',
                         compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10',
                     ]"
                     title="Klik untuk membuka pemilih tanggal kalender"
                 >
-                    <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalMulai) }}</span>
-                    <template v-if="tanggalMulai !== tanggalSelesai">
-                        <span class="text-emerald-500 font-black">➜</span>
-                        <span class="text-emerald-700 font-extrabold">{{ formatTanggalIndo(tanggalSelesai) }}</span>
-                    </template>
+                    <div class="flex items-center gap-1.5 min-w-0 truncate">
+                        <span class="text-emerald-700 font-extrabold truncate">{{ formatTanggalIndo(tanggalMulai) }}</span>
+                        <template v-if="tanggalMulai !== tanggalSelesai">
+                            <span class="text-emerald-500 font-black shrink-0">➜</span>
+                            <span class="text-emerald-700 font-extrabold truncate">{{ formatTanggalIndo(tanggalSelesai) }}</span>
+                        </template>
+                    </div>
                     <ChevronDown
-                        class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0"
                         :class="{ 'rotate-180': isDatePickerOpen }"
                     />
                 </button>
@@ -601,26 +635,37 @@ onMounted(() => {
             <!-- Info Hari Ini (Saat mode Hari Ini aktif) -->
             <div
                 v-else-if="activeFilterMode === 'hari_ini' && !isFilterAllTime"
-                class="flex items-center gap-2 animate-in fade-in duration-200"
+                class="w-full sm:w-auto min-w-0 flex items-center animate-in fade-in duration-200"
             >
                 <div
                     :class="[
-                        'inline-flex items-center gap-2 px-3.5 rounded-xl bg-white border border-emerald-300 shadow-2xs text-xs font-bold text-emerald-800 whitespace-nowrap',
+                        'w-full sm:w-auto min-w-0 inline-flex items-center justify-center sm:justify-start gap-2 px-3.5 rounded-xl bg-white border border-emerald-300 shadow-2xs text-xs font-bold text-emerald-800 truncate',
                         compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10',
                     ]"
                 >
-                    <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                    <span>{{ formatTanggalIndo(todayStr) }}</span>
+                    <Calendar class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span class="truncate">{{ formatTanggalIndo(todayStr) }}</span>
                 </div>
             </div>
 
             <!-- Slot ekstra (misal tombol atau dropdown filter samping) -->
-            <slot name="extra" />
+            <div v-if="$slots.extra" class="w-full sm:w-auto min-w-0">
+                <slot name="extra" />
+            </div>
         </div>
 
-        <!-- Sisi Kanan: Icon Aksi Lihat Semua Arsip / Kembalikan ke Semula -->
-        <div class="flex items-center gap-2 ml-auto sm:ml-0">
-            <slot name="right" />
+        <!-- Sisi Kanan: Slot Right & Archive Action -->
+        <!-- Di Desktop: Tampil normal di kanan. Di HP: Tampil jika ada slot right, ATAU jika showArchive dan ada slot right -->
+        <div
+            v-if="showArchive || $slots.right"
+            :class="[
+                'flex items-center gap-2 min-w-0 w-full sm:w-auto',
+                $slots.right ? 'justify-between sm:justify-end' : 'hidden sm:flex justify-end'
+            ]"
+        >
+            <div v-if="$slots.right" class="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                <slot name="right" />
+            </div>
 
             <template v-if="showArchive">
                 <button
@@ -628,7 +673,8 @@ onMounted(() => {
                     type="button"
                     @click="resetFilterSemua"
                     :class="[
-                        'rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 text-slate-700 hover:text-emerald-800 shadow-2xs flex items-center justify-center transition-all cursor-pointer group',
+                        'rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 text-slate-700 hover:text-emerald-800 shadow-2xs flex items-center justify-center transition-all cursor-pointer group shrink-0',
+                        !$slots.right ? 'hidden sm:flex' : '',
                         compact ? 'h-8 sm:h-9 w-8 sm:w-9' : 'h-9 sm:h-10 w-9 sm:w-10',
                     ]"
                     title="Lihat semua arsip yang ada"
@@ -640,7 +686,8 @@ onMounted(() => {
                     type="button"
                     @click="kembalikanFilterSemula"
                     :class="[
-                        'rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs flex items-center justify-center transition-all cursor-pointer group',
+                        'rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs flex items-center justify-center transition-all cursor-pointer group shrink-0',
+                        !$slots.right ? 'hidden sm:flex' : '',
                         compact ? 'h-8 sm:h-9 w-8 sm:w-9' : 'h-9 sm:h-10 w-9 sm:w-10',
                     ]"
                     title="Kembalikan ke semula"

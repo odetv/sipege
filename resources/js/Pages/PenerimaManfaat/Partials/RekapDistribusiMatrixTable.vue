@@ -165,12 +165,12 @@ function getColTotalPorsi(col) {
                             :key="col.dateStr"
                             @click="$emit('toggleKolomStatus', col.dateStr)"
                             :class="[
-                                'py-2 px-1 text-center min-w-[34px] max-w-[34px] border-r border-slate-200 select-none transition-colors cursor-pointer hover:bg-slate-200/80',
+                                'py-2 px-1 text-center min-w-[34px] max-w-[34px] border-r border-slate-200 select-none transition-all cursor-pointer hover:bg-slate-200/80 active:scale-95',
                                 col.isToday
                                     ? 'bg-emerald-100/80 font-black text-emerald-950'
                                     : (col.isSunday ? 'bg-red-50/70 text-red-700 font-semibold' : (col.isWeekend ? 'bg-amber-50/50 text-amber-800' : ''))
                             ]"
-                            :title="`${col.dayName}, ${col.dateStr} (Klik untuk set/kosongkan seluruh kolom)`"
+                            :title="`${col.dayName}, ${col.dateStr} (Klik tanggal untuk ganti status: T ➜ P ➜ L ➜ Kosong)`"
                         >
                             <div class="text-[9px] leading-tight opacity-75 uppercase">{{ col.dayName }}</div>
                             <div class="text-[11px] leading-tight font-extrabold mt-0.5">{{ col.dayNum }}</div>

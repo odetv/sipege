@@ -800,35 +800,13 @@ function copyRowRekening(id, text) {
             <!-- ─── Page Header & Navigation Breadcrumb ───────────────────── -->
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
-                    <!-- Breadcrumbs / Submenu Nav Tab -->
-                    <div class="flex items-center gap-2 mb-2 text-xs font-medium">
-                        <Link
-                            :href="route('petugas.index')"
-                            class="text-slate-500 hover:text-slate-800 transition-colors"
-                        >
-                            Daftar Petugas
-                        </Link>
-                        <span class="text-slate-300">/</span>
-                        <Link
-                            :href="route('petugas.rekap-kehadiran')"
-                            class="text-slate-500 hover:text-slate-800 transition-colors"
-                        >
-                            Rekap Kehadiran
-                        </Link>
-                        <span class="text-slate-300">/</span>
-                        <span class="text-primary font-bold">Pembayaran Gaji (BNI Direct)</span>
-                    </div>
-
                     <div class="flex items-center gap-3">
-                        <div class="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs">
+                        <div class="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs shrink-0">
                             <CreditCard class="h-6 w-6" />
                         </div>
-                        <div>
-                            <h1 class="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                                <span>Pembayaran Gaji Petugas SPPG</span>
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    BNI Direct Inhouse
-                                </span>
+                        <div class="min-w-0">
+                            <h1 class="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                                Pembayaran Gaji Petugas SPPG
                             </h1>
                             <p class="text-xs text-slate-500 mt-0.5">
                                 Generator otomatis batch transfer payroll BNI Direct (Sheet Inhouse) sesuai kehadiran & kompensasi personil
@@ -842,11 +820,11 @@ function copyRowRekening(id, text) {
                     <button
                         type="button"
                         @click="openPreviewModal"
-                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer flex-1 sm:flex-none"
+                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer flex-1 sm:flex-none min-w-0 truncate"
                         title="Lihat isi format file CSV BNI Direct"
                     >
-                        <Eye class="h-4 w-4 text-slate-500" />
-                        <span>Preview CSV</span>
+                        <Eye class="h-4 w-4 text-slate-500 shrink-0" />
+                        <span class="truncate">Preview CSV</span>
                     </button>
 
                     <!-- Download Template .XLS (Hanya 3 Kolom Diisi) -->
@@ -855,11 +833,11 @@ function copyRowRekening(id, text) {
                         @click="triggerDownloadExcel"
                         :disabled="isDownloadingExcel || totalSelectedCount === 0"
                         title="Download template .xls resmi BNI Direct dengan hanya mengisi data di 3 kolom (Rek. Tujuan, Nama, Amount) tanpa mengubah format template"
-                        class="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none"
+                        class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none min-w-0 truncate"
                     >
-                        <FileSpreadsheet class="h-4 w-4" />
-                        <span v-if="isDownloadingExcel">Menyiapkan .xls...</span>
-                        <span v-else>Download Template .XLS</span>
+                        <FileSpreadsheet class="h-4 w-4 shrink-0" />
+                        <span v-if="isDownloadingExcel" class="truncate">Menyiapkan .xls...</span>
+                        <span v-else class="truncate">Download Template .XLS</span>
                     </button>
 
                     <!-- Download CSV BNI Direct -->
@@ -867,9 +845,9 @@ function copyRowRekening(id, text) {
                         type="button"
                         @click="triggerDownloadCsv"
                         :disabled="isDownloading || totalSelectedCount === 0"
-                        class="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto"
+                        class="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto min-w-0"
                     >
-                        <Download class="h-4 w-4" />
+                        <Download class="h-4 w-4 shrink-0" />
                         <span>Download CSV BNI Direct</span>
                     </button>
                 </div>

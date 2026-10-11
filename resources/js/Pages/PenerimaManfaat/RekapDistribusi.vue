@@ -233,17 +233,50 @@ function cycleStatus(itemId, dateStr) {
     isDirty.value = true;
 }
 
+// Siklus seluruh jenis status distribusi: T (Terkirim) -> P (Proses) -> L (Libur) -> "" (Kosong)
+const STATUS_DISTRIBUSI_CYCLE_META = [
+    { code: "T", label: "Terkirim (T)" },
+    { code: "P", label: "Proses / Terjadwal (P)" },
+    { code: "L", label: "Libur Operasional (L)" },
+    { code: "", label: "Kosong" },
+];
+
 function toggleKolomStatus(dateStr) {
-    const allT = props.distribusiList.every(
-        (it) => matrixDistribusi.value[it.id]?.[dateStr] === "T"
+    if (!props.distribusiList || props.distribusiList.length === 0) return;
+
+    // Ambil status titik pertama sebagai acuan
+    const firstStatus = matrixDistribusi.value[props.distribusiList[0].id]?.[dateStr] || "";
+    // Cek apakah seluruh titik sasaran memiliki status seragam di tanggal ini
+    const isAllSame = props.distribusiList.every(
+        (it) => (matrixDistribusi.value[it.id]?.[dateStr] || "") === firstStatus
     );
-    const nextSt = allT ? "" : "T";
+
+    // Tentukan status berikutnya dalam siklus
+    let nextSt = "T";
+    if (isAllSame) {
+        if (firstStatus === "") nextSt = "T";
+        else if (firstStatus === "T") nextSt = "P";
+        else if (firstStatus === "P") nextSt = "L";
+        else if (firstStatus === "L") nextSt = ""; // Kembali kosong
+        else nextSt = "T";
+    } else {
+        // Jika status masih bercampur-campur, samakan semua ke "T" terlebih dahulu
+        nextSt = "T";
+    }
+
     props.distribusiList.forEach((it) => {
         if (!matrixDistribusi.value[it.id]) matrixDistribusi.value[it.id] = {};
         matrixDistribusi.value[it.id][dateStr] = nextSt;
     });
+
     isDirty.value = true;
-    showToast(nextSt === "T" ? `Seluruh titik pada tanggal ${dateStr} diset Terkirim (T)` : `Kolom tanggal ${dateStr} dikosongkan`);
+    const meta = STATUS_DISTRIBUSI_CYCLE_META.find((s) => s.code === nextSt);
+    const labelDesc = meta ? meta.label : "Kosong";
+    showToast(
+        nextSt !== ""
+            ? `Seluruh titik pada ${formatTanggalIndo(dateStr)} diset: ${labelDesc}`
+            : `Kolom tanggal ${formatTanggalIndo(dateStr)} dikosongkan`
+    );
 }
 
 function setSemuaTerkirim() {

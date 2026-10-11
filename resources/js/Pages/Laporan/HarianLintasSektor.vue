@@ -1227,7 +1227,7 @@ const activeTab = ref("narasi");
                     <!-- Dropdown Pilihan WO yang Ada di Rentang/Periode Terpilih -->
                     <div
                         v-if="filteredCalendarWorkOrders.length > 0"
-                        class="flex items-center gap-2"
+                        class="flex items-center gap-2 w-full sm:w-auto min-w-0"
                     >
                         <label
                             for="laporanQuickSelectWo"
@@ -1239,7 +1239,7 @@ const activeTab = ref("narasi");
                             id="laporanQuickSelectWo"
                             :value="currentWoSelectValue"
                             @change="(e) => handleSelectDate(e.target.value)"
-                            class="h-9 sm:h-10 px-3 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs max-w-[240px] sm:max-w-[340px] truncate outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20"
+                            class="w-full sm:w-auto min-w-0 h-9 sm:h-10 px-3 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs max-w-full sm:max-w-[340px] truncate outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20"
                         >
                             <option
                                 v-for="cWo in filteredCalendarWorkOrders"

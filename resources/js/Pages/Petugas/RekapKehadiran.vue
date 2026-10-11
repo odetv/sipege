@@ -362,18 +362,57 @@ function kosongkanSemua() {
     showToast("Seluruh catatan presensi dikosongkan");
 }
 
+// Siklus seluruh jenis presensi: H (Hadir) -> H2 (Setengah Hari ½) -> L (Libur) -> I (Izin) -> S (Sakit) -> TK (Tanpa Keterangan) -> "" (Kosong)
+const STATUS_CYCLE_META = [
+    { code: "H", label: "Hadir Penuh (H)" },
+    { code: "H2", label: "Hadir Setengah Hari (½)" },
+    { code: "L", label: "Libur Operasional (L)" },
+    { code: "I", label: "Izin (I)" },
+    { code: "S", label: "Sakit (S)" },
+    { code: "TK", label: "Tanpa Keterangan (TK)" },
+    { code: "", label: "Kosong" },
+];
+
 function toggleKolomStatus(dateStr) {
-    // Jika semua sudah H di tanggal ini, maka kosongkan. Jika belum, set semua H
-    const allH = props.petugas.every((p) => p.status !== "Aktif" || matrixPresensi.value[p.id]?.[dateStr] === "H");
-    const nextSt = allH ? "" : "H";
-    props.petugas.forEach((p) => {
-        if (p.status === "Aktif") {
-            if (!matrixPresensi.value[p.id]) matrixPresensi.value[p.id] = {};
-            matrixPresensi.value[p.id][dateStr] = nextSt;
-        }
+    const activePetugas = props.petugas.filter((p) => p.status === "Aktif");
+    if (activePetugas.length === 0) return;
+
+    // Ambil status personil aktif pertama sebagai acuan
+    const firstStatus = matrixPresensi.value[activePetugas[0].id]?.[dateStr] || "";
+    // Cek apakah seluruh personil aktif memiliki status yang seragam di tanggal ini
+    const isAllSame = activePetugas.every(
+        (p) => (matrixPresensi.value[p.id]?.[dateStr] || "") === firstStatus
+    );
+
+    // Tentukan status berikutnya dalam siklus
+    let nextSt = "H";
+    if (isAllSame) {
+        if (firstStatus === "") nextSt = "H";
+        else if (firstStatus === "H") nextSt = "H2";
+        else if (firstStatus === "H2") nextSt = "L";
+        else if (firstStatus === "L") nextSt = "I";
+        else if (firstStatus === "I") nextSt = "S";
+        else if (firstStatus === "S") nextSt = "TK";
+        else if (firstStatus === "TK") nextSt = ""; // Kembali kosong
+        else nextSt = "H";
+    } else {
+        // Jika status masih berbeda-beda, samakan semua ke "H" terlebih dahulu
+        nextSt = "H";
+    }
+
+    activePetugas.forEach((p) => {
+        if (!matrixPresensi.value[p.id]) matrixPresensi.value[p.id] = {};
+        matrixPresensi.value[p.id][dateStr] = nextSt;
     });
+
     isDirty.value = true;
-    showToast(nextSt === "H" ? `Semua personil aktif pada tanggal ${dateStr} diset Hadir (H)` : `Kolom tanggal ${dateStr} dikosongkan`);
+    const meta = STATUS_CYCLE_META.find((s) => s.code === nextSt);
+    const labelDesc = meta ? meta.label : "Kosong";
+    showToast(
+        nextSt !== ""
+            ? `Seluruh personil aktif pada ${formatTanggalIndo(dateStr)} diset: ${labelDesc}`
+            : `Kolom tanggal ${formatTanggalIndo(dateStr)} dikosongkan`
+    );
 }
 
 function resetPresensi() {
@@ -895,7 +934,7 @@ function closeDetailModal() {
                 </div>
 
                 <!-- Action Buttons: Icon + Text (Responsive Icon-Only di HP) -->
-                <div class="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto shrink-0">
+                <div class="flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto shrink-0 flex-wrap">
                     <!-- Link ke Master Petugas -->
                     <Link
                         :href="route('petugas.index')"
@@ -1253,7 +1292,7 @@ function closeDetailModal() {
                                             ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
                                             : (dt.isWeekend ? 'bg-amber-50/70 border-amber-200/60 text-slate-700' : 'bg-emerald-50/50 border-emerald-200/50 text-slate-700'),
                                     ]"
-                                    :title="`${dt.dayName}, ${dt.dateStr}${dt.dateStr === todayStr ? ' (HARI INI)' : ''} (Klik tanggal untuk set Hadir / Kosongkan)`"
+                                    :title="`${dt.dayName}, ${dt.dateStr}${dt.dateStr === todayStr ? ' (HARI INI)' : ''} (Klik tanggal untuk ganti status: H ➜ ½ ➜ L ➜ I ➜ S ➜ TK ➜ Kosong)`"
                                 >
                                     <div class="flex flex-col items-center">
                                         <span
@@ -1270,12 +1309,12 @@ function closeDetailModal() {
                                             type="button"
                                             @click="toggleKolomStatus(dt.dateStr)"
                                             :class="[
-                                                'mt-0.5 px-1 py-0.5 rounded text-[11px] font-black transition-colors cursor-pointer',
+                                                'mt-0.5 px-1 py-0.5 rounded text-[11px] font-black transition-all cursor-pointer hover:scale-105 active:scale-95',
                                                 dt.dateStr === todayStr
                                                     ? 'bg-white text-emerald-800 hover:bg-emerald-100 ring-2 ring-emerald-300'
                                                     : 'hover:bg-emerald-200/70 hover:text-emerald-900',
                                             ]"
-                                            :title="`Klik untuk set Hadir (H) atau kosongkan kolom tanggal ${dt.dateStr}`"
+                                            :title="`Klik tanggal ${dt.dayNum} untuk ganti status seluruh personil: H ➜ ½ ➜ L ➜ I ➜ S ➜ TK ➜ Kosong`"
                                         >
                                             {{ dt.dayNum }}
                                         </button>

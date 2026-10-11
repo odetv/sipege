@@ -663,10 +663,10 @@ const totalManual = computed(
                         </button>
                     </div>
 
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <div class="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
                         <select
                             v-model="filterMetode"
-                            class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer"
+                            class="w-full sm:w-auto min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer truncate"
                         >
                             <option value="all">Semua Metode</option>
                             <option value="sistem">Metode Sistem</option>
@@ -675,7 +675,7 @@ const totalManual = computed(
 
                         <select
                             v-model="filterStatus"
-                            class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer"
+                            class="w-full sm:w-auto min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer truncate"
                         >
                             <option value="all">Semua Status</option>
                             <option value="Draft">Draft</option>
