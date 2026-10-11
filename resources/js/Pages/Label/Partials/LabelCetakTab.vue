@@ -1089,9 +1089,9 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
         }
 
         let specificGizi = { ...baseGizi };
-        if (akgSpecific && (akgSpecific.akg_pb || akgSpecific.akg_pk)) {
-            const specPb = akgSpecific.akg_pb || {};
-            const specPk = akgSpecific.akg_pk || {};
+        if (akgSpecific && (akgSpecific.akg_pb || akgSpecific.akg_pk || akgSpecific.pb || akgSpecific.pk)) {
+            const specPb = akgSpecific.pb || akgSpecific.akg_pb || {};
+            const specPk = akgSpecific.pk || akgSpecific.akg_pk || {};
             specificGizi = {
                 energi_pb: String(specPb.energi ?? specPb.energy ?? baseGizi.energi_pb),
                 prot_pb: String(specPb.protein ?? specPb.prot ?? baseGizi.prot_pb),

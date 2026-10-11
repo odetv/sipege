@@ -526,7 +526,10 @@ class LabelController extends Controller
         if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
             $hasRealData = false;
             foreach ($wo->akg_alergi as $j => $data) {
-                if (is_array($data) && (!empty($data['akg_pb']) || !empty($data['akg_pk']))) {
+                if (is_array($data) && (
+                    !empty($data['akg_pb']) || !empty($data['akg_pk']) ||
+                    !empty($data['pb']) || !empty($data['pk'])
+                )) {
                     $hasRealData = true;
                     break;
                 }

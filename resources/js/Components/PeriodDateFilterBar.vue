@@ -465,11 +465,11 @@ onMounted(() => {
 
 <template>
     <div
-        class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs w-full max-w-full"
+        class="relative flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 shadow-2xs w-full max-w-full flex-wrap"
         :class="{ 'p-2 sm:p-2.5': compact }"
     >
         <!-- Sisi Kiri: Switcher 3 Opsi + Dropdown Periode / Capsule Rentang -->
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto min-w-0">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full xl:w-auto min-w-0 flex-wrap">
             <!-- Slot tambahan kiri (opsional) -->
             <slot name="left" />
 
@@ -569,7 +569,7 @@ onMounted(() => {
                         v-model="selectedPeriodeId"
                         @change="onPeriodeSelectChange"
                         :class="[
-                            'w-full sm:w-auto min-w-0 pl-3 pr-8 rounded-xl border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none cursor-pointer shadow-2xs transition-all max-w-full sm:max-w-xs md:max-w-md truncate block',
+                            'w-full sm:w-auto min-w-0 pl-3 pr-8 rounded-xl border border-emerald-300 hover:border-emerald-500 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none cursor-pointer shadow-2xs transition-all max-w-full sm:max-w-[280px] md:max-w-xs lg:max-w-sm truncate block shrink',
                             compact ? 'h-8 sm:h-9' : 'h-9 sm:h-10',
                         ]"
                     >
@@ -659,11 +659,11 @@ onMounted(() => {
         <div
             v-if="showArchive || $slots.right"
             :class="[
-                'flex items-center gap-2 min-w-0 w-full sm:w-auto',
-                $slots.right ? 'justify-between sm:justify-end' : 'hidden sm:flex justify-end'
+                'flex items-center gap-2 min-w-0 w-full xl:w-auto',
+                $slots.right ? 'justify-start sm:justify-between xl:justify-end' : 'hidden sm:flex justify-end'
             ]"
         >
-            <div v-if="$slots.right" class="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+            <div v-if="$slots.right" class="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0 w-full sm:w-auto">
                 <slot name="right" />
             </div>
 

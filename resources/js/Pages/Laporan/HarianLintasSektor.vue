@@ -24,6 +24,7 @@ import {
     Eye,
     RotateCcw,
     ShieldAlert,
+    PlusCircle,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
@@ -131,9 +132,7 @@ const namaYayasanDb = computed(() => {
 // Format UPPERCASE untuk Judul & Header Yayasan
 const namaSppgUpper = computed(() => {
     return (
-        props.kopConfig?.nama_instansi_1 ||
-        namaSppgDb.value ||
-        "SPPG BULELENG SUKASADA TEGALLINGGAH"
+        namaSppgDb.value || "SPPG BULELENG SUKASADA TEGALLINGGAH"
     ).toUpperCase();
 });
 
@@ -383,6 +382,278 @@ const totalPorsiKeseluruhan = computed(() => {
     );
 });
 
+// Helper Ekstraksi Kategori Siswa/Guru/Tendik atau Bumil/Busui/Balita
+function extractBreakdownSubKategori(rincian, kategori, totalFallback) {
+    const kat = (kategori || "").toLowerCase();
+    const isPosyandu = kat === "posyandu";
+    let siswa = 0,
+        guru = 0,
+        tendik = 0;
+    let bumil = 0,
+        busui = 0,
+        balita = 0;
+
+    if (Array.isArray(rincian) && rincian.length > 0) {
+        rincian.forEach((r) => {
+            const sub = (r.sub_kategori || "").toLowerCase();
+            const tot =
+                Number(
+                    r.total ??
+                        Number(r.jumlah_laki_laki || 0) +
+                            Number(r.jumlah_perempuan || 0),
+                ) || 0;
+
+            if (isPosyandu) {
+                if (sub.includes("hamil") || sub.includes("bumil")) {
+                    bumil += tot;
+                } else if (sub.includes("menyusui") || sub.includes("busui")) {
+                    busui += tot;
+                } else {
+                    balita += tot;
+                }
+            } else {
+                if (
+                    sub.includes("tendik") ||
+                    sub.includes("tenaga kependidikan") ||
+                    sub.includes("kependidikan") ||
+                    sub.includes("satpam") ||
+                    sub.includes("tata usaha") ||
+                    sub.includes("tu") ||
+                    sub.includes("penjaga")
+                ) {
+                    tendik += tot;
+                } else if (sub.includes("guru") || sub.includes("pendidik")) {
+                    guru += tot;
+                } else {
+                    siswa += tot;
+                }
+            }
+        });
+    }
+
+    const total = isPosyandu
+        ? bumil + busui + balita || Number(totalFallback) || 0
+        : siswa + guru + tendik || Number(totalFallback) || 0;
+
+    return {
+        isPosyandu,
+        siswa,
+        guru,
+        tendik,
+        bumil,
+        busui,
+        balita,
+        total,
+    };
+}
+
+// Selisih Jumlah Penerima Manfaat Yang Ditetapkan dengan Jumlah Terdistribusi
+const selisihPenerimaManfaatList = computed(() => {
+    const allKelompoks = props.workOrder?.kelompoks || [];
+    if (!allKelompoks || allKelompoks.length === 0) return [];
+
+    const results = [];
+
+    allKelompoks.forEach((k) => {
+        const kel = k.kelompok || {};
+        const kat = (kel.kategori || k.kategori || "").toLowerCase();
+        const isPosyandu = kat === "posyandu";
+        const nama =
+            kel.nama_kelompok ||
+            k.nama_kelompok ||
+            (isPosyandu ? "Posyandu" : "Sekolah");
+
+        // 1. Data Awal (Penetapan Master Kelompok)
+        const rincianAwalRaw =
+            Array.isArray(kel.rincian) && kel.rincian.length > 0
+                ? kel.rincian
+                : Array.isArray(k.rincian)
+                  ? k.rincian
+                  : [];
+        const totalAwalMaster =
+            Number(kel.total_penerima ?? k.total_penerima) || 0;
+        const bAwal = extractBreakdownSubKategori(
+            rincianAwalRaw,
+            kat,
+            totalAwalMaster,
+        );
+        const totalAwal = totalAwalMaster > 0 ? totalAwalMaster : bAwal.total;
+
+        // 2. Data Rill Terdistribusi
+        let totalRill = 0;
+        let bRill = {
+            siswa: 0,
+            guru: 0,
+            tendik: 0,
+            bumil: 0,
+            busui: 0,
+            balita: 0,
+            total: 0,
+        };
+        const rincianRillRaw =
+            k.is_menerima !== false
+                ? Array.isArray(k.rincian) && k.rincian.length > 0
+                    ? k.rincian
+                    : rincianAwalRaw
+                : [];
+
+        if (k.is_menerima !== false) {
+            bRill = extractBreakdownSubKategori(
+                rincianRillRaw,
+                kat,
+                k.total_penerima,
+            );
+            totalRill = Number(k.total_penerima ?? bRill.total) || bRill.total;
+        }
+
+        // 3. Selisih
+        const totalSelisih = Math.max(0, totalAwal - totalRill);
+
+        if (totalSelisih > 0) {
+            const tidakMenerima = [];
+
+            if (rincianAwalRaw.length > 0) {
+                rincianAwalRaw.forEach((ra) => {
+                    const subName = ra.sub_kategori || "Penerima";
+                    const totA =
+                        Number(
+                            ra.total ??
+                                Number(ra.jumlah_laki_laki || 0) +
+                                    Number(ra.jumlah_perempuan || 0),
+                        ) || 0;
+
+                    let totR = 0;
+                    if (
+                        k.is_menerima !== false &&
+                        Array.isArray(rincianRillRaw)
+                    ) {
+                        const match = rincianRillRaw.find(
+                            (rr) =>
+                                (rr.sub_kategori || "").trim().toLowerCase() ===
+                                subName.trim().toLowerCase(),
+                        );
+                        if (match) {
+                            totR =
+                                Number(
+                                    match.total ??
+                                        Number(match.jumlah_laki_laki || 0) +
+                                            Number(
+                                                match.jumlah_perempuan || 0,
+                                            ),
+                                ) || 0;
+                        }
+                    }
+
+                    const diff = Math.max(0, totA - totR);
+                    if (diff > 0) {
+                        tidakMenerima.push({
+                            sub: subName,
+                            jumlah: diff,
+                        });
+                    }
+                });
+            }
+
+            if (tidakMenerima.length === 0) {
+                if (isPosyandu) {
+                    const dBumil = Math.max(0, bAwal.bumil - bRill.bumil);
+                    const dBusui = Math.max(0, bAwal.busui - bRill.busui);
+                    const dBalita = Math.max(0, bAwal.balita - bRill.balita);
+                    if (dBumil > 0)
+                        tidakMenerima.push({ sub: "Bumil", jumlah: dBumil });
+                    if (dBusui > 0)
+                        tidakMenerima.push({ sub: "Busui", jumlah: dBusui });
+                    if (dBalita > 0)
+                        tidakMenerima.push({ sub: "Balita", jumlah: dBalita });
+                } else {
+                    const dSiswa = Math.max(0, bAwal.siswa - bRill.siswa);
+                    const dGuru = Math.max(0, bAwal.guru - bRill.guru);
+                    const dTendik = Math.max(0, bAwal.tendik - bRill.tendik);
+                    if (dSiswa > 0)
+                        tidakMenerima.push({ sub: "Siswa", jumlah: dSiswa });
+                    if (dGuru > 0)
+                        tidakMenerima.push({ sub: "Guru", jumlah: dGuru });
+                    if (dTendik > 0)
+                        tidakMenerima.push({ sub: "Tendik", jumlah: dTendik });
+                }
+            }
+
+            if (tidakMenerima.length === 0) {
+                tidakMenerima.push({ sub: "Porsi", jumlah: totalSelisih });
+            }
+
+            const rincianStr = tidakMenerima
+                .map((it) => `${it.sub} (${it.jumlah} Porsi)`)
+                .join(" + ");
+
+            let teks = "";
+            if (isPosyandu) {
+                teks = `- ${nama}, dengan data awal yaitu Bumil (${bAwal.bumil} Porsi) + Busui (${bAwal.busui} Porsi) + Balita (${bAwal.balita} Porsi) = ${totalAwal} Porsi. Namun hanya terdistribusi sejumlah ${totalRill} Porsi, dikarenakan adanya penyesuaian dengan jadwal Posyandu tersebut dengan rincian yang tidak menerima yaitu ${rincianStr} = ${totalSelisih} Porsi`;
+            } else {
+                teks = `- ${nama}, dengan data awal yaitu Siswa (${bAwal.siswa} Porsi) + Guru (${bAwal.guru} Porsi) + Tendik (${bAwal.tendik} Porsi) = ${totalAwal} Porsi. Namun hanya terdistribusi sejumlah ${totalRill} Porsi, dikarenakan adanya penyesuaian dengan jadwal Sekolah tersebut dengan rincian yang tidak menerima yaitu ${rincianStr} = ${totalSelisih} Porsi`;
+            }
+
+            results.push({
+                nama,
+                isPosyandu,
+                totalAwal,
+                totalRill,
+                totalSelisih,
+                tidakMenerima,
+                rincianStr,
+                teks,
+            });
+        }
+    });
+
+    return results;
+});
+
+// Tambahan Porsi Diluar Jumlah Penerima Manfaat (Uji Organoleptik & Sampel)
+const porsiTambahanData = computed(() => {
+    const raw = props.workOrder?.porsi_tambahan;
+    if (!raw) {
+        const kpmCount = kelompokMenerima.value.length || 0;
+        const organoleptik = kpmCount * 1;
+        const sampel = 4;
+        return {
+            organoleptik,
+            sampel,
+            buffer: 0,
+            total: organoleptik + sampel,
+        };
+    }
+    const pt = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const organoleptik = Number(
+        pt.organoleptik?.total ??
+        (Number(pt.organoleptik?.pk || 0) + Number(pt.organoleptik?.pb || 0))
+    ) || 0;
+    const sampel = Number(
+        pt.sampel?.total ??
+        (Number(pt.sampel?.pk || 0) + Number(pt.sampel?.pb || 0))
+    ) || 0;
+    const buffer = Number(
+        pt.buffer?.total ??
+        (Number(pt.buffer?.pk || 0) + Number(pt.buffer?.pb || 0))
+    ) || 0;
+    const total = Number(
+        pt.total ??
+        (Number(pt.total_pk || 0) + Number(pt.total_pb || 0)) ??
+        (organoleptik + sampel + buffer)
+    ) || (organoleptik + sampel + buffer);
+
+    return {
+        organoleptik,
+        sampel,
+        buffer,
+        total,
+    };
+});
+
+const totalProduksiHarian = computed(() => {
+    return totalPorsiKeseluruhan.value + porsiTambahanData.value.total;
+});
+
 // Menu MBG & Kandungan Gizi
 const subMenuNormalList = computed(() => {
     const wo = props.workOrder || {};
@@ -404,24 +675,18 @@ const subMenuNormalList = computed(() => {
 });
 
 function hasNutrisi(gizi) {
-    if (!gizi) return false;
-    const e = Number(
-        gizi.energi ?? gizi.energy ?? gizi.energi_pk ?? gizi.energi_pb ?? 0,
-    );
-    const p = Number(
-        gizi.protein ?? gizi.prot ?? gizi.prot_pk ?? gizi.prot_pb ?? 0,
-    );
-    const l = Number(gizi.lemak ?? gizi.lmk ?? gizi.lmk_pk ?? gizi.lmk_pb ?? 0);
-    const k = Number(
-        gizi.karbohidrat ?? gizi.karbo ?? gizi.karbo_pk ?? gizi.karbo_pb ?? 0,
-    );
-    const s = Number(gizi.serat ?? gizi.serat_pk ?? gizi.serat_pb ?? 0);
+    if (!gizi || typeof gizi !== "object") return false;
+    const e = Math.abs(Number(gizi.energi ?? gizi.energy ?? gizi.energi_pk ?? gizi.energi_pb ?? 0) || 0);
+    const p = Math.abs(Number(gizi.protein ?? gizi.prot ?? gizi.protein_pk ?? gizi.protein_pb ?? gizi.prot_pk ?? gizi.prot_pb ?? 0) || 0);
+    const l = Math.abs(Number(gizi.lemak ?? gizi.lmk ?? gizi.lemak_pk ?? gizi.lemak_pb ?? gizi.lmk_pk ?? gizi.lmk_pb ?? 0) || 0);
+    const k = Math.abs(Number(gizi.karbohidrat ?? gizi.karbo ?? gizi.karbohidrat_pk ?? gizi.karbohidrat_pb ?? gizi.karbo_pk ?? gizi.karbo_pb ?? 0) || 0);
+    const s = Math.abs(Number(gizi.serat ?? gizi.serat_pk ?? gizi.serat_pb ?? 0) || 0);
     return (
-        Math.abs(e) > 0.001 ||
-        Math.abs(p) > 0.001 ||
-        Math.abs(l) > 0.001 ||
-        Math.abs(k) > 0.001 ||
-        Math.abs(s) > 0.001
+        e > 0.001 ||
+        p > 0.001 ||
+        l > 0.001 ||
+        k > 0.001 ||
+        s > 0.001
     );
 }
 
@@ -441,27 +706,41 @@ function matchAllergyKey(objKey, targetKey) {
 }
 
 const akgPK = computed(() => {
-    return (
-        props.workOrder?.akg_pk || {
-            energi: 0,
-            protein: 0,
-            lemak: 0,
-            karbohidrat: 0,
-            serat: 0,
+    let raw = props.workOrder?.akg_pk;
+    if (typeof raw === "string") {
+        try {
+            raw = JSON.parse(raw);
+        } catch {
+            raw = {};
         }
-    );
+    }
+    const wo = props.workOrder || {};
+    return {
+        energi: Number(raw?.energi ?? raw?.energy ?? wo.energi_pk ?? 0) || 0,
+        protein: Number(raw?.protein ?? raw?.prot ?? wo.protein_pk ?? 0) || 0,
+        lemak: Number(raw?.lemak ?? raw?.lmk ?? wo.lemak_pk ?? 0) || 0,
+        karbohidrat: Number(raw?.karbohidrat ?? raw?.karbo ?? wo.karbo_pk ?? 0) || 0,
+        serat: Number(raw?.serat ?? wo.serat_pk ?? 0) || 0,
+    };
 });
 
 const akgPB = computed(() => {
-    return (
-        props.workOrder?.akg_pb || {
-            energi: 0,
-            protein: 0,
-            lemak: 0,
-            karbohidrat: 0,
-            serat: 0,
+    let raw = props.workOrder?.akg_pb;
+    if (typeof raw === "string") {
+        try {
+            raw = JSON.parse(raw);
+        } catch {
+            raw = {};
         }
-    );
+    }
+    const wo = props.workOrder || {};
+    return {
+        energi: Number(raw?.energi ?? raw?.energy ?? wo.energi_pb ?? 0) || 0,
+        protein: Number(raw?.protein ?? raw?.prot ?? wo.protein_pb ?? 0) || 0,
+        lemak: Number(raw?.lemak ?? raw?.lmk ?? wo.lemak_pb ?? 0) || 0,
+        karbohidrat: Number(raw?.karbohidrat ?? raw?.karbo ?? wo.karbo_pb ?? 0) || 0,
+        serat: Number(raw?.serat ?? wo.serat_pb ?? 0) || 0,
+    };
 });
 
 const hasNormalPK = computed(() => hasNutrisi(akgPK.value));
@@ -551,8 +830,19 @@ const varianAlergiList = computed(() => {
         }
     });
 
-    if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
-        Object.keys(wo.akg_alergi).forEach((k) => {
+    let safeAkgAlergi = wo.akg_alergi;
+    if (typeof safeAkgAlergi === "string") {
+        try {
+            safeAkgAlergi = JSON.parse(safeAkgAlergi);
+        } catch {
+            safeAkgAlergi = {};
+        }
+    }
+    safeAkgAlergi =
+        safeAkgAlergi && typeof safeAkgAlergi === "object" ? safeAkgAlergi : {};
+
+    if (Object.keys(safeAkgAlergi).length > 0) {
+        Object.keys(safeAkgAlergi).forEach((k) => {
             const j = extractCleanJenis(k);
             if (j && !alergiMap[j]) {
                 alergiMap[j] = { jenis: j, pengganti: {} };
@@ -572,94 +862,115 @@ const varianAlergiList = computed(() => {
 
             let tempPK = null;
             let tempPB = null;
-            let foundSpecific = false;
 
-            if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
-                let specificAkg = wo.akg_alergi[al.jenis];
-                if (!specificAkg) {
-                    const found = Object.entries(wo.akg_alergi).find(([k]) =>
-                        matchAllergyKey(k, al.jenis),
-                    );
-                    if (found) specificAkg = found[1];
+            let specificAkg = safeAkgAlergi[al.jenis];
+            if (!specificAkg) {
+                const found = Object.entries(safeAkgAlergi).find(([k]) =>
+                    matchAllergyKey(k, al.jenis),
+                );
+                if (found) specificAkg = found[1];
+            }
+
+            if (typeof specificAkg === "string") {
+                try {
+                    specificAkg = JSON.parse(specificAkg);
+                } catch {
+                    specificAkg = null;
                 }
+            }
 
-                if (specificAkg && typeof specificAkg === "object") {
-                    foundSpecific = true;
-                    const rawPK =
-                        specificAkg.akg_pk ??
-                        (specificAkg.energi_pk !== undefined
+            if (specificAkg && typeof specificAkg === "object") {
+                const rawPK =
+                    specificAkg.pk !== undefined
+                        ? specificAkg.pk
+                        : specificAkg.akg_pk !== undefined
+                          ? specificAkg.akg_pk
+                          : specificAkg.energi_pk !== undefined
                             ? specificAkg
-                            : null);
-                    const rawPB =
-                        specificAkg.akg_pb ??
-                        (specificAkg.energi_pb !== undefined
+                            : null;
+                const rawPB =
+                    specificAkg.pb !== undefined
+                        ? specificAkg.pb
+                        : specificAkg.akg_pb !== undefined
+                          ? specificAkg.akg_pb
+                          : specificAkg.energi_pb !== undefined
                             ? specificAkg
-                            : null);
+                            : null;
 
-                    if (rawPK && typeof rawPK === "object") {
-                        tempPK = {
-                            energi: Number(
+                if (rawPK && typeof rawPK === "object") {
+                    tempPK = {
+                        energi:
+                            Number(
                                 rawPK.energi ??
                                     rawPK.energy ??
                                     rawPK.energi_pk ??
                                     0,
-                            ),
-                            protein: Number(
+                            ) || 0,
+                        protein:
+                            Number(
                                 rawPK.protein ??
                                     rawPK.prot ??
+                                    rawPK.protein_pk ??
                                     rawPK.prot_pk ??
                                     0,
-                            ),
-                            lemak: Number(
-                                rawPK.lemak ?? rawPK.lmk ?? rawPK.lmk_pk ?? 0,
-                            ),
-                            karbohidrat: Number(
+                            ) || 0,
+                        lemak:
+                            Number(
+                                rawPK.lemak ??
+                                    rawPK.lmk ??
+                                    rawPK.lemak_pk ??
+                                    rawPK.lmk_pk ??
+                                    0,
+                            ) || 0,
+                        karbohidrat:
+                            Number(
                                 rawPK.karbohidrat ??
                                     rawPK.karbo ??
+                                    rawPK.karbohidrat_pk ??
                                     rawPK.karbo_pk ??
                                     0,
-                            ),
-                            serat: Number(rawPK.serat ?? rawPK.serat_pk ?? 0),
-                        };
-                    }
+                            ) || 0,
+                        serat:
+                            Number(rawPK.serat ?? rawPK.serat_pk ?? 0) || 0,
+                    };
+                }
 
-                    if (rawPB && typeof rawPB === "object") {
-                        tempPB = {
-                            energi: Number(
+                if (rawPB && typeof rawPB === "object") {
+                    tempPB = {
+                        energi:
+                            Number(
                                 rawPB.energi ??
                                     rawPB.energy ??
                                     rawPB.energi_pb ??
                                     0,
-                            ),
-                            protein: Number(
+                            ) || 0,
+                        protein:
+                            Number(
                                 rawPB.protein ??
                                     rawPB.prot ??
+                                    rawPB.protein_pb ??
                                     rawPB.prot_pb ??
                                     0,
-                            ),
-                            lemak: Number(
-                                rawPB.lemak ?? rawPB.lmk ?? rawPB.lmk_pb ?? 0,
-                            ),
-                            karbohidrat: Number(
+                            ) || 0,
+                        lemak:
+                            Number(
+                                rawPB.lemak ??
+                                    rawPB.lmk ??
+                                    rawPB.lemak_pb ??
+                                    rawPB.lmk_pb ??
+                                    0,
+                            ) || 0,
+                        karbohidrat:
+                            Number(
                                 rawPB.karbohidrat ??
                                     rawPB.karbo ??
+                                    rawPB.karbohidrat_pb ??
                                     rawPB.karbo_pb ??
                                     0,
-                            ),
-                            serat: Number(rawPB.serat ?? rawPB.serat_pb ?? 0),
-                        };
-                    }
-                }
-            }
-
-            // Jika tidak ada data spesifik akg_alergi sama sekali untuk alergen ini,
-            // gunakan nilai normal HANYA jika porsi normal tersebut memang memiliki nilai nutrisi (> 0)
-            if (!foundSpecific) {
-                if (hasNormalPK.value) {
-                    tempPK = { ...akgPK.value };
-                }
-                if (hasNormalPB.value) {
-                    tempPB = { ...akgPB.value };
+                            ) || 0,
+                        serat:
+                            Number(rawPB.serat ?? rawPB.serat_pb ?? 0) || 0,
+                    };
                 }
             }
 
@@ -700,7 +1011,7 @@ const defaultNarasiText = computed(() => {
 
     let lines = [];
     lines.push(
-        `*PENYALURAN MBG ${namaSppgUpper.value} ${namaYayasanUpper.value}*`,
+        `*LAPORAN HARIAN PENYALURAN MBG ${namaSppgUpper.value} ${namaYayasanUpper.value}*`,
     );
     lines.push(``);
     lines.push(``);
@@ -716,19 +1027,24 @@ const defaultNarasiText = computed(() => {
     lines.push(``);
 
     // 1. Waktu Kegiatan Operasional
-    lines.push(`*1.  Waktu Kegiatan Operasional:*`);
+    lines.push(`*1. Waktu Kegiatan Operasional*`);
     jadwalOperasionalList.value.forEach((j) => {
         lines.push(`- Pukul ${j.mulai} s.d ${j.selesai} ${j.nama}`);
     });
     lines.push(``);
 
-    // 2. Rincian Pembagian MBG (3B: Bumil, Busui, Balita)
+    // 2. Rincian Pembagian Penyaluran MBG Kepada Penerima Manfaat
     lines.push(
-        `*2.  Adapun rincian pembagian MBG sebanyak ${totalPorsiSekolah.value} porsi untuk ${sekolahList.value.length} Sekolah dan ${totalPorsiPosyandu.value} porsi untuk ${posyanduList.value.length} Posyandu 3B (Bumil, Busui, Balita) dengan total ${totalPorsiKeseluruhan.value} Penerima Manfaat dan rincian sebagai berikut:*`,
+        `*2. Rincian Pembagian Penyaluran MBG Kepada Penerima Manfaat*`,
+    );
+    lines.push(
+        `Terdapat sebanyak ${totalPorsiKeseluruhan.value} porsi dengan rincian sebagai berikut:`,
     );
     lines.push(``);
 
-    lines.push(`*Sekolah:*`);
+    lines.push(
+        `*Sekolah: ${sekolahList.value.length} Sekolah dengan ${totalPorsiSekolah.value} Porsi*`,
+    );
     if (sekolahList.value.length > 0) {
         sekolahList.value.forEach((s) => {
             lines.push(
@@ -738,106 +1054,164 @@ const defaultNarasiText = computed(() => {
     } else {
         lines.push(`- Tidak ada penyaluran ke sekolah pada hari ini`);
     }
-    lines.push(``);
 
-    lines.push(`*Posyandu 3B (Bumil, Busui, Balita):*`);
     if (posyanduList.value.length > 0) {
+        lines.push(``);
+        lines.push(
+            `*Posyandu 3B (Bumil, Busui, Balita): ${posyanduList.value.length} Posyandu dengan ${totalPorsiPosyandu.value} Porsi*`,
+        );
         posyanduList.value.forEach((p) => {
             lines.push(
                 `- ${p.nama} (Bumil: ${p.bumil} + Busui: ${p.busui} + Balita: ${p.balita} = ${p.totalPorsi} Porsi)`,
             );
         });
+    }
+    lines.push(``);
+
+    // 3. Selisih Jumlah Penerima Manfaat Yang Ditetapkan dengan Jumlah Terdistribusi
+    lines.push(
+        `*3. Selisih Jumlah Penerima Manfaat Yang Ditetapkan dengan Jumlah Terdistribusi*`,
+    );
+    if (selisihPenerimaManfaatList.value.length > 0) {
+        selisihPenerimaManfaatList.value.forEach((s) => {
+            lines.push(s.teks);
+        });
     } else {
-        lines.push(`- Tidak ada penyaluran ke posyandu pada hari ini`);
+        lines.push(`- Nihil`);
     }
     lines.push(``);
 
-    // 3. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)
-    if (
-        hasNormalPK.value ||
-        hasNormalPB.value ||
-        varianAlergiList.value.length > 0
-    ) {
-        lines.push(`*3.  Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)*`);
-        lines.push(``);
+    // 4. Tambahan Porsi Diluar Jumlah Penerima Manfaat
+    lines.push(`*4. Tambahan Porsi Diluar Jumlah Penerima Manfaat*`);
+    lines.push(
+        `Terdapat tambahan porsi sebanyak ${porsiTambahanData.value.total} porsi diantaranya: `,
+    );
+    lines.push(
+        `- Uji Organoleptik (Dibagi untuk masing-masing Kelompok Penerima Manfaat): ${porsiTambahanData.value.organoleptik} Porsi`,
+    );
+    lines.push(
+        `- Sampel Makanan (Diamankan pada Suhu Dingin dan Suhu Ruang di SPPG): ${porsiTambahanData.value.sampel} Porsi`,
+    );
+    lines.push(
+        `- Buffer Produksi (Cadangan jika terdapat kendala pada paket MBG yang terdistribusikan): ${porsiTambahanData.value.buffer} Porsi`,
+    );
+    lines.push(``);
 
-        if (hasNormalPK.value || hasNormalPB.value) {
-            lines.push(`*Porsi Menu Normal*`);
+    // 5. Total Produksi Harian
+    lines.push(`*5. Total Produksi Harian*`);
+    lines.push(
+        `Terdapat total porsi yang diproduksi sebanyak ${totalProduksiHarian.value} porsi diantaranya: `,
+    );
+    lines.push(
+        `- Porsi PM Rill Sesuai KPM: ${totalPorsiKeseluruhan.value} Porsi`,
+    );
+    lines.push(
+        `- Porsi Tambahan: Uji Organoleptik (${porsiTambahanData.value.organoleptik} Porsi) + Sampel Makanan (${porsiTambahanData.value.sampel} Porsi) + Buffer Produksi (${porsiTambahanData.value.buffer} Porsi) = ${porsiTambahanData.value.total} Porsi`,
+    );
+    lines.push(``);
 
-            if (hasNormalPK.value) {
-                lines.push(`*Menu Normal Porsi Kecil:*`);
-                subMenuNormalList.value.forEach((sm) => {
-                    lines.push(`- ${sm}`);
-                });
-                lines.push(`*Kandungan Gizi Menu Normal Porsi Kecil:*`);
-                lines.push(`- Energi: ${akgPK.value.energi || 0} Kkal`);
-                lines.push(`- Protein: ${akgPK.value.protein || 0} gr`);
-                lines.push(`- Lemak: ${akgPK.value.lemak || 0} gr`);
-                lines.push(`- Karbohidrat: ${akgPK.value.karbohidrat || 0} gr`);
-                lines.push(`- Serat: ${akgPK.value.serat || 0} gr`);
-            }
+    // 6. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)
+    const hasPosyandu = posyanduList.value.length > 0;
+    const judulMenu = hasPosyandu
+        ? `*6. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita)*`
+        : `*6. Menu MBG Sekolah*`;
+    lines.push(judulMenu);
+    lines.push(``);
 
-            if (hasNormalPB.value) {
-                if (hasNormalPK.value) lines.push(``);
-                lines.push(`*Menu Normal Porsi Besar:*`);
-                subMenuNormalList.value.forEach((sm) => {
-                    lines.push(`- ${sm}`);
-                });
-                lines.push(`*Kandungan Gizi Menu Normal Porsi Besar:*`);
-                lines.push(`- Energi: ${akgPB.value.energi || 0} Kkal`);
-                lines.push(`- Protein: ${akgPB.value.protein || 0} gr`);
-                lines.push(`- Lemak: ${akgPB.value.lemak || 0} gr`);
-                lines.push(`- Karbohidrat: ${akgPB.value.karbohidrat || 0} gr`);
-                lines.push(`- Serat: ${akgPB.value.serat || 0} gr`);
-            }
-        }
+    if (hasNormalPK.value || hasNormalPB.value) {
+        lines.push(`*Porsi Menu Normal*`);
 
-        // Porsi Menu Alergi Jika Ada
-        if (varianAlergiList.value.length > 0) {
-            varianAlergiList.value.forEach((al) => {
-                lines.push(``);
-                lines.push(`*Porsi Menu Alergi ${al.jenis}*`);
-
-                if (al.hasPK) {
-                    lines.push(`*Menu Alergi ${al.jenis} Porsi Kecil:*`);
-                    al.menuList.forEach((sm) => {
-                        lines.push(`- ${sm}`);
-                    });
-                    lines.push(
-                        `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Kecil:*`,
-                    );
-                    lines.push(`- Energi: ${al.akgPK.energi || 0} Kkal`);
-                    lines.push(`- Protein: ${al.akgPK.protein || 0} gr`);
-                    lines.push(`- Lemak: ${al.akgPK.lemak || 0} gr`);
-                    lines.push(
-                        `- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`,
-                    );
-                    lines.push(`- Serat: ${al.akgPK.serat || 0} gr`);
-                }
-
-                if (al.hasPB) {
-                    if (al.hasPK) lines.push(``);
-                    lines.push(`*Menu Alergi ${al.jenis} Porsi Besar:*`);
-                    al.menuList.forEach((sm) => {
-                        lines.push(`- ${sm}`);
-                    });
-                    lines.push(
-                        `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Besar:*`,
-                    );
-                    lines.push(`- Energi: ${al.akgPB.energi || 0} Kkal`);
-                    lines.push(`- Protein: ${al.akgPB.protein || 0} gr`);
-                    lines.push(`- Lemak: ${al.akgPB.lemak || 0} gr`);
-                    lines.push(
-                        `- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`,
-                    );
-                    lines.push(`- Serat: ${al.akgPB.serat || 0} gr`);
-                }
+        if (hasNormalPK.value) {
+            lines.push(`*Menu Normal Porsi Kecil:*`);
+            subMenuNormalList.value.forEach((sm) => {
+                lines.push(`- ${sm}`);
             });
+            lines.push(`*Kandungan Gizi Menu Normal Porsi Kecil:*`);
+            lines.push(`- Energi: ${akgPK.value.energi || 0} Kkal`);
+            lines.push(`- Protein: ${akgPK.value.protein || 0} gr`);
+            lines.push(`- Lemak: ${akgPK.value.lemak || 0} gr`);
+            lines.push(`- Karbohidrat: ${akgPK.value.karbohidrat || 0} gr`);
+            lines.push(`- Serat: ${akgPK.value.serat || 0} gr`);
+        }
+
+        if (hasNormalPB.value) {
+            if (hasNormalPK.value) {
+                lines.push(``);
+            }
+            lines.push(`*Menu Normal Porsi Besar:*`);
+            subMenuNormalList.value.forEach((sm) => {
+                lines.push(`- ${sm}`);
+            });
+            lines.push(`*Kandungan Gizi Menu Normal Porsi Besar:*`);
+            lines.push(`- Energi: ${akgPB.value.energi || 0} Kkal`);
+            lines.push(`- Protein: ${akgPB.value.protein || 0} gr`);
+            lines.push(`- Lemak: ${akgPB.value.lemak || 0} gr`);
+            lines.push(`- Karbohidrat: ${akgPB.value.karbohidrat || 0} gr`);
+            lines.push(`- Serat: ${akgPB.value.serat || 0} gr`);
         }
     }
 
+    // Porsi Menu Alergi Jika Ada
+    if (varianAlergiList.value.length > 0) {
+        varianAlergiList.value.forEach((al) => {
+            if (
+                hasNormalPK.value ||
+                hasNormalPB.value ||
+                lines[lines.length - 1] !== ""
+            ) {
+                lines.push(``);
+            }
+            lines.push(`*Porsi Menu Alergi ${al.jenis}*`);
+
+            if (al.hasPK) {
+                lines.push(`*Menu Alergi ${al.jenis} Porsi Kecil:*`);
+                al.menuList.forEach((sm) => {
+                    lines.push(`- ${sm}`);
+                });
+                lines.push(
+                    `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Kecil:*`,
+                );
+                lines.push(`- Energi: ${al.akgPK.energi || 0} Kkal`);
+                lines.push(`- Protein: ${al.akgPK.protein || 0} gr`);
+                lines.push(`- Lemak: ${al.akgPK.lemak || 0} gr`);
+                lines.push(
+                    `- Karbohidrat: ${al.akgPK.karbohidrat || 0} gr`,
+                );
+                lines.push(`- Serat: ${al.akgPK.serat || 0} gr`);
+            }
+
+            if (al.hasPB) {
+                if (al.hasPK) {
+                    lines.push(``);
+                }
+                lines.push(`*Menu Alergi ${al.jenis} Porsi Besar:*`);
+                al.menuList.forEach((sm) => {
+                    lines.push(`- ${sm}`);
+                });
+                lines.push(
+                    `*Kandungan Gizi Menu Alergi ${al.jenis} Porsi Besar:*`,
+                );
+                lines.push(`- Energi: ${al.akgPB.energi || 0} Kkal`);
+                lines.push(`- Protein: ${al.akgPB.protein || 0} gr`);
+                lines.push(`- Lemak: ${al.akgPB.lemak || 0} gr`);
+                lines.push(
+                    `- Karbohidrat: ${al.akgPB.karbohidrat || 0} gr`,
+                );
+                lines.push(`- Serat: ${al.akgPB.serat || 0} gr`);
+            }
+        });
+    }
+
+    if (
+        !hasNormalPK.value &&
+        !hasNormalPB.value &&
+        varianAlergiList.value.length === 0
+    ) {
+        lines.push(`- Nihil`);
+    }
+
     lines.push(``);
-    lines.push(`*4. Kejadian Menonjol: Nihil*`);
+    lines.push(`*7. Kejadian Menonjol: Nihil*`);
     lines.push(``);
     lines.push(`*Demikian UMP*`);
 
@@ -1231,7 +1605,7 @@ const activeTab = ref("narasi");
                     >
                         <label
                             for="laporanQuickSelectWo"
-                            class="text-xs font-bold text-slate-600 whitespace-nowrap hidden lg:inline"
+                            class="text-xs font-bold text-slate-600 whitespace-nowrap hidden sm:inline shrink-0"
                         >
                             Daftar WO:
                         </label>
@@ -1239,7 +1613,7 @@ const activeTab = ref("narasi");
                             id="laporanQuickSelectWo"
                             :value="currentWoSelectValue"
                             @change="(e) => handleSelectDate(e.target.value)"
-                            class="w-full sm:w-auto min-w-0 h-9 sm:h-10 px-3 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs max-w-full sm:max-w-[340px] truncate outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20"
+                            class="w-full sm:w-auto min-w-0 h-9 sm:h-10 px-3 text-xs font-bold rounded-xl border border-emerald-300 hover:border-emerald-500 text-slate-800 bg-white shadow-2xs max-w-full sm:max-w-xs md:max-w-[340px] truncate outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 shrink"
                         >
                             <option
                                 v-for="cWo in filteredCalendarWorkOrders"
@@ -1710,6 +2084,182 @@ const activeTab = ref("narasi");
                     </div>
                 </div>
 
+                <!-- KARTU SELISIH JUMLAH PENERIMA MANFAAT -->
+                <div
+                    class="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-3.5"
+                >
+                    <div
+                        class="flex items-center justify-between border-b border-slate-100 pb-3"
+                    >
+                        <div class="flex items-center gap-2">
+                            <div
+                                class="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center font-bold"
+                            >
+                                <Info class="w-4 h-4" />
+                            </div>
+                            <div>
+                                <h3
+                                    class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider"
+                                >
+                                    Selisih Jumlah Penerima Manfaat
+                                </h3>
+                                <span class="text-[11px] text-slate-500">
+                                    Penetapan Awal vs Realisasi Terdistribusi
+                                </span>
+                            </div>
+                        </div>
+                        <span
+                            :class="[
+                                'px-2.5 py-0.5 rounded-md text-xs font-bold',
+                                selisihPenerimaManfaatList.length === 0
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200',
+                            ]"
+                        >
+                            {{
+                                selisihPenerimaManfaatList.length === 0
+                                    ? "Nihil"
+                                    : `${selisihPenerimaManfaatList.length} Penyesuaian`
+                            }}
+                        </span>
+                    </div>
+
+                    <div
+                        v-if="selisihPenerimaManfaatList.length === 0"
+                        class="text-xs text-slate-500 py-1"
+                    >
+                        Seluruh kelompok sasaran MBG terdistribusi sesuai penetapan data awal (tidak ada selisih).
+                    </div>
+                    <div v-else class="space-y-2.5">
+                        <div
+                            v-for="(s, sIdx) in selisihPenerimaManfaatList"
+                            :key="sIdx"
+                            class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs"
+                        >
+                            <div
+                                class="flex items-center justify-between font-bold text-slate-900"
+                            >
+                                <span>{{ s.nama }}</span>
+                                <span class="font-black text-rose-600"
+                                    >Selisih: -{{ s.totalSelisih }} Porsi</span
+                                >
+                            </div>
+                            <p
+                                class="text-[11px] text-slate-600 leading-relaxed font-mono"
+                            >
+                                {{ s.teks.replace(/^-\s*/, "") }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KARTU TAMBAHAN PORSI (UJI ORGANOLEPTIK & SAMPEL) -->
+                <div
+                    class="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-3.5"
+                >
+                    <div
+                        class="flex items-center justify-between border-b border-slate-100 pb-3"
+                    >
+                        <div class="flex items-center gap-2">
+                            <div
+                                class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold"
+                            >
+                                <PlusCircle class="w-4 h-4" />
+                            </div>
+                            <div>
+                                <h3
+                                    class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider"
+                                >
+                                    Tambahan Porsi Diluar Jumlah Penerima Manfaat
+                                </h3>
+                                <span class="text-[11px] text-slate-500">
+                                    Total Tambahan:
+                                    <strong class="text-amber-800">{{ porsiTambahanData.total }} Porsi</strong>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-800">Uji Organoleptik</span>
+                                <span class="font-black text-amber-700">{{ porsiTambahanData.organoleptik }} Porsi</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                Dibagi untuk masing-masing Kelompok Penerima Manfaat
+                            </p>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-800">Sampel Makanan</span>
+                                <span class="font-black text-amber-700">{{ porsiTambahanData.sampel }} Porsi</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                Diamankan pada Suhu Dingin dan Suhu Ruang di SPPG
+                            </p>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-800">Buffer Produksi</span>
+                                <span class="font-black text-amber-700">{{ porsiTambahanData.buffer }} Porsi</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                Cadangan jika terdapat kendala pada paket MBG yang terdistribusikan
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KARTU TOTAL PRODUKSI HARIAN -->
+                <div
+                    class="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-3.5"
+                >
+                    <div
+                        class="flex items-center justify-between border-b border-slate-100 pb-3"
+                    >
+                        <div class="flex items-center gap-2">
+                            <div
+                                class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold"
+                            >
+                                <Utensils class="w-4 h-4" />
+                            </div>
+                            <div>
+                                <h3
+                                    class="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider"
+                                >
+                                    Total Produksi Harian
+                                </h3>
+                                <span class="text-[11px] text-slate-500">
+                                    Total Produksi:
+                                    <strong class="text-emerald-800">{{ totalProduksiHarian }} Porsi</strong>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-800">Porsi PM Rill Sesuai KPM</span>
+                                <span class="font-black text-primary">{{ totalPorsiKeseluruhan }} Porsi</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                Porsi yang disalurkan kepada siswa, guru, tendik, dan 3B
+                            </p>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-800">Porsi Tambahan</span>
+                                <span class="font-black text-amber-700">{{ porsiTambahanData.total }} Porsi</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                Uji Organoleptik ({{ porsiTambahanData.organoleptik }} Porsi) + Sampel Makanan ({{ porsiTambahanData.sampel }} Porsi) + Buffer Produksi ({{ porsiTambahanData.buffer }} Porsi)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- MENU MBG & KANDUNGAN GIZI -->
                 <div
                     class="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-4"
@@ -2066,6 +2616,23 @@ const activeTab = ref("narasi");
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- KARTU KEJADIAN MENONJOL -->
+                <div
+                    class="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-2"
+                >
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-slate-900 uppercase tracking-wider">
+                            7. Kejadian Menonjol
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Nihil
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">
+                        Tidak ada kejadian menonjol selama proses operasional dan penyaluran MBG.
+                    </p>
                 </div>
             </div>
         </div>

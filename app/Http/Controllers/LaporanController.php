@@ -253,7 +253,10 @@ class LaporanController extends Controller
         if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
             $hasRealData = false;
             foreach ($wo->akg_alergi as $j => $data) {
-                if (is_array($data) && (!empty($data['akg_pb']) || !empty($data['akg_pk']))) {
+                if (is_array($data) && (
+                    !empty($data['akg_pb']) || !empty($data['akg_pk']) ||
+                    !empty($data['pb']) || !empty($data['pk'])
+                )) {
                     $hasRealData = true;
                     break;
                 }
@@ -373,7 +376,8 @@ class LaporanController extends Controller
                 ->latest()
                 ->get()
                 ->first(function ($other) use ($jenis) {
-                    return !empty($other->akg_alergi[$jenis]['akg_pb']) || !empty($other->akg_alergi[$jenis]['akg_pk']);
+                    $item = $other->akg_alergi[$jenis] ?? null;
+                    return is_array($item) && (!empty($item['akg_pb']) || !empty($item['akg_pk']) || !empty($item['pb']) || !empty($item['pk']));
                 });
 
             if ($otherAkg && !empty($otherAkg->akg_alergi[$jenis])) {
