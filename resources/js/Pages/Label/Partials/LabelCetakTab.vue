@@ -39,6 +39,7 @@ import {
     AlertTriangle,
     ShieldAlert,
     PlusCircle,
+    Minus,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
@@ -816,8 +817,336 @@ const printableKelompokList = computed(() => {
     );
 });
 
+// ─── State Tambahan Buffer / Cadangan Label untuk Antisipasi Kerusakan ────────
+const activeBufferTab = ref("normal");
+const extraLabelBuffers = ref({
+    normal: {}, // { [kelompokId]: count }
+    normalManual: 0,
+    alergi: {}, // { [`${kelompokId || 'manual'}_${jenis.toLowerCase()}`]: count }
+    tambahan: {
+        organoleptik: 0,
+        sampel: 0,
+        buffer: 0,
+    },
+});
+
+function getExtraBufferForKelompok(kelompokId) {
+    if (kelompokId === undefined || kelompokId === null) return 0;
+    const val = extraLabelBuffers.value.normal?.[kelompokId];
+    return Math.max(0, parseInt(val, 10) || 0);
+}
+
+function setExtraBufferForKelompok(kelompokId, val) {
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    extraLabelBuffers.value.normal = {
+        ...extraLabelBuffers.value.normal,
+        [kelompokId]: num,
+    };
+}
+
+function adjustKelompokBuffer(kelompokId, delta) {
+    const current = getExtraBufferForKelompok(kelompokId);
+    setExtraBufferForKelompok(kelompokId, Math.max(0, current + delta));
+}
+
+function getExtraBufferForManualNormal() {
+    return Math.max(0, parseInt(extraLabelBuffers.value.normalManual, 10) || 0);
+}
+
+function setManualNormalBuffer(val) {
+    extraLabelBuffers.value.normalManual = Math.max(0, parseInt(val, 10) || 0);
+}
+
+function adjustManualNormalBuffer(delta) {
+    const current = getExtraBufferForManualNormal();
+    setManualNormalBuffer(Math.max(0, current + delta));
+}
+
+function getExtraBufferForAlergiItem(kelompokId, jenis) {
+    const key = `${kelompokId || "manual"}_${(jenis || "").trim().toLowerCase()}`;
+    const val = extraLabelBuffers.value.alergi?.[key];
+    return Math.max(0, parseInt(val, 10) || 0);
+}
+
+function setExtraBufferForAlergiItem(kelompokId, jenis, val) {
+    const key = `${kelompokId || "manual"}_${(jenis || "").trim().toLowerCase()}`;
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    extraLabelBuffers.value.alergi = {
+        ...extraLabelBuffers.value.alergi,
+        [key]: num,
+    };
+}
+
+function adjustAlergiItemBuffer(kelompokId, jenis, delta) {
+    const current = getExtraBufferForAlergiItem(kelompokId, jenis);
+    setExtraBufferForAlergiItem(kelompokId, jenis, Math.max(0, current + delta));
+}
+
+function getExtraBufferForTambahan(subTipe) {
+    const val = extraLabelBuffers.value.tambahan?.[subTipe];
+    return Math.max(0, parseInt(val, 10) || 0);
+}
+
+function setExtraBufferForTambahan(subTipe, val) {
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    extraLabelBuffers.value.tambahan = {
+        ...extraLabelBuffers.value.tambahan,
+        [subTipe]: num,
+    };
+}
+
+function adjustTambahanBuffer(subTipe, delta) {
+    const current = getExtraBufferForTambahan(subTipe);
+    setExtraBufferForTambahan(subTipe, Math.max(0, current + delta));
+}
+
+// Quick Presets
+function quickAddBufferNormal(amount) {
+    if (labelMode.value === "manual") {
+        setManualNormalBuffer(getExtraBufferForManualNormal() + amount);
+    } else {
+        const updated = { ...extraLabelBuffers.value.normal };
+        printableKelompokList.value.forEach((k) => {
+            updated[k.id] = (updated[k.id] || 0) + amount;
+        });
+        extraLabelBuffers.value.normal = updated;
+    }
+}
+
+function quickAddBufferAlergi(amount) {
+    const updated = { ...extraLabelBuffers.value.alergi };
+    if (labelMode.value === "manual") {
+        selectedManualAllergies.value.forEach((al) => {
+            const key = `manual_${al.trim().toLowerCase()}`;
+            updated[key] = (updated[key] || 0) + amount;
+        });
+    } else {
+        printableKelompokList.value.forEach((k) => {
+            const breakdown = getKelompokAlergiBreakdown(k);
+            breakdown.forEach((b) => {
+                const key = `${k.id}_${b.jenis.trim().toLowerCase()}`;
+                updated[key] = (updated[key] || 0) + amount;
+            });
+        });
+    }
+    extraLabelBuffers.value.alergi = updated;
+}
+
+function quickAddBufferTambahan(amount) {
+    extraLabelBuffers.value.tambahan = {
+        organoleptik:
+            (extraLabelBuffers.value.tambahan.organoleptik || 0) + amount,
+        sampel: (extraLabelBuffers.value.tambahan.sampel || 0) + amount,
+        buffer: (extraLabelBuffers.value.tambahan.buffer || 0) + amount,
+    };
+}
+
+function autoFillA4EmptySlots() {
+    // 1. Normal
+    if (labelMode.value === "manual") {
+        const count = Number(manualPorsiNormal.value) || 0;
+        const rem = count % 9;
+        const empty = rem > 0 ? 9 - rem : 0;
+        setManualNormalBuffer(empty);
+    } else {
+        const updatedNormal = { ...extraLabelBuffers.value.normal };
+        printableKelompokList.value.forEach((k) => {
+            const base = getKelompokNormalBaseCount(k);
+            const rem = base % 9;
+            updatedNormal[k.id] = rem > 0 ? 9 - rem : 0;
+        });
+        extraLabelBuffers.value.normal = updatedNormal;
+    }
+
+    // 2. Alergi
+    const updatedAlergi = { ...extraLabelBuffers.value.alergi };
+    if (labelMode.value === "manual") {
+        selectedManualAllergies.value.forEach((al) => {
+            const cfg = manualAllergyConfigs.value[al];
+            const base = Number(cfg?.porsi) || 0;
+            const rem = base % 9;
+            const key = `manual_${al.trim().toLowerCase()}`;
+            updatedAlergi[key] = rem > 0 ? 9 - rem : 0;
+        });
+    } else {
+        printableKelompokList.value.forEach((k) => {
+            const breakdown = getKelompokAlergiBreakdown(k);
+            breakdown.forEach((b) => {
+                const rem = b.count % 9;
+                const key = `${k.id}_${b.jenis.trim().toLowerCase()}`;
+                updatedAlergi[key] = rem > 0 ? 9 - rem : 0;
+            });
+        });
+    }
+    extraLabelBuffers.value.alergi = updatedAlergi;
+
+    // 3. Tambahan
+    if (labelMode.value === "auto") {
+        const pt = porsiTambahanData.value;
+        const updatedTambahan = { ...extraLabelBuffers.value.tambahan };
+        if (pt.organoleptik > 0) {
+            const rem = pt.organoleptik % 9;
+            updatedTambahan.organoleptik = rem > 0 ? 9 - rem : 0;
+        }
+        if (pt.sampel > 0) {
+            const rem = pt.sampel % 9;
+            updatedTambahan.sampel = rem > 0 ? 9 - rem : 0;
+        }
+        if (pt.buffer > 0) {
+            const rem = pt.buffer % 9;
+            updatedTambahan.buffer = rem > 0 ? 9 - rem : 0;
+        }
+        extraLabelBuffers.value.tambahan = updatedTambahan;
+    }
+}
+
+const totalA4EmptySlots = computed(() => {
+    let empty = 0;
+    // Normal
+    if (labelMode.value === "manual") {
+        const rem = (Number(manualPorsiNormal.value) || 0) % 9;
+        if (rem > 0) empty += 9 - rem;
+    } else {
+        printableKelompokList.value.forEach((k) => {
+            const rem = getKelompokNormalBaseCount(k) % 9;
+            if (rem > 0) empty += 9 - rem;
+        });
+    }
+    // Alergi
+    if (labelMode.value === "manual") {
+        selectedManualAllergies.value.forEach((al) => {
+            const base = Number(manualAllergyConfigs.value[al]?.porsi) || 0;
+            const rem = base % 9;
+            if (rem > 0) empty += 9 - rem;
+        });
+    } else {
+        printableKelompokList.value.forEach((k) => {
+            const breakdown = getKelompokAlergiBreakdown(k);
+            breakdown.forEach((b) => {
+                const rem = b.count % 9;
+                if (rem > 0) empty += 9 - rem;
+            });
+        });
+    }
+    // Tambahan
+    if (labelMode.value === "auto") {
+        const pt = porsiTambahanData.value;
+        if (pt.organoleptik > 0) {
+            const rem = pt.organoleptik % 9;
+            if (rem > 0) empty += 9 - rem;
+        }
+        if (pt.sampel > 0) {
+            const rem = pt.sampel % 9;
+            if (rem > 0) empty += 9 - rem;
+        }
+        if (pt.buffer > 0) {
+            const rem = pt.buffer % 9;
+            if (rem > 0) empty += 9 - rem;
+        }
+    }
+    return empty;
+});
+
+function resetAllBuffers() {
+    extraLabelBuffers.value = {
+        normal: {},
+        normalManual: 0,
+        alergi: {},
+        tambahan: {
+            organoleptik: 0,
+            sampel: 0,
+            buffer: 0,
+        },
+    };
+}
+
+const totalExtraBufferNormal = computed(() => {
+    if (labelMode.value === "manual") {
+        return getExtraBufferForManualNormal();
+    }
+    return printableKelompokList.value.reduce((sum, k) => {
+        return sum + getExtraBufferForKelompok(k.id);
+    }, 0);
+});
+
+const totalExtraBufferAlergi = computed(() => {
+    if (labelMode.value === "manual") {
+        return selectedManualAllergies.value.reduce((sum, al) => {
+            return sum + getExtraBufferForAlergiItem(null, al);
+        }, 0);
+    }
+    let sum = 0;
+    printableKelompokList.value.forEach((k) => {
+        const breakdown = getKelompokAlergiBreakdown(k);
+        breakdown.forEach((b) => {
+            sum += getExtraBufferForAlergiItem(k.id, b.jenis);
+        });
+    });
+    return sum;
+});
+
+const totalExtraBufferTambahan = computed(() => {
+    return (
+        getExtraBufferForTambahan("organoleptik") +
+        getExtraBufferForTambahan("sampel") +
+        getExtraBufferForTambahan("buffer")
+    );
+});
+
+const totalExtraAllBuffers = computed(() => {
+    return (
+        totalExtraBufferNormal.value +
+        totalExtraBufferAlergi.value +
+        totalExtraBufferTambahan.value
+    );
+});
+
+const activeAlergiBufferItems = computed(() => {
+    if (labelMode.value === "manual") {
+        return selectedManualAllergies.value.map((al) => {
+            const cfg = manualAllergyConfigs.value[al];
+            const baseCount = Number(cfg?.porsi) || 0;
+            const extra = getExtraBufferForAlergiItem(null, al);
+            return {
+                kelompokId: null,
+                namaKelompok: "Input Manual",
+                jenis: al,
+                baseCount,
+                extra,
+                total: baseCount + extra,
+            };
+        });
+    }
+
+    const items = [];
+    printableKelompokList.value.forEach((k) => {
+        const breakdown = getKelompokAlergiBreakdown(k);
+        breakdown.forEach((b) => {
+            const extra = getExtraBufferForAlergiItem(k.id, b.jenis);
+            items.push({
+                kelompokId: k.id,
+                namaKelompok: k.nama_kelompok,
+                jenis: b.jenis,
+                baseCount: b.count,
+                extra,
+                total: b.count + extra,
+            });
+        });
+    });
+    return items;
+});
+
+function getKelompokNormalBaseCount(k) {
+    if (!k) return 0;
+    const pk = Number(k.total_porsi_kecil) || 0;
+    const pb = Number(k.total_porsi_besar) || 0;
+    const totalPm = Number(k.total_penerima) || pk + pb;
+    const totalAlergi = getKelompokAlergiCount(k);
+    return Math.max(0, totalPm - totalAlergi);
+}
+
 // Hitung Breakdown Porsi Normal vs Alergi
-const totalPorsiAlergi = computed(() => {
+const totalPorsiAlergiBase = computed(() => {
     if (labelMode.value === "manual") {
         return selectedManualAllergies.value.reduce((acc, jenis) => {
             const cfg = manualAllergyConfigs.value[jenis];
@@ -863,7 +1192,11 @@ const totalPorsiAlergi = computed(() => {
     return sum;
 });
 
-const totalPorsiNormal = computed(() => {
+const totalPorsiAlergi = computed(() => {
+    return totalPorsiAlergiBase.value + totalExtraBufferAlergi.value;
+});
+
+const totalPorsiNormalBase = computed(() => {
     if (labelMode.value === "manual") {
         return Number(manualPorsiNormal.value) || 0;
     }
@@ -911,7 +1244,11 @@ const totalPorsiNormal = computed(() => {
     }
     return sum > 0
         ? sum
-        : Math.max(0, (totalWoPorsi.value || 0) - totalPorsiAlergi.value);
+        : Math.max(0, (totalWoPorsi.value || 0) - totalPorsiAlergiBase.value);
+});
+
+const totalPorsiNormal = computed(() => {
+    return totalPorsiNormalBase.value + totalExtraBufferNormal.value;
 });
 
 // Tambahan Porsi Diluar Jumlah Penerima Manfaat (Uji Organoleptik, Sampel Makanan, Buffer Produksi)
@@ -974,7 +1311,11 @@ const porsiTambahanData = computed(() => {
     };
 });
 
-const totalPorsiTambahan = computed(() => porsiTambahanData.value.total);
+const totalPorsiTambahanBase = computed(() => porsiTambahanData.value.total);
+
+const totalPorsiTambahan = computed(() => {
+    return totalPorsiTambahanBase.value + totalExtraBufferTambahan.value;
+});
 
 const totalSemuaPorsi = computed(() => {
     return (
@@ -985,16 +1326,16 @@ const totalSemuaPorsi = computed(() => {
 });
 
 // Helper hitung jumlah porsi per jenis alergi (Mode Otomatis & Manual)
-function getAllergyPorsiCount(jenis) {
+function getAllergyPorsiBaseCount(jenis) {
     if (labelMode.value === "manual") {
         if (!jenis || jenis === "Semua Alergi") {
-            return totalPorsiAlergi.value;
+            return totalPorsiAlergiBase.value;
         }
         return Number(manualAllergyConfigs.value[jenis]?.porsi) || 0;
     }
     // Mode Otomatis
     if (!jenis || jenis === "Semua Alergi") {
-        return totalPorsiAlergi.value;
+        return totalPorsiAlergiBase.value;
     }
     let sum = 0;
     const targetGroups =
@@ -1023,6 +1364,22 @@ function getAllergyPorsiCount(jenis) {
         }
     }
     return sum;
+}
+
+function getAllergyPorsiCount(jenis) {
+    const base = getAllergyPorsiBaseCount(jenis);
+    if (!jenis || jenis === "Semua Alergi") {
+        return totalPorsiAlergi.value;
+    }
+    let extra = 0;
+    if (labelMode.value === "manual") {
+        extra = getExtraBufferForAlergiItem(null, jenis);
+    } else {
+        printableKelompokList.value.forEach((k) => {
+            extra += getExtraBufferForAlergiItem(k.id, jenis);
+        });
+    }
+    return base + extra;
 }
 
 // Helper hitung breakdown porsi PK & PB per jenis alergi
@@ -1550,8 +1907,9 @@ function initAutoAllergyConfigs(
                     : getAllergyMenuItemsForTarget(jenis, wo),
             giziData: { ...specificGizi },
             tagAlergi:
-                existing?.tagAlergi ||
-                `⚠️ KHUSUS ALERGI: ${jenis.toUpperCase()}`,
+                existing?.tagAlergi
+                    ? existing.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
+                    : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
         };
     });
 
@@ -1885,6 +2243,25 @@ watch(
                         activeEditingAllergy.value =
                             parsed.selected_manual_allergies[0] || "";
                     }
+                    if (parsed.extra_label_buffers) {
+                        extraLabelBuffers.value = {
+                            normal: parsed.extra_label_buffers.normal || {},
+                            normalManual:
+                                parsed.extra_label_buffers.normalManual || 0,
+                            alergi: parsed.extra_label_buffers.alergi || {},
+                            tambahan: {
+                                organoleptik:
+                                    parsed.extra_label_buffers.tambahan
+                                        ?.organoleptik || 0,
+                                sampel:
+                                    parsed.extra_label_buffers.tambahan
+                                        ?.sampel || 0,
+                                buffer:
+                                    parsed.extra_label_buffers.tambahan
+                                        ?.buffer || 0,
+                            },
+                        };
+                    }
                 } catch {
                     // ignore
                 }
@@ -1987,7 +2364,9 @@ const printableItems = computed(() => {
 
         // 1. Simpan Label Porsi Normal
         const count = Number(manualPorsiNormal.value) || 0;
-        if (count > 0) {
+        const extraNormal = getExtraBufferForManualNormal();
+        const totalNormalCount = count + extraNormal;
+        if (totalNormalCount > 0) {
             normalList.push({
                 kelompok: baseKelompok,
                 tipeLabel: "normal",
@@ -1995,7 +2374,9 @@ const printableItems = computed(() => {
                 tagAlergi: "",
                 menuItems: [...menuItems.value],
                 giziData: { ...giziData.value },
-                count: count,
+                count: totalNormalCount,
+                baseCount: count,
+                extraCount: extraNormal,
             });
         }
 
@@ -2003,21 +2384,29 @@ const printableItems = computed(() => {
         selectedManualAllergies.value.forEach((jenis) => {
             const cfg = manualAllergyConfigs.value[jenis];
             const aCount = Number(cfg?.porsi) || 0;
-            if (aCount > 0) {
+            const extraAlergi = getExtraBufferForAlergiItem(null, jenis);
+            const totalAlergiCount = aCount + extraAlergi;
+            if (totalAlergiCount > 0) {
                 alergiList.push({
                     kelompok: baseKelompok,
                     tipeLabel: "alergi",
                     jenisAlergi: jenis,
                     tagAlergi:
-                        customTagAlergi.value ||
-                        `⚠️ KHUSUS ALERGI: ${jenis.toUpperCase()}`,
+                        customTagAlergi.value
+                            ? customTagAlergi.value.replace(
+                                  /KHUSUS\s+ALERGI/gi,
+                                  "ALERGI",
+                              )
+                            : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
                     menuItems: cfg?.menuItems
                         ? [...cfg.menuItems]
                         : [...menuItemsAlergi.value],
                     giziData: cfg?.giziData
                         ? { ...cfg.giziData }
                         : { ...giziDataAlergi.value },
-                    count: aCount,
+                    count: totalAlergiCount,
+                    baseCount: aCount,
+                    extraCount: extraAlergi,
                 });
             }
         });
@@ -2084,9 +2473,11 @@ const printableItems = computed(() => {
         }
 
         const normalCount = Math.max(0, totalPm - totalAlergiInGroup);
+        const extraNormal = getExtraBufferForKelompok(k.id);
+        const totalNormalCount = normalCount + extraNormal;
 
         // 1. Simpan Label Porsi Normal kelompok ini
-        if (normalCount > 0) {
+        if (totalNormalCount > 0) {
             normalList.push({
                 kelompok: k,
                 tipeLabel: "normal",
@@ -2094,7 +2485,9 @@ const printableItems = computed(() => {
                 tagAlergi: "",
                 menuItems: [...menuItems.value],
                 giziData: { ...giziData.value },
-                count: normalCount,
+                count: totalNormalCount,
+                baseCount: normalCount,
+                extraCount: extraNormal,
             });
         }
 
@@ -2127,21 +2520,35 @@ const printableItems = computed(() => {
                             ? { ...cfg.giziData }
                             : { ...giziDataAlergi.value };
                     const tagItem =
-                        cfg?.tagAlergi ||
-                        (customTagAlergi.value &&
-                        matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
-                            ? customTagAlergi.value
-                            : `⚠️ KHUSUS ALERGI: ${ab.jenis.toUpperCase()}`);
+                        cfg?.tagAlergi
+                            ? cfg.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
+                            : (customTagAlergi.value &&
+                              matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
+                                  ? customTagAlergi.value.replace(
+                                        /KHUSUS\s+ALERGI/gi,
+                                        "ALERGI",
+                                    )
+                                  : `⚠️ ALERGI: ${ab.jenis.toUpperCase()}`);
 
-                    alergiList.push({
-                        kelompok: k,
-                        tipeLabel: "alergi",
-                        jenisAlergi: ab.jenis,
-                        tagAlergi: tagItem,
-                        menuItems: menuList,
-                        giziData: giziItem,
-                        count: ab.count,
-                    });
+                    const extraAlergi = getExtraBufferForAlergiItem(
+                        k.id,
+                        ab.jenis,
+                    );
+                    const totalAlergiCount = ab.count + extraAlergi;
+
+                    if (totalAlergiCount > 0) {
+                        alergiList.push({
+                            kelompok: k,
+                            tipeLabel: "alergi",
+                            jenisAlergi: ab.jenis,
+                            tagAlergi: tagItem,
+                            menuItems: menuList,
+                            giziData: giziItem,
+                            count: totalAlergiCount,
+                            baseCount: ab.count,
+                            extraCount: extraAlergi,
+                        });
+                    }
                 }
             }
         }
@@ -2156,7 +2563,9 @@ const printableItems = computed(() => {
         kategori: "Internal SPPG",
     };
 
-    if (pt.organoleptik > 0) {
+    const extraOrg = getExtraBufferForTambahan("organoleptik");
+    const totalOrg = pt.organoleptik + extraOrg;
+    if (totalOrg > 0) {
         tambahanList.push({
             kelompok: baseUnitKelompok,
             tipeLabel: "tambahan",
@@ -2165,11 +2574,15 @@ const printableItems = computed(() => {
             tagAlergi: "🔬 UJI ORGANOLEPTIK",
             menuItems: [...menuItems.value],
             giziData: { ...giziData.value },
-            count: pt.organoleptik,
+            count: totalOrg,
+            baseCount: pt.organoleptik,
+            extraCount: extraOrg,
         });
     }
 
-    if (pt.sampel > 0) {
+    const extraSampel = getExtraBufferForTambahan("sampel");
+    const totalSampel = pt.sampel + extraSampel;
+    if (totalSampel > 0) {
         tambahanList.push({
             kelompok: baseUnitKelompok,
             tipeLabel: "tambahan",
@@ -2178,11 +2591,15 @@ const printableItems = computed(() => {
             tagAlergi: "🧪 SAMPEL MAKANAN",
             menuItems: [...menuItems.value],
             giziData: { ...giziData.value },
-            count: pt.sampel,
+            count: totalSampel,
+            baseCount: pt.sampel,
+            extraCount: extraSampel,
         });
     }
 
-    if (pt.buffer > 0) {
+    const extraBuf = getExtraBufferForTambahan("buffer");
+    const totalBuf = pt.buffer + extraBuf;
+    if (totalBuf > 0) {
         tambahanList.push({
             kelompok: baseUnitKelompok,
             tipeLabel: "tambahan",
@@ -2191,7 +2608,9 @@ const printableItems = computed(() => {
             tagAlergi: "📦 BUFFER PRODUKSI",
             menuItems: [...menuItems.value],
             giziData: { ...giziData.value },
-            count: pt.buffer,
+            count: totalBuf,
+            baseCount: pt.buffer,
+            extraCount: extraBuf,
         });
     }
 
@@ -2205,6 +2624,8 @@ const printableItems = computed(() => {
             menuItems: [...menuItems.value],
             giziData: { ...giziData.value },
             count: pt.total,
+            baseCount: pt.total,
+            extraCount: 0,
         });
     }
 
@@ -2240,6 +2661,31 @@ const expandedPrintableItems = computed(() => {
         const count =
             item.count && Number(item.count) > 0 ? Number(item.count) : 1;
         for (let i = 0; i < count; i++) {
+            expanded.push(item);
+        }
+    }
+    return expanded;
+});
+
+// Daftar expanded khusus untuk mode Lembar A4 (9 label/halaman)
+// Cadangan label langsung mengisi area kosong pada lembar jenis porsi tersebut tanpa membuat lembaran baru
+const expandedPrintableItemsA4 = computed(() => {
+    const expanded = [];
+    for (const item of printableItems.value) {
+        const base = Number(item.baseCount ?? item.count) || 0;
+        const extra = Number(item.extraCount) || 0;
+        if (base <= 0 && extra <= 0) continue;
+
+        let totalForThisItem = base;
+        if (extra > 0) {
+            const rem = base % 9;
+            const emptySlotsOnSheet = rem > 0 ? 9 - rem : 0;
+            // Cadangan mengisi area kosong pada lembar jenis porsi tersebut (tidak membuat lembaran baru)
+            const allowedExtra = Math.min(extra, emptySlotsOnSheet);
+            totalForThisItem = base + allowedExtra;
+        }
+
+        for (let i = 0; i < totalForThisItem; i++) {
             expanded.push(item);
         }
     }
@@ -2331,6 +2777,7 @@ function saveLabelToDatabase() {
             manual_porsi_normal: manualPorsiNormal.value,
             manual_allergy_configs: manualAllergyConfigs.value,
             selected_manual_allergies: selectedManualAllergies.value,
+            extra_label_buffers: extraLabelBuffers.value,
         }),
     };
 
@@ -2565,6 +3012,9 @@ function resetLabelToDefault() {
     downloadFormatOption.value = "single";
     customLabelCount.value = totalWoPorsi.value || 9;
 
+    // Reset Cadangan Label
+    resetAllBuffers();
+
     // Jika sedang dalam mode edit label dari daftar, batalkan edit mode
     if (props.editingLabel) {
         emit("cancel-edit");
@@ -2731,11 +3181,13 @@ const currentPreviewTag = computed(() => {
         return "🔬 UJI ORGANOLEPTIK";
     }
     if (activeLabelTab.value === "alergi") {
+        if (customTagAlergi.value) {
+            return customTagAlergi.value.replace(/KHUSUS\s+ALERGI/gi, "ALERGI");
+        }
         return (
-            customTagAlergi.value ||
-            (currentPreviewJenisAlergi.value
-                ? `⚠️ KHUSUS ALERGI: ${currentPreviewJenisAlergi.value.toUpperCase()}`
-                : "")
+            currentPreviewJenisAlergi.value
+                ? `⚠️ ALERGI: ${currentPreviewJenisAlergi.value.toUpperCase()}`
+                : ""
         );
     }
     return "";
@@ -2755,10 +3207,8 @@ const previewKelompok = computed(() => {
 async function startDownload(type = null) {
     const selectedType = type || downloadFormatOption.value || "single";
     const itemsToPrint =
-        selectedType === "custom"
-            ? expandedPrintableItems.value.length > 0
-                ? expandedPrintableItems.value
-                : printableItems.value
+        selectedType === "a4" || selectedType === "custom"
+            ? expandedPrintableItemsA4.value
             : expandedPrintableItems.value;
 
     if (itemsToPrint.length === 0) {
@@ -3506,7 +3956,7 @@ async function startPrintDirect() {
                                 <input
                                     v-model="customTagAlergi"
                                     type="text"
-                                    placeholder="Otomatis (contoh: ⚠️ KHUSUS ALERGI: TELUR)"
+                                    placeholder="Otomatis (contoh: ⚠️ ALERGI: TELUR)"
                                     class="w-full mt-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-bold text-amber-950 focus:ring-2 focus:ring-amber-400 outline-none"
                                 />
                             </div>
@@ -3615,7 +4065,7 @@ async function startPrintDirect() {
                                     <label
                                         class="font-bold text-slate-700 block text-[11px]"
                                     >
-                                        Nilai Kandungan Gizi (AKG) Khusus Alergi
+                                        Nilai Kandungan Gizi (AKG) Alergi
                                         {{ currentAutoEditingAllergy }}:
                                     </label>
                                     <!-- Porsi Besar -->
@@ -3634,12 +4084,14 @@ async function startPrintDirect() {
                                                     >Energi</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.energi_pb
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3649,12 +4101,14 @@ async function startPrintDirect() {
                                                     >Protein</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.prot_pb
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3664,12 +4118,14 @@ async function startPrintDirect() {
                                                     >Lemak</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.lmk_pb
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3679,12 +4135,14 @@ async function startPrintDirect() {
                                                     >Karbo</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.karbo_pb
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3694,12 +4152,14 @@ async function startPrintDirect() {
                                                     >Serat</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.serat_pb
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3722,12 +4182,14 @@ async function startPrintDirect() {
                                                     >Energi</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.energi_pk
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3737,12 +4199,14 @@ async function startPrintDirect() {
                                                     >Protein</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.prot_pk
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3752,12 +4216,14 @@ async function startPrintDirect() {
                                                     >Lemak</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.lmk_pk
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3767,12 +4233,14 @@ async function startPrintDirect() {
                                                     >Karbo</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.karbo_pk
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -3782,12 +4250,14 @@ async function startPrintDirect() {
                                                     >Serat</label
                                                 >
                                                 <input
-                                                    v-model="
+                                                    v-model.number="
                                                         autoAllergyConfigs[
                                                             currentAutoEditingAllergy
                                                         ].giziData.serat_pk
                                                     "
-                                                    type="text"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
                                                     class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                                                 />
                                             </div>
@@ -4927,7 +5397,7 @@ async function startPrintDirect() {
                                         <input
                                             v-model="customTagAlergi"
                                             type="text"
-                                            :placeholder="`Otomatis (contoh: ⚠️ KHUSUS ALERGI: ${activeEditingAllergy.toUpperCase()})`"
+                                            :placeholder="`Otomatis (contoh: ⚠️ ALERGI: ${activeEditingAllergy.toUpperCase()})`"
                                             class="w-full mt-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-bold text-amber-950 focus:ring-2 focus:ring-amber-400 outline-none text-xs"
                                         />
                                     </div>
@@ -5078,6 +5548,475 @@ async function startPrintDirect() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    <!-- CARD TAMBAHAN LABEL CADANGAN (ANTISIPASI KERUSAKAN / KEKURANGAN) -->
+                    <Card className="bg-white border-slate-200/80 shadow-2xs">
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
+                        >
+                            <CardTitle
+                                class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                            >
+                                <PlusCircle class="h-4 w-4 text-emerald-600" />
+                                <span>Cadangan Label (Antisipasi Kerusakan)</span>
+                            </CardTitle>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    :class="[
+                                        'px-2 py-0.5 rounded-full text-[11px] font-black',
+                                        totalExtraAllBuffers > 0
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : 'bg-slate-100 text-slate-500 border border-slate-200',
+                                    ]"
+                                >
+                                    +{{ totalExtraAllBuffers }} Cadangan
+                                </span>
+                                <button
+                                    v-if="totalExtraAllBuffers > 0"
+                                    type="button"
+                                    @click="resetAllBuffers"
+                                    class="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer"
+                                    title="Reset semua cadangan ke 0"
+                                >
+                                    <RotateCcw class="h-3 w-3" />
+                                    <span>Reset</span>
+                                </button>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-4 space-y-3 text-xs">
+                            <!-- Quick Action Preset Buttons -->
+                            <div class="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                    ⚡ Tambah Cepat Cadangan:
+                                </span>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <button
+                                        type="button"
+                                        @click="quickAddBufferNormal(1)"
+                                        class="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                    >
+                                        <Plus class="h-3 w-3" />
+                                        <span>1 Tiap Normal</span>
+                                    </button>
+                                    <button
+                                        v-if="activeAlergiBufferItems.length > 0"
+                                        type="button"
+                                        @click="quickAddBufferAlergi(1)"
+                                        class="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                    >
+                                        <Plus class="h-3 w-3" />
+                                        <span>1 Tiap Alergi</span>
+                                    </button>
+                                    <button
+                                        v-if="labelMode === 'auto' && porsiTambahanData.total > 0"
+                                        type="button"
+                                        @click="quickAddBufferTambahan(1)"
+                                        class="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                    >
+                                        <Plus class="h-3 w-3" />
+                                        <span>1 Tiap Tambahan</span>
+                                    </button>
+                                    <button
+                                        v-if="totalA4EmptySlots > 0"
+                                        type="button"
+                                        @click="autoFillA4EmptySlots"
+                                        class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                        title="Otomatis isi slot kosong lembar A4 (hingga pas 9 label per halaman) tanpa menambah lembar baru"
+                                    >
+                                        <Sparkles class="h-3 w-3 text-emerald-600" />
+                                        <span>Penuhi Area Kosong A4 (+{{ totalA4EmptySlots }})</span>
+                                    </button>
+                                </div>
+                                <div class="pt-1.5 border-t border-slate-200/70 text-[10.5px] text-slate-600 flex items-start gap-1.5">
+                                    <Sparkles class="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+                                    <span>
+                                        <strong>Mode Lembar A4 (9 Label/Halaman):</strong> Cadangan otomatis langsung mengisi area kosong pada lembar jenis porsi tersebut tanpa membuat lembaran baru.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Tabs Switcher for Types -->
+                            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                                <button
+                                    type="button"
+                                    @click="activeBufferTab = 'normal'"
+                                    :class="[
+                                        'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer',
+                                        activeBufferTab === 'normal'
+                                            ? 'bg-white text-blue-700 shadow-2xs font-black'
+                                            : 'text-slate-600 hover:text-slate-900',
+                                    ]"
+                                >
+                                    <span>🏷️ Normal</span>
+                                    <span
+                                        v-if="totalExtraBufferNormal > 0"
+                                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-800 font-extrabold"
+                                    >
+                                        +{{ totalExtraBufferNormal }}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="activeBufferTab = 'alergi'"
+                                    :class="[
+                                        'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer',
+                                        activeBufferTab === 'alergi'
+                                            ? 'bg-white text-amber-700 shadow-2xs font-black'
+                                            : 'text-slate-600 hover:text-slate-900',
+                                    ]"
+                                >
+                                    <span>⚠️ Alergi</span>
+                                    <span
+                                        v-if="totalExtraBufferAlergi > 0"
+                                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold"
+                                    >
+                                        +{{ totalExtraBufferAlergi }}
+                                    </span>
+                                </button>
+                                <button
+                                    v-if="labelMode === 'auto' && porsiTambahanData.total > 0"
+                                    type="button"
+                                    @click="activeBufferTab = 'tambahan'"
+                                    :class="[
+                                        'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer',
+                                        activeBufferTab === 'tambahan'
+                                            ? 'bg-white text-sky-700 shadow-2xs font-black'
+                                            : 'text-slate-600 hover:text-slate-900',
+                                    ]"
+                                >
+                                    <span>➕ Tambahan</span>
+                                    <span
+                                        v-if="totalExtraBufferTambahan > 0"
+                                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-800 font-extrabold"
+                                    >
+                                        +{{ totalExtraBufferTambahan }}
+                                    </span>
+                                </button>
+                            </div>
+
+                            <!-- Content Tab: NORMAL -->
+                            <div v-if="activeBufferTab === 'normal'" class="space-y-2">
+                                <!-- Mode Manual Normal -->
+                                <div
+                                    v-if="labelMode === 'manual'"
+                                    class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/40 flex items-center justify-between"
+                                >
+                                    <div>
+                                        <span class="font-bold text-slate-800 block text-xs">Porsi Normal (Manual)</span>
+                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                            <span>Dasar: {{ manualPorsiNormal || 0 }} Label</span>
+                                            <span
+                                                v-if="(Number(manualPorsiNormal) || 0) % 9 > 0"
+                                                class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                title="Sisa slot kosong di lembar A4 terakhir sebelum lembar baru"
+                                            >
+                                                Area Kosong A4: {{ 9 - ((Number(manualPorsiNormal) || 0) % 9) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            @click="adjustManualNormalBuffer(-1)"
+                                            class="w-7 h-7 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Minus class="h-3.5 w-3.5" />
+                                        </button>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            :value="getExtraBufferForManualNormal()"
+                                            @input="setManualNormalBuffer($event.target.value)"
+                                            class="w-14 text-center font-black font-mono py-1 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-400 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="adjustManualNormalBuffer(1)"
+                                            class="w-7 h-7 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Plus class="h-3.5 w-3.5" />
+                                        </button>
+                                        <span class="text-[11px] font-bold text-blue-900 ml-1">
+                                            = {{ (Number(manualPorsiNormal) || 0) + getExtraBufferForManualNormal() }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Mode Otomatis Normal Per Kelompok -->
+                                <div v-else class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+                                    <div
+                                        v-for="k in printableKelompokList"
+                                        :key="k.id"
+                                        class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between"
+                                    >
+                                        <div class="min-w-0 pr-2">
+                                            <span class="font-bold text-slate-800 block truncate text-xs">{{ k.nama_kelompok }}</span>
+                                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                                <span>Dasar: {{ getKelompokNormalBaseCount(k) }} pcs</span>
+                                                <span
+                                                    v-if="getKelompokNormalBaseCount(k) % 9 > 0"
+                                                    class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                    title="Sisa slot kosong di lembar A4 terakhir kelompok ini"
+                                                >
+                                                    Area Kosong A4: {{ 9 - (getKelompokNormalBaseCount(k) % 9) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                type="button"
+                                                @click="adjustKelompokBuffer(k.id, -1)"
+                                                class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                            >
+                                                <Minus class="h-3 w-3" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="500"
+                                                :value="getExtraBufferForKelompok(k.id)"
+                                                @input="setExtraBufferForKelompok(k.id, $event.target.value)"
+                                                class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-400 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                @click="adjustKelompokBuffer(k.id, 1)"
+                                                class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                            >
+                                                <Plus class="h-3 w-3" />
+                                            </button>
+                                            <span class="text-[11px] font-bold text-blue-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                                = {{ getKelompokNormalBaseCount(k) + getExtraBufferForKelompok(k.id) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Content Tab: ALERGI -->
+                            <div v-if="activeBufferTab === 'alergi'" class="space-y-2">
+                                <div
+                                    v-if="activeAlergiBufferItems.length === 0"
+                                    class="p-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 text-center"
+                                >
+                                    <p class="font-bold text-amber-900 text-xs">Tidak Ada Porsi Alergi Terpilih</p>
+                                    <p class="text-[11px] text-amber-700 mt-0.5">
+                                        Porsi alergi akan muncul otomatis bila ada kelompok sasaran dengan data alergi atau jenis alergi manual yang dipilih.
+                                    </p>
+                                </div>
+                                <div v-else class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+                                    <div
+                                        v-for="(item, idx) in activeAlergiBufferItems"
+                                        :key="`${item.kelompokId || 'manual'}_${item.jenis}_${idx}`"
+                                        class="p-2 rounded-xl border border-amber-200 bg-amber-50/40 flex items-center justify-between"
+                                    >
+                                        <div class="min-w-0 pr-2 space-y-0.5">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-bold text-slate-800 text-xs truncate max-w-[150px]">
+                                                    {{ item.namaKelompok }}
+                                                </span>
+                                                <span class="px-1.5 py-0.2 bg-amber-200/90 text-amber-950 font-black rounded text-[10px]">
+                                                    ⚠️ {{ item.jenis }}
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                                <span>Dasar: {{ item.baseCount }} pcs</span>
+                                                <span
+                                                    v-if="item.baseCount % 9 > 0"
+                                                    class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                    title="Sisa slot kosong di lembar A4 terakhir kelompok alergi ini"
+                                                >
+                                                    Area Kosong A4: {{ 9 - (item.baseCount % 9) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                type="button"
+                                                @click="adjustAlergiItemBuffer(item.kelompokId, item.jenis, -1)"
+                                                class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                            >
+                                                <Minus class="h-3 w-3" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="500"
+                                                :value="item.extra"
+                                                @input="setExtraBufferForAlergiItem(item.kelompokId, item.jenis, $event.target.value)"
+                                                class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-amber-400 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                @click="adjustAlergiItemBuffer(item.kelompokId, item.jenis, 1)"
+                                                class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                            >
+                                                <Plus class="h-3 w-3" />
+                                            </button>
+                                            <span class="text-[11px] font-bold text-amber-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                                = {{ item.total }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Content Tab: TAMBAHAN -->
+                            <div
+                                v-if="activeBufferTab === 'tambahan' && labelMode === 'auto' && porsiTambahanData.total > 0"
+                                class="space-y-1.5"
+                            >
+                                <!-- Organoleptik -->
+                                <div
+                                    v-if="porsiTambahanData.organoleptik > 0"
+                                    class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
+                                >
+                                    <div>
+                                        <span class="font-bold text-slate-800 block text-xs">🔬 Uji Organoleptik</span>
+                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                            <span>Dasar: {{ porsiTambahanData.organoleptik }} pcs</span>
+                                            <span
+                                                v-if="porsiTambahanData.organoleptik % 9 > 0"
+                                                class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                title="Sisa slot kosong di lembar A4 terakhir uji organoleptik"
+                                            >
+                                                Area Kosong A4: {{ 9 - (porsiTambahanData.organoleptik % 9) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('organoleptik', -1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Minus class="h-3 w-3" />
+                                        </button>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            :value="getExtraBufferForTambahan('organoleptik')"
+                                            @input="setExtraBufferForTambahan('organoleptik', $event.target.value)"
+                                            class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('organoleptik', 1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                        </button>
+                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                            = {{ porsiTambahanData.organoleptik + getExtraBufferForTambahan('organoleptik') }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Sampel Makanan -->
+                                <div
+                                    v-if="porsiTambahanData.sampel > 0"
+                                    class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
+                                >
+                                    <div>
+                                        <span class="font-bold text-slate-800 block text-xs">🧪 Sampel Makanan</span>
+                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                            <span>Dasar: {{ porsiTambahanData.sampel }} pcs</span>
+                                            <span
+                                                v-if="porsiTambahanData.sampel % 9 > 0"
+                                                class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                title="Sisa slot kosong di lembar A4 terakhir sampel makanan"
+                                            >
+                                                Area Kosong A4: {{ 9 - (porsiTambahanData.sampel % 9) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('sampel', -1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Minus class="h-3 w-3" />
+                                        </button>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            :value="getExtraBufferForTambahan('sampel')"
+                                            @input="setExtraBufferForTambahan('sampel', $event.target.value)"
+                                            class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('sampel', 1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                        </button>
+                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                            = {{ porsiTambahanData.sampel + getExtraBufferForTambahan('sampel') }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Buffer Produksi -->
+                                <div
+                                    v-if="porsiTambahanData.buffer > 0"
+                                    class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
+                                >
+                                    <div>
+                                        <span class="font-bold text-slate-800 block text-xs">📦 Buffer Produksi</span>
+                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                            <span>Dasar: {{ porsiTambahanData.buffer }} pcs</span>
+                                            <span
+                                                v-if="porsiTambahanData.buffer % 9 > 0"
+                                                class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
+                                                title="Sisa slot kosong di lembar A4 terakhir buffer produksi"
+                                            >
+                                                Area Kosong A4: {{ 9 - (porsiTambahanData.buffer % 9) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('buffer', -1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Minus class="h-3 w-3" />
+                                        </button>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            :value="getExtraBufferForTambahan('buffer')"
+                                            @input="setExtraBufferForTambahan('buffer', $event.target.value)"
+                                            class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="adjustTambahanBuffer('buffer', 1)"
+                                            class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
+                                        >
+                                            <Plus class="h-3 w-3" />
+                                        </button>
+                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                            = {{ porsiTambahanData.buffer + getExtraBufferForTambahan('buffer') }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Footer Info Ringkasan -->
+                            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                                <span>Cadangan Aktif: <strong class="text-emerald-700">+{{ totalExtraAllBuffers }} Label</strong></span>
+                                <span class="font-bold text-slate-700">Total Semua Label: {{ totalSemuaPorsi }} pcs</span>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <!-- ================= RIGHT COLUMN: LIVE PREVIEW ================= -->
@@ -5117,9 +6056,16 @@ async function startPrintDirect() {
                                     <Tag class="h-3.5 w-3.5 text-blue-600" />
                                     <span>🏷️ Normal</span>
                                     <span
-                                        class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                        class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-1"
                                     >
-                                        {{ totalPorsiNormal }}
+                                        <span>{{ totalPorsiNormal }}</span>
+                                        <span
+                                            v-if="totalExtraBufferNormal > 0"
+                                            class="text-blue-600 font-extrabold text-[9px]"
+                                            title="Termasuk Cadangan"
+                                        >
+                                            (+{{ totalExtraBufferNormal }})
+                                        </span>
                                     </span>
                                 </button>
                                 <button
@@ -5135,9 +6081,16 @@ async function startPrintDirect() {
                                     <AlertTriangle class="h-3.5 w-3.5" />
                                     <span>⚠️ Alergi</span>
                                     <span
-                                        class="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                        class="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-1"
                                     >
-                                        {{ totalPorsiAlergi }}
+                                        <span>{{ totalPorsiAlergi }}</span>
+                                        <span
+                                            v-if="totalExtraBufferAlergi > 0"
+                                            class="text-amber-700 font-extrabold text-[9px]"
+                                            title="Termasuk Cadangan"
+                                        >
+                                            (+{{ totalExtraBufferAlergi }})
+                                        </span>
                                     </span>
                                 </button>
                                 <button
@@ -5154,9 +6107,16 @@ async function startPrintDirect() {
                                     <PlusCircle class="h-3.5 w-3.5" />
                                     <span>➕ Tambahan</span>
                                     <span
-                                        class="bg-sky-100 text-sky-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                        class="bg-sky-100 text-sky-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-1"
                                     >
-                                        {{ totalPorsiTambahan }}
+                                        <span>{{ totalPorsiTambahan }}</span>
+                                        <span
+                                            v-if="totalExtraBufferTambahan > 0"
+                                            class="text-sky-700 font-extrabold text-[9px]"
+                                            title="Termasuk Cadangan"
+                                        >
+                                            (+{{ totalExtraBufferTambahan }})
+                                        </span>
                                     </span>
                                 </button>
                             </div>

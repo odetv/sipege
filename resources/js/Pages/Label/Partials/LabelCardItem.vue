@@ -279,7 +279,10 @@ const isTambahan = computed(() => props.tipeLabel === "tambahan");
 
 const bannerBadgeText = computed(() => {
     if (props.tagAlergi && props.tagAlergi.trim()) {
-        return props.tagAlergi.trim().toUpperCase();
+        return props.tagAlergi
+            .trim()
+            .toUpperCase()
+            .replace(/KHUSUS\s+ALERGI/g, "ALERGI");
     }
     if (isAlergi.value) {
         if (props.jenisAlergi && props.jenisAlergi.trim()) {
