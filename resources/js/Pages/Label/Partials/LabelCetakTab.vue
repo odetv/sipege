@@ -879,7 +879,11 @@ function setExtraBufferForAlergiItem(kelompokId, jenis, val) {
 
 function adjustAlergiItemBuffer(kelompokId, jenis, delta) {
     const current = getExtraBufferForAlergiItem(kelompokId, jenis);
-    setExtraBufferForAlergiItem(kelompokId, jenis, Math.max(0, current + delta));
+    setExtraBufferForAlergiItem(
+        kelompokId,
+        jenis,
+        Math.max(0, current + delta),
+    );
 }
 
 function getExtraBufferForTambahan(subTipe) {
@@ -1906,10 +1910,9 @@ function initAutoAllergyConfigs(
                     ? [...existing.menuItems]
                     : getAllergyMenuItemsForTarget(jenis, wo),
             giziData: { ...specificGizi },
-            tagAlergi:
-                existing?.tagAlergi
-                    ? existing.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
-                    : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
+            tagAlergi: existing?.tagAlergi
+                ? existing.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
+                : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
         };
     });
 
@@ -2391,13 +2394,12 @@ const printableItems = computed(() => {
                     kelompok: baseKelompok,
                     tipeLabel: "alergi",
                     jenisAlergi: jenis,
-                    tagAlergi:
-                        customTagAlergi.value
-                            ? customTagAlergi.value.replace(
-                                  /KHUSUS\s+ALERGI/gi,
-                                  "ALERGI",
-                              )
-                            : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
+                    tagAlergi: customTagAlergi.value
+                        ? customTagAlergi.value.replace(
+                              /KHUSUS\s+ALERGI/gi,
+                              "ALERGI",
+                          )
+                        : `⚠️ ALERGI: ${jenis.toUpperCase()}`,
                     menuItems: cfg?.menuItems
                         ? [...cfg.menuItems]
                         : [...menuItemsAlergi.value],
@@ -2519,16 +2521,15 @@ const printableItems = computed(() => {
                         cfg && cfg.giziData
                             ? { ...cfg.giziData }
                             : { ...giziDataAlergi.value };
-                    const tagItem =
-                        cfg?.tagAlergi
-                            ? cfg.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
-                            : (customTagAlergi.value &&
-                              matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
-                                  ? customTagAlergi.value.replace(
-                                        /KHUSUS\s+ALERGI/gi,
-                                        "ALERGI",
-                                    )
-                                  : `⚠️ ALERGI: ${ab.jenis.toUpperCase()}`);
+                    const tagItem = cfg?.tagAlergi
+                        ? cfg.tagAlergi.replace(/KHUSUS\s+ALERGI/gi, "ALERGI")
+                        : customTagAlergi.value &&
+                            matchAllergyKey(selectedJenisAlergi.value, ab.jenis)
+                          ? customTagAlergi.value.replace(
+                                /KHUSUS\s+ALERGI/gi,
+                                "ALERGI",
+                            )
+                          : `⚠️ ALERGI: ${ab.jenis.toUpperCase()}`;
 
                     const extraAlergi = getExtraBufferForAlergiItem(
                         k.id,
@@ -3184,11 +3185,9 @@ const currentPreviewTag = computed(() => {
         if (customTagAlergi.value) {
             return customTagAlergi.value.replace(/KHUSUS\s+ALERGI/gi, "ALERGI");
         }
-        return (
-            currentPreviewJenisAlergi.value
-                ? `⚠️ ALERGI: ${currentPreviewJenisAlergi.value.toUpperCase()}`
-                : ""
-        );
+        return currentPreviewJenisAlergi.value
+            ? `⚠️ ALERGI: ${currentPreviewJenisAlergi.value.toUpperCase()}`
+            : "";
     }
     return "";
 });
@@ -3484,13 +3483,13 @@ async function startPrintDirect() {
                                     class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
                                 >
                                     <Tag class="h-5 w-5 text-primary" />
-                                    <span>Konfigurasi Label Resmi SPPG</span>
+                                    <span>Konfigurasi Label</span>
                                 </CardTitle>
-                                <span
+                                <!-- <span
                                     class="bg-blue-100 text-blue-900 border border-blue-200 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"
                                 >
-                                    <span>Standar Resmi BGN</span>
-                                </span>
+                                    <span>Standar</span>
+                                </span> -->
                             </div>
                             <CardDescription class="text-xs sm:text-sm mt-0.5">
                                 Mendukung label sesuai kebutuhan SPPG.
@@ -3500,73 +3499,69 @@ async function startPrintDirect() {
                         <!-- Action Buttons -->
                         <div class="flex items-center gap-2 shrink-0 flex-wrap">
                             <!-- Filter Cetak: Semua / PM / Normal / Alergi / Tambahan -->
-                            <div
-                                class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200"
+
+                            <select
+                                v-model="filterCetakTipe"
+                                class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                title="Pilih porsi yang akan dicetak atau diunduh"
                             >
-                                <select
-                                    v-model="filterCetakTipe"
-                                    class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-                                    title="Pilih porsi yang akan dicetak atau diunduh"
+                                <option value="semua">
+                                    ✨ Semua Porsi
+                                    {{
+                                        totalPorsiTambahan > 0
+                                            ? "(Normal, Alergi & Tambahan)"
+                                            : "(Normal & Alergi)"
+                                    }}
+                                    [{{ totalSemuaPorsi }}]
+                                </option>
+                                <option
+                                    v-if="totalPorsiTambahan > 0"
+                                    value="pm"
                                 >
-                                    <option value="semua">
-                                        ✨ Semua Porsi
-                                        {{
-                                            totalPorsiTambahan > 0
-                                                ? "(Normal, Alergi & Tambahan)"
-                                                : "(Normal & Alergi)"
-                                        }}
-                                        [{{ totalSemuaPorsi }}]
-                                    </option>
-                                    <option
-                                        v-if="totalPorsiTambahan > 0"
-                                        value="pm"
-                                    >
-                                        👥 Semua Porsi PM Saja [{{
-                                            totalPorsiNormal + totalPorsiAlergi
-                                        }}]
-                                    </option>
-                                    <option value="normal">
-                                        🏷️ Hanya Porsi Normal ({{
-                                            totalPorsiNormal
-                                        }})
-                                    </option>
-                                    <option value="alergi">
-                                        ⚠️ Hanya Porsi Alergi ({{
-                                            totalPorsiAlergi
-                                        }})
-                                    </option>
-                                    <option value="tambahan">
-                                        ➕ Hanya Porsi Tambahan Saja ({{
-                                            totalPorsiTambahan
-                                        }})
-                                    </option>
-                                    <option
-                                        v-if="
-                                            porsiTambahanData.organoleptik > 0
-                                        "
-                                        value="tambahan_organoleptik"
-                                    >
-                                        &nbsp;&nbsp;&nbsp;🔬 Uji Organoleptik
-                                        ({{ porsiTambahanData.organoleptik }})
-                                    </option>
-                                    <option
-                                        v-if="porsiTambahanData.sampel > 0"
-                                        value="tambahan_sampel"
-                                    >
-                                        &nbsp;&nbsp;&nbsp;🧪 Sampel Makanan ({{
-                                            porsiTambahanData.sampel
-                                        }})
-                                    </option>
-                                    <option
-                                        v-if="porsiTambahanData.buffer > 0"
-                                        value="tambahan_buffer"
-                                    >
-                                        &nbsp;&nbsp;&nbsp;📦 Buffer Produksi ({{
-                                            porsiTambahanData.buffer
-                                        }})
-                                    </option>
-                                </select>
-                            </div>
+                                    👥 Semua Porsi PM Saja [{{
+                                        totalPorsiNormal + totalPorsiAlergi
+                                    }}]
+                                </option>
+                                <option value="normal">
+                                    🏷️ Hanya Porsi Normal ({{
+                                        totalPorsiNormal
+                                    }})
+                                </option>
+                                <option value="alergi">
+                                    ⚠️ Hanya Porsi Alergi ({{
+                                        totalPorsiAlergi
+                                    }})
+                                </option>
+                                <option value="tambahan">
+                                    ➕ Hanya Porsi Tambahan Saja ({{
+                                        totalPorsiTambahan
+                                    }})
+                                </option>
+                                <option
+                                    v-if="porsiTambahanData.organoleptik > 0"
+                                    value="tambahan_organoleptik"
+                                >
+                                    &nbsp;&nbsp;&nbsp;🔬 Uji Organoleptik ({{
+                                        porsiTambahanData.organoleptik
+                                    }})
+                                </option>
+                                <option
+                                    v-if="porsiTambahanData.sampel > 0"
+                                    value="tambahan_sampel"
+                                >
+                                    &nbsp;&nbsp;&nbsp;🧪 Sampel Makanan ({{
+                                        porsiTambahanData.sampel
+                                    }})
+                                </option>
+                                <option
+                                    v-if="porsiTambahanData.buffer > 0"
+                                    value="tambahan_buffer"
+                                >
+                                    &nbsp;&nbsp;&nbsp;📦 Buffer Produksi ({{
+                                        porsiTambahanData.buffer
+                                    }})
+                                </option>
+                            </select>
 
                             <!-- Tombol RESET KE AWAL -->
                             <Button
@@ -3579,7 +3574,7 @@ async function startPrintDirect() {
                                 <RotateCcw
                                     class="h-4 w-4 text-slate-500 shrink-0"
                                 />
-                                <span class="hidden md:inline">Reset Awal</span>
+                                <!-- <span class="hidden md:inline">Reset</span> -->
                             </Button>
 
                             <!-- Tombol SIMPAN LABEL -->
@@ -3610,7 +3605,7 @@ async function startPrintDirect() {
                                         ? "Menyimpan..."
                                         : editingLabel
                                           ? "Simpan Perubahan"
-                                          : "Simpan Label"
+                                          : "Simpan"
                                 }}</span>
                             </Button>
 
@@ -4828,9 +4823,7 @@ async function startPrintDirect() {
                                     <span
                                         class="text-[11px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300"
                                     >
-                                        {{
-                                            selectedManualAllergies.length
-                                        }}
+                                        {{ selectedManualAllergies.length }}
                                         Alergi Dipilih • Total
                                         {{ totalPorsiAlergi }} Porsi
                                     </span>
@@ -5171,9 +5164,7 @@ async function startPrintDirect() {
                                                 />
                                                 <span
                                                     >Nilai Kandungan Gizi Khusus
-                                                    {{
-                                                        activeEditingAllergy
-                                                    }}
+                                                    {{ activeEditingAllergy }}
                                                     (AKG):</span
                                                 >
                                             </label>
@@ -5522,9 +5513,7 @@ async function startPrintDirect() {
                                                 class="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-200 rounded text-[10px] font-extrabold"
                                             >
                                                 ⚠️
-                                                {{
-                                                    getKelompokAlergiCount(k)
-                                                }}
+                                                {{ getKelompokAlergiCount(k) }}
                                                 Alergi
                                             </span>
                                         </div>
@@ -5558,7 +5547,9 @@ async function startPrintDirect() {
                                 class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
                             >
                                 <PlusCircle class="h-4 w-4 text-emerald-600" />
-                                <span>Cadangan Label (Antisipasi Kerusakan)</span>
+                                <span
+                                    >Cadangan Label (Antisipasi Kerusakan)</span
+                                >
                             </CardTitle>
                             <div class="flex items-center gap-2">
                                 <span
@@ -5586,11 +5577,17 @@ async function startPrintDirect() {
 
                         <CardContent className="p-4 space-y-3 text-xs">
                             <!-- Quick Action Preset Buttons -->
-                            <div class="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            <div
+                                class="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5"
+                            >
+                                <span
+                                    class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block"
+                                >
                                     ⚡ Tambah Cepat Cadangan:
                                 </span>
-                                <div class="flex items-center gap-1.5 flex-wrap">
+                                <div
+                                    class="flex items-center gap-1.5 flex-wrap"
+                                >
                                     <button
                                         type="button"
                                         @click="quickAddBufferNormal(1)"
@@ -5600,7 +5597,9 @@ async function startPrintDirect() {
                                         <span>1 Tiap Normal</span>
                                     </button>
                                     <button
-                                        v-if="activeAlergiBufferItems.length > 0"
+                                        v-if="
+                                            activeAlergiBufferItems.length > 0
+                                        "
                                         type="button"
                                         @click="quickAddBufferAlergi(1)"
                                         class="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
@@ -5609,7 +5608,10 @@ async function startPrintDirect() {
                                         <span>1 Tiap Alergi</span>
                                     </button>
                                     <button
-                                        v-if="labelMode === 'auto' && porsiTambahanData.total > 0"
+                                        v-if="
+                                            labelMode === 'auto' &&
+                                            porsiTambahanData.total > 0
+                                        "
                                         type="button"
                                         @click="quickAddBufferTambahan(1)"
                                         class="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
@@ -5624,20 +5626,38 @@ async function startPrintDirect() {
                                         class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
                                         title="Otomatis isi slot kosong lembar A4 (hingga pas 9 label per halaman) tanpa menambah lembar baru"
                                     >
-                                        <Sparkles class="h-3 w-3 text-emerald-600" />
-                                        <span>Penuhi Area Kosong A4 (+{{ totalA4EmptySlots }})</span>
+                                        <Sparkles
+                                            class="h-3 w-3 text-emerald-600"
+                                        />
+                                        <span
+                                            >Penuhi Area Kosong A4 (+{{
+                                                totalA4EmptySlots
+                                            }})</span
+                                        >
                                     </button>
                                 </div>
-                                <div class="pt-1.5 border-t border-slate-200/70 text-[10.5px] text-slate-600 flex items-start gap-1.5">
-                                    <Sparkles class="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+                                <div
+                                    class="pt-1.5 border-t border-slate-200/70 text-[10.5px] text-slate-600 flex items-start gap-1.5"
+                                >
+                                    <Sparkles
+                                        class="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5"
+                                    />
                                     <span>
-                                        <strong>Mode Lembar A4 (9 Label/Halaman):</strong> Cadangan otomatis langsung mengisi area kosong pada lembar jenis porsi tersebut tanpa membuat lembaran baru.
+                                        <strong
+                                            >Mode Lembar A4 (9
+                                            Label/Halaman):</strong
+                                        >
+                                        Cadangan otomatis langsung mengisi area
+                                        kosong pada lembar jenis porsi tersebut
+                                        tanpa membuat lembaran baru.
                                     </span>
                                 </div>
                             </div>
 
                             <!-- Tabs Switcher for Types -->
-                            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                            <div
+                                class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200"
+                            >
                                 <button
                                     type="button"
                                     @click="activeBufferTab = 'normal'"
@@ -5675,7 +5695,10 @@ async function startPrintDirect() {
                                     </span>
                                 </button>
                                 <button
-                                    v-if="labelMode === 'auto' && porsiTambahanData.total > 0"
+                                    v-if="
+                                        labelMode === 'auto' &&
+                                        porsiTambahanData.total > 0
+                                    "
                                     type="button"
                                     @click="activeBufferTab = 'tambahan'"
                                     :class="[
@@ -5696,29 +5719,56 @@ async function startPrintDirect() {
                             </div>
 
                             <!-- Content Tab: NORMAL -->
-                            <div v-if="activeBufferTab === 'normal'" class="space-y-2">
+                            <div
+                                v-if="activeBufferTab === 'normal'"
+                                class="space-y-2"
+                            >
                                 <!-- Mode Manual Normal -->
                                 <div
                                     v-if="labelMode === 'manual'"
                                     class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/40 flex items-center justify-between"
                                 >
                                     <div>
-                                        <span class="font-bold text-slate-800 block text-xs">Porsi Normal (Manual)</span>
-                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                            <span>Dasar: {{ manualPorsiNormal || 0 }} Label</span>
+                                        <span
+                                            class="font-bold text-slate-800 block text-xs"
+                                            >Porsi Normal (Manual)</span
+                                        >
+                                        <div
+                                            class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                        >
                                             <span
-                                                v-if="(Number(manualPorsiNormal) || 0) % 9 > 0"
+                                                >Dasar:
+                                                {{ manualPorsiNormal || 0 }}
+                                                Label</span
+                                            >
+                                            <span
+                                                v-if="
+                                                    (Number(
+                                                        manualPorsiNormal,
+                                                    ) || 0) %
+                                                        9 >
+                                                    0
+                                                "
                                                 class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                 title="Sisa slot kosong di lembar A4 terakhir sebelum lembar baru"
                                             >
-                                                Area Kosong A4: {{ 9 - ((Number(manualPorsiNormal) || 0) % 9) }}
+                                                Area Kosong A4:
+                                                {{
+                                                    9 -
+                                                    ((Number(
+                                                        manualPorsiNormal,
+                                                    ) || 0) %
+                                                        9)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <button
                                             type="button"
-                                            @click="adjustManualNormalBuffer(-1)"
+                                            @click="
+                                                adjustManualNormalBuffer(-1)
+                                            "
                                             class="w-7 h-7 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Minus class="h-3.5 w-3.5" />
@@ -5727,8 +5777,14 @@ async function startPrintDirect() {
                                             type="number"
                                             min="0"
                                             max="500"
-                                            :value="getExtraBufferForManualNormal()"
-                                            @input="setManualNormalBuffer($event.target.value)"
+                                            :value="
+                                                getExtraBufferForManualNormal()
+                                            "
+                                            @input="
+                                                setManualNormalBuffer(
+                                                    $event.target.value,
+                                                )
+                                            "
                                             class="w-14 text-center font-black font-mono py-1 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-400 outline-none"
                                         />
                                         <button
@@ -5738,36 +5794,79 @@ async function startPrintDirect() {
                                         >
                                             <Plus class="h-3.5 w-3.5" />
                                         </button>
-                                        <span class="text-[11px] font-bold text-blue-900 ml-1">
-                                            = {{ (Number(manualPorsiNormal) || 0) + getExtraBufferForManualNormal() }}
+                                        <span
+                                            class="text-[11px] font-bold text-blue-900 ml-1"
+                                        >
+                                            =
+                                            {{
+                                                (Number(manualPorsiNormal) ||
+                                                    0) +
+                                                getExtraBufferForManualNormal()
+                                            }}
                                         </span>
                                     </div>
                                 </div>
 
                                 <!-- Mode Otomatis Normal Per Kelompok -->
-                                <div v-else class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+                                <div
+                                    v-else
+                                    class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5"
+                                >
                                     <div
                                         v-for="k in printableKelompokList"
                                         :key="k.id"
                                         class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between"
                                     >
                                         <div class="min-w-0 pr-2">
-                                            <span class="font-bold text-slate-800 block truncate text-xs">{{ k.nama_kelompok }}</span>
-                                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                                <span>Dasar: {{ getKelompokNormalBaseCount(k) }} pcs</span>
+                                            <span
+                                                class="font-bold text-slate-800 block truncate text-xs"
+                                                >{{ k.nama_kelompok }}</span
+                                            >
+                                            <div
+                                                class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                            >
                                                 <span
-                                                    v-if="getKelompokNormalBaseCount(k) % 9 > 0"
+                                                    >Dasar:
+                                                    {{
+                                                        getKelompokNormalBaseCount(
+                                                            k,
+                                                        )
+                                                    }}
+                                                    pcs</span
+                                                >
+                                                <span
+                                                    v-if="
+                                                        getKelompokNormalBaseCount(
+                                                            k,
+                                                        ) %
+                                                            9 >
+                                                        0
+                                                    "
                                                     class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                     title="Sisa slot kosong di lembar A4 terakhir kelompok ini"
                                                 >
-                                                    Area Kosong A4: {{ 9 - (getKelompokNormalBaseCount(k) % 9) }}
+                                                    Area Kosong A4:
+                                                    {{
+                                                        9 -
+                                                        (getKelompokNormalBaseCount(
+                                                            k,
+                                                        ) %
+                                                            9)
+                                                    }}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div class="flex items-center gap-1.5 shrink-0">
+                                        <div
+                                            class="flex items-center gap-1.5 shrink-0"
+                                        >
                                             <button
                                                 type="button"
-                                                @click="adjustKelompokBuffer(k.id, -1)"
+                                                @click="
+                                                    adjustKelompokBuffer(
+                                                        k.id,
+                                                        -1,
+                                                    )
+                                                "
                                                 class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                             >
                                                 <Minus class="h-3 w-3" />
@@ -5776,19 +5875,43 @@ async function startPrintDirect() {
                                                 type="number"
                                                 min="0"
                                                 max="500"
-                                                :value="getExtraBufferForKelompok(k.id)"
-                                                @input="setExtraBufferForKelompok(k.id, $event.target.value)"
+                                                :value="
+                                                    getExtraBufferForKelompok(
+                                                        k.id,
+                                                    )
+                                                "
+                                                @input="
+                                                    setExtraBufferForKelompok(
+                                                        k.id,
+                                                        $event.target.value,
+                                                    )
+                                                "
                                                 class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-400 outline-none"
                                             />
                                             <button
                                                 type="button"
-                                                @click="adjustKelompokBuffer(k.id, 1)"
+                                                @click="
+                                                    adjustKelompokBuffer(
+                                                        k.id,
+                                                        1,
+                                                    )
+                                                "
                                                 class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                             >
                                                 <Plus class="h-3 w-3" />
                                             </button>
-                                            <span class="text-[11px] font-bold text-blue-900 ml-1 min-w-[2.5rem] text-right font-mono">
-                                                = {{ getKelompokNormalBaseCount(k) + getExtraBufferForKelompok(k.id) }}
+                                            <span
+                                                class="text-[11px] font-bold text-blue-900 ml-1 min-w-[2.5rem] text-right font-mono"
+                                            >
+                                                =
+                                                {{
+                                                    getKelompokNormalBaseCount(
+                                                        k,
+                                                    ) +
+                                                    getExtraBufferForKelompok(
+                                                        k.id,
+                                                    )
+                                                }}
                                             </span>
                                         </div>
                                     </div>
@@ -5796,46 +5919,85 @@ async function startPrintDirect() {
                             </div>
 
                             <!-- Content Tab: ALERGI -->
-                            <div v-if="activeBufferTab === 'alergi'" class="space-y-2">
+                            <div
+                                v-if="activeBufferTab === 'alergi'"
+                                class="space-y-2"
+                            >
                                 <div
                                     v-if="activeAlergiBufferItems.length === 0"
                                     class="p-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 text-center"
                                 >
-                                    <p class="font-bold text-amber-900 text-xs">Tidak Ada Porsi Alergi Terpilih</p>
-                                    <p class="text-[11px] text-amber-700 mt-0.5">
-                                        Porsi alergi akan muncul otomatis bila ada kelompok sasaran dengan data alergi atau jenis alergi manual yang dipilih.
+                                    <p class="font-bold text-amber-900 text-xs">
+                                        Tidak Ada Porsi Alergi Terpilih
+                                    </p>
+                                    <p
+                                        class="text-[11px] text-amber-700 mt-0.5"
+                                    >
+                                        Porsi alergi akan muncul otomatis bila
+                                        ada kelompok sasaran dengan data alergi
+                                        atau jenis alergi manual yang dipilih.
                                     </p>
                                 </div>
-                                <div v-else class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+                                <div
+                                    v-else
+                                    class="max-h-60 overflow-y-auto space-y-1.5 pr-0.5"
+                                >
                                     <div
-                                        v-for="(item, idx) in activeAlergiBufferItems"
+                                        v-for="(
+                                            item, idx
+                                        ) in activeAlergiBufferItems"
                                         :key="`${item.kelompokId || 'manual'}_${item.jenis}_${idx}`"
                                         class="p-2 rounded-xl border border-amber-200 bg-amber-50/40 flex items-center justify-between"
                                     >
                                         <div class="min-w-0 pr-2 space-y-0.5">
-                                            <div class="flex items-center gap-1.5 flex-wrap">
-                                                <span class="font-bold text-slate-800 text-xs truncate max-w-[150px]">
+                                            <div
+                                                class="flex items-center gap-1.5 flex-wrap"
+                                            >
+                                                <span
+                                                    class="font-bold text-slate-800 text-xs truncate max-w-[150px]"
+                                                >
                                                     {{ item.namaKelompok }}
                                                 </span>
-                                                <span class="px-1.5 py-0.2 bg-amber-200/90 text-amber-950 font-black rounded text-[10px]">
+                                                <span
+                                                    class="px-1.5 py-0.2 bg-amber-200/90 text-amber-950 font-black rounded text-[10px]"
+                                                >
                                                     ⚠️ {{ item.jenis }}
                                                 </span>
                                             </div>
-                                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                                <span>Dasar: {{ item.baseCount }} pcs</span>
+                                            <div
+                                                class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                            >
                                                 <span
-                                                    v-if="item.baseCount % 9 > 0"
+                                                    >Dasar:
+                                                    {{ item.baseCount }}
+                                                    pcs</span
+                                                >
+                                                <span
+                                                    v-if="
+                                                        item.baseCount % 9 > 0
+                                                    "
                                                     class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                     title="Sisa slot kosong di lembar A4 terakhir kelompok alergi ini"
                                                 >
-                                                    Area Kosong A4: {{ 9 - (item.baseCount % 9) }}
+                                                    Area Kosong A4:
+                                                    {{
+                                                        9 - (item.baseCount % 9)
+                                                    }}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div class="flex items-center gap-1.5 shrink-0">
+                                        <div
+                                            class="flex items-center gap-1.5 shrink-0"
+                                        >
                                             <button
                                                 type="button"
-                                                @click="adjustAlergiItemBuffer(item.kelompokId, item.jenis, -1)"
+                                                @click="
+                                                    adjustAlergiItemBuffer(
+                                                        item.kelompokId,
+                                                        item.jenis,
+                                                        -1,
+                                                    )
+                                                "
                                                 class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                             >
                                                 <Minus class="h-3 w-3" />
@@ -5845,17 +6007,31 @@ async function startPrintDirect() {
                                                 min="0"
                                                 max="500"
                                                 :value="item.extra"
-                                                @input="setExtraBufferForAlergiItem(item.kelompokId, item.jenis, $event.target.value)"
+                                                @input="
+                                                    setExtraBufferForAlergiItem(
+                                                        item.kelompokId,
+                                                        item.jenis,
+                                                        $event.target.value,
+                                                    )
+                                                "
                                                 class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-amber-400 outline-none"
                                             />
                                             <button
                                                 type="button"
-                                                @click="adjustAlergiItemBuffer(item.kelompokId, item.jenis, 1)"
+                                                @click="
+                                                    adjustAlergiItemBuffer(
+                                                        item.kelompokId,
+                                                        item.jenis,
+                                                        1,
+                                                    )
+                                                "
                                                 class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                             >
                                                 <Plus class="h-3 w-3" />
                                             </button>
-                                            <span class="text-[11px] font-bold text-amber-900 ml-1 min-w-[2.5rem] text-right font-mono">
+                                            <span
+                                                class="text-[11px] font-bold text-amber-900 ml-1 min-w-[2.5rem] text-right font-mono"
+                                            >
                                                 = {{ item.total }}
                                             </span>
                                         </div>
@@ -5865,7 +6041,11 @@ async function startPrintDirect() {
 
                             <!-- Content Tab: TAMBAHAN -->
                             <div
-                                v-if="activeBufferTab === 'tambahan' && labelMode === 'auto' && porsiTambahanData.total > 0"
+                                v-if="
+                                    activeBufferTab === 'tambahan' &&
+                                    labelMode === 'auto' &&
+                                    porsiTambahanData.total > 0
+                                "
                                 class="space-y-1.5"
                             >
                                 <!-- Organoleptik -->
@@ -5874,22 +6054,47 @@ async function startPrintDirect() {
                                     class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
                                 >
                                     <div>
-                                        <span class="font-bold text-slate-800 block text-xs">🔬 Uji Organoleptik</span>
-                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                            <span>Dasar: {{ porsiTambahanData.organoleptik }} pcs</span>
+                                        <span
+                                            class="font-bold text-slate-800 block text-xs"
+                                            >🔬 Uji Organoleptik</span
+                                        >
+                                        <div
+                                            class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                        >
                                             <span
-                                                v-if="porsiTambahanData.organoleptik % 9 > 0"
+                                                >Dasar:
+                                                {{
+                                                    porsiTambahanData.organoleptik
+                                                }}
+                                                pcs</span
+                                            >
+                                            <span
+                                                v-if="
+                                                    porsiTambahanData.organoleptik %
+                                                        9 >
+                                                    0
+                                                "
                                                 class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                 title="Sisa slot kosong di lembar A4 terakhir uji organoleptik"
                                             >
-                                                Area Kosong A4: {{ 9 - (porsiTambahanData.organoleptik % 9) }}
+                                                Area Kosong A4:
+                                                {{
+                                                    9 -
+                                                    (porsiTambahanData.organoleptik %
+                                                        9)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('organoleptik', -1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'organoleptik',
+                                                    -1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Minus class="h-3 w-3" />
@@ -5898,19 +6103,41 @@ async function startPrintDirect() {
                                             type="number"
                                             min="0"
                                             max="500"
-                                            :value="getExtraBufferForTambahan('organoleptik')"
-                                            @input="setExtraBufferForTambahan('organoleptik', $event.target.value)"
+                                            :value="
+                                                getExtraBufferForTambahan(
+                                                    'organoleptik',
+                                                )
+                                            "
+                                            @input="
+                                                setExtraBufferForTambahan(
+                                                    'organoleptik',
+                                                    $event.target.value,
+                                                )
+                                            "
                                             class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
                                         />
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('organoleptik', 1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'organoleptik',
+                                                    1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Plus class="h-3 w-3" />
                                         </button>
-                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
-                                            = {{ porsiTambahanData.organoleptik + getExtraBufferForTambahan('organoleptik') }}
+                                        <span
+                                            class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono"
+                                        >
+                                            =
+                                            {{
+                                                porsiTambahanData.organoleptik +
+                                                getExtraBufferForTambahan(
+                                                    "organoleptik",
+                                                )
+                                            }}
                                         </span>
                                     </div>
                                 </div>
@@ -5921,22 +6148,45 @@ async function startPrintDirect() {
                                     class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
                                 >
                                     <div>
-                                        <span class="font-bold text-slate-800 block text-xs">🧪 Sampel Makanan</span>
-                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                            <span>Dasar: {{ porsiTambahanData.sampel }} pcs</span>
+                                        <span
+                                            class="font-bold text-slate-800 block text-xs"
+                                            >🧪 Sampel Makanan</span
+                                        >
+                                        <div
+                                            class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                        >
                                             <span
-                                                v-if="porsiTambahanData.sampel % 9 > 0"
+                                                >Dasar:
+                                                {{ porsiTambahanData.sampel }}
+                                                pcs</span
+                                            >
+                                            <span
+                                                v-if="
+                                                    porsiTambahanData.sampel %
+                                                        9 >
+                                                    0
+                                                "
                                                 class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                 title="Sisa slot kosong di lembar A4 terakhir sampel makanan"
                                             >
-                                                Area Kosong A4: {{ 9 - (porsiTambahanData.sampel % 9) }}
+                                                Area Kosong A4:
+                                                {{
+                                                    9 -
+                                                    (porsiTambahanData.sampel %
+                                                        9)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('sampel', -1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'sampel',
+                                                    -1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Minus class="h-3 w-3" />
@@ -5945,19 +6195,41 @@ async function startPrintDirect() {
                                             type="number"
                                             min="0"
                                             max="500"
-                                            :value="getExtraBufferForTambahan('sampel')"
-                                            @input="setExtraBufferForTambahan('sampel', $event.target.value)"
+                                            :value="
+                                                getExtraBufferForTambahan(
+                                                    'sampel',
+                                                )
+                                            "
+                                            @input="
+                                                setExtraBufferForTambahan(
+                                                    'sampel',
+                                                    $event.target.value,
+                                                )
+                                            "
                                             class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
                                         />
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('sampel', 1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'sampel',
+                                                    1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Plus class="h-3 w-3" />
                                         </button>
-                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
-                                            = {{ porsiTambahanData.sampel + getExtraBufferForTambahan('sampel') }}
+                                        <span
+                                            class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono"
+                                        >
+                                            =
+                                            {{
+                                                porsiTambahanData.sampel +
+                                                getExtraBufferForTambahan(
+                                                    "sampel",
+                                                )
+                                            }}
                                         </span>
                                     </div>
                                 </div>
@@ -5968,22 +6240,45 @@ async function startPrintDirect() {
                                     class="p-2 rounded-xl border border-sky-200 bg-sky-50/40 flex items-center justify-between"
                                 >
                                     <div>
-                                        <span class="font-bold text-slate-800 block text-xs">📦 Buffer Produksi</span>
-                                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                            <span>Dasar: {{ porsiTambahanData.buffer }} pcs</span>
+                                        <span
+                                            class="font-bold text-slate-800 block text-xs"
+                                            >📦 Buffer Produksi</span
+                                        >
+                                        <div
+                                            class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                                        >
                                             <span
-                                                v-if="porsiTambahanData.buffer % 9 > 0"
+                                                >Dasar:
+                                                {{ porsiTambahanData.buffer }}
+                                                pcs</span
+                                            >
+                                            <span
+                                                v-if="
+                                                    porsiTambahanData.buffer %
+                                                        9 >
+                                                    0
+                                                "
                                                 class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
                                                 title="Sisa slot kosong di lembar A4 terakhir buffer produksi"
                                             >
-                                                Area Kosong A4: {{ 9 - (porsiTambahanData.buffer % 9) }}
+                                                Area Kosong A4:
+                                                {{
+                                                    9 -
+                                                    (porsiTambahanData.buffer %
+                                                        9)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('buffer', -1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'buffer',
+                                                    -1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Minus class="h-3 w-3" />
@@ -5992,28 +6287,63 @@ async function startPrintDirect() {
                                             type="number"
                                             min="0"
                                             max="500"
-                                            :value="getExtraBufferForTambahan('buffer')"
-                                            @input="setExtraBufferForTambahan('buffer', $event.target.value)"
+                                            :value="
+                                                getExtraBufferForTambahan(
+                                                    'buffer',
+                                                )
+                                            "
+                                            @input="
+                                                setExtraBufferForTambahan(
+                                                    'buffer',
+                                                    $event.target.value,
+                                                )
+                                            "
                                             class="w-12 text-center font-black font-mono py-0.5 px-1 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-400 outline-none"
                                         />
                                         <button
                                             type="button"
-                                            @click="adjustTambahanBuffer('buffer', 1)"
+                                            @click="
+                                                adjustTambahanBuffer(
+                                                    'buffer',
+                                                    1,
+                                                )
+                                            "
                                             class="w-6 h-6 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 transition cursor-pointer"
                                         >
                                             <Plus class="h-3 w-3" />
                                         </button>
-                                        <span class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono">
-                                            = {{ porsiTambahanData.buffer + getExtraBufferForTambahan('buffer') }}
+                                        <span
+                                            class="text-[11px] font-bold text-sky-900 ml-1 min-w-[2.5rem] text-right font-mono"
+                                        >
+                                            =
+                                            {{
+                                                porsiTambahanData.buffer +
+                                                getExtraBufferForTambahan(
+                                                    "buffer",
+                                                )
+                                            }}
                                         </span>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Footer Info Ringkasan -->
-                            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                                <span>Cadangan Aktif: <strong class="text-emerald-700">+{{ totalExtraAllBuffers }} Label</strong></span>
-                                <span class="font-bold text-slate-700">Total Semua Label: {{ totalSemuaPorsi }} pcs</span>
+                            <div
+                                class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500"
+                            >
+                                <span
+                                    >Cadangan Aktif:
+                                    <strong class="text-emerald-700"
+                                        >+{{
+                                            totalExtraAllBuffers
+                                        }}
+                                        Label</strong
+                                    ></span
+                                >
+                                <span class="font-bold text-slate-700"
+                                    >Total Semua Label:
+                                    {{ totalSemuaPorsi }} pcs</span
+                                >
                             </div>
                         </CardContent>
                     </Card>
@@ -6029,12 +6359,12 @@ async function startPrintDirect() {
                                 class="text-sm font-black text-slate-900 flex items-center gap-2"
                             >
                                 <Sparkles class="h-4 w-4 text-primary" />
-                                <span>Live Preview Desain Label Resmi BGN</span>
+                                <span>Live Preview Desain Label</span>
                             </h3>
                             <span
                                 class="text-[11px] text-slate-500 font-medium"
                             >
-                                Standar Stiker Kemasan
+                                Stiker Kemasan
                             </span>
                         </div>
 
