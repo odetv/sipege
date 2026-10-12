@@ -89,6 +89,7 @@ async function preRenderUniqueTemplates({
             ("tipeLabel" in itemOrKelompok || "kelompok" in itemOrKelompok);
         const k = isItem ? itemOrKelompok.kelompok : itemOrKelompok;
         const tipe = isItem ? itemOrKelompok.tipeLabel || "normal" : "normal";
+        const subTambahan = isItem ? itemOrKelompok.subTipeTambahan || "" : "";
         const alergi = isItem ? itemOrKelompok.jenisAlergi || "" : "";
         const tag = isItem ? itemOrKelompok.tagAlergi || "" : "";
         const kId = k?.id !== undefined && k?.id !== null ? k.id : (k?.nama_kelompok || k?.nama || "0");
@@ -98,7 +99,7 @@ async function preRenderUniqueTemplates({
         const giziSignature = isItem && itemOrKelompok.giziData
             ? `${itemOrKelompok.giziData.energi_pb || ''}_${itemOrKelompok.giziData.energi_pk || ''}_${itemOrKelompok.giziData.prot_pb || ''}_${itemOrKelompok.giziData.prot_pk || ''}`
             : "";
-        return `${kId}_${tipe}_${alergi}_${tag}_${menuSignature}_${giziSignature}`;
+        return `${kId}_${tipe}_${subTambahan}_${alergi}_${tag}_${menuSignature}_${giziSignature}`;
     }
 
     const uniqueMap = new Map();
@@ -447,6 +448,66 @@ export async function printPdfSingleMode({
 }
 
 /**
+ * Identifier unik untuk mengelompokkan jenis label.
+ * Jika tipe label, sub-tipe tambahan, jenis alergi, atau kelompok sasaran berbeda,
+ * maka akan menghasilkan group key yang berbeda sehingga pada mode A4 grid
+ * label akan dipisahkan halamannya (tidak disambung isian per labelnya).
+ */
+export function getLabelGroupKey(item) {
+    if (!item) return "";
+    const isItem =
+        typeof item === "object" &&
+        ("tipeLabel" in item || "kelompok" in item);
+    const k = isItem ? item.kelompok : item;
+    const tipe = isItem ? item.tipeLabel || "normal" : "normal";
+    const subTambahan = isItem ? item.subTipeTambahan || "" : "";
+    const alergi = isItem ? (item.jenisAlergi || "").trim().toLowerCase() : "";
+    const tag = isItem ? (item.tagAlergi || "").trim() : "";
+    const kId =
+        k?.id !== undefined && k?.id !== null
+            ? String(k.id)
+            : String(k?.nama_kelompok || k?.nama || "0");
+
+    if (tipe === "tambahan") {
+        return `tambahan_${subTambahan || tag || "umum"}`;
+    }
+    if (tipe === "alergi") {
+        return `alergi_${kId}_${alergi}_${tag}`;
+    }
+    return `normal_${kId}`;
+}
+
+/**
+ * Menghitung total lembar A4 secara akurat dengan pemisahan halaman
+ * antar kelompok sasaran dan antar jenis label (normal, variasi alergi, organoleptik, sampel, buffer).
+ */
+export function calculateA4TotalPages(list, totalCount = null, labelsPerPage = 9) {
+    if (!list || list.length === 0) return 1;
+    const total =
+        totalCount && Number(totalCount) > 0
+            ? parseInt(totalCount, 10)
+            : list.length;
+    let simPages = 1;
+    let simSlot = 0;
+    for (let i = 0; i < total; i++) {
+        const curr = list[i % list.length];
+        const prev = i > 0 ? list[(i - 1) % list.length] : null;
+        const isTransition =
+            prev && getLabelGroupKey(prev) !== getLabelGroupKey(curr);
+
+        if (isTransition && simSlot !== 0) {
+            simPages++;
+            simSlot = 0;
+        } else if (simSlot >= labelsPerPage) {
+            simPages++;
+            simSlot = 0;
+        }
+        simSlot++;
+    }
+    return Math.max(1, simPages);
+}
+
+/**
  * Download A4 Sheet Mode PDF (9cm x 6cm Labels on A4 Landscape: 9 Labels / Page: 3 cols x 3 rows)
  * Ultra-fast generation for 1000s of labels using aliased image embedding + real-time ETA.
  */
@@ -486,28 +547,9 @@ export async function downloadPdfA4GridMode({
     const startY = 11.5; // (210 - (60*3 + 3.5*2)) / 2 = 11.5mm
     const labelsPerPage = 9;
 
-    // Hitung total halaman dengan pemisahan lembar khusus untuk Porsi Alergi
-    // (Agar label porsi alergi terisolasi pada lembar stiker tersendiri, tidak bercampur dengan normal)
-    let simPages = 1;
-    let simSlot = 0;
-    for (let i = 0; i < total; i++) {
-        const curr = list[i % list.length];
-        const prev = i > 0 ? list[(i - 1) % list.length] : null;
-        const isTransitionToAlergi =
-            prev &&
-            prev.tipeLabel === "normal" &&
-            curr?.tipeLabel === "alergi";
-
-        if (isTransitionToAlergi && simSlot !== 0) {
-            simPages++;
-            simSlot = 0;
-        } else if (simSlot >= labelsPerPage) {
-            simPages++;
-            simSlot = 0;
-        }
-        simSlot++;
-    }
-    const totalPages = Math.max(1, simPages);
+    // Hitung total halaman dengan pemisahan lembar untuk setiap jenis label & kelompok
+    // (Agar tiap jenis label/kelompok terisolasi pada lembar stiker tersendiri, tidak bercampur/disambung)
+    const totalPages = calculateA4TotalPages(list, total, labelsPerPage);
 
     const startTime = Date.now();
 
@@ -544,14 +586,13 @@ export async function downloadPdfA4GridMode({
 
         const item = list[i % list.length];
         const prevItem = i > 0 ? list[(i - 1) % list.length] : null;
-        const isTransitionToAlergi =
+        const isTransition =
             prevItem &&
-            prevItem.tipeLabel === "normal" &&
-            item?.tipeLabel === "alergi";
+            getLabelGroupKey(prevItem) !== getLabelGroupKey(item);
 
-        // Pisahkan ke lembar A4 baru jika masuk ke porsi alergi pertama kali
+        // Pisahkan ke lembar A4 baru jika berganti jenis label atau kelompok penerima
         // atau jika 1 lembar (9 slot) sudah penuh
-        if (isTransitionToAlergi && currentSlot !== 0) {
+        if (isTransition && currentSlot !== 0) {
             doc.addPage("a4", "landscape");
             currentSlot = 0;
             currentPage++;
@@ -592,8 +633,12 @@ export async function downloadPdfA4GridMode({
                 75 + Math.round(((i + 1) / total) * 20),
             );
 
-            const isAlergiPhase = item.tipeLabel === "alergi";
-            const phaseNote = isAlergiPhase ? " (Lembar Alergi)" : "";
+            const phaseNote =
+                item.tipeLabel === "alergi"
+                    ? ` (Lembar Alergi: ${item.jenisAlergi || "Khusus"})`
+                    : item.tipeLabel === "tambahan"
+                      ? ` (Lembar Tambahan: ${item.tagAlergi || "Porsi Tambahan"})`
+                      : "";
 
             onProgress({
                 phase: "assembly",

@@ -44,6 +44,7 @@ import {
     downloadPdfSingleMode,
     downloadPdfA4GridMode,
     printPdfSingleMode,
+    calculateA4TotalPages,
 } from "../labelPdfHelper.js";
 
 const props = defineProps({
@@ -2807,7 +2808,7 @@ async function startDownload(type = null) {
         total: totalCount,
         totalPages:
             selectedType === "a4" || selectedType === "custom"
-                ? Math.ceil(totalCount / 9)
+                ? calculateA4TotalPages(itemsToPrint, totalCount, 9)
                 : totalCount,
         currentPage: 1,
         percentage: 0,
