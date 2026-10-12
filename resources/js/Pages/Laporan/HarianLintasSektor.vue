@@ -509,7 +509,10 @@ const selisihPenerimaManfaatList = computed(() => {
         // 3. Selisih
         const totalSelisih = Math.max(0, totalAwal - totalRill);
 
-        if (totalSelisih > 0) {
+        // Hanya dianggap selisih jika ada pendistribusian (totalRill > 0 dan totalSelisih > 0).
+        // Jika sama sekali tidak ada pendistribusian pada sekolah/posyandu tersebut (totalRill === 0 atau is_menerima false),
+        // maka bukan selisih melainkan memang tidak ada pendistribusian terjadwal, sehingga dikosongkan.
+        if (k.is_menerima !== false && totalRill > 0 && totalSelisih > 0) {
             const tidakMenerima = [];
 
             if (rincianAwalRaw.length > 0) {
@@ -1052,19 +1055,21 @@ const defaultNarasiText = computed(() => {
             );
         });
     } else {
-        lines.push(`- Tidak ada penyaluran ke sekolah pada hari ini`);
+        lines.push(`- Tidak ada jadwal pendistribusian ke Sekolah`);
     }
+    lines.push(``);
 
+    lines.push(
+        `*Posyandu 3B (Bumil, Busui, Balita): ${posyanduList.value.length} Posyandu dengan ${totalPorsiPosyandu.value} Porsi*`,
+    );
     if (posyanduList.value.length > 0) {
-        lines.push(``);
-        lines.push(
-            `*Posyandu 3B (Bumil, Busui, Balita): ${posyanduList.value.length} Posyandu dengan ${totalPorsiPosyandu.value} Porsi*`,
-        );
         posyanduList.value.forEach((p) => {
             lines.push(
                 `- ${p.nama} (Bumil: ${p.bumil} + Busui: ${p.busui} + Balita: ${p.balita} = ${p.totalPorsi} Porsi)`,
             );
         });
+    } else {
+        lines.push(`- Tidak ada jadwal pendistribusian ke Posyandu 3B`);
     }
     lines.push(``);
 

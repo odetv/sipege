@@ -19,15 +19,15 @@ Terdapat sebanyak [Total Porsi Keseluruhan] porsi dengan rincian sebagai berikut
 *Sekolah: [Jumlah Sekolah] Sekolah dengan [Jumlah Porsi Sekolah Sesuai Hari] Porsi*
 - Nama Sekolah 1 (Siswa: [Jumlah Siswa] + Guru: [Jumlah Guru] + Tendik: [Jumlah Tendik] = [Total Porsi] Porsi)
 - Nama Sekolah 2 (Siswa: [Jumlah Siswa] + Guru: [Jumlah Guru] + Tendik: [Jumlah Tendik] = [Total Porsi] Porsi)
-- dst
+- dst [Bila sama sekali tidak ada maka buat "- Tidak ada jadwal pendistribusian ke Sekolah"]
 
 *Posyandu 3B (Bumil, Busui, Balita): [Jumlah Posyandu] Posyandu dengan [Jumlah Porsi Posyandu Sesuai Hari] Porsi*
 - Nama Posyandu 1 (Bumil: [Jumlah Bumil] + Busui: [Jumlah Busui] + Balita: [Jumlah Balita] = [Total Porsi] Porsi)
 - Nama Posyandu 2 (Bumil: [Jumlah Bumil] + Busui: [Jumlah Busui] + Balita: [Jumlah Balita] = [Total Porsi] Porsi)
-- dst
+- dst [Bila sama sekali tidak ada maka buat "- Tidak ada jadwal pendistribusian ke Posyandu 3B"]
 
 *3. Selisih Jumlah Penerima Manfaat Yang Ditetapkan dengan Jumlah Terdistribusi*
-- [Nama Sekolah], dengan data awal yaitu Siswa ([Jumlah Siswa Awal] Porsi) + Guru ([Jumlah Guru Awal] Porsi) + Tendik ([Jumlah Tendik Awal] Porsi) = [Total Porsi Awal] Porsi. Namun hanya terdistribusi sejumlah [Total Porsi Rill Terdistribusi] Porsi, dikarenakan adanya penyesuaian dengan jadwal [Sekolah/Posyandu] tersebut dengan rincian yang tidak menerima yaitu [Nama Sub Kategori yang tidak menerima] ([Jumlah Porsi Sub Kategori yang tidak menerima] Porsi) + [Nama Sub Kategori berikutnya yang tidak menerima] ([Jumlah Porsi Sub Kategori berikutnya yang tidak menerima] Porsi) + [dst] = [Total Porsi Tidak Terdistribusi] Porsi [Bila tidak ada maka "- Nihil"]
+- [Nama Sekolah], dengan data awal yaitu Siswa ([Jumlah Siswa Awal] Porsi) + Guru ([Jumlah Guru Awal] Porsi) + Tendik ([Jumlah Tendik Awal] Porsi) = [Total Porsi Awal] Porsi. Namun hanya terdistribusi sejumlah [Total Porsi Rill Terdistribusi] Porsi, dikarenakan adanya penyesuaian dengan jadwal [Sekolah/Posyandu] tersebut dengan rincian yang tidak menerima yaitu [Nama Sub Kategori yang tidak menerima] ([Jumlah Porsi Sub Kategori yang tidak menerima] Porsi) + [Nama Sub Kategori berikutnya yang tidak menerima] ([Jumlah Porsi Sub Kategori berikutnya yang tidak menerima] Porsi) + [dst] = [Total Porsi Tidak Terdistribusi] Porsi [Bila tidak ada maka "- Nihil", dan jika sama sekali dari masing-masing Sekolah atau Posyandu tidak ada maka itu bukan selisih tetapi memang tidak ada pendistribusian secara global kosongin saja]
 
 *4. Tambahan Porsi Diluar Jumlah Penerima Manfaat*
 Terdapat tambahan porsi sebanyak [Total Porsi Tambahan Keseluruhan] porsi diantaranya: 
