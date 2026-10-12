@@ -52,6 +52,7 @@ class LabelController extends Controller
                         'porsi_pk' => (int)$wo->total_pk,
                         'porsi_pb' => (int)$wo->total_pb,
                         'total_alergi' => (int)($wo->total_alergi ?: 0),
+                        'porsi_tambahan' => $wo->porsi_tambahan,
                         'sub_menu_1' => $wo->sub_menu_1,
                         'sub_menu_2' => $wo->sub_menu_2,
                         'sub_menu_3' => $wo->sub_menu_3,

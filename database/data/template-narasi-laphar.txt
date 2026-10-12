@@ -1,0 +1,103 @@
+*LAPORAN HARIAN PENYALURAN MBG [NAMA SPPG] [NAMA YAYASAN]*
+
+
+Mohon ijin melaporkan kegiatan *[Nama SPPG, Sesuai database jangan di uppercase]* *[Nama Yayasan, Sesuai database jangan di uppercase]* pada hari *[Hari, DD Bulan YYYY]* sebagai berikut:
+
+*[NAMA YAYASAN]*
+- Nama SPPG: [Nama SPPG, Sesuai database jangan di uppercase]
+- ID SPPG: [ID SPPG]
+- Alamat SPPG: [Alamat SPPG]
+- Nama Kepala SPPG: [Nama Kepala SPPG]
+
+*1. Waktu Kegiatan Operasional*
+- Pukul [Jam Mulai] s.d [Jam Selesai] [Sesuai Bagian kegiatanya]
+- dst
+
+*2. Rincian Pembagian Penyaluran MBG Kepada Penerima Manfaat*
+Terdapat sebanyak [Total Porsi Keseluruhan] porsi dengan rincian sebagai berikut:
+
+*Sekolah: [Jumlah Sekolah] Sekolah dengan [Jumlah Porsi Sekolah Sesuai Hari] Porsi*
+- Nama Sekolah 1 (Siswa: [Jumlah Siswa] + Guru: [Jumlah Guru] + Tendik: [Jumlah Tendik] = [Total Porsi] Porsi)
+- Nama Sekolah 2 (Siswa: [Jumlah Siswa] + Guru: [Jumlah Guru] + Tendik: [Jumlah Tendik] = [Total Porsi] Porsi)
+- dst
+
+*Posyandu 3B (Bumil, Busui, Balita): [Jumlah Posyandu] Posyandu dengan [Jumlah Porsi Posyandu Sesuai Hari] Porsi*
+- Nama Posyandu 1 (Bumil: [Jumlah Bumil] + Busui: [Jumlah Busui] + Balita: [Jumlah Balita] = [Total Porsi] Porsi)
+- Nama Posyandu 2 (Bumil: [Jumlah Bumil] + Busui: [Jumlah Busui] + Balita: [Jumlah Balita] = [Total Porsi] Porsi)
+- dst
+
+*3. Selisih Jumlah Penerima Manfaat Yang Ditetapkan dengan Jumlah Terdistribusi*
+- [Nama Sekolah], dengan data awal yaitu Siswa ([Jumlah Siswa Awal] Porsi) + Guru ([Jumlah Guru Awal] Porsi) + Tendik ([Jumlah Tendik Awal] Porsi) = [Total Porsi Awal] Porsi. Namun hanya terdistribusi sejumlah [Total Porsi Rill Terdistribusi] Porsi, dikarenakan adanya penyesuaian dengan jadwal [Sekolah/Posyandu] tersebut dengan rincian yang tidak menerima yaitu [Nama Sub Kategori yang tidak menerima] ([Jumlah Porsi Sub Kategori yang tidak menerima] Porsi) + [Nama Sub Kategori berikutnya yang tidak menerima] ([Jumlah Porsi Sub Kategori berikutnya yang tidak menerima] Porsi) + [dst] = [Total Porsi Tidak Terdistribusi] Porsi [Bila tidak ada maka "- Nihil"]
+
+*4. Tambahan Porsi Diluar Jumlah Penerima Manfaat*
+Terdapat tambahan porsi sebanyak [Total Porsi Tambahan Keseluruhan] porsi diantaranya: 
+- Uji Organoleptik (Dibagi untuk masing-masing Kelompok Penerima Manfaat): [Jumlah Porsi Tambahan Uji Organoleptik Sesuai Hari] Porsi
+- Sampel Makanan (Diamankan pada Suhu Dingin dan Suhu Ruang di SPPG): [Jumlah Porsi Tambahan Sampel Sesuai Hari] Porsi
+- Buffer Produksi (Cadangan jika terdapat kendala pada paket MBG yang terdistribusikan): [Jumlah Porsi Tambahan Buffer Produksi Sesuai Hari] Porsi
+
+*5. Total Produksi Harian*
+Terdapat total porsi yang diproduksi sebanyak [Total Porsi Rill ditambah dengan Porsi Tambahan Keseluruhan] porsi diantaranya: 
+- Porsi PM Rill Sesuai KPM: [Hanya jumlah porsi rill saja] Porsi
+- Porsi Tambahan: Uji Organoleptik ([Jumlah Porsi Tambahan Uji Organoleptik Sesuai Hari] Porsi) + Sampel Makanan ([Jumlah Porsi Tambahan Sampel Sesuai Hari] Porsi) + Buffer Produksi ([Jumlah Porsi Tambahan Buffer Produksi Sesuai Hari] Porsi) = [Hanya jumlah porsi tambahan saja] Porsi
+
+*6. Menu MBG Sekolah dan 3B (Bumil, Busui, Balita) [Cantumkan "dan 3B (Bumil, Busui, Balita)" bila terdapat KPM posyandu]*
+
+*Porsi Menu Normal*
+*Menu Normal Porsi Kecil:*
+- Nama Sub Menu 1
+- Nama Sub Menu 2
+- Nama Sub Menu 3
+- Nama Sub Menu 4
+- ⁠Nama Sub Menu 5
+- dst bila ada
+*Kandungan Gizi Menu Normal Porsi Kecil:*
+- Energi: [Jumlah] Kkal
+- Protein: [Jumlah] gr
+- Lemak: [Jumlah] gr
+- Karbohidrat: [Jumlah] gr
+- Serat: [Jumlah] gr
+*Menu Normal Porsi Besar:*
+- Nama Sub Menu 1
+- Nama Sub Menu 2
+- Nama Sub Menu 3
+- Nama Sub Menu 4
+- ⁠Nama Sub Menu 5
+- dst bila ada
+*Kandungan Gizi Menu Normal Porsi Besar:*
+- Energi: [Jumlah] Kkal
+- Protein: [Jumlah] gr
+- Lemak: [Jumlah] gr
+- Karbohidrat: [Jumlah] gr
+- Serat: [Jumlah] gr
+
+*Porsi Menu Alergi [Nama Alergi]*
+*Menu Alergi [Nama Alergi] Porsi Kecil: *
+- Nama Sub Menu 1
+- Nama Sub Menu 2
+- Nama Sub Menu 3
+- Nama Sub Menu 4
+- ⁠Nama Sub Menu 5
+- dst bila ada
+*Kandungan Gizi Menu Alergi [Nama Alergi] Porsi Kecil:*
+- Energi: [Jumlah] Kkal
+- Protein: [Jumlah] gr
+- Lemak: [Jumlah] gr
+- Karbohidrat: [Jumlah] gr
+- Serat: [Jumlah] gr
+*Menu Alergi [Nama Alergi] Porsi Besar:*
+- Nama Sub Menu 1
+- Nama Sub Menu 2
+- Nama Sub Menu 3
+- Nama Sub Menu 4
+- ⁠Nama Sub Menu 5
+- dst bila ada
+*Kandungan Gizi Menu Alergi [Nama Alergi] Porsi Besar:*
+- Energi: [Jumlah] Kkal
+- Protein: [Jumlah] gr
+- Lemak: [Jumlah] gr
+- Karbohidrat: [Jumlah] gr
+- Serat: [Jumlah] gr
+
+*7. Kejadian Menonjol: Nihil*
+
+*Demikian UMP*

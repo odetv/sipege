@@ -275,16 +275,20 @@ const headerWaktuMaksimalDisplay = computed(() => {
 });
 
 const isAlergi = computed(() => props.tipeLabel === "alergi");
+const isTambahan = computed(() => props.tipeLabel === "tambahan");
 
 const bannerBadgeText = computed(() => {
+    if (props.tagAlergi && props.tagAlergi.trim()) {
+        return props.tagAlergi.trim().toUpperCase();
+    }
     if (isAlergi.value) {
-        if (props.tagAlergi && props.tagAlergi.trim()) {
-            return props.tagAlergi.trim().toUpperCase();
-        }
         if (props.jenisAlergi && props.jenisAlergi.trim()) {
             return `⚠️ ALERGI: ${props.jenisAlergi.trim().toUpperCase()}`;
         }
         return "⚠️ MENU ALERGI";
+    }
+    if (isTambahan.value) {
+        return "➕ PORSI TAMBAHAN";
     }
     return "MENU";
 });
@@ -461,7 +465,7 @@ const resolvedGizi = computed(() => {
                 :style="{
                     display: 'flex',
                     alignItems: 'stretch',
-                    backgroundColor: isAlergi ? '#ea580c' : '#4a85d9',
+                    backgroundColor: isAlergi ? '#ea580c' : (isTambahan || props.tagAlergi ? '#0284c7' : '#4a85d9'),
                     borderRadius: '5px',
                     color: '#ffffff',
                     marginBottom: dyn.bannerMarginBottom,
@@ -472,7 +476,7 @@ const resolvedGizi = computed(() => {
             >
                 <div
                     :style="{
-                        backgroundColor: isAlergi ? '#c2410c' : '#3b72c2',
+                        backgroundColor: isAlergi ? '#c2410c' : (isTambahan || props.tagAlergi ? '#0369a1' : '#3b72c2'),
                         fontSize: dyn.menuBadgeFontSize,
                         fontWeight: '900',
                         padding: dyn.menuBadgePadding,

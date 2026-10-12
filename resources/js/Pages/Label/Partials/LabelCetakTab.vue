@@ -38,6 +38,7 @@ import {
     RotateCcw,
     AlertTriangle,
     ShieldAlert,
+    PlusCircle,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
@@ -110,11 +111,13 @@ const activeWorkOrder = computed(() => {
     if (labelMode.value !== "auto") return null;
     if (!props.workOrders || props.workOrders.length === 0) return null;
     if (selectedWoId.value) {
+        const target = String(selectedWoId.value);
         const found = props.workOrders.find(
             (w) =>
-                w.id === selectedWoId.value ||
-                w.uuid === selectedWoId.value ||
-                w.db_id === selectedWoId.value,
+                String(w.id) === target ||
+                String(w.nomor_wo) === target ||
+                String(w.uuid) === target ||
+                String(w.db_id) === target,
         );
         if (found) return found;
     }
@@ -208,7 +211,10 @@ const filterCetakTipe = ref("semua");
 const autoAllergyConfigs = ref({});
 const activeEditingAllergyAuto = ref("");
 const currentAutoEditingAllergy = computed(() => {
-    if (selectedJenisAlergi.value && selectedJenisAlergi.value !== "Semua Alergi") {
+    if (
+        selectedJenisAlergi.value &&
+        selectedJenisAlergi.value !== "Semua Alergi"
+    ) {
         return selectedJenisAlergi.value;
     }
     return activeEditingAllergyAuto.value || detectedAlergiList.value[0] || "";
@@ -281,8 +287,8 @@ function normalizeAllergyName(name) {
     if (!name) return "";
     let s = String(
         typeof name === "object"
-            ? (name.value || name.label || name.jenis_alergi || "")
-            : name
+            ? name.value || name.label || name.jenis_alergi || ""
+            : name,
     );
     return s
         .trim()
@@ -295,14 +301,18 @@ function matchAllergyKey(k1, k2) {
     if (!k1 || !k2) return false;
     const s1 = String(
         typeof k1 === "object"
-            ? (k1.value || k1.label || k1.jenis_alergi || "")
-            : k1
-    ).trim().toLowerCase();
+            ? k1.value || k1.label || k1.jenis_alergi || ""
+            : k1,
+    )
+        .trim()
+        .toLowerCase();
     const s2 = String(
         typeof k2 === "object"
-            ? (k2.value || k2.label || k2.jenis_alergi || "")
-            : k2
-    ).trim().toLowerCase();
+            ? k2.value || k2.label || k2.jenis_alergi || ""
+            : k2,
+    )
+        .trim()
+        .toLowerCase();
     if (s1 === s2) return true;
     const n1 = normalizeAllergyName(s1);
     const n2 = normalizeAllergyName(s2);
@@ -338,7 +348,10 @@ const detectedAlergiList = computed(() => {
                 if (sm) {
                     const val =
                         typeof sm === "object"
-                            ? (sm.jenis_alergi?.value || sm.jenis_alergi || sm.alergen || sm.nama_alergi)
+                            ? sm.jenis_alergi?.value ||
+                              sm.jenis_alergi ||
+                              sm.alergen ||
+                              sm.nama_alergi
                             : sm;
                     if (
                         val &&
@@ -395,7 +408,12 @@ const detectedAlergiList = computed(() => {
             if (!jenis) return false;
             // Jika ada nilai AKG khusus di akg_alergi WO, wajib tampilkan
             if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
-                if (wo.akg_alergi[jenis] || Object.keys(wo.akg_alergi).some((k) => matchAllergyKey(k, jenis))) {
+                if (
+                    wo.akg_alergi[jenis] ||
+                    Object.keys(wo.akg_alergi).some((k) =>
+                        matchAllergyKey(k, jenis),
+                    )
+                ) {
                     return true;
                 }
             }
@@ -405,13 +423,16 @@ const detectedAlergiList = computed(() => {
                 const subMenus = Array.isArray(wo.sub_menu_alergi)
                     ? wo.sub_menu_alergi
                     : typeof wo.sub_menu_alergi === "object"
-                    ? Object.values(wo.sub_menu_alergi).flat()
-                    : [];
+                      ? Object.values(wo.sub_menu_alergi).flat()
+                      : [];
                 inSubMenu = subMenus.some((sm) => {
                     if (!sm) return false;
                     const smVal =
                         typeof sm === "object"
-                            ? (sm.jenis_alergi?.value || sm.jenis_alergi || sm.alergen || sm.nama_alergi)
+                            ? sm.jenis_alergi?.value ||
+                              sm.jenis_alergi ||
+                              sm.alergen ||
+                              sm.nama_alergi
                             : sm;
                     return matchAllergyKey(smVal, jenis);
                 });
@@ -433,7 +454,10 @@ const detectedAlergiList = computed(() => {
                                     (Number(d.porsi_besar) || 0) +
                                     (Number(d.jumlah) || 0);
                             }
-                        } else if (typeof d === "string" && matchAllergyKey(d.trim(), jenis)) {
+                        } else if (
+                            typeof d === "string" &&
+                            matchAllergyKey(d.trim(), jenis)
+                        ) {
                             count += 1;
                         }
                     }
@@ -462,7 +486,13 @@ const detectedAlergiList = computed(() => {
     const arr = Array.from(list).filter(Boolean);
     return arr.length > 0
         ? arr
-        : ["Telur", "Seafood / Udang", "Kacang-kacangan", "Ikan", "Gluten / Gandum"];
+        : [
+              "Telur",
+              "Seafood / Udang",
+              "Kacang-kacangan",
+              "Ikan",
+              "Gluten / Gandum",
+          ];
 });
 
 // ─── Daftar Seluruh Opsi Alergen yang Tersedia di Mode Manual ─────────────────
@@ -514,9 +544,15 @@ function getInitialGroupAllergyPorsi(jenis) {
                 if (typeof d === "object") {
                     const j = (d.jenis_alergi || d.nama || "").trim();
                     if (j.toLowerCase() === jenis.toLowerCase()) {
-                        count += (Number(d.porsi_kecil) || 0) + (Number(d.porsi_besar) || 0) + (Number(d.jumlah) || 0);
+                        count +=
+                            (Number(d.porsi_kecil) || 0) +
+                            (Number(d.porsi_besar) || 0) +
+                            (Number(d.jumlah) || 0);
                     }
-                } else if (typeof d === "string" && d.trim().toLowerCase() === jenis.toLowerCase()) {
+                } else if (
+                    typeof d === "string" &&
+                    d.trim().toLowerCase() === jenis.toLowerCase()
+                ) {
                     count += 1;
                 }
             }
@@ -536,7 +572,16 @@ function ensureManualAllergyConfig(jenis) {
 
         manualAllergyConfigs.value[jenis] = {
             porsi: initialPorsi > 0 ? initialPorsi : 1,
-            menuItems: defaultMenu.length > 0 ? [...defaultMenu] : ["Nasi Putih", `Lauk (Bebas ${jenis})`, "Tempe", "Sayur", "Buah"],
+            menuItems:
+                defaultMenu.length > 0
+                    ? [...defaultMenu]
+                    : [
+                          "Nasi Putih",
+                          `Lauk (Bebas ${jenis})`,
+                          "Tempe",
+                          "Sayur",
+                          "Buah",
+                      ],
             giziData: { ...giziData.value },
         };
     }
@@ -554,9 +599,13 @@ function toggleAllergySelected(jenis) {
         }
     } else {
         selectedManualAllergies.value.push(jenis);
-        if (!manualAllergyConfigs.value[jenis].porsi || manualAllergyConfigs.value[jenis].porsi <= 0) {
+        if (
+            !manualAllergyConfigs.value[jenis].porsi ||
+            manualAllergyConfigs.value[jenis].porsi <= 0
+        ) {
             const initialPorsi = getInitialGroupAllergyPorsi(jenis);
-            manualAllergyConfigs.value[jenis].porsi = initialPorsi > 0 ? initialPorsi : 1;
+            manualAllergyConfigs.value[jenis].porsi =
+                initialPorsi > 0 ? initialPorsi : 1;
         }
         activeEditingAllergy.value = jenis;
     }
@@ -569,7 +618,10 @@ function selectAllDetectedAllergies() {
             selectedManualAllergies.value.push(jenis);
         }
     });
-    if (!activeEditingAllergy.value && selectedManualAllergies.value.length > 0) {
+    if (
+        !activeEditingAllergy.value &&
+        selectedManualAllergies.value.length > 0
+    ) {
         activeEditingAllergy.value = selectedManualAllergies.value[0];
     }
 }
@@ -592,7 +644,12 @@ function addNewCustomAllergy() {
 
 function initManualConfigsFromGroups(force = false) {
     if (!props.kelompokList || props.kelompokList.length === 0) return;
-    if (!force && Object.keys(manualAllergyConfigs.value).length > 0 && manualPorsiNormal.value > 0) return;
+    if (
+        !force &&
+        Object.keys(manualAllergyConfigs.value).length > 0 &&
+        manualPorsiNormal.value > 0
+    )
+        return;
 
     let totalPmAll = 0;
     const allergyPorsiMap = {};
@@ -610,13 +667,17 @@ function initManualConfigsFromGroups(force = false) {
                 let count = 0;
                 if (typeof d === "object") {
                     jenis = (d.jenis_alergi || d.nama || "").trim();
-                    count = (Number(d.porsi_kecil) || 0) + (Number(d.porsi_besar) || 0) + (Number(d.jumlah) || 0);
+                    count =
+                        (Number(d.porsi_kecil) || 0) +
+                        (Number(d.porsi_besar) || 0) +
+                        (Number(d.jumlah) || 0);
                 } else if (typeof d === "string" && d.trim()) {
                     jenis = d.trim();
                     count = 1;
                 }
                 if (jenis) {
-                    allergyPorsiMap[jenis] = (allergyPorsiMap[jenis] || 0) + count;
+                    allergyPorsiMap[jenis] =
+                        (allergyPorsiMap[jenis] || 0) + count;
                 }
             });
         }
@@ -632,7 +693,9 @@ function initManualConfigsFromGroups(force = false) {
         if (!configs[jenis]) {
             configs[jenis] = {
                 porsi: porsi,
-                menuItems: menuItems.value.map((m, idx) => (idx === 1 ? `${m} (Bebas ${jenis})` : m)),
+                menuItems: menuItems.value.map((m, idx) =>
+                    idx === 1 ? `${m} (Bebas ${jenis})` : m,
+                ),
                 giziData: { ...giziData.value },
             };
         } else if (force) {
@@ -645,7 +708,9 @@ function initManualConfigsFromGroups(force = false) {
         if (!configs[jenis]) {
             configs[jenis] = {
                 porsi: 0,
-                menuItems: menuItems.value.map((m, idx) => (idx === 1 ? `${m} (Bebas ${jenis})` : m)),
+                menuItems: menuItems.value.map((m, idx) =>
+                    idx === 1 ? `${m} (Bebas ${jenis})` : m,
+                ),
                 giziData: { ...giziData.value },
             };
         }
@@ -653,10 +718,16 @@ function initManualConfigsFromGroups(force = false) {
 
     manualAllergyConfigs.value = configs;
     if (selectedManualAllergies.value.length === 0 || force) {
-        selectedManualAllergies.value = initialSelected.length > 0 ? initialSelected : (detectedAlergiList.value.slice(0, 1));
+        selectedManualAllergies.value =
+            initialSelected.length > 0
+                ? initialSelected
+                : detectedAlergiList.value.slice(0, 1);
     }
     if (!activeEditingAllergy.value) {
-        activeEditingAllergy.value = selectedManualAllergies.value[0] || detectedAlergiList.value[0] || "";
+        activeEditingAllergy.value =
+            selectedManualAllergies.value[0] ||
+            detectedAlergiList.value[0] ||
+            "";
     }
 
     if (manualPorsiNormal.value === 0 || force) {
@@ -842,6 +913,76 @@ const totalPorsiNormal = computed(() => {
         : Math.max(0, (totalWoPorsi.value || 0) - totalPorsiAlergi.value);
 });
 
+// Tambahan Porsi Diluar Jumlah Penerima Manfaat (Uji Organoleptik, Sampel Makanan, Buffer Produksi)
+const porsiTambahanData = computed(() => {
+    if (labelMode.value !== "auto") {
+        return {
+            organoleptik: 0,
+            sampel: 0,
+            buffer: 0,
+            total: 0,
+        };
+    }
+    const wo = activeWorkOrder.value;
+    if (!wo) {
+        return { organoleptik: 0, sampel: 0, buffer: 0, total: 0 };
+    }
+    const raw = wo.porsi_tambahan;
+    if (!raw) {
+        const kpmCount =
+            activeKelompokList.value.filter((k) => k.is_menerima !== false)
+                .length || 0;
+        const organoleptik = kpmCount * 1;
+        const sampel = 4;
+        return {
+            organoleptik,
+            sampel,
+            buffer: 0,
+            total: organoleptik + sampel,
+        };
+    }
+    const pt = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const organoleptik =
+        Number(
+            pt.organoleptik?.total ??
+                Number(pt.organoleptik?.pk || 0) +
+                    Number(pt.organoleptik?.pb || 0),
+        ) || 0;
+    const sampel =
+        Number(
+            pt.sampel?.total ??
+                Number(pt.sampel?.pk || 0) + Number(pt.sampel?.pb || 0),
+        ) || 0;
+    const buffer =
+        Number(
+            pt.buffer?.total ??
+                Number(pt.buffer?.pk || 0) + Number(pt.buffer?.pb || 0),
+        ) || 0;
+    const total =
+        Number(
+            pt.total ??
+                Number(pt.total_pk || 0) + Number(pt.total_pb || 0) ??
+                organoleptik + sampel + buffer,
+        ) || organoleptik + sampel + buffer;
+
+    return {
+        organoleptik,
+        sampel,
+        buffer,
+        total,
+    };
+});
+
+const totalPorsiTambahan = computed(() => porsiTambahanData.value.total);
+
+const totalSemuaPorsi = computed(() => {
+    return (
+        totalPorsiNormal.value +
+        totalPorsiAlergi.value +
+        totalPorsiTambahan.value
+    );
+});
+
 // Helper hitung jumlah porsi per jenis alergi (Mode Otomatis & Manual)
 function getAllergyPorsiCount(jenis) {
     if (labelMode.value === "manual") {
@@ -908,7 +1049,9 @@ function getAllergyPorsiBreakdown(jenis) {
                     const isTarget =
                         !jenis || jenis === "Semua Alergi"
                             ? affectedList.length > 0
-                                ? affectedList.some((al) => matchAllergyKey(al, j))
+                                ? affectedList.some((al) =>
+                                      matchAllergyKey(al, j),
+                                  )
                                 : true
                             : matchAllergyKey(j, jenis);
 
@@ -924,7 +1067,9 @@ function getAllergyPorsiBreakdown(jenis) {
                     const isTarget =
                         !jenis || jenis === "Semua Alergi"
                             ? affectedList.length > 0
-                                ? affectedList.some((al) => matchAllergyKey(al, j))
+                                ? affectedList.some((al) =>
+                                      matchAllergyKey(al, j),
+                                  )
                                 : true
                             : matchAllergyKey(j, jenis);
 
@@ -1046,36 +1191,307 @@ function setLabelMode(mode) {
 
 function setActiveLabelTab(tab) {
     activeLabelTab.value = tab;
-    // Jangan ubah filterCetakTipe jika user telah memilih "semua"
-    if (filterCetakTipe.value !== "semua") {
+    // Jangan ubah filterCetakTipe jika user telah memilih "semua" atau "pm"
+    if (filterCetakTipe.value !== "semua" && filterCetakTipe.value !== "pm") {
         filterCetakTipe.value = tab;
     }
 }
 
+const lastSyncedWoId = ref(null);
+
+// Helper mengambil menu pengganti alergi berdasarkan sub_menu 1-5 (atau lebih) dan sub_menu_alergi di WO
+function getAllergyMenuItemsForTarget(
+    targetAlergi,
+    wo = activeWorkOrder.value,
+) {
+    if (!wo) return [...menuItemsAlergi.value];
+
+    // 1. Dapatkan base sub menu normal dari WO
+    let baseList = [];
+    if (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) {
+        baseList = wo.sub_menus
+            .map((s) => (s != null ? String(s).trim() : ""))
+            .filter(Boolean);
+    }
+    if (baseList.length === 0) {
+        const slots = [
+            wo.sub_menu_1,
+            wo.sub_menu_2,
+            wo.sub_menu_3,
+            wo.sub_menu_4,
+            wo.sub_menu_5,
+        ]
+            .map((s) => (s != null ? String(s).trim() : ""))
+            .filter(Boolean);
+        if (slots.length > 0) {
+            baseList = slots;
+        }
+    }
+    if (
+        baseList.length === 0 &&
+        Array.isArray(wo.komponen) &&
+        wo.komponen.length > 0
+    ) {
+        baseList = wo.komponen
+            .map((s) => (s != null ? String(s).trim() : ""))
+            .filter(Boolean);
+    }
+    if (baseList.length === 0) {
+        baseList = [...menuItems.value];
+    }
+
+    if (baseList.length === 0) {
+        return [...menuItemsAlergi.value];
+    }
+
+    const result = [...baseList];
+
+    // Helper ekstraksi string nama pengganti
+    const extractReplName = (rep) => {
+        if (!rep) return "";
+        if (
+            typeof rep.menu_pengganti === "object" &&
+            rep.menu_pengganti !== null
+        ) {
+            return (
+                rep.menu_pengganti.nama || rep.menu_pengganti.nama_menu || ""
+            );
+        }
+        if (rep.menu_pengganti && typeof rep.menu_pengganti === "string") {
+            return rep.menu_pengganti.trim();
+        }
+        if (typeof rep.nama === "string" && rep.nama.trim()) {
+            return rep.nama.trim();
+        }
+        if (typeof rep.nama_menu === "string" && rep.nama_menu.trim()) {
+            return rep.nama_menu.trim();
+        }
+        if (typeof rep.item === "string" && rep.item.trim()) {
+            return rep.item.trim();
+        }
+        return "";
+    };
+
+    // Helper ekstraksi nama jenis alergi
+    const extractJenis = (rep) => {
+        if (!rep) return "";
+        const raw =
+            rep.jenis_alergi?.value ||
+            rep.jenis_alergi ||
+            rep.alergen ||
+            rep.nama_alergi ||
+            "";
+        return normalizeAllergyName(raw);
+    };
+
+    const targetNorm = normalizeAllergyName(targetAlergi);
+
+    // Kumpulkan semua pengganti alergi berdasarkan indeks (0-based)
+    const replacementMap = {};
+
+    const checkAndSetReplacement = (slotIdx, rep) => {
+        if (slotIdx < 0 || slotIdx >= result.length) return;
+        const replName = extractReplName(rep);
+        if (!replName || replName === "-") return;
+
+        const jNorm = extractJenis(rep);
+        const match =
+            !targetNorm ||
+            targetNorm === "semua alergi" ||
+            !jNorm ||
+            jNorm === targetNorm ||
+            matchAllergyKey(targetNorm, jNorm);
+
+        if (match) {
+            if (!replacementMap[slotIdx] || (jNorm && jNorm === targetNorm)) {
+                replacementMap[slotIdx] = replName;
+            }
+        }
+    };
+
+    const rawAlergi = wo.sub_menu_alergi;
+
+    if (rawAlergi) {
+        if (Array.isArray(rawAlergi)) {
+            rawAlergi.forEach((rep) => {
+                if (!rep) return;
+                let slotIdx = -1;
+                const subKey = rep.sub_menu_key || "";
+                const keyMatch = subKey.match(/sub_menu_(\d+)/i);
+                if (keyMatch) {
+                    slotIdx = parseInt(keyMatch[1], 10) - 1;
+                } else if (rep.sub_menu_ke != null) {
+                    slotIdx = parseInt(rep.sub_menu_ke, 10) - 1;
+                } else if (rep.index != null) {
+                    slotIdx = parseInt(rep.index, 10);
+                } else {
+                    slotIdx = 1; // Default sub_menu_2
+                }
+                checkAndSetReplacement(slotIdx, rep);
+            });
+        } else if (typeof rawAlergi === "object") {
+            Object.entries(rawAlergi).forEach(([key, val]) => {
+                const keyMatch = key.match(/sub_menu_(\d+)/i);
+                if (keyMatch) {
+                    const slotIdx = parseInt(keyMatch[1], 10) - 1;
+                    if (Array.isArray(val)) {
+                        val.forEach((rep) =>
+                            checkAndSetReplacement(slotIdx, rep),
+                        );
+                    } else if (val && typeof val === "object") {
+                        checkAndSetReplacement(slotIdx, val);
+                    }
+                } else {
+                    const jKeyNorm = normalizeAllergyName(key);
+                    const match =
+                        !targetNorm ||
+                        targetNorm === "semua alergi" ||
+                        jKeyNorm === targetNorm ||
+                        matchAllergyKey(targetNorm, jKeyNorm);
+
+                    if (match) {
+                        if (Array.isArray(val)) {
+                            val.forEach((rep) => {
+                                let slotIdx = 1;
+                                const subKey = rep?.sub_menu_key || "";
+                                const km = subKey.match(/sub_menu_(\d+)/i);
+                                if (km) slotIdx = parseInt(km[1], 10) - 1;
+                                checkAndSetReplacement(slotIdx, rep);
+                            });
+                        } else if (val && typeof val === "object") {
+                            Object.entries(val).forEach(
+                                ([innerKey, innerVal]) => {
+                                    const km =
+                                        innerKey.match(/sub_menu_(\d+)/i);
+                                    if (km) {
+                                        const slotIdx = parseInt(km[1], 10) - 1;
+                                        const repObj =
+                                            typeof innerVal === "object"
+                                                ? innerVal
+                                                : {
+                                                      menu_pengganti: innerVal,
+                                                      jenis_alergi: key,
+                                                  };
+                                        checkAndSetReplacement(slotIdx, repObj);
+                                    }
+                                },
+                            );
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Cek juga wo.items jika ada yang bertipe 'alergi'
+    if (Array.isArray(wo.items)) {
+        wo.items.forEach((it) => {
+            if (it.tipe_porsi === "alergi") {
+                let slotIdx = 1;
+                const km = (it.sub_menu_key || "").match(/sub_menu_(\d+)/i);
+                if (km) slotIdx = parseInt(km[1], 10) - 1;
+                const repObj = {
+                    jenis_alergi: it.jenis_alergi,
+                    menu_pengganti: it.nama_sub_menu || it.nama,
+                };
+                checkAndSetReplacement(slotIdx, repObj);
+            }
+        });
+    }
+
+    // Terapkan semua penggantian ke result
+    Object.entries(replacementMap).forEach(([idxStr, replName]) => {
+        const idx = parseInt(idxStr, 10);
+        if (result[idx] !== undefined && replName) {
+            result[idx] = replName;
+        }
+    });
+
+    return result;
+}
+
 // Inisialisasi konfigurasi komponen menu dan gizi terpisah untuk tiap jenis alergi (Mode Otomatis)
-function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
+function initAutoAllergyConfigs(
+    wo = activeWorkOrder.value,
+    forceReset = false,
+) {
     if (!wo) return;
-    const configs = { ...autoAllergyConfigs.value };
-    const affectedList = detectedAlergiList.value;
+    const woIdentifier = String(
+        wo.id || wo.nomor_wo || wo.uuid || wo.tanggal || "",
+    );
+    const isDifferentWo = lastSyncedWoId.value !== woIdentifier;
+
+    // Jika berganti Work Order atau forceReset, konfigurasi lama HARUS di-reset bersih agar tidak nyangkut
+    const configs =
+        isDifferentWo || forceReset ? {} : { ...autoAllergyConfigs.value };
+
+    const affectedSet = new Set(detectedAlergiList.value || []);
+    if (wo.akg_alergi && typeof wo.akg_alergi === "object") {
+        Object.keys(wo.akg_alergi).forEach((k) => {
+            if (k && k.trim()) affectedSet.add(k.trim());
+        });
+    }
+    if (wo.sub_menu_alergi) {
+        if (Array.isArray(wo.sub_menu_alergi)) {
+            wo.sub_menu_alergi.forEach((rep) => {
+                const j =
+                    rep?.jenis_alergi?.value ||
+                    rep?.jenis_alergi ||
+                    rep?.alergen ||
+                    rep?.nama_alergi;
+                if (j && typeof j === "string" && j.trim())
+                    affectedSet.add(j.trim());
+            });
+        } else if (typeof wo.sub_menu_alergi === "object") {
+            Object.entries(wo.sub_menu_alergi).forEach(([k, val]) => {
+                if (Array.isArray(val)) {
+                    val.forEach((rep) => {
+                        const j =
+                            rep?.jenis_alergi?.value ||
+                            rep?.jenis_alergi ||
+                            rep?.alergen ||
+                            rep?.nama_alergi;
+                        if (j && typeof j === "string" && j.trim())
+                            affectedSet.add(j.trim());
+                    });
+                } else if (!k.toLowerCase().startsWith("sub_menu_")) {
+                    affectedSet.add(k.trim());
+                }
+            });
+        }
+    }
+    const affectedList = Array.from(affectedSet);
 
     const pb = wo.akg_pb || {};
     const pk = wo.akg_pk || {};
 
     const baseGizi = {
-        energi_pb: String(pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624"),
-        prot_pb: String(pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2"),
+        energi_pb: String(
+            pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624",
+        ),
+        prot_pb: String(
+            pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2",
+        ),
         lmk_pb: String(pb.lemak ?? pb.lmk ?? giziData.value?.lmk_pb ?? "17.7"),
-        karbo_pb: String(pb.karbohidrat ?? pb.karbo ?? giziData.value?.karbo_pb ?? "69.6"),
+        karbo_pb: String(
+            pb.karbohidrat ?? pb.karbo ?? giziData.value?.karbo_pb ?? "69.6",
+        ),
         serat_pb: String(pb.serat ?? giziData.value?.serat_pb ?? "3.8"),
-        energi_pk: String(pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2"),
-        prot_pk: String(pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4"),
+        energi_pk: String(
+            pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2",
+        ),
+        prot_pk: String(
+            pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4",
+        ),
         lmk_pk: String(pk.lemak ?? pk.lmk ?? giziData.value?.lmk_pk ?? "14.2"),
-        karbo_pk: String(pk.karbohidrat ?? pk.karbo ?? giziData.value?.karbo_pk ?? "45.7"),
+        karbo_pk: String(
+            pk.karbohidrat ?? pk.karbo ?? giziData.value?.karbo_pk ?? "45.7",
+        ),
         serat_pk: String(pk.serat ?? giziData.value?.serat_pk ?? "2.6"),
     };
 
     affectedList.forEach((jenis) => {
-        const existing = configs[jenis];
+        const existing = isDifferentWo || forceReset ? null : configs[jenis];
 
         // Cari nilai AKG spesifik alergi dari Work Order
         let akgSpecific = null;
@@ -1083,25 +1499,45 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
             if (wo.akg_alergi[jenis]) {
                 akgSpecific = wo.akg_alergi[jenis];
             } else {
-                const foundEntry = Object.entries(wo.akg_alergi).find(([k]) => matchAllergyKey(k, jenis));
+                const foundEntry = Object.entries(wo.akg_alergi).find(([k]) =>
+                    matchAllergyKey(k, jenis),
+                );
                 if (foundEntry) akgSpecific = foundEntry[1];
             }
         }
 
         let specificGizi = { ...baseGizi };
-        if (akgSpecific && (akgSpecific.akg_pb || akgSpecific.akg_pk || akgSpecific.pb || akgSpecific.pk)) {
+        if (
+            akgSpecific &&
+            (akgSpecific.akg_pb ||
+                akgSpecific.akg_pk ||
+                akgSpecific.pb ||
+                akgSpecific.pk)
+        ) {
             const specPb = akgSpecific.pb || akgSpecific.akg_pb || {};
             const specPk = akgSpecific.pk || akgSpecific.akg_pk || {};
             specificGizi = {
-                energi_pb: String(specPb.energi ?? specPb.energy ?? baseGizi.energi_pb),
-                prot_pb: String(specPb.protein ?? specPb.prot ?? baseGizi.prot_pb),
-                lmk_pb: String(specPb.lemak ?? specPb.lmk ?? baseGizi.lmk_pb),
-                karbo_pb: String(specPb.karbohidrat ?? specPb.karbo ?? baseGizi.karbo_pb),
+                energi_pb: String(
+                    specPb.energi ?? specPb.energy ?? baseGizi.energi_pb,
+                ),
+                prot_pb: String(
+                    specPb.protein ?? specPb.prot ?? baseGizi.prot_pb,
+                ),
+                lmk_pb: String(specPb.lemak ?? specPb.lemak ?? baseGizi.lmk_pb),
+                karbo_pb: String(
+                    specPb.karbohidrat ?? specPb.karbo ?? baseGizi.karbo_pb,
+                ),
                 serat_pb: String(specPb.serat ?? baseGizi.serat_pb),
-                energi_pk: String(specPk.energi ?? specPk.energy ?? baseGizi.energi_pk),
-                prot_pk: String(specPk.protein ?? specPk.prot ?? baseGizi.prot_pk),
+                energi_pk: String(
+                    specPk.energi ?? specPk.energy ?? baseGizi.energi_pk,
+                ),
+                prot_pk: String(
+                    specPk.protein ?? specPk.prot ?? baseGizi.prot_pk,
+                ),
                 lmk_pk: String(specPk.lemak ?? specPk.lmk ?? baseGizi.lmk_pk),
-                karbo_pk: String(specPk.karbohidrat ?? specPk.karbo ?? baseGizi.karbo_pk),
+                karbo_pk: String(
+                    specPk.karbohidrat ?? specPk.karbo ?? baseGizi.karbo_pk,
+                ),
                 serat_pk: String(specPk.serat ?? baseGizi.serat_pk),
             };
         }
@@ -1122,13 +1558,16 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
 
     // Sinkronkan giziDataAlergi aktif dengan alergi yang sedang dipilih/diedit
     const targetAllergy =
-        (selectedJenisAlergi.value && selectedJenisAlergi.value !== "Semua Alergi")
+        selectedJenisAlergi.value &&
+        selectedJenisAlergi.value !== "Semua Alergi"
             ? selectedJenisAlergi.value
-            : (currentAutoEditingAllergy.value || affectedList[0]);
+            : currentAutoEditingAllergy.value || affectedList[0];
 
     let targetCfg = targetAllergy ? configs[targetAllergy] : null;
     if (!targetCfg && targetAllergy) {
-        const found = Object.entries(configs).find(([k]) => matchAllergyKey(k, targetAllergy));
+        const found = Object.entries(configs).find(([k]) =>
+            matchAllergyKey(k, targetAllergy),
+        );
         if (found) targetCfg = found[1];
     }
 
@@ -1137,70 +1576,21 @@ function initAutoAllergyConfigs(wo = activeWorkOrder.value) {
     }
 }
 
-// Helper mengambil menu pengganti alergi berdasarkan sub_menu 1-5 (atau lebih) dan sub_menu_alergi di WO
-function getAllergyMenuItemsForTarget(
-    targetAlergi,
-    wo = activeWorkOrder.value,
-) {
-    if (!wo) return menuItemsAlergi.value;
-
-    let baseList = [];
-    if (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) {
-        baseList = wo.sub_menus.filter(Boolean);
-    } else {
-        const normal1 = menuItems.value[0] || wo.sub_menu_1 || "";
-        const normal2 = menuItems.value[1] || wo.sub_menu_2 || "";
-        const normal3 = menuItems.value[2] || wo.sub_menu_3 || "";
-        const normal4 = menuItems.value[3] || wo.sub_menu_4 || "";
-        const normal5 = menuItems.value[4] || wo.sub_menu_5 || "";
-        baseList = [normal1, normal2, normal3, normal4, normal5].filter(
-            Boolean,
-        );
-    }
-
-    if (baseList.length === 0) {
-        return menuItemsAlergi.value;
-    }
-
-    const rawAlergi = wo.sub_menu_alergi;
-    if (!rawAlergi || typeof rawAlergi !== "object") {
-        return baseList;
-    }
-
-    const result = [...baseList];
-
-    // Cek sub_menu_1 sampai sub_menu_N untuk mencari menu pengganti
-    for (let i = 1; i <= result.length; i++) {
-        const key = `sub_menu_${i}`;
-        const replacements = rawAlergi[key];
-        if (Array.isArray(replacements) && replacements.length > 0) {
-            for (const rep of replacements) {
-                if (!rep) continue;
-                const j = (rep.jenis_alergi || rep.alergen || "").trim();
-                const replName =
-                    rep.menu_pengganti || rep.nama || rep.item || "";
-
-                if (
-                    replName &&
-                    (!targetAlergi ||
-                        targetAlergi === "Semua Alergi" ||
-                        matchAllergyKey(targetAlergi, j) ||
-                        j === "")
-                ) {
-                    if (result[i - 1] !== undefined) {
-                        result[i - 1] = replName;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    return result;
-}
-
-function syncDataFromWorkOrder(wo) {
+function syncDataFromWorkOrder(wo, forceReset = false) {
     if (!wo) return;
+    const woIdentifier = String(
+        wo.id || wo.nomor_wo || wo.uuid || wo.tanggal || "",
+    );
+    const isDifferentWo = lastSyncedWoId.value !== woIdentifier;
+
+    if (isDifferentWo || forceReset) {
+        // Reset pilihan alergi & custom tag jika berpindah ke WO/tanggal yang berbeda
+        selectedJenisAlergi.value = "Semua Alergi";
+        activeEditingAllergyAuto.value = "";
+        customTagAlergi.value = "";
+        autoAllergyConfigs.value = {};
+    }
+
     tanggalProduksi.value = wo.tanggal || todayStr;
     tanggalExpired.value = wo.tanggal || todayStr;
 
@@ -1238,31 +1628,59 @@ function syncDataFromWorkOrder(wo) {
     const pk = wo.akg_pk || {};
     if (wo.akg_pb || wo.akg_pk) {
         giziData.value = {
-            energi_pb: String(pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624"),
-            prot_pb: String(pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2"),
-            lmk_pb: String(pb.lemak ?? pb.lmk ?? giziData.value?.lmk_pb ?? "17.7"),
-            karbo_pb: String(pb.karbohidrat ?? pb.karbo ?? giziData.value?.karbo_pb ?? "69.6"),
+            energi_pb: String(
+                pb.energi ?? pb.energy ?? giziData.value?.energi_pb ?? "624",
+            ),
+            prot_pb: String(
+                pb.protein ?? pb.prot ?? giziData.value?.prot_pb ?? "25.2",
+            ),
+            lmk_pb: String(
+                pb.lemak ?? pb.lmk ?? giziData.value?.lmk_pb ?? "17.7",
+            ),
+            karbo_pb: String(
+                pb.karbohidrat ??
+                    pb.karbo ??
+                    giziData.value?.karbo_pb ??
+                    "69.6",
+            ),
             serat_pb: String(pb.serat ?? giziData.value?.serat_pb ?? "3.8"),
-            energi_pk: String(pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2"),
-            prot_pk: String(pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4"),
-            lmk_pk: String(pk.lemak ?? pk.lmk ?? giziData.value?.lmk_pk ?? "14.2"),
-            karbo_pk: String(pk.karbohidrat ?? pk.karbo ?? giziData.value?.karbo_pk ?? "45.7"),
+            energi_pk: String(
+                pk.energi ?? pk.energy ?? giziData.value?.energi_pk ?? "384.2",
+            ),
+            prot_pk: String(
+                pk.protein ?? pk.prot ?? giziData.value?.prot_pk ?? "21.4",
+            ),
+            lmk_pk: String(
+                pk.lemak ?? pk.lmk ?? giziData.value?.lmk_pk ?? "14.2",
+            ),
+            karbo_pk: String(
+                pk.karbohidrat ??
+                    pk.karbo ??
+                    giziData.value?.karbo_pk ??
+                    "45.7",
+            ),
             serat_pk: String(pk.serat ?? giziData.value?.serat_pk ?? "2.6"),
         };
     }
 
     // 4. Inisialisasi konfigurasi menu dan gizi terpisah untuk tiap jenis alergi terdampak dari WO
-    initAutoAllergyConfigs(wo);
+    initAutoAllergyConfigs(wo, isDifferentWo || forceReset);
+    lastSyncedWoId.value = woIdentifier;
 
     // 5. Sinkronisasi komponen menu & gizi alergi aktif
     const targetAllergy =
-        (selectedJenisAlergi.value && selectedJenisAlergi.value !== "Semua Alergi")
+        selectedJenisAlergi.value &&
+        selectedJenisAlergi.value !== "Semua Alergi"
             ? selectedJenisAlergi.value
-            : (currentAutoEditingAllergy.value || detectedAlergiList.value[0]);
+            : currentAutoEditingAllergy.value || detectedAlergiList.value[0];
 
-    let targetCfg = targetAllergy ? autoAllergyConfigs.value[targetAllergy] : null;
+    let targetCfg = targetAllergy
+        ? autoAllergyConfigs.value[targetAllergy]
+        : null;
     if (!targetCfg && targetAllergy) {
-        const found = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, targetAllergy));
+        const found = Object.entries(autoAllergyConfigs.value).find(([k]) =>
+            matchAllergyKey(k, targetAllergy),
+        );
         if (found) targetCfg = found[1];
     }
 
@@ -1320,47 +1738,60 @@ watch([activeLabelTab, filterCetakTipe], ([tab, filter]) => {
 watch(filterCetakTipe, (val) => {
     if (val === "normal" || val === "alergi") {
         activeLabelTab.value = val;
-    }
-});
-
-watch([currentAutoEditingAllergy, selectedJenisAlergi], ([currAuto, selJenis]) => {
-    if (labelMode.value === "auto" && activeWorkOrder.value) {
-        const target =
-            selJenis && selJenis !== "Semua Alergi"
-                ? selJenis
-                : currAuto || detectedAlergiList.value[0];
-        let foundCfg = target ? autoAllergyConfigs.value[target] : null;
-        if (!foundCfg && target) {
-            const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, target));
-            if (entry) foundCfg = entry[1];
-        }
-        if (foundCfg) {
-            menuItemsAlergi.value = [...foundCfg.menuItems];
-            if (foundCfg.giziData) {
-                giziDataAlergi.value = { ...foundCfg.giziData };
-            }
-        } else {
-            menuItemsAlergi.value = getAllergyMenuItemsForTarget(
-                target || "Semua Alergi",
-                activeWorkOrder.value,
-            );
-        }
-        if (
-            activeLabelTab.value === "alergi" &&
-            filterCetakTipe.value !== "semua"
-        ) {
-            selectedKelompokIds.value = activeKelompokList.value
-                .filter(
-                    (k) =>
-                        k.is_menerima !== false && hasKelompokImpactedAlergi(k),
-                )
-                .map((k) => k.id);
-        }
+    } else if (val && val.startsWith("tambahan")) {
+        activeLabelTab.value = "tambahan";
+        if (val === "tambahan_sampel") selectedSubTambahan.value = "sampel";
+        else if (val === "tambahan_buffer")
+            selectedSubTambahan.value = "buffer";
+        else if (val === "tambahan_organoleptik")
+            selectedSubTambahan.value = "organoleptik";
     }
 });
 
 watch(
-    [labelMode, activeWorkOrder],
+    [currentAutoEditingAllergy, selectedJenisAlergi],
+    ([currAuto, selJenis]) => {
+        if (labelMode.value === "auto" && activeWorkOrder.value) {
+            const target =
+                selJenis && selJenis !== "Semua Alergi"
+                    ? selJenis
+                    : currAuto || detectedAlergiList.value[0];
+            let foundCfg = target ? autoAllergyConfigs.value[target] : null;
+            if (!foundCfg && target) {
+                const entry = Object.entries(autoAllergyConfigs.value).find(
+                    ([k]) => matchAllergyKey(k, target),
+                );
+                if (entry) foundCfg = entry[1];
+            }
+            if (foundCfg) {
+                menuItemsAlergi.value = [...foundCfg.menuItems];
+                if (foundCfg.giziData) {
+                    giziDataAlergi.value = { ...foundCfg.giziData };
+                }
+            } else {
+                menuItemsAlergi.value = getAllergyMenuItemsForTarget(
+                    target || "Semua Alergi",
+                    activeWorkOrder.value,
+                );
+            }
+            if (
+                activeLabelTab.value === "alergi" &&
+                filterCetakTipe.value !== "semua"
+            ) {
+                selectedKelompokIds.value = activeKelompokList.value
+                    .filter(
+                        (k) =>
+                            k.is_menerima !== false &&
+                            hasKelompokImpactedAlergi(k),
+                    )
+                    .map((k) => k.id);
+            }
+        }
+    },
+);
+
+watch(
+    [labelMode, activeWorkOrder, selectedWoId],
     () => {
         if (labelMode.value === "auto" && activeWorkOrder.value) {
             syncDataFromWorkOrder(activeWorkOrder.value);
@@ -1371,6 +1802,19 @@ watch(
         }
     },
     { immediate: true },
+);
+
+watch(
+    autoAllergyConfigs,
+    (newVal) => {
+        if (labelMode.value === "auto" && currentAutoEditingAllergy.value) {
+            const cfg = newVal[currentAutoEditingAllergy.value];
+            if (cfg && Array.isArray(cfg.menuItems)) {
+                menuItemsAlergi.value = [...cfg.menuItems];
+            }
+        }
+    },
+    { deep: true },
 );
 
 // Watch editingLabel
@@ -1424,14 +1868,21 @@ watch(
                         customTagAlergi.value = parsed.tag_alergi;
                     }
                     if (parsed.manual_porsi_normal !== undefined) {
-                        manualPorsiNormal.value = Number(parsed.manual_porsi_normal) || 0;
+                        manualPorsiNormal.value =
+                            Number(parsed.manual_porsi_normal) || 0;
                     }
                     if (parsed.manual_allergy_configs) {
-                        manualAllergyConfigs.value = parsed.manual_allergy_configs;
+                        manualAllergyConfigs.value =
+                            parsed.manual_allergy_configs;
                     }
-                    if (Array.isArray(parsed.selected_manual_allergies) && parsed.selected_manual_allergies.length > 0) {
-                        selectedManualAllergies.value = parsed.selected_manual_allergies;
-                        activeEditingAllergy.value = parsed.selected_manual_allergies[0] || "";
+                    if (
+                        Array.isArray(parsed.selected_manual_allergies) &&
+                        parsed.selected_manual_allergies.length > 0
+                    ) {
+                        selectedManualAllergies.value =
+                            parsed.selected_manual_allergies;
+                        activeEditingAllergy.value =
+                            parsed.selected_manual_allergies[0] || "";
                     }
                 } catch {
                     // ignore
@@ -1455,7 +1906,12 @@ onMounted(() => {
 watch(
     () => props.kelompokList,
     (newList) => {
-        if (newList && newList.length > 0 && !props.editingLabel && manualPorsiNormal.value === 0) {
+        if (
+            newList &&
+            newList.length > 0 &&
+            !props.editingLabel &&
+            manualPorsiNormal.value === 0
+        ) {
             initManualConfigsFromGroups();
         }
     },
@@ -1519,10 +1975,11 @@ const printableItems = computed(() => {
     const kelompokList = printableKelompokList.value;
 
     if (labelMode.value === "manual") {
-        const baseKelompok = kelompokList[0] || (props.kelompokList || [])[0] || {
-            id: 1,
-            nama_kelompok: namaSppg.value,
-        };
+        const baseKelompok = kelompokList[0] ||
+            (props.kelompokList || [])[0] || {
+                id: 1,
+                nama_kelompok: namaSppg.value,
+            };
 
         const normalList = [];
         const alergiList = [];
@@ -1553,8 +2010,12 @@ const printableItems = computed(() => {
                     tagAlergi:
                         customTagAlergi.value ||
                         `⚠️ KHUSUS ALERGI: ${jenis.toUpperCase()}`,
-                    menuItems: cfg?.menuItems ? [...cfg.menuItems] : [...menuItemsAlergi.value],
-                    giziData: cfg?.giziData ? { ...cfg.giziData } : { ...giziDataAlergi.value },
+                    menuItems: cfg?.menuItems
+                        ? [...cfg.menuItems]
+                        : [...menuItemsAlergi.value],
+                    giziData: cfg?.giziData
+                        ? { ...cfg.giziData }
+                        : { ...giziDataAlergi.value },
                     count: aCount,
                 });
             }
@@ -1646,13 +2107,20 @@ const printableItems = computed(() => {
                 ) {
                     let cfg = autoAllergyConfigs.value[ab.jenis];
                     if (!cfg) {
-                        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, ab.jenis));
+                        const entry = Object.entries(
+                            autoAllergyConfigs.value,
+                        ).find(([k]) => matchAllergyKey(k, ab.jenis));
                         if (entry) cfg = entry[1];
                     }
                     const menuList =
-                        cfg && Array.isArray(cfg.menuItems) && cfg.menuItems.length > 0
+                        cfg &&
+                        Array.isArray(cfg.menuItems) &&
+                        cfg.menuItems.length > 0
                             ? [...cfg.menuItems]
-                            : getAllergyMenuItemsForTarget(ab.jenis);
+                            : getAllergyMenuItemsForTarget(
+                                  ab.jenis,
+                                  activeWorkOrder.value,
+                              );
                     const giziItem =
                         cfg && cfg.giziData
                             ? { ...cfg.giziData }
@@ -1678,14 +2146,90 @@ const printableItems = computed(() => {
         }
     }
 
+    // Porsi Tambahan (Uji Organoleptik, Sampel Makanan, Buffer Produksi)
+    const tambahanList = [];
+    const pt = porsiTambahanData.value;
+    const baseUnitKelompok = {
+        id: "unit-sppg-tambahan",
+        nama_kelompok: namaSppg.value || "SPPG",
+        kategori: "Internal SPPG",
+    };
+
+    if (pt.organoleptik > 0) {
+        tambahanList.push({
+            kelompok: baseUnitKelompok,
+            tipeLabel: "tambahan",
+            subTipeTambahan: "organoleptik",
+            jenisAlergi: "",
+            tagAlergi: "🔬 UJI ORGANOLEPTIK",
+            menuItems: [...menuItems.value],
+            giziData: { ...giziData.value },
+            count: pt.organoleptik,
+        });
+    }
+
+    if (pt.sampel > 0) {
+        tambahanList.push({
+            kelompok: baseUnitKelompok,
+            tipeLabel: "tambahan",
+            subTipeTambahan: "sampel",
+            jenisAlergi: "",
+            tagAlergi: "🧪 SAMPEL MAKANAN",
+            menuItems: [...menuItems.value],
+            giziData: { ...giziData.value },
+            count: pt.sampel,
+        });
+    }
+
+    if (pt.buffer > 0) {
+        tambahanList.push({
+            kelompok: baseUnitKelompok,
+            tipeLabel: "tambahan",
+            subTipeTambahan: "buffer",
+            jenisAlergi: "",
+            tagAlergi: "📦 BUFFER PRODUKSI",
+            menuItems: [...menuItems.value],
+            giziData: { ...giziData.value },
+            count: pt.buffer,
+        });
+    }
+
+    if (tambahanList.length === 0 && pt.total > 0) {
+        tambahanList.push({
+            kelompok: baseUnitKelompok,
+            tipeLabel: "tambahan",
+            subTipeTambahan: "tambahan",
+            jenisAlergi: "",
+            tagAlergi: "➕ PORSI TAMBAHAN",
+            menuItems: [...menuItems.value],
+            giziData: { ...giziData.value },
+            count: pt.total,
+        });
+    }
+
     if (filterCetakTipe.value === "normal") {
         return normalList;
     }
     if (filterCetakTipe.value === "alergi") {
         return alergiList;
     }
-    // "semua": Gabungkan semua Normal terlebih dahulu, lalu semua Alergi di akhir
-    return [...normalList, ...alergiList];
+    if (filterCetakTipe.value === "pm") {
+        return [...normalList, ...alergiList];
+    }
+    if (filterCetakTipe.value === "tambahan") {
+        return tambahanList;
+    }
+    if (filterCetakTipe.value === "tambahan_organoleptik") {
+        return tambahanList.filter((t) => t.subTipeTambahan === "organoleptik");
+    }
+    if (filterCetakTipe.value === "tambahan_sampel") {
+        return tambahanList.filter((t) => t.subTipeTambahan === "sampel");
+    }
+    if (filterCetakTipe.value === "tambahan_buffer") {
+        return tambahanList.filter((t) => t.subTipeTambahan === "buffer");
+    }
+    // "semua": Gabungkan semua Normal terlebih dahulu, lalu semua Alergi, dan Porsi Tambahan di akhir
+    return [...normalList, ...alergiList, ...tambahanList];
 });
 
 // Daftar expanded per individu porsi untuk dicetak atau diunduh
@@ -1841,7 +2385,7 @@ const totalWoPorsi = computed(() => {
     return sum > 0 ? sum : 9;
 });
 
-// Target porsi aktif sesuai filter / tab cetak saat ini (Normal, Alergi, atau Semua)
+// Target porsi aktif sesuai filter / tab cetak saat ini (Normal, Alergi, Tambahan, atau Semua)
 const activeScopePorsiCount = computed(() => {
     if (filterCetakTipe.value === "normal") {
         return totalPorsiNormal.value;
@@ -1849,7 +2393,22 @@ const activeScopePorsiCount = computed(() => {
     if (filterCetakTipe.value === "alergi") {
         return totalPorsiAlergi.value;
     }
-    return totalPorsiNormal.value + totalPorsiAlergi.value;
+    if (filterCetakTipe.value === "pm") {
+        return totalPorsiNormal.value + totalPorsiAlergi.value;
+    }
+    if (filterCetakTipe.value === "tambahan") {
+        return totalPorsiTambahan.value;
+    }
+    if (filterCetakTipe.value === "tambahan_organoleptik") {
+        return porsiTambahanData.value.organoleptik;
+    }
+    if (filterCetakTipe.value === "tambahan_sampel") {
+        return porsiTambahanData.value.sampel;
+    }
+    if (filterCetakTipe.value === "tambahan_buffer") {
+        return porsiTambahanData.value.buffer;
+    }
+    return totalSemuaPorsi.value;
 });
 
 // PDF Download State & Handlers
@@ -2034,11 +2593,14 @@ async function getSandboxCardElement(itemOrKelompok) {
     const tag = isItem ? itemOrKelompok.tagAlergi || "" : "";
 
     const mItems =
-        isItem && itemOrKelompok.menuItems && itemOrKelompok.menuItems.length > 0
+        isItem &&
+        itemOrKelompok.menuItems &&
+        itemOrKelompok.menuItems.length > 0
             ? itemOrKelompok.menuItems
             : tipe === "alergi"
               ? labelMode.value === "auto"
-                  ? autoAllergyConfigs.value[alergi]?.menuItems || getAllergyMenuItemsForTarget(alergi)
+                  ? autoAllergyConfigs.value[alergi]?.menuItems ||
+                    getAllergyMenuItemsForTarget(alergi, activeWorkOrder.value)
                   : menuItemsAlergi.value
               : menuItems.value;
 
@@ -2049,7 +2611,8 @@ async function getSandboxCardElement(itemOrKelompok) {
             ? itemOrKelompok.giziData
             : tipe === "alergi"
               ? labelMode.value === "auto"
-                  ? autoAllergyConfigs.value[alergi]?.giziData || giziDataAlergi.value
+                  ? autoAllergyConfigs.value[alergi]?.giziData ||
+                    giziDataAlergi.value
                   : giziDataAlergi.value
               : giziData.value;
 
@@ -2094,7 +2657,10 @@ const currentPreviewJenisAlergi = computed(() => {
 });
 
 const currentPreviewMenuItems = computed(() => {
-    if (activeLabelTab.value === "normal") {
+    if (
+        activeLabelTab.value === "normal" ||
+        activeLabelTab.value === "tambahan"
+    ) {
         return menuItems.value;
     }
     if (labelMode.value === "manual") {
@@ -2111,16 +2677,24 @@ const currentPreviewMenuItems = computed(() => {
         if (autoAllergyConfigs.value[jenis]?.menuItems) {
             return autoAllergyConfigs.value[jenis].menuItems;
         }
-        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, jenis));
+        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) =>
+            matchAllergyKey(k, jenis),
+        );
         if (entry && entry[1]?.menuItems) {
             return entry[1].menuItems;
         }
     }
-    return getAllergyMenuItemsForTarget(jenis || "Semua Alergi");
+    return getAllergyMenuItemsForTarget(
+        jenis || "Semua Alergi",
+        activeWorkOrder.value,
+    );
 });
 
 const currentPreviewGiziData = computed(() => {
-    if (activeLabelTab.value === "normal") {
+    if (
+        activeLabelTab.value === "normal" ||
+        activeLabelTab.value === "tambahan"
+    ) {
         return giziData.value;
     }
     if (labelMode.value === "manual") {
@@ -2137,7 +2711,9 @@ const currentPreviewGiziData = computed(() => {
         if (autoAllergyConfigs.value[jenis]?.giziData) {
             return autoAllergyConfigs.value[jenis].giziData;
         }
-        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) => matchAllergyKey(k, jenis));
+        const entry = Object.entries(autoAllergyConfigs.value).find(([k]) =>
+            matchAllergyKey(k, jenis),
+        );
         if (entry && entry[1]?.giziData) {
             return entry[1].giziData;
         }
@@ -2145,13 +2721,43 @@ const currentPreviewGiziData = computed(() => {
     return giziDataAlergi.value;
 });
 
+const selectedSubTambahan = ref("organoleptik");
+
+const currentPreviewTag = computed(() => {
+    if (activeLabelTab.value === "tambahan") {
+        if (selectedSubTambahan.value === "sampel") return "🧪 SAMPEL MAKANAN";
+        if (selectedSubTambahan.value === "buffer") return "📦 BUFFER PRODUKSI";
+        return "🔬 UJI ORGANOLEPTIK";
+    }
+    if (activeLabelTab.value === "alergi") {
+        return (
+            customTagAlergi.value ||
+            (currentPreviewJenisAlergi.value
+                ? `⚠️ KHUSUS ALERGI: ${currentPreviewJenisAlergi.value.toUpperCase()}`
+                : "")
+        );
+    }
+    return "";
+});
+
+const previewKelompok = computed(() => {
+    if (activeLabelTab.value === "tambahan") {
+        return {
+            id: "unit-sppg-tambahan",
+            nama_kelompok: namaSppg.value || "SPPG",
+            kategori: "Internal SPPG",
+        };
+    }
+    return printableKelompokList.value[0] || activeKelompokList.value[0];
+});
+
 async function startDownload(type = null) {
     const selectedType = type || downloadFormatOption.value || "single";
     const itemsToPrint =
         selectedType === "custom"
-            ? (expandedPrintableItems.value.length > 0
-                  ? expandedPrintableItems.value
-                  : printableItems.value)
+            ? expandedPrintableItems.value.length > 0
+                ? expandedPrintableItems.value
+                : printableItems.value
             : expandedPrintableItems.value;
 
     if (itemsToPrint.length === 0) {
@@ -2184,7 +2790,17 @@ async function startDownload(type = null) {
             ? "Porsi Alergi"
             : filterCetakTipe.value === "normal"
               ? "Porsi Normal"
-              : "Normal & Alergi";
+              : filterCetakTipe.value === "tambahan"
+                ? "Porsi Tambahan"
+                : filterCetakTipe.value === "tambahan_organoleptik"
+                  ? "Porsi Tambahan Organoleptik"
+                  : filterCetakTipe.value === "tambahan_sampel"
+                    ? "Porsi Tambahan Sampel"
+                    : filterCetakTipe.value === "tambahan_buffer"
+                      ? "Porsi Tambahan Buffer"
+                      : filterCetakTipe.value === "pm"
+                        ? "Porsi PM Saja"
+                        : "Semua Porsi";
 
     downloadProgress.value = {
         current: 0,
@@ -2210,7 +2826,17 @@ async function startDownload(type = null) {
                 ? "Alergi"
                 : filterCetakTipe.value === "normal"
                   ? "Normal"
-                  : "Semua";
+                  : filterCetakTipe.value === "tambahan"
+                    ? "Tambahan"
+                    : filterCetakTipe.value === "tambahan_organoleptik"
+                      ? "Tambahan_Organoleptik"
+                      : filterCetakTipe.value === "tambahan_sampel"
+                        ? "Tambahan_Sampel"
+                        : filterCetakTipe.value === "tambahan_buffer"
+                          ? "Tambahan_Buffer"
+                          : filterCetakTipe.value === "pm"
+                            ? "PM_Saja"
+                            : "Semua";
 
         if (selectedType === "single") {
             const filename = `Label_BGN_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
@@ -2292,7 +2918,17 @@ async function startPrintDirect() {
             ? "Porsi Alergi"
             : filterCetakTipe.value === "normal"
               ? "Porsi Normal"
-              : "Semua Porsi";
+              : filterCetakTipe.value === "tambahan"
+                ? "Porsi Tambahan"
+                : filterCetakTipe.value === "tambahan_organoleptik"
+                  ? "Porsi Tambahan Organoleptik"
+                  : filterCetakTipe.value === "tambahan_sampel"
+                    ? "Porsi Tambahan Sampel"
+                    : filterCetakTipe.value === "tambahan_buffer"
+                      ? "Porsi Tambahan Buffer"
+                      : filterCetakTipe.value === "pm"
+                        ? "Porsi PM Saja"
+                        : "Semua Porsi";
 
     downloadProgress.value = {
         current: 0,
@@ -2412,16 +3048,72 @@ async function startPrintDirect() {
 
                         <!-- Action Buttons -->
                         <div class="flex items-center gap-2 shrink-0 flex-wrap">
-                            <!-- Filter Cetak: Semua / Normal / Alergi -->
-                            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                            <!-- Filter Cetak: Semua / PM / Normal / Alergi / Tambahan -->
+                            <div
+                                class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200"
+                            >
                                 <select
                                     v-model="filterCetakTipe"
                                     class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                                     title="Pilih porsi yang akan dicetak atau diunduh"
                                 >
-                                    <option value="semua">✨ Semua Porsi (Normal & Alergi) [{{ totalPorsiNormal + totalPorsiAlergi }}]</option>
-                                    <option value="normal">🏷️ Hanya Porsi Normal ({{ totalPorsiNormal }})</option>
-                                    <option value="alergi">⚠️ Hanya Porsi Alergi ({{ totalPorsiAlergi }})</option>
+                                    <option value="semua">
+                                        ✨ Semua Porsi
+                                        {{
+                                            totalPorsiTambahan > 0
+                                                ? "(Normal, Alergi & Tambahan)"
+                                                : "(Normal & Alergi)"
+                                        }}
+                                        [{{ totalSemuaPorsi }}]
+                                    </option>
+                                    <option
+                                        v-if="totalPorsiTambahan > 0"
+                                        value="pm"
+                                    >
+                                        👥 Semua Porsi PM Saja [{{
+                                            totalPorsiNormal + totalPorsiAlergi
+                                        }}]
+                                    </option>
+                                    <option value="normal">
+                                        🏷️ Hanya Porsi Normal ({{
+                                            totalPorsiNormal
+                                        }})
+                                    </option>
+                                    <option value="alergi">
+                                        ⚠️ Hanya Porsi Alergi ({{
+                                            totalPorsiAlergi
+                                        }})
+                                    </option>
+                                    <option value="tambahan">
+                                        ➕ Hanya Porsi Tambahan Saja ({{
+                                            totalPorsiTambahan
+                                        }})
+                                    </option>
+                                    <option
+                                        v-if="
+                                            porsiTambahanData.organoleptik > 0
+                                        "
+                                        value="tambahan_organoleptik"
+                                    >
+                                        &nbsp;&nbsp;&nbsp;🔬 Uji Organoleptik
+                                        ({{ porsiTambahanData.organoleptik }})
+                                    </option>
+                                    <option
+                                        v-if="porsiTambahanData.sampel > 0"
+                                        value="tambahan_sampel"
+                                    >
+                                        &nbsp;&nbsp;&nbsp;🧪 Sampel Makanan ({{
+                                            porsiTambahanData.sampel
+                                        }})
+                                    </option>
+                                    <option
+                                        v-if="porsiTambahanData.buffer > 0"
+                                        value="tambahan_buffer"
+                                    >
+                                        &nbsp;&nbsp;&nbsp;📦 Buffer Produksi ({{
+                                            porsiTambahanData.buffer
+                                        }})
+                                    </option>
                                 </select>
                             </div>
 
@@ -2433,7 +3125,9 @@ async function startPrintDirect() {
                                 className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300 font-bold text-xs flex items-center gap-1.5 rounded-xl shadow-xs cursor-pointer"
                                 title="Reset Konfigurasi Awal"
                             >
-                                <RotateCcw class="h-4 w-4 text-slate-500 shrink-0" />
+                                <RotateCcw
+                                    class="h-4 w-4 text-slate-500 shrink-0"
+                                />
                                 <span class="hidden md:inline">Reset Awal</span>
                             </Button>
 
@@ -2456,7 +3150,10 @@ async function startPrintDirect() {
                                     v-if="isSaving"
                                     class="h-4 w-4 animate-spin shrink-0"
                                 />
-                                <BookmarkCheck v-else class="h-4 w-4 shrink-0" />
+                                <BookmarkCheck
+                                    v-else
+                                    class="h-4 w-4 shrink-0"
+                                />
                                 <span class="hidden sm:inline">{{
                                     isSaving
                                         ? "Menyimpan..."
@@ -2474,9 +3171,15 @@ async function startPrintDirect() {
                                     v-model="downloadFormatOption"
                                     class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                                 >
-                                    <option value="single">Label Tunggal</option>
-                                    <option value="a4">Lembar A4 (9 Label)</option>
-                                    <option value="custom">Kustom Jumlah (A4)</option>
+                                    <option value="single">
+                                        Label Tunggal
+                                    </option>
+                                    <option value="a4">
+                                        Lembar A4 (9 Label)
+                                    </option>
+                                    <option value="custom">
+                                        Kustom Jumlah (A4)
+                                    </option>
                                 </select>
 
                                 <!-- Custom Count Input (Appears when Custom is selected) -->
@@ -2484,7 +3187,10 @@ async function startPrintDirect() {
                                     v-if="downloadFormatOption === 'custom'"
                                     class="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 h-8 sm:h-9 shadow-2xs"
                                 >
-                                    <span class="text-[11px] font-bold text-slate-500">Jml:</span>
+                                    <span
+                                        class="text-[11px] font-bold text-slate-500"
+                                        >Jml:</span
+                                    >
                                     <input
                                         type="number"
                                         v-model.number="customLabelCount"
@@ -2493,7 +3199,10 @@ async function startPrintDirect() {
                                         class="w-14 sm:w-16 h-6 text-center text-xs font-black text-slate-800 border-none p-0 focus:outline-none focus:ring-0"
                                         title="Jumlah label untuk dicetak"
                                     />
-                                    <span class="text-[10px] font-semibold text-slate-400">pcs</span>
+                                    <span
+                                        class="text-[10px] font-semibold text-slate-400"
+                                        >pcs</span
+                                    >
                                 </div>
                                 <Button
                                     type="button"
@@ -2514,8 +3223,13 @@ async function startPrintDirect() {
                                         "
                                         class="h-3.5 w-3.5 animate-spin shrink-0"
                                     />
-                                    <Download v-else class="h-3.5 w-3.5 shrink-0" />
-                                    <span class="hidden sm:inline">Download PDF</span>
+                                    <Download
+                                        v-else
+                                        class="h-3.5 w-3.5 shrink-0"
+                                    />
+                                    <span class="hidden sm:inline"
+                                        >Download PDF</span
+                                    >
                                 </Button>
                             </div>
                         </div>
@@ -2610,7 +3324,9 @@ async function startPrintDirect() {
                                         <p
                                             class="text-[11px] text-blue-700 leading-relaxed"
                                         >
-                                            Data menu normal, menu porsi alergi, kandungan gizi, dan sasaran kelompok terhubung langsung dari Work Order.
+                                            Data menu normal, menu porsi alergi,
+                                            kandungan gizi, dan sasaran kelompok
+                                            terhubung langsung dari Work Order.
                                         </p>
                                     </div>
                                 </div>
@@ -2620,8 +3336,12 @@ async function startPrintDirect() {
 
                     <!-- Pengaturan Dimensi & Area Tempel Isolasi (Berlaku untuk Mode Otomatis & Manual) -->
                     <Card className="bg-white border-slate-200/80 shadow-2xs">
-                        <CardHeader className="p-4 pb-2 border-b border-slate-100">
-                            <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-slate-100"
+                        >
+                            <CardTitle
+                                class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                            >
                                 <Layers class="h-4 w-4 text-primary" />
                                 <span>Area Tempel / Perekat Kemasan</span>
                             </CardTitle>
@@ -2632,13 +3352,19 @@ async function startPrintDirect() {
                                     Area Perekat Stiker Kemasan:
                                 </label>
                                 <p class="text-[11px] text-slate-500 mt-0.5">
-                                    Pilih ukuran area kosong perekat pada bagian atas label.
+                                    Pilih ukuran area kosong perekat pada bagian
+                                    atas label.
                                 </p>
                             </div>
 
                             <!-- Preset Cepat -->
-                            <div class="flex items-center gap-1.5 flex-wrap pt-1">
-                                <span class="text-[11px] font-bold text-slate-400 mr-1">Preset:</span>
+                            <div
+                                class="flex items-center gap-1.5 flex-wrap pt-1"
+                            >
+                                <span
+                                    class="text-[11px] font-bold text-slate-400 mr-1"
+                                    >Preset:</span
+                                >
                                 <button
                                     type="button"
                                     v-for="preset in [1.0, 1.5, 2.0, 2.5]"
@@ -2648,54 +3374,94 @@ async function startPrintDirect() {
                                         'px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer border',
                                         Number(tinggiIsolasiCm) === preset
                                             ? 'bg-primary text-white border-primary shadow-2xs font-extrabold'
-                                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200',
                                     ]"
                                 >
-                                    {{ preset === 1.5 ? '1.5 cm (Default)' : preset + ' cm' }}
+                                    {{
+                                        preset === 1.5
+                                            ? "1.5 cm (Default)"
+                                            : preset + " cm"
+                                    }}
                                 </button>
                             </div>
                         </CardContent>
                     </Card>
 
                     <!-- SASARAN JENIS ALERGEN (MODE OTOMATIS: HANYA YANG TERDAMPAK PADA WORK ORDER) -->
-                    <Card v-if="labelMode === 'auto' && detectedAlergiList.length > 0" className="bg-amber-50/40 border-amber-200/80 shadow-2xs">
-                        <CardHeader className="p-4 pb-2 border-b border-amber-200/60">
-                            <CardTitle class="text-xs sm:text-sm font-bold text-amber-950 flex items-center justify-between">
+                    <Card
+                        v-if="
+                            labelMode === 'auto' &&
+                            detectedAlergiList.length > 0
+                        "
+                        className="bg-amber-50/40 border-amber-200/80 shadow-2xs"
+                    >
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-amber-200/60"
+                        >
+                            <CardTitle
+                                class="text-xs sm:text-sm font-bold text-amber-950 flex items-center justify-between"
+                            >
                                 <div class="flex items-center gap-2">
-                                    <ShieldAlert class="h-4 w-4 text-amber-600" />
-                                    <span>Identitas & Sasaran Jenis Alergen (Terdampak WO)</span>
+                                    <ShieldAlert
+                                        class="h-4 w-4 text-amber-600"
+                                    />
+                                    <span
+                                        >Identitas & Sasaran Jenis Alergen
+                                        (Terdampak WO)</span
+                                    >
                                 </div>
-                                <span class="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300">
-                                    {{ formatPorsiBreakdownText(selectedJenisAlergi) }}
+                                <span
+                                    class="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300"
+                                >
+                                    {{
+                                        formatPorsiBreakdownText(
+                                            selectedJenisAlergi,
+                                        )
+                                    }}
                                 </span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 space-y-3.5 text-xs">
                             <div>
-                                <label class="font-bold text-amber-900 block mb-1.5">
+                                <label
+                                    class="font-bold text-amber-900 block mb-1.5"
+                                >
                                     Target Jenis Alergi Terdampak Work Order:
                                 </label>
-                                <div class="flex items-center gap-1.5 flex-wrap">
+                                <div
+                                    class="flex items-center gap-1.5 flex-wrap"
+                                >
                                     <button
                                         type="button"
-                                        @click="selectedJenisAlergi = 'Semua Alergi'"
+                                        @click="
+                                            selectedJenisAlergi = 'Semua Alergi'
+                                        "
                                         :class="[
                                             'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5',
-                                            selectedJenisAlergi === 'Semua Alergi'
+                                            selectedJenisAlergi ===
+                                            'Semua Alergi'
                                                 ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300'
+                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300',
                                         ]"
                                     >
-                                        <span>✨ Semua Jenis Alergi (Dinamis)</span>
+                                        <span
+                                            >✨ Semua Jenis Alergi
+                                            (Dinamis)</span
+                                        >
                                         <span
                                             :class="[
                                                 'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
-                                                selectedJenisAlergi === 'Semua Alergi'
+                                                selectedJenisAlergi ===
+                                                'Semua Alergi'
                                                     ? 'bg-amber-700 text-white'
-                                                    : 'bg-amber-100 text-amber-900'
+                                                    : 'bg-amber-100 text-amber-900',
                                             ]"
                                         >
-                                            {{ formatPorsiBreakdownText('Semua Alergi') }}
+                                            {{
+                                                formatPorsiBreakdownText(
+                                                    "Semua Alergi",
+                                                )
+                                            }}
                                         </span>
                                     </button>
                                     <button
@@ -2707,7 +3473,7 @@ async function startPrintDirect() {
                                             'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5',
                                             selectedJenisAlergi === alergi
                                                 ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300'
+                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300',
                                         ]"
                                     >
                                         <span>⚠️ {{ alergi }}</span>
@@ -2716,15 +3482,19 @@ async function startPrintDirect() {
                                                 'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
                                                 selectedJenisAlergi === alergi
                                                     ? 'bg-amber-700 text-white'
-                                                    : 'bg-amber-100 text-amber-900'
+                                                    : 'bg-amber-100 text-amber-900',
                                             ]"
                                         >
-                                            {{ formatPorsiBreakdownText(alergi) }}
+                                            {{
+                                                formatPorsiBreakdownText(alergi)
+                                            }}
                                         </span>
                                     </button>
                                 </div>
                                 <p class="text-[11px] text-amber-800/80 mt-1.5">
-                                    * Menampilkan jenis alergi yang memiliki menu pengganti/terdampak pada Work Order ini.
+                                    * Menampilkan jenis alergi yang memiliki
+                                    menu pengganti/terdampak pada Work Order
+                                    ini.
                                 </p>
                             </div>
 
@@ -2742,27 +3512,50 @@ async function startPrintDirect() {
 
                             <!-- Panel Rincian & Penyesuaian Sub Menu & Gizi Khusus Alergi Terpilih (Mode Otomatis) -->
                             <div
-                                v-if="currentAutoEditingAllergy && autoAllergyConfigs[currentAutoEditingAllergy]"
+                                v-if="
+                                    currentAutoEditingAllergy &&
+                                    autoAllergyConfigs[
+                                        currentAutoEditingAllergy
+                                    ]
+                                "
                                 class="pt-3 border-t border-amber-200/80 space-y-3 bg-amber-50/50 p-3 rounded-xl border border-amber-200"
                             >
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-1.5">
-                                        <Sparkles class="h-4 w-4 text-amber-600" />
-                                        <span class="text-xs font-black text-amber-950">
-                                            Rincian Sub Menu & Nilai Gizi: {{ currentAutoEditingAllergy }}
+                                        <Sparkles
+                                            class="h-4 w-4 text-amber-600"
+                                        />
+                                        <span
+                                            class="text-xs font-black text-amber-950"
+                                        >
+                                            Rincian Sub Menu & Nilai Gizi:
+                                            {{ currentAutoEditingAllergy }}
                                         </span>
                                     </div>
-                                    <span class="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-2 py-0.5 rounded-full border border-amber-300">
-                                        {{ formatPorsiBreakdownText(currentAutoEditingAllergy) }}
+                                    <span
+                                        class="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-2 py-0.5 rounded-full border border-amber-300"
+                                    >
+                                        {{
+                                            formatPorsiBreakdownText(
+                                                currentAutoEditingAllergy,
+                                            )
+                                        }}
                                     </span>
                                 </div>
 
                                 <!-- Switcher Tab saat memilih Semua Alergi -->
                                 <div
-                                    v-if="selectedJenisAlergi === 'Semua Alergi' && detectedAlergiList.length > 1"
+                                    v-if="
+                                        selectedJenisAlergi ===
+                                            'Semua Alergi' &&
+                                        detectedAlergiList.length > 1
+                                    "
                                     class="flex items-center gap-1.5 pb-2 border-b border-amber-200/70 flex-wrap"
                                 >
-                                    <span class="text-[10px] font-bold text-amber-900">Edit Alergi:</span>
+                                    <span
+                                        class="text-[10px] font-bold text-amber-900"
+                                        >Edit Alergi:</span
+                                    >
                                     <button
                                         type="button"
                                         v-for="a in detectedAlergiList"
@@ -2772,26 +3565,42 @@ async function startPrintDirect() {
                                             'px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer border',
                                             currentAutoEditingAllergy === a
                                                 ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                                                : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60',
                                         ]"
                                     >
-                                        ⚠️ {{ a }} ({{ formatPorsiBreakdownText(a) }})
+                                        ⚠️ {{ a }} ({{
+                                            formatPorsiBreakdownText(a)
+                                        }})
                                     </button>
                                 </div>
 
                                 <!-- 1. Sub Menu Pengganti -->
                                 <div class="space-y-1.5">
-                                    <label class="font-bold text-slate-700 block text-[11px]">
-                                        Komponen Sub Menu (Pengganti Alergi {{ currentAutoEditingAllergy }}):
+                                    <label
+                                        class="font-bold text-slate-700 block text-[11px]"
+                                    >
+                                        Komponen Sub Menu (Pengganti Alergi
+                                        {{ currentAutoEditingAllergy }}):
                                     </label>
                                     <div
-                                        v-for="(sub, sIdx) in autoAllergyConfigs[currentAutoEditingAllergy].menuItems"
+                                        v-for="(
+                                            sub, sIdx
+                                        ) in autoAllergyConfigs[
+                                            currentAutoEditingAllergy
+                                        ].menuItems"
                                         :key="sIdx"
                                         class="flex items-center gap-1.5"
                                     >
-                                        <span class="font-mono font-bold text-amber-700 text-[11px] w-4">{{ sIdx + 1 }}.</span>
+                                        <span
+                                            class="font-mono font-bold text-amber-700 text-[11px] w-4"
+                                            >{{ sIdx + 1 }}.</span
+                                        >
                                         <input
-                                            v-model="autoAllergyConfigs[currentAutoEditingAllergy].menuItems[sIdx]"
+                                            v-model="
+                                                autoAllergyConfigs[
+                                                    currentAutoEditingAllergy
+                                                ].menuItems[sIdx]
+                                            "
                                             type="text"
                                             class="flex-1 px-2.5 py-1 text-xs border border-amber-200 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-amber-500 outline-none bg-white"
                                         />
@@ -2799,60 +3608,187 @@ async function startPrintDirect() {
                                 </div>
 
                                 <!-- 2. Nilai Kandungan Gizi Khusus Alergi Ini -->
-                                <div class="space-y-2 pt-2 border-t border-amber-200/60">
-                                    <label class="font-bold text-slate-700 block text-[11px]">
-                                        Nilai Kandungan Gizi (AKG) Khusus Alergi {{ currentAutoEditingAllergy }}:
+                                <div
+                                    class="space-y-2 pt-2 border-t border-amber-200/60"
+                                >
+                                    <label
+                                        class="font-bold text-slate-700 block text-[11px]"
+                                    >
+                                        Nilai Kandungan Gizi (AKG) Khusus Alergi
+                                        {{ currentAutoEditingAllergy }}:
                                     </label>
                                     <!-- Porsi Besar -->
-                                    <div class="bg-white p-2 rounded-lg border border-amber-200/80">
-                                        <p class="font-bold text-amber-900 text-[10px] mb-1">Porsi Besar (PB):</p>
+                                    <div
+                                        class="bg-white p-2 rounded-lg border border-amber-200/80"
+                                    >
+                                        <p
+                                            class="font-bold text-amber-900 text-[10px] mb-1"
+                                        >
+                                            Porsi Besar (PB):
+                                        </p>
                                         <div class="grid grid-cols-5 gap-1">
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Energi</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.energi_pb" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Energi</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.energi_pb
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Protein</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.prot_pb" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Protein</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.prot_pb
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Lemak</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.lmk_pb" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Lemak</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.lmk_pb
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Karbo</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.karbo_pb" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Karbo</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.karbo_pb
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Serat</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.serat_pb" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Serat</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.serat_pb
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Porsi Kecil -->
-                                    <div class="bg-white p-2 rounded-lg border border-amber-200/80">
-                                        <p class="font-bold text-amber-900 text-[10px] mb-1">Porsi Kecil (PK):</p>
+                                    <div
+                                        class="bg-white p-2 rounded-lg border border-amber-200/80"
+                                    >
+                                        <p
+                                            class="font-bold text-amber-900 text-[10px] mb-1"
+                                        >
+                                            Porsi Kecil (PK):
+                                        </p>
                                         <div class="grid grid-cols-5 gap-1">
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Energi</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.energi_pk" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Energi</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.energi_pk
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Protein</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.prot_pk" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Protein</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.prot_pk
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Lemak</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.lmk_pk" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Lemak</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.lmk_pk
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Karbo</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.karbo_pk" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Karbo</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.karbo_pk
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[9px] text-slate-500 block text-center">Serat</label>
-                                                <input v-model="autoAllergyConfigs[currentAutoEditingAllergy].giziData.serat_pk" type="text" class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none" />
+                                                <label
+                                                    class="text-[9px] text-slate-500 block text-center"
+                                                    >Serat</label
+                                                >
+                                                <input
+                                                    v-model="
+                                                        autoAllergyConfigs[
+                                                            currentAutoEditingAllergy
+                                                        ].giziData.serat_pk
+                                                    "
+                                                    type="text"
+                                                    class="w-full mt-0.5 px-1 py-0.5 border border-slate-200 rounded text-center text-xs font-bold focus:ring-1 focus:ring-amber-500 outline-none"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -2864,7 +3800,9 @@ async function startPrintDirect() {
                     <!-- FORM & KONFIGURASI KHUSUS MODE MANUAL: TAB SELECTOR, IDENTITAS, MENU, GIZI & ALERGI -->
                     <template v-if="labelMode === 'manual'">
                         <!-- TAB SELECTOR UNTUK KONFIGURASI MENU: NORMAL vs ALERGI -->
-                        <div class="p-1.5 bg-slate-100 rounded-2xl border border-slate-200 flex items-center gap-1">
+                        <div
+                            class="p-1.5 bg-slate-100 rounded-2xl border border-slate-200 flex items-center gap-1"
+                        >
                             <button
                                 type="button"
                                 @click="activeLabelTab = 'normal'"
@@ -2872,12 +3810,14 @@ async function startPrintDirect() {
                                     'flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer',
                                     activeLabelTab === 'normal'
                                         ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-300/60'
-                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50',
                                 ]"
                             >
                                 <Tag class="h-3.5 w-3.5 text-blue-600" />
                                 <span>🏷️ Konfigurasi Porsi Normal</span>
-                                <span class="bg-blue-100 text-blue-800 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold">
+                                <span
+                                    class="bg-blue-100 text-blue-800 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold"
+                                >
                                     {{ totalPorsiNormal }} Porsi
                                 </span>
                             </button>
@@ -2888,29 +3828,41 @@ async function startPrintDirect() {
                                     'flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer',
                                     activeLabelTab === 'alergi'
                                         ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'text-amber-800 hover:text-amber-950 hover:bg-amber-100/50'
+                                        : 'text-amber-800 hover:text-amber-950 hover:bg-amber-100/50',
                                 ]"
                             >
                                 <AlertTriangle class="h-3.5 w-3.5" />
                                 <span>⚠️ Konfigurasi Porsi Alergi</span>
-                                <span class="bg-amber-100 text-amber-900 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold">
+                                <span
+                                    class="bg-amber-100 text-amber-900 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold"
+                                >
                                     {{ totalPorsiAlergi }} Porsi
                                 </span>
                             </button>
                         </div>
 
                         <!-- IDENTITAS & WAKTU -->
-                        <Card className="bg-white border-slate-200/80 shadow-2xs">
-                            <CardHeader className="p-4 pb-2 border-b border-slate-100">
-                                <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
                                     <Building2 class="h-4 w-4 text-primary" />
                                     <span>Identitas Header & Waktu</span>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-4 space-y-3 text-xs">
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                                >
                                     <div class="sm:col-span-2">
-                                        <label class="font-bold text-slate-600">Nama SPPG:</label>
+                                        <label class="font-bold text-slate-600"
+                                            >Nama SPPG:</label
+                                        >
                                         <input
                                             v-model="namaSppg"
                                             type="text"
@@ -2918,7 +3870,9 @@ async function startPrintDirect() {
                                         />
                                     </div>
                                     <div>
-                                        <label class="font-bold text-slate-600">Zona Waktu:</label>
+                                        <label class="font-bold text-slate-600"
+                                            >Zona Waktu:</label
+                                        >
                                         <select
                                             v-model="zonaWaktu"
                                             class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
@@ -2930,9 +3884,13 @@ async function startPrintDirect() {
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1"
+                                >
                                     <div>
-                                        <label class="font-bold text-slate-600">Tanggal Produksi:</label>
+                                        <label class="font-bold text-slate-600"
+                                            >Tanggal Produksi:</label
+                                        >
                                         <input
                                             v-model="tanggalProduksi"
                                             type="date"
@@ -2940,9 +3898,16 @@ async function startPrintDirect() {
                                         />
                                     </div>
                                     <div>
-                                        <div class="flex items-center justify-between">
-                                            <label class="font-bold text-slate-600">Jam Produksi:</label>
-                                            <label class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600">
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <label
+                                                class="font-bold text-slate-600"
+                                                >Jam Produksi:</label
+                                            >
+                                            <label
+                                                class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600"
+                                            >
                                                 <input
                                                     type="checkbox"
                                                     v-model="gunakanJamProduksi"
@@ -2960,15 +3925,26 @@ async function startPrintDirect() {
                                         />
                                     </div>
                                     <div class="sm:col-span-2">
-                                        <div class="flex items-center justify-between">
-                                            <label class="font-bold text-slate-600">Jam Expired (Batas Konsumsi):</label>
-                                            <label class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600">
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <label
+                                                class="font-bold text-slate-600"
+                                                >Jam Expired (Batas
+                                                Konsumsi):</label
+                                            >
+                                            <label
+                                                class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600"
+                                            >
                                                 <input
                                                     type="checkbox"
                                                     v-model="gunakanJamExpired"
                                                     class="rounded text-primary focus:ring-primary h-3.5 w-3.5"
                                                 />
-                                                <span>Gunakan Jam pada Batas Konsumsi</span>
+                                                <span
+                                                    >Gunakan Jam pada Batas
+                                                    Konsumsi</span
+                                                >
                                             </label>
                                         </div>
                                         <input
@@ -2978,8 +3954,14 @@ async function startPrintDirect() {
                                             :disabled="!gunakanJamExpired"
                                             class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         />
-                                        <p class="text-[10.5px] text-slate-400 mt-1">
-                                            * Jika dicentang, kotak oranye 'WAKTU MAKSIMAL KONSUMSI' akan otomatis menampilkan jam batas konsumsi (contoh: SEBELUM JAM 14:14 WITA).
+                                        <p
+                                            class="text-[10.5px] text-slate-400 mt-1"
+                                        >
+                                            * Jika dicentang, kotak oranye
+                                            'WAKTU MAKSIMAL KONSUMSI' akan
+                                            otomatis menampilkan jam batas
+                                            konsumsi (contoh: SEBELUM JAM 14:14
+                                            WITA).
                                         </p>
                                     </div>
                                 </div>
@@ -2987,16 +3969,27 @@ async function startPrintDirect() {
                         </Card>
 
                         <!-- Pengaturan Waktu Konsumsi & Teks Larangan -->
-                        <Card className="bg-white border-slate-200/80 shadow-2xs">
-                            <CardHeader className="p-4 pb-2 border-b border-slate-100">
-                                <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Card
+                            className="bg-white border-slate-200/80 shadow-2xs"
+                        >
+                            <CardHeader
+                                className="p-4 pb-2 border-b border-slate-100"
+                            >
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
                                     <Clock class="h-4 w-4 text-amber-600" />
-                                    <span>Waktu Maksimal & Peringatan Larangan</span>
+                                    <span
+                                        >Waktu Maksimal & Peringatan
+                                        Larangan</span
+                                    >
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-4 space-y-3 text-xs">
                                 <div>
-                                    <label class="font-bold text-slate-600">Waktu Maksimal Konsumsi:</label>
+                                    <label class="font-bold text-slate-600"
+                                        >Waktu Maksimal Konsumsi:</label
+                                    >
                                     <input
                                         v-model="waktuMaksimal"
                                         type="text"
@@ -3004,9 +3997,13 @@ async function startPrintDirect() {
                                         class="w-full mt-1 px-3 py-1.5 border border-amber-200 bg-amber-50/50 rounded-lg font-black text-amber-900 focus:ring-2 focus:ring-amber-200 outline-none"
                                     />
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                                >
                                     <div>
-                                        <label class="font-bold text-slate-600">Teks Larangan (Baris 1):</label>
+                                        <label class="font-bold text-slate-600"
+                                            >Teks Larangan (Baris 1):</label
+                                        >
                                         <input
                                             v-model="teksLaranganHeader"
                                             type="text"
@@ -3015,7 +4012,9 @@ async function startPrintDirect() {
                                         />
                                     </div>
                                     <div>
-                                        <label class="font-bold text-slate-600">Teks Larangan (Baris 2):</label>
+                                        <label class="font-bold text-slate-600"
+                                            >Teks Larangan (Baris 2):</label
+                                        >
                                         <input
                                             v-model="teksLaranganSub"
                                             type="text"
@@ -3030,9 +4029,15 @@ async function startPrintDirect() {
                         <!-- SECTION 1: KONTEN PORSI NORMAL -->
                         <template v-if="activeLabelTab === 'normal'">
                             <!-- Input Jumlah Porsi Normal (Mode Manual) -->
-                            <Card className="bg-white border-slate-200/80 shadow-2xs">
-                                <CardHeader className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between">
-                                    <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <Card
+                                className="bg-white border-slate-200/80 shadow-2xs"
+                            >
+                                <CardHeader
+                                    className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
+                                >
+                                    <CardTitle
+                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                    >
                                         <Tag class="h-4 w-4 text-blue-600" />
                                         <span>Jumlah Porsi Label Normal</span>
                                     </CardTitle>
@@ -3049,32 +4054,53 @@ async function startPrintDirect() {
                                 <CardContent className="p-4 space-y-2 text-xs">
                                     <div class="flex items-center gap-3">
                                         <div class="flex-1">
-                                            <label class="font-bold text-slate-700 block mb-1">
-                                                Total Porsi Normal yang Dibuatkan Label:
+                                            <label
+                                                class="font-bold text-slate-700 block mb-1"
+                                            >
+                                                Total Porsi Normal yang
+                                                Dibuatkan Label:
                                             </label>
                                             <div class="relative">
                                                 <input
-                                                    v-model.number="manualPorsiNormal"
+                                                    v-model.number="
+                                                        manualPorsiNormal
+                                                    "
                                                     type="number"
                                                     min="0"
                                                     class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                                                 />
-                                                <span class="absolute right-3 top-2 text-xs font-bold text-slate-400">Porsi / Lembar</span>
+                                                <span
+                                                    class="absolute right-3 top-2 text-xs font-bold text-slate-400"
+                                                    >Porsi / Lembar</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
                                     <p class="text-[11px] text-slate-500">
-                                        * Menentukan berapa banyak lembar stiker label kemasan porsi normal yang akan dicetak.
+                                        * Menentukan berapa banyak lembar stiker
+                                        label kemasan porsi normal yang akan
+                                        dicetak.
                                     </p>
                                 </CardContent>
                             </Card>
 
                             <!-- Komponen Menu Makanan Normal -->
-                            <Card className="bg-white border-slate-200/80 shadow-2xs">
-                                <CardHeader className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between">
-                                    <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                                        <Utensils class="h-4 w-4 text-primary" />
-                                        <span>Komponen Menu Makanan (Porsi Normal)</span>
+                            <Card
+                                className="bg-white border-slate-200/80 shadow-2xs"
+                            >
+                                <CardHeader
+                                    className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
+                                >
+                                    <CardTitle
+                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                    >
+                                        <Utensils
+                                            class="h-4 w-4 text-primary"
+                                        />
+                                        <span
+                                            >Komponen Menu Makanan (Porsi
+                                            Normal)</span
+                                        >
                                     </CardTitle>
                                     <button
                                         type="button"
@@ -3091,11 +4117,16 @@ async function startPrintDirect() {
                                         :key="idx"
                                         class="flex items-center gap-2"
                                     >
-                                        <span class="font-mono font-bold text-slate-400 w-4">{{ idx + 1 }}.</span>
+                                        <span
+                                            class="font-mono font-bold text-slate-400 w-4"
+                                            >{{ idx + 1 }}.</span
+                                        >
                                         <input
                                             v-model="menuItems[idx]"
                                             type="text"
-                                            :placeholder="getMenuPlaceholder(idx)"
+                                            :placeholder="
+                                                getMenuPlaceholder(idx)
+                                            "
                                             class="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
                                         />
                                         <button
@@ -3111,64 +4142,191 @@ async function startPrintDirect() {
                             </Card>
 
                             <!-- Kandungan Gizi Normal (AKG) -->
-                            <Card className="bg-white border-slate-200/80 shadow-2xs">
-                                <CardHeader className="p-4 pb-2 border-b border-slate-100">
-                                    <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <Card
+                                className="bg-white border-slate-200/80 shadow-2xs"
+                            >
+                                <CardHeader
+                                    className="p-4 pb-2 border-b border-slate-100"
+                                >
+                                    <CardTitle
+                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                    >
                                         <Flame class="h-4 w-4 text-amber-500" />
-                                        <span>Nilai Kandungan Gizi Porsi Normal (AKG)</span>
+                                        <span
+                                            >Nilai Kandungan Gizi Porsi Normal
+                                            (AKG)</span
+                                        >
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-3 text-xs">
                                     <!-- Porsi Besar -->
                                     <div>
-                                        <p class="font-bold text-slate-700 mb-1.5">Porsi Besar:</p>
+                                        <p
+                                            class="font-bold text-slate-700 mb-1.5"
+                                        >
+                                            Porsi Besar:
+                                        </p>
                                         <div class="grid grid-cols-5 gap-1.5">
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Energi (kcal)</label>
-                                                <input v-model.number="giziData.energi_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Energi (kcal)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.energi_pb
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Prot (g)</label>
-                                                <input v-model.number="giziData.prot_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Prot (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.prot_pb
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Lmk (g)</label>
-                                                <input v-model.number="giziData.lmk_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Lmk (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.lmk_pb
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Karbo (g)</label>
-                                                <input v-model.number="giziData.karbo_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Karbo (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.karbo_pb
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Serat (g)</label>
-                                                <input v-model.number="giziData.serat_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Serat (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.serat_pb
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Porsi Kecil -->
                                     <div class="pt-2 border-t border-slate-100">
-                                        <p class="font-bold text-slate-700 mb-1.5">Porsi Kecil:</p>
+                                        <p
+                                            class="font-bold text-slate-700 mb-1.5"
+                                        >
+                                            Porsi Kecil:
+                                        </p>
                                         <div class="grid grid-cols-5 gap-1.5">
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Energi (kcal)</label>
-                                                <input v-model.number="giziData.energi_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Energi (kcal)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.energi_pk
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Prot (g)</label>
-                                                <input v-model.number="giziData.prot_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Prot (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.prot_pk
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Lmk (g)</label>
-                                                <input v-model.number="giziData.lmk_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Lmk (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.lmk_pk
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Karbo (g)</label>
-                                                <input v-model.number="giziData.karbo_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Karbo (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.karbo_pk
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                             <div>
-                                                <label class="text-[10.5px] text-slate-500">Serat (g)</label>
-                                                <input v-model.number="giziData.serat_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none" />
+                                                <label
+                                                    class="text-[10.5px] text-slate-500"
+                                                    >Serat (g)</label
+                                                >
+                                                <input
+                                                    v-model.number="
+                                                        giziData.serat_pk
+                                                    "
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -3179,35 +4337,58 @@ async function startPrintDirect() {
                         <!-- SECTION 2: KONTEN PORSI ALERGI (DIET KHUSUS) -->
                         <template v-else-if="activeLabelTab === 'alergi'">
                             <!-- CARD 1: PILIH JENIS ALERGI YANG DIBUATKAN LABEL -->
-                            <Card className="bg-amber-50/40 border-amber-200/80 shadow-2xs">
-                                <CardHeader className="p-4 pb-2 border-b border-amber-200/60 flex flex-row items-center justify-between flex-wrap gap-2">
+                            <Card
+                                className="bg-amber-50/40 border-amber-200/80 shadow-2xs"
+                            >
+                                <CardHeader
+                                    className="p-4 pb-2 border-b border-amber-200/60 flex flex-row items-center justify-between flex-wrap gap-2"
+                                >
                                     <div class="flex items-center gap-2">
-                                        <ShieldAlert class="h-4 w-4 text-amber-600" />
-                                        <CardTitle class="text-xs sm:text-sm font-bold text-amber-950">
-                                            Pilih Jenis Alergi yang Dibuatkan Label
+                                        <ShieldAlert
+                                            class="h-4 w-4 text-amber-600"
+                                        />
+                                        <CardTitle
+                                            class="text-xs sm:text-sm font-bold text-amber-950"
+                                        >
+                                            Pilih Jenis Alergi yang Dibuatkan
+                                            Label
                                         </CardTitle>
                                     </div>
-                                    <span class="text-[11px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300">
-                                        {{ selectedManualAllergies.length }} Alergi Dipilih • Total {{ totalPorsiAlergi }} Porsi
+                                    <span
+                                        class="text-[11px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300"
+                                    >
+                                        {{
+                                            selectedManualAllergies.length
+                                        }}
+                                        Alergi Dipilih • Total
+                                        {{ totalPorsiAlergi }} Porsi
                                     </span>
                                 </CardHeader>
-                                <CardContent className="p-4 space-y-3.5 text-xs">
+                                <CardContent
+                                    className="p-4 space-y-3.5 text-xs"
+                                >
                                     <!-- Action Bar Pintas -->
-                                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <div
+                                        class="flex items-center justify-between gap-2 flex-wrap"
+                                    >
                                         <label class="font-bold text-amber-900">
                                             Pilih Alergi Target:
                                         </label>
                                         <div class="flex items-center gap-1.5">
                                             <button
                                                 type="button"
-                                                @click="selectAllDetectedAllergies"
+                                                @click="
+                                                    selectAllDetectedAllergies
+                                                "
                                                 class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-bold text-[11px] transition-colors cursor-pointer border border-amber-300"
                                             >
                                                 Pilih Semua Alergi dari PM
                                             </button>
                                             <button
                                                 type="button"
-                                                @click="clearAllSelectedAllergies"
+                                                @click="
+                                                    clearAllSelectedAllergies
+                                                "
                                                 class="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 rounded-lg font-bold text-[11px] transition-colors cursor-pointer border border-slate-200 hover:border-rose-300"
                                             >
                                                 Kosongkan Pilihan
@@ -3216,37 +4397,61 @@ async function startPrintDirect() {
                                     </div>
 
                                     <!-- Grid Pilihan Jenis Alergi -->
-                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                    <div
+                                        class="flex items-center gap-1.5 flex-wrap"
+                                    >
                                         <button
                                             type="button"
                                             v-for="alergi in availableAllergiesList"
                                             :key="alergi"
-                                            @click="toggleAllergySelected(alergi)"
+                                            @click="
+                                                toggleAllergySelected(alergi)
+                                            "
                                             :class="[
                                                 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5',
-                                                selectedManualAllergies.includes(alergi)
+                                                selectedManualAllergies.includes(
+                                                    alergi,
+                                                )
                                                     ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300'
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300',
                                             ]"
                                         >
-                                            <Check v-if="selectedManualAllergies.includes(alergi)" class="h-3.5 w-3.5 text-white" />
+                                            <Check
+                                                v-if="
+                                                    selectedManualAllergies.includes(
+                                                        alergi,
+                                                    )
+                                                "
+                                                class="h-3.5 w-3.5 text-white"
+                                            />
                                             <span>⚠️ {{ alergi }}</span>
                                             <span
-                                                v-if="manualAllergyConfigs[alergi]?.porsi"
+                                                v-if="
+                                                    manualAllergyConfigs[alergi]
+                                                        ?.porsi
+                                                "
                                                 :class="[
                                                     'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
-                                                    selectedManualAllergies.includes(alergi)
+                                                    selectedManualAllergies.includes(
+                                                        alergi,
+                                                    )
                                                         ? 'bg-amber-700/80 text-white'
-                                                        : 'bg-amber-100 text-amber-900'
+                                                        : 'bg-amber-100 text-amber-900',
                                                 ]"
                                             >
-                                                {{ manualAllergyConfigs[alergi].porsi }} Porsi
+                                                {{
+                                                    manualAllergyConfigs[alergi]
+                                                        .porsi
+                                                }}
+                                                Porsi
                                             </span>
                                         </button>
                                     </div>
 
                                     <!-- Form Tambah Alergi Kustom -->
-                                    <div class="pt-3 border-t border-amber-200/50 flex items-center gap-2">
+                                    <div
+                                        class="pt-3 border-t border-amber-200/50 flex items-center gap-2"
+                                    >
                                         <input
                                             v-model="customAllergyInput"
                                             @keyup.enter="addNewCustomAllergy"
@@ -3267,83 +4472,157 @@ async function startPrintDirect() {
                             </Card>
 
                             <!-- CARD 2: DETAIL KONFIGURASI MENU & GIZI TIAP ALERGI TERPILIH -->
-                            <Card v-if="selectedManualAllergies.length > 0 && activeEditingAllergy && manualAllergyConfigs[activeEditingAllergy]" className="bg-white border-amber-200/80 shadow-2xs">
-                                <CardHeader className="p-4 pb-2 border-b border-amber-100 bg-amber-50/40">
-                                    <div class="flex items-center justify-between gap-2 flex-wrap pb-2">
-                                        <CardTitle class="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-2">
-                                            <Utensils class="h-4 w-4 text-amber-600" />
-                                            <span>Pengaturan Detail Alergi Terpilih</span>
+                            <Card
+                                v-if="
+                                    selectedManualAllergies.length > 0 &&
+                                    activeEditingAllergy &&
+                                    manualAllergyConfigs[activeEditingAllergy]
+                                "
+                                className="bg-white border-amber-200/80 shadow-2xs"
+                            >
+                                <CardHeader
+                                    className="p-4 pb-2 border-b border-amber-100 bg-amber-50/40"
+                                >
+                                    <div
+                                        class="flex items-center justify-between gap-2 flex-wrap pb-2"
+                                    >
+                                        <CardTitle
+                                            class="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-2"
+                                        >
+                                            <Utensils
+                                                class="h-4 w-4 text-amber-600"
+                                            />
+                                            <span
+                                                >Pengaturan Detail Alergi
+                                                Terpilih</span
+                                            >
                                         </CardTitle>
-                                        <span class="text-[11px] font-bold text-amber-800">
-                                            Pilih tab alergi di bawah untuk mengedit menu & gizinya
+                                        <span
+                                            class="text-[11px] font-bold text-amber-800"
+                                        >
+                                            Pilih tab alergi di bawah untuk
+                                            mengedit menu & gizinya
                                         </span>
                                     </div>
 
                                     <!-- Sub-Pill Tab Alergi Aktif yang Sedang Dikonfigurasi -->
-                                    <div class="flex items-center gap-1.5 overflow-x-auto py-1">
+                                    <div
+                                        class="flex items-center gap-1.5 overflow-x-auto py-1"
+                                    >
                                         <button
                                             v-for="jenis in selectedManualAllergies"
                                             :key="jenis"
                                             type="button"
-                                            @click="activeEditingAllergy = jenis; selectedJenisAlergi = jenis"
+                                            @click="
+                                                activeEditingAllergy = jenis;
+                                                selectedJenisAlergi = jenis;
+                                            "
                                             :class="[
                                                 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 border',
                                                 activeEditingAllergy === jenis
                                                     ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                    : 'bg-white text-amber-900 border-amber-200 hover:bg-amber-50'
+                                                    : 'bg-white text-amber-900 border-amber-200 hover:bg-amber-50',
                                             ]"
                                         >
-                                            <AlertTriangle class="h-3.5 w-3.5" />
+                                            <AlertTriangle
+                                                class="h-3.5 w-3.5"
+                                            />
                                             <span>{{ jenis }}</span>
                                             <span
                                                 :class="[
                                                     'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
-                                                    activeEditingAllergy === jenis
+                                                    activeEditingAllergy ===
+                                                    jenis
                                                         ? 'bg-amber-700 text-white'
-                                                        : 'bg-amber-100 text-amber-900'
+                                                        : 'bg-amber-100 text-amber-900',
                                                 ]"
                                             >
-                                                {{ manualAllergyConfigs[jenis]?.porsi || 0 }} Porsi
+                                                {{
+                                                    manualAllergyConfigs[jenis]
+                                                        ?.porsi || 0
+                                                }}
+                                                Porsi
                                             </span>
                                         </button>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-4 text-xs">
                                     <!-- 1. Input Jumlah Porsi Khusus Alergi Ini -->
-                                    <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1">
-                                        <div class="flex items-center justify-between">
-                                            <label class="font-bold text-amber-950 text-xs">
-                                                Jumlah Porsi Label Alergi: <u class="text-amber-700">{{ activeEditingAllergy }}</u>
+                                    <div
+                                        class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <label
+                                                class="font-bold text-amber-950 text-xs"
+                                            >
+                                                Jumlah Porsi Label Alergi:
+                                                <u class="text-amber-700">{{
+                                                    activeEditingAllergy
+                                                }}</u>
                                             </label>
-                                            <span class="text-[11px] font-extrabold text-amber-800">
+                                            <span
+                                                class="text-[11px] font-extrabold text-amber-800"
+                                            >
                                                 Target Cetak Stiker
                                             </span>
                                         </div>
                                         <div class="relative mt-1">
                                             <input
-                                                v-model.number="manualAllergyConfigs[activeEditingAllergy].porsi"
+                                                v-model.number="
+                                                    manualAllergyConfigs[
+                                                        activeEditingAllergy
+                                                    ].porsi
+                                                "
                                                 type="number"
                                                 min="1"
                                                 class="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg font-black text-amber-950 text-sm focus:ring-2 focus:ring-amber-400 outline-none"
                                             />
-                                            <span class="absolute right-3 top-2.5 text-xs font-bold text-amber-600">Porsi / Lembar</span>
+                                            <span
+                                                class="absolute right-3 top-2.5 text-xs font-bold text-amber-600"
+                                                >Porsi / Lembar</span
+                                            >
                                         </div>
-                                        <p class="text-[10.5px] text-amber-800/80">
-                                            * Menentukan berapa lembar stiker label kemasan yang dicetak khusus bertanda alergi {{ activeEditingAllergy }}.
+                                        <p
+                                            class="text-[10.5px] text-amber-800/80"
+                                        >
+                                            * Menentukan berapa lembar stiker
+                                            label kemasan yang dicetak khusus
+                                            bertanda alergi
+                                            {{ activeEditingAllergy }}.
                                         </p>
                                     </div>
 
                                     <!-- 2. Komponen Menu Pengganti untuk Alergi Ini -->
-                                    <div class="space-y-2 pt-2 border-t border-slate-100">
-                                        <div class="flex items-center justify-between flex-wrap gap-2">
-                                            <label class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                                                <Utensils class="h-3.5 w-3.5 text-amber-600" />
-                                                <span>Komponen Menu Pengganti (Bebas {{ activeEditingAllergy }}):</span>
+                                    <div
+                                        class="space-y-2 pt-2 border-t border-slate-100"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between flex-wrap gap-2"
+                                        >
+                                            <label
+                                                class="font-bold text-slate-800 text-xs flex items-center gap-1.5"
+                                            >
+                                                <Utensils
+                                                    class="h-3.5 w-3.5 text-amber-600"
+                                                />
+                                                <span
+                                                    >Komponen Menu Pengganti
+                                                    (Bebas
+                                                    {{
+                                                        activeEditingAllergy
+                                                    }}):</span
+                                                >
                                             </label>
-                                            <div class="flex items-center gap-1.5">
+                                            <div
+                                                class="flex items-center gap-1.5"
+                                            >
                                                 <button
                                                     type="button"
-                                                    @click="copyMenuFromNormalToActiveAllergy"
+                                                    @click="
+                                                        copyMenuFromNormalToActiveAllergy
+                                                    "
                                                     class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-slate-200"
                                                     title="Salin komponen menu dari porsi normal"
                                                 >
@@ -3351,7 +4630,9 @@ async function startPrintDirect() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    @click="addCurrentAllergyMenuItem"
+                                                    @click="
+                                                        addCurrentAllergyMenuItem
+                                                    "
                                                     class="px-2.5 py-1 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-amber-200"
                                                 >
                                                     + Tambah Menu
@@ -3360,39 +4641,76 @@ async function startPrintDirect() {
                                         </div>
                                         <div class="space-y-1.5">
                                             <div
-                                                v-for="(item, idx) in manualAllergyConfigs[activeEditingAllergy].menuItems"
+                                                v-for="(
+                                                    item, idx
+                                                ) in manualAllergyConfigs[
+                                                    activeEditingAllergy
+                                                ].menuItems"
                                                 :key="idx"
                                                 class="flex items-center gap-2"
                                             >
-                                                <span class="font-mono font-bold text-amber-600 w-4 text-[11px]">{{ idx + 1 }}.</span>
+                                                <span
+                                                    class="font-mono font-bold text-amber-600 w-4 text-[11px]"
+                                                    >{{ idx + 1 }}.</span
+                                                >
                                                 <input
-                                                    v-model="manualAllergyConfigs[activeEditingAllergy].menuItems[idx]"
+                                                    v-model="
+                                                        manualAllergyConfigs[
+                                                            activeEditingAllergy
+                                                        ].menuItems[idx]
+                                                    "
                                                     type="text"
-                                                    :placeholder="getMenuAlergiPlaceholder(idx)"
+                                                    :placeholder="
+                                                        getMenuAlergiPlaceholder(
+                                                            idx,
+                                                        )
+                                                    "
                                                     class="flex-1 px-3 py-1.5 border border-amber-200 bg-amber-50/30 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-amber-300 outline-none text-xs"
                                                 />
                                                 <button
                                                     type="button"
-                                                    @click="removeCurrentAllergyMenuItem(idx)"
+                                                    @click="
+                                                        removeCurrentAllergyMenuItem(
+                                                            idx,
+                                                        )
+                                                    "
                                                     class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                                     title="Hapus menu pengganti ini"
                                                 >
-                                                    <Trash2 class="h-3.5 w-3.5" />
+                                                    <Trash2
+                                                        class="h-3.5 w-3.5"
+                                                    />
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- 3. Nilai Kandungan Gizi Khusus Alergi Ini -->
-                                    <div class="space-y-2 pt-3 border-t border-slate-100">
-                                        <div class="flex items-center justify-between flex-wrap gap-2">
-                                            <label class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                                                <Flame class="h-3.5 w-3.5 text-amber-500" />
-                                                <span>Nilai Kandungan Gizi Khusus {{ activeEditingAllergy }} (AKG):</span>
+                                    <div
+                                        class="space-y-2 pt-3 border-t border-slate-100"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between flex-wrap gap-2"
+                                        >
+                                            <label
+                                                class="font-bold text-slate-800 text-xs flex items-center gap-1.5"
+                                            >
+                                                <Flame
+                                                    class="h-3.5 w-3.5 text-amber-500"
+                                                />
+                                                <span
+                                                    >Nilai Kandungan Gizi Khusus
+                                                    {{
+                                                        activeEditingAllergy
+                                                    }}
+                                                    (AKG):</span
+                                                >
                                             </label>
                                             <button
                                                 type="button"
-                                                @click="copyGiziFromNormalToActiveAllergy"
+                                                @click="
+                                                    copyGiziFromNormalToActiveAllergy
+                                                "
                                                 class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-slate-200"
                                                 title="Salin nilai gizi dari porsi normal"
                                             >
@@ -3402,54 +4720,196 @@ async function startPrintDirect() {
 
                                         <!-- Porsi Besar -->
                                         <div>
-                                            <p class="font-bold text-slate-700 text-[11px] mb-1">Porsi Besar:</p>
-                                            <div class="grid grid-cols-5 gap-1.5">
+                                            <p
+                                                class="font-bold text-slate-700 text-[11px] mb-1"
+                                            >
+                                                Porsi Besar:
+                                            </p>
+                                            <div
+                                                class="grid grid-cols-5 gap-1.5"
+                                            >
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Energi (kcal)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.energi_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Energi (kcal)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.energi_pb
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Prot (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.prot_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Prot (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.prot_pb
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Lmk (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.lmk_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Lmk (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.lmk_pb
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Karbo (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.karbo_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Karbo (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.karbo_pb
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Serat (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.serat_pb" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Serat (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.serat_pb
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
 
                                         <!-- Porsi Kecil -->
                                         <div class="pt-1.5">
-                                            <p class="font-bold text-slate-700 text-[11px] mb-1">Porsi Kecil:</p>
-                                            <div class="grid grid-cols-5 gap-1.5">
+                                            <p
+                                                class="font-bold text-slate-700 text-[11px] mb-1"
+                                            >
+                                                Porsi Kecil:
+                                            </p>
+                                            <div
+                                                class="grid grid-cols-5 gap-1.5"
+                                            >
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Energi (kcal)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.energi_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Energi (kcal)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.energi_pk
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Prot (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.prot_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Prot (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.prot_pk
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Lmk (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.lmk_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Lmk (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.lmk_pk
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Karbo (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.karbo_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Karbo (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.karbo_pk
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label class="text-[10px] text-slate-500">Serat (g)</label>
-                                                    <input v-model.number="manualAllergyConfigs[activeEditingAllergy].giziData.serat_pk" type="number" step="0.1" min="0" class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none" />
+                                                    <label
+                                                        class="text-[10px] text-slate-500"
+                                                        >Serat (g)</label
+                                                    >
+                                                    <input
+                                                        v-model.number="
+                                                            manualAllergyConfigs[
+                                                                activeEditingAllergy
+                                                            ].giziData.serat_pk
+                                                        "
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
@@ -3457,8 +4917,11 @@ async function startPrintDirect() {
 
                                     <!-- 4. Kustom Teks Banner Badge Alergi -->
                                     <div class="pt-3 border-t border-slate-100">
-                                        <label class="font-bold text-amber-900 block text-xs">
-                                            Kustom Teks Banner Badge Alergi (Opsional):
+                                        <label
+                                            class="font-bold text-amber-900 block text-xs"
+                                        >
+                                            Kustom Teks Banner Badge Alergi
+                                            (Opsional):
                                         </label>
                                         <input
                                             v-model="customTagAlergi"
@@ -3471,12 +4934,27 @@ async function startPrintDirect() {
                             </Card>
 
                             <!-- Alert Info Jika Belum Ada Alergi yang Dipilih -->
-                            <Card v-else className="bg-amber-50/40 border-amber-200/80 shadow-2xs">
-                                <CardContent className="p-6 text-center space-y-2">
-                                    <ShieldAlert class="h-8 w-8 text-amber-500 mx-auto" />
-                                    <p class="font-bold text-amber-950 text-xs">Belum Ada Jenis Alergi yang Dipilih</p>
-                                    <p class="text-[11px] text-amber-800/80 max-w-sm mx-auto">
-                                        Silakan klik satu atau beberapa jenis alergi pada daftar di atas untuk mengaktifkan cetakan label alergi dan mengatur menu pengganti serta nilai gizinya.
+                            <Card
+                                v-else
+                                className="bg-amber-50/40 border-amber-200/80 shadow-2xs"
+                            >
+                                <CardContent
+                                    className="p-6 text-center space-y-2"
+                                >
+                                    <ShieldAlert
+                                        class="h-8 w-8 text-amber-500 mx-auto"
+                                    />
+                                    <p class="font-bold text-amber-950 text-xs">
+                                        Belum Ada Jenis Alergi yang Dipilih
+                                    </p>
+                                    <p
+                                        class="text-[11px] text-amber-800/80 max-w-sm mx-auto"
+                                    >
+                                        Silakan klik satu atau beberapa jenis
+                                        alergi pada daftar di atas untuk
+                                        mengaktifkan cetakan label alergi dan
+                                        mengatur menu pengganti serta nilai
+                                        gizinya.
                                     </p>
                                 </CardContent>
                             </Card>
@@ -3533,29 +5011,50 @@ async function startPrintDirect() {
                                         class="rounded text-primary focus:ring-primary"
                                     />
                                     <div class="space-y-1">
-                                        <div class="flex items-center gap-1.5 flex-wrap">
-                                            <span class="font-bold">{{ k.nama_kelompok }}</span>
+                                        <div
+                                            class="flex items-center gap-1.5 flex-wrap"
+                                        >
+                                            <span class="font-bold">{{
+                                                k.nama_kelompok
+                                            }}</span>
                                             <!-- Breakdown porsi per jenis alergi (Mode Otomatis & Manual) -->
-                                            <template v-if="getKelompokAlergiBreakdown(k).length > 0">
+                                            <template
+                                                v-if="
+                                                    getKelompokAlergiBreakdown(
+                                                        k,
+                                                    ).length > 0
+                                                "
+                                            >
                                                 <span
-                                                    v-for="item in getKelompokAlergiBreakdown(k)"
+                                                    v-for="item in getKelompokAlergiBreakdown(
+                                                        k,
+                                                    )"
                                                     :key="item.jenis"
                                                     :class="[
                                                         'px-1.5 py-0.5 border rounded text-[10px] font-extrabold flex items-center gap-1 transition-all',
-                                                        selectedJenisAlergi === item.jenis
+                                                        selectedJenisAlergi ===
+                                                        item.jenis
                                                             ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                                                            : 'bg-amber-100 text-amber-900 border-amber-200'
+                                                            : 'bg-amber-100 text-amber-900 border-amber-200',
                                                     ]"
                                                     :title="`Alergi ${item.jenis}: ${item.count} Porsi`"
                                                 >
-                                                    ⚠️ {{ item.jenis }}: {{ item.count }} Porsi
+                                                    ⚠️ {{ item.jenis }}:
+                                                    {{ item.count }} Porsi
                                                 </span>
                                             </template>
                                             <span
-                                                v-else-if="labelMode === 'manual' && hasKelompokImpactedAlergi(k)"
+                                                v-else-if="
+                                                    labelMode === 'manual' &&
+                                                    hasKelompokImpactedAlergi(k)
+                                                "
                                                 class="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-200 rounded text-[10px] font-extrabold"
                                             >
-                                                ⚠️ {{ getKelompokAlergiCount(k) }} Alergi
+                                                ⚠️
+                                                {{
+                                                    getKelompokAlergiCount(k)
+                                                }}
+                                                Alergi
                                             </span>
                                         </div>
                                     </div>
@@ -3566,7 +5065,10 @@ async function startPrintDirect() {
                                         {{ k.total_porsi_besar || 0 }} PB
                                     </span>
                                     <span
-                                        v-if="getKelompokAlergiBreakdown(k).length > 0"
+                                        v-if="
+                                            getKelompokAlergiBreakdown(k)
+                                                .length > 0
+                                        "
                                         class="text-[10px] text-amber-800 font-bold block"
                                     >
                                         {{ getKelompokAlergiCount(k) }} Alergi
@@ -3580,7 +5082,9 @@ async function startPrintDirect() {
                 <!-- ================= RIGHT COLUMN: LIVE PREVIEW ================= -->
                 <div class="lg:col-span-6 space-y-4">
                     <div class="sticky top-6 space-y-3">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div
+                            class="flex items-center justify-between gap-2 flex-wrap"
+                        >
                             <h3
                                 class="text-sm font-black text-slate-900 flex items-center gap-2"
                             >
@@ -3594,8 +5098,10 @@ async function startPrintDirect() {
                             </span>
                         </div>
 
-                        <!-- Segmented Switch Preview: Normal vs Alergi -->
-                        <div class="flex items-center justify-between gap-2 p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300/80">
+                        <!-- Segmented Switch Preview: Normal vs Alergi vs Tambahan -->
+                        <div
+                            class="flex items-center justify-between gap-2 p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300/80"
+                        >
                             <div class="flex items-center gap-1 flex-1">
                                 <button
                                     type="button"
@@ -3604,12 +5110,14 @@ async function startPrintDirect() {
                                         'flex-1 py-1.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer',
                                         activeLabelTab === 'normal'
                                             ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-400/40'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/40',
                                     ]"
                                 >
                                     <Tag class="h-3.5 w-3.5 text-blue-600" />
-                                    <span>🏷️ Label Porsi Normal</span>
-                                    <span class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                                    <span>🏷️ Normal</span>
+                                    <span
+                                        class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                    >
                                         {{ totalPorsiNormal }}
                                     </span>
                                 </button>
@@ -3620,13 +5128,34 @@ async function startPrintDirect() {
                                         'flex-1 py-1.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer',
                                         activeLabelTab === 'alergi'
                                             ? 'bg-amber-600 text-white shadow-xs'
-                                            : 'text-amber-800 hover:text-amber-950 hover:bg-amber-100/50'
+                                            : 'text-amber-800 hover:text-amber-950 hover:bg-amber-100/50',
                                     ]"
                                 >
                                     <AlertTriangle class="h-3.5 w-3.5" />
-                                    <span>⚠️ Label Porsi Alergi</span>
-                                    <span class="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                                    <span>⚠️ Alergi</span>
+                                    <span
+                                        class="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                    >
                                         {{ totalPorsiAlergi }}
+                                    </span>
+                                </button>
+                                <button
+                                    v-if="totalPorsiTambahan > 0"
+                                    type="button"
+                                    @click="setActiveLabelTab('tambahan')"
+                                    :class="[
+                                        'flex-1 py-1.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                                        activeLabelTab === 'tambahan'
+                                            ? 'bg-sky-600 text-white shadow-xs'
+                                            : 'text-sky-800 hover:text-sky-950 hover:bg-sky-100/50',
+                                    ]"
+                                >
+                                    <PlusCircle class="h-3.5 w-3.5" />
+                                    <span>➕ Tambahan</span>
+                                    <span
+                                        class="bg-sky-100 text-sky-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                                    >
+                                        {{ totalPorsiTambahan }}
                                     </span>
                                 </button>
                             </div>
@@ -3637,48 +5166,74 @@ async function startPrintDirect() {
                             v-if="activeLabelTab === 'alergi'"
                             class="flex items-center gap-1.5 px-3 py-2 bg-amber-50/80 border border-amber-200 rounded-xl text-xs"
                         >
-                            <span class="text-[11px] font-bold text-amber-900 shrink-0">Preview Jenis:</span>
-                            <div class="flex items-center gap-1 overflow-x-auto py-0.5">
+                            <span
+                                class="text-[11px] font-bold text-amber-900 shrink-0"
+                                >Preview Jenis:</span
+                            >
+                            <div
+                                class="flex items-center gap-1 overflow-x-auto py-0.5"
+                            >
                                 <template v-if="labelMode === 'manual'">
                                     <button
                                         type="button"
-                                        v-for="al in (selectedManualAllergies.length > 0 ? selectedManualAllergies : availableAllergiesList)"
+                                        v-for="al in selectedManualAllergies.length >
+                                        0
+                                            ? selectedManualAllergies
+                                            : availableAllergiesList"
                                         :key="al"
-                                        @click="selectedJenisAlergi = al; activeEditingAllergy = al"
+                                        @click="
+                                            selectedJenisAlergi = al;
+                                            activeEditingAllergy = al;
+                                        "
                                         :class="[
                                             'px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
                                             currentPreviewJenisAlergi === al
                                                 ? 'bg-amber-600 text-white font-extrabold shadow-2xs'
-                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100'
+                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100',
                                         ]"
                                     >
                                         <span>⚠️ {{ al }}</span>
-                                        <span v-if="manualAllergyConfigs[al]?.porsi" class="text-[10px] opacity-80">
-                                            ({{ manualAllergyConfigs[al].porsi }})
+                                        <span
+                                            v-if="
+                                                manualAllergyConfigs[al]?.porsi
+                                            "
+                                            class="text-[10px] opacity-80"
+                                        >
+                                            ({{
+                                                manualAllergyConfigs[al].porsi
+                                            }})
                                         </span>
                                     </button>
                                 </template>
                                 <template v-else>
                                     <button
                                         type="button"
-                                        @click="selectedJenisAlergi = 'Semua Alergi'"
+                                        @click="
+                                            selectedJenisAlergi = 'Semua Alergi'
+                                        "
                                         :class="[
                                             'px-2 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
-                                            selectedJenisAlergi === 'Semua Alergi'
+                                            selectedJenisAlergi ===
+                                            'Semua Alergi'
                                                 ? 'bg-amber-600 text-white font-extrabold shadow-2xs'
-                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100'
+                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100',
                                         ]"
                                     >
                                         <span>✨ Semua Alergi</span>
                                         <span
                                             :class="[
                                                 'text-[10px] px-1 rounded-full font-bold',
-                                                selectedJenisAlergi === 'Semua Alergi'
+                                                selectedJenisAlergi ===
+                                                'Semua Alergi'
                                                     ? 'bg-amber-700 text-white'
-                                                    : 'bg-amber-100 text-amber-900'
+                                                    : 'bg-amber-100 text-amber-900',
                                             ]"
                                         >
-                                            {{ getAllergyPorsiCount('Semua Alergi') }}
+                                            {{
+                                                getAllergyPorsiCount(
+                                                    "Semua Alergi",
+                                                )
+                                            }}
                                         </span>
                                     </button>
                                     <button
@@ -3690,7 +5245,7 @@ async function startPrintDirect() {
                                             'px-2 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
                                             selectedJenisAlergi === al
                                                 ? 'bg-amber-600 text-white font-extrabold shadow-2xs'
-                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100'
+                                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-100',
                                         ]"
                                     >
                                         <span>⚠️ {{ al }}</span>
@@ -3699,13 +5254,84 @@ async function startPrintDirect() {
                                                 'text-[10px] px-1 rounded-full font-bold',
                                                 selectedJenisAlergi === al
                                                     ? 'bg-amber-700 text-white'
-                                                    : 'bg-amber-100 text-amber-900'
+                                                    : 'bg-amber-100 text-amber-900',
                                             ]"
                                         >
                                             {{ getAllergyPorsiCount(al) }}
                                         </span>
                                     </button>
                                 </template>
+                            </div>
+                        </div>
+
+                        <!-- Sub-Pill Quick Tambahan Selector for Preview when on Tambahan tab -->
+                        <div
+                            v-if="activeLabelTab === 'tambahan'"
+                            class="flex items-center gap-1.5 px-3 py-2 bg-sky-50/80 border border-sky-200 rounded-xl text-xs"
+                        >
+                            <span
+                                class="text-[11px] font-bold text-sky-900 shrink-0"
+                                >Preview Jenis:</span
+                            >
+                            <div
+                                class="flex items-center gap-1 overflow-x-auto py-0.5"
+                            >
+                                <button
+                                    v-if="porsiTambahanData.organoleptik > 0"
+                                    type="button"
+                                    @click="
+                                        selectedSubTambahan = 'organoleptik'
+                                    "
+                                    :class="[
+                                        'px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
+                                        selectedSubTambahan === 'organoleptik'
+                                            ? 'bg-sky-600 text-white font-extrabold shadow-2xs'
+                                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-sky-100',
+                                    ]"
+                                >
+                                    <span>🔬 Uji Organoleptik</span>
+                                    <span
+                                        class="text-[10px] px-1 rounded-full font-bold bg-sky-100 text-sky-900"
+                                    >
+                                        {{ porsiTambahanData.organoleptik }}
+                                    </span>
+                                </button>
+                                <button
+                                    v-if="porsiTambahanData.sampel > 0"
+                                    type="button"
+                                    @click="selectedSubTambahan = 'sampel'"
+                                    :class="[
+                                        'px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
+                                        selectedSubTambahan === 'sampel'
+                                            ? 'bg-sky-600 text-white font-extrabold shadow-2xs'
+                                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-sky-100',
+                                    ]"
+                                >
+                                    <span>🧪 Sampel Makanan</span>
+                                    <span
+                                        class="text-[10px] px-1 rounded-full font-bold bg-sky-100 text-sky-900"
+                                    >
+                                        {{ porsiTambahanData.sampel }}
+                                    </span>
+                                </button>
+                                <button
+                                    v-if="porsiTambahanData.buffer > 0"
+                                    type="button"
+                                    @click="selectedSubTambahan = 'buffer'"
+                                    :class="[
+                                        'px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1',
+                                        selectedSubTambahan === 'buffer'
+                                            ? 'bg-sky-600 text-white font-extrabold shadow-2xs'
+                                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-sky-100',
+                                    ]"
+                                >
+                                    <span>📦 Buffer Produksi</span>
+                                    <span
+                                        class="text-[10px] px-1 rounded-full font-bold bg-sky-100 text-sky-900"
+                                    >
+                                        {{ porsiTambahanData.buffer }}
+                                    </span>
+                                </button>
                             </div>
                         </div>
 
@@ -3729,19 +5355,17 @@ async function startPrintDirect() {
                                 :teks-larangan-sub="teksLaranganSub"
                                 :tipe-label="activeLabelTab"
                                 :jenis-alergi="currentPreviewJenisAlergi"
-                                :tag-alergi="customTagAlergi"
+                                :tag-alergi="currentPreviewTag"
                                 :menu-items="currentPreviewMenuItems"
                                 :gizi-data="currentPreviewGiziData"
                                 :harga-items="hargaItems"
-                                :kelompok="printableKelompokList[0] || activeKelompokList[0]"
+                                :kelompok="previewKelompok"
                             />
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-
 
         <!-- Download Progress Modal -->
         <Teleport to="body">
@@ -3822,32 +5446,59 @@ async function startPrintDirect() {
                             class="flex items-center justify-between text-[11px] font-mono font-bold text-slate-600 px-1"
                         >
                             <span v-if="downloadProgress.phase === 'template'">
-                                {{ downloadProgress.current }} dari {{ downloadProgress.total }} Desain Label
-                                <span class="text-slate-400 font-sans font-normal"> (Render Desain)</span>
+                                {{ downloadProgress.current }} dari
+                                {{ downloadProgress.total }} Desain Label
+                                <span
+                                    class="text-slate-400 font-sans font-normal"
+                                >
+                                    (Render Desain)</span
+                                >
                             </span>
                             <span v-else>
                                 {{ downloadProgress.current }} dari
                                 {{ downloadProgress.total }} Label
-                                <span v-if="(downloadType === 'a4' || downloadType === 'custom') && downloadProgress.totalPages > 1" class="text-slate-400 font-sans font-normal">
+                                <span
+                                    v-if="
+                                        (downloadType === 'a4' ||
+                                            downloadType === 'custom') &&
+                                        downloadProgress.totalPages > 1
+                                    "
+                                    class="text-slate-400 font-sans font-normal"
+                                >
                                     ({{ downloadProgress.totalPages }} Hal A4)
                                 </span>
-                                <span v-else-if="(downloadType === 'single' || downloadType === 'print') && downloadProgress.totalPages > 1" class="text-slate-400 font-sans font-normal">
+                                <span
+                                    v-else-if="
+                                        (downloadType === 'single' ||
+                                            downloadType === 'print') &&
+                                        downloadProgress.totalPages > 1
+                                    "
+                                    class="text-slate-400 font-sans font-normal"
+                                >
                                     ({{ downloadProgress.totalPages }} Lembar)
                                 </span>
                             </span>
-                            <span class="text-primary font-black">{{ downloadProgress.percentage }}%</span>
+                            <span class="text-primary font-black"
+                                >{{ downloadProgress.percentage }}%</span
+                            >
                         </div>
 
                         <!-- ETA & Speed Badges -->
                         <div
-                            v-if="!downloadSuccess && (downloadProgress.etaText || downloadProgress.speedText)"
+                            v-if="
+                                !downloadSuccess &&
+                                (downloadProgress.etaText ||
+                                    downloadProgress.speedText)
+                            "
                             class="flex items-center justify-center gap-2 pt-1 flex-wrap"
                         >
                             <div
                                 v-if="downloadProgress.etaText"
                                 class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800"
                             >
-                                <Clock class="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                                <Clock
+                                    class="h-3.5 w-3.5 text-amber-600 animate-pulse"
+                                />
                                 <span>{{ downloadProgress.etaText }}</span>
                             </div>
 
@@ -3904,7 +5555,10 @@ async function startPrintDirect() {
                 background: #ffffff;
             "
         >
-            <div ref="sandboxCardRef" style="width: 555px; height: 370px; background: white">
+            <div
+                ref="sandboxCardRef"
+                style="width: 555px; height: 370px; background: white"
+            >
                 <LabelCardItem
                     :key="`${sandboxParams.kelompok?.id || '0'}_${sandboxParams.tipeLabel}_${sandboxParams.jenisAlergi}_${sandboxParams.tagAlergi}_${(sandboxParams.menuItems || []).join('|')}_${sandboxParams.giziData?.energi_pb || ''}_${sandboxParams.giziData?.energi_pk || ''}`"
                     :unit-sppg="unitSppg"
