@@ -1160,16 +1160,48 @@ class KelompokPenerimaManfaatController extends Controller
         // Hitung jumlah hari operasional (Jika 1 hari, hasilnya 1)
         $hariOperasional = (int) $startDate->diffInDays($endDate) + 1;
 
+        // Ambil data Work Order dalam rentang tanggal beserta rincian kelompoknya
+        $workOrders = WorkOrder::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)
+            ->whereBetween('tanggal_distribusi', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->with(['kelompoks'])
+            ->get();
+
+        $woByDateMap = [];
+        foreach ($workOrders as $wo) {
+            $tglKey = $wo->tanggal_distribusi instanceof Carbon
+                ? $wo->tanggal_distribusi->format('Y-m-d')
+                : substr((string)$wo->tanggal_distribusi, 0, 10);
+
+            $woKelompoks = $wo->kelompoks->map(function ($wk) {
+                return [
+                    'id' => $wk->id,
+                    'kelompok_id' => $wk->kelompok_id,
+                    'nama_kelompok' => $wk->nama_kelompok,
+                    'kategori' => $wk->kategori,
+                    'is_menerima' => (bool) $wk->is_menerima,
+                    'porsi_kecil' => (int) $wk->porsi_kecil,
+                    'porsi_besar' => (int) $wk->porsi_besar,
+                    'total_penerima' => (int) $wk->total_penerima,
+                ];
+            });
+
+            $woByDateMap[$tglKey] = [
+                'id' => $wo->id,
+                'nomor_wo' => $wo->nomor_wo,
+                'status' => $wo->status,
+                'kelompoks' => $woKelompoks,
+            ];
+        }
+
         // Ambil data catatan distribusi yang tersimpan di database untuk rentang ini
         $distribusiRecords = DistribusiPenerimaManfaat::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)
             ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get();
 
-        $distribusiCountMap = [];
+        $savedDistribusiMap = [];
         foreach ($distribusiRecords as $rec) {
-            if ($rec->status === 'T') {
-                $distribusiCountMap[$rec->kelompok_id] = ($distribusiCountMap[$rec->kelompok_id] ?? 0) + 1;
-            }
+            $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
+            $savedDistribusiMap[$rec->kelompok_id][$tglStr] = $rec->status;
         }
 
         $query = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1);
@@ -1194,52 +1226,135 @@ class KelompokPenerimaManfaatController extends Controller
 
         $allKelompok = $query->orderBy('kategori', 'asc')->orderBy('nama_kelompok', 'asc')->get();
 
-        $insentifList = $allKelompok->map(function ($kpm) use ($hariOperasional, $distribusiCountMap) {
+        $insentifList = $allKelompok->map(function ($kpm) use ($startDate, $endDate, $hariOperasional, $woByDateMap, $savedDistribusiMap, $mode) {
+            $kId = $kpm->id;
             $isPosyandu = $kpm->kategori === 'Posyandu';
-            $totalPm = (int) $kpm->total_penerima;
+            $masterPm = (int) $kpm->total_penerima;
+
+            $hariDistribusi = 0;
+            $totalInsentif = 0;
+            $totalPmAkumulasi = 0;
+            $lastWoKpm = null;
+
+            $curDate = $startDate->copy();
+            while ($curDate->lte($endDate)) {
+                $dateStr = $curDate->format('Y-m-d');
+
+                $woInfo = $woByDateMap[$dateStr] ?? null;
+                $wok = null;
+                if ($woInfo && !empty($woInfo['kelompoks'])) {
+                    $wok = collect($woInfo['kelompoks'])->first(function ($item) use ($kId, $kpm) {
+                        return (int)$item['kelompok_id'] === (int)$kId || $item['nama_kelompok'] === $kpm->nama_kelompok;
+                    });
+                }
+
+                if ($wok) {
+                    $lastWoKpm = $wok;
+                }
+
+                // Tentukan status distribusi tanggal ini
+                $savedStatus = $savedDistribusiMap[$kId][$dateStr] ?? null;
+                $isT = false;
+
+                if ($savedStatus !== null && $savedStatus !== '') {
+                    $isT = ($savedStatus === 'T');
+                } elseif ($woInfo && $wok) {
+                    if (!$wok['is_menerima'] || $wok['total_penerima'] <= 0) {
+                        $isT = false;
+                    } else {
+                        $woStatus = strtolower((string)$woInfo['status']);
+                        if (in_array($woStatus, ['selesai', 'siap produksi', 'terkirim'])) {
+                            $isT = true;
+                        } elseif ($mode === 'hari_ini') {
+                            $isT = true;
+                        }
+                    }
+                }
+
+                if ($isT) {
+                    $hariDistribusi++;
+                    // Gunakan porsi riil dari Work Order jika tersedia
+                    $pmHariIni = ($wok && isset($wok['total_penerima'])) ? (int)$wok['total_penerima'] : $masterPm;
+                    $totalPmAkumulasi += $pmHariIni;
+
+                    // Hitung tarif hari ini berdasarkan porsi PM riil hari ini
+                    if ($isPosyandu) {
+                        $tarifHariIni = $pmHariIni * 1000;
+                    } else {
+                        if ($pmHariIni < 100) {
+                            $tarifHariIni = 20000;
+                        } elseif ($pmHariIni <= 500) {
+                            $tarifHariIni = 30000;
+                        } elseif ($pmHariIni <= 750) {
+                            $tarifHariIni = 50000;
+                        } elseif ($pmHariIni <= 1000) {
+                            $tarifHariIni = 60000;
+                        } elseif ($pmHariIni <= 2000) {
+                            $tarifHariIni = 100000;
+                        } else {
+                            $tarifHariIni = 200000;
+                        }
+                    }
+                    $totalInsentif += $tarifHariIni;
+                }
+
+                $curDate->addDay();
+            }
+
+            // Tentukan total_penerima representatif untuk ditampilkan di tabel:
+            // 1. Jika terdistribusi minimal 1 hari, gunakan rata-rata porsi harian riil
+            // 2. Jika belum terdistribusi tapi ada WO dalam rentang, gunakan porsi dari WO
+            // 3. Jika tidak ada WO, gunakan dari master data kelompok
+            if ($hariDistribusi > 0) {
+                $totalPm = (int) round($totalPmAkumulasi / $hariDistribusi);
+                $tarifHarian = (int) round($totalInsentif / $hariDistribusi);
+            } elseif ($lastWoKpm && isset($lastWoKpm['total_penerima'])) {
+                $totalPm = (int) $lastWoKpm['total_penerima'];
+                if ($isPosyandu) {
+                    $tarifHarian = $totalPm * 1000;
+                } else {
+                    if ($totalPm < 100) $tarifHarian = 20000;
+                    elseif ($totalPm <= 500) $tarifHarian = 30000;
+                    elseif ($totalPm <= 750) $tarifHarian = 50000;
+                    elseif ($totalPm <= 1000) $tarifHarian = 60000;
+                    elseif ($totalPm <= 2000) $tarifHarian = 100000;
+                    else $tarifHarian = 200000;
+                }
+            } else {
+                $totalPm = $masterPm;
+                if ($isPosyandu) {
+                    $tarifHarian = $totalPm * 1000;
+                } else {
+                    if ($totalPm < 100) $tarifHarian = 20000;
+                    elseif ($totalPm <= 500) $tarifHarian = 30000;
+                    elseif ($totalPm <= 750) $tarifHarian = 50000;
+                    elseif ($totalPm <= 1000) $tarifHarian = 60000;
+                    elseif ($totalPm <= 2000) $tarifHarian = 100000;
+                    else $tarifHarian = 200000;
+                }
+            }
 
             if ($isPosyandu) {
-                // Perhitungan Resmi Posyandu: Rata-rata Rp 1.000 / PM (Ibu Hamil, Menyusui, Balita) per hari operasional
-                $ratePerPm = 1000;
-                $tarifHarian = $totalPm * $ratePerPm;
                 $skemaTier = "Posyandu: Rp 1.000 / PM / hari";
                 $tipePenerima = "Kader Posyandu (Pendamping PM)";
                 $deskripsiTarif = "{$totalPm} PM × Rp 1.000";
             } else {
-                // Perhitungan Resmi Satuan Pendidikan (Tabel 3 BGN):
-                // < 100 siswa: Rp 20.000
-                // 100 s.d. 500 siswa: Rp 30.000
-                // 501 s.d. 750 siswa: Rp 50.000
-                // 751 s.d. 1.000: Rp 60.000
-                // 1.001 s.d. 2000 siswa: Rp 100.000
-                // 2.001 s.d. 3.000 siswa: Rp 200.000
                 if ($totalPm < 100) {
-                    $tarifHarian = 20000;
                     $skemaTier = "< 100 Siswa (Tier 1)";
                 } elseif ($totalPm <= 500) {
-                    $tarifHarian = 30000;
                     $skemaTier = "100 - 500 Siswa (Tier 2)";
                 } elseif ($totalPm <= 750) {
-                    $tarifHarian = 50000;
                     $skemaTier = "501 - 750 Siswa (Tier 3)";
                 } elseif ($totalPm <= 1000) {
-                    $tarifHarian = 60000;
                     $skemaTier = "751 - 1.000 Siswa (Tier 4)";
                 } elseif ($totalPm <= 2000) {
-                    $tarifHarian = 100000;
                     $skemaTier = "1.001 - 2.000 Siswa (Tier 5)";
                 } else {
-                    $tarifHarian = 200000;
                     $skemaTier = "2.001 - 3.000 Siswa (Tier 6)";
                 }
                 $tipePenerima = "PJ Satuan Pendidikan (PIC)";
                 $deskripsiTarif = "Rp " . number_format($tarifHarian, 0, ',', '.') . "/hari";
             }
-
-            // Sesuai permintaan user: hari kerja disesuaikan dengan rekap distribusi yang terdistribusikan
-            $hariDistribusi = (int) ($distribusiCountMap[$kpm->id] ?? 0);
-            $hariKerjaRiil = $hariDistribusi;
-            $totalInsentif = $tarifHarian * $hariKerjaRiil;
 
             return [
                 'id' => $kpm->id,
@@ -1254,7 +1369,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'skema_tier' => $skemaTier,
                 'deskripsi_tarif' => $deskripsiTarif,
                 'tarif_harian' => $tarifHarian,
-                'hari_operasional' => $hariKerjaRiil,
+                'hari_operasional' => $hariDistribusi,
                 'hari_rentang' => $hariOperasional,
                 'hari_distribusi' => $hariDistribusi,
                 'amount' => $totalInsentif,
@@ -1262,6 +1377,8 @@ class KelompokPenerimaManfaatController extends Controller
                 'desa_kelurahan' => $kpm->desa_kelurahan,
                 'is_valid' => $totalInsentif > 0,
                 'status_label' => $totalInsentif > 0 ? 'Siap Disalurkan (Tunai)' : 'Belum Ada Distribusi',
+                'has_wo' => $lastWoKpm !== null,
+                'is_wo_menerima' => $lastWoKpm ? $lastWoKpm['is_menerima'] : null,
             ];
         });
 
@@ -1281,6 +1398,11 @@ class KelompokPenerimaManfaatController extends Controller
             'insentif_posyandu' => $insentifPosyandu,
             'rata_rata_insentif' => $insentifList->count() > 0 ? round($totalAnggaran / $insentifList->count()) : 0,
         ];
+
+        $distribusiCountMap = [];
+        foreach ($insentifList as $item) {
+            $distribusiCountMap[$item['id']] = $item['hari_distribusi'];
+        }
 
         return Inertia::render('PenerimaManfaat/PembayaranInsentif', [
             'user' => $user,
