@@ -1168,7 +1168,10 @@ const modalPmError = ref("");
 function handleOpenModalEditPm(kelompok) {
     editingKelompok.value = kelompok;
     modalPmError.value = "";
-    editFormRincian.value = JSON.parse(JSON.stringify(kelompok.rincian || []));
+    editFormRincian.value = JSON.parse(JSON.stringify(kelompok.rincian || [])).map((r) => ({
+        ...r,
+        is_menerima: r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
+    }));
     editFormKeteranganAlergi.value = JSON.parse(
         JSON.stringify(kelompok.keterangan_alergi || []),
     );
@@ -1177,7 +1180,7 @@ function handleOpenModalEditPm(kelompok) {
 
 const modalTotalPk = computed(() => {
     return editFormRincian.value
-        .filter((r) => r.jenis_porsi === "Porsi Kecil")
+        .filter((r) => r.jenis_porsi === "Porsi Kecil" && r.is_menerima !== false)
         .reduce(
             (sum, r) =>
                 sum +
@@ -1189,7 +1192,7 @@ const modalTotalPk = computed(() => {
 
 const modalTotalPb = computed(() => {
     return editFormRincian.value
-        .filter((r) => r.jenis_porsi === "Porsi Besar")
+        .filter((r) => r.jenis_porsi === "Porsi Besar" && r.is_menerima !== false)
         .reduce(
             (sum, r) =>
                 sum +
@@ -1228,20 +1231,24 @@ function handleSimpanEditDetailPm() {
         modalTotalPm.value === 0 &&
         editingKelompok.value.status_menerima !== false
     ) {
-        modalPmError.value = `Total porsi untuk "${editingKelompok.value.nama_kelompok}" minimal 1 porsi. Jika tidak menerima distribusi, silakan tandai status kelompok menjadi 'Tidak Menerima'.`;
-        return;
+        // Jika seluruh sub-kategori dimatikan (Tidak Menerima), otomatis kelompok ditandai Tidak Menerima
+        editingKelompok.value.status_menerima = false;
     }
 
     modalPmError.value = "";
 
-    editingKelompok.value.rincian = editFormRincian.value.map((r) => ({
-        ...r,
-        jumlah_laki_laki: Math.max(0, Number(r.jumlah_laki_laki) || 0),
-        jumlah_perempuan: Math.max(0, Number(r.jumlah_perempuan) || 0),
-        total:
-            Math.max(0, Number(r.jumlah_laki_laki) || 0) +
-            Math.max(0, Number(r.jumlah_perempuan) || 0),
-    }));
+    editingKelompok.value.rincian = editFormRincian.value.map((r) => {
+        const isMenerima = r.is_menerima !== false;
+        const jmlL = Math.max(0, Number(r.jumlah_laki_laki) || 0);
+        const jmlP = Math.max(0, Number(r.jumlah_perempuan) || 0);
+        return {
+            ...r,
+            is_menerima: isMenerima,
+            jumlah_laki_laki: jmlL,
+            jumlah_perempuan: jmlP,
+            total: isMenerima ? (jmlL + jmlP) : 0,
+        };
+    });
 
     editingKelompok.value.keterangan_alergi =
         editFormKeteranganAlergi.value.map((a) => ({
@@ -5596,22 +5603,40 @@ onUnmounted(() => {
                                 />
                                 <span>{{ modalPmError }}</span>
                             </div>
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-2">
                                 <h4
                                     class="text-xs font-bold text-slate-700 uppercase tracking-wider"
                                 >
                                     Rincian Kuota Porsi / Penerima per Jenjang:
                                 </h4>
-                                <span class="text-xs text-slate-500">
-                                    Format input: Laki-laki (L) + Perempuan (P)
-                                </span>
+                                <div class="inline-flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200 shadow-2xs">
+                                    <button
+                                        type="button"
+                                        @click="editFormRincian.forEach((r) => (r.is_menerima = true))"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-md cursor-pointer transition-colors whitespace-nowrap"
+                                        title="Aktifkan seluruh sub-kategori / jenjang"
+                                    >
+                                        <Check class="w-3.5 h-3.5 stroke-[2.5]" />
+                                        <span>Semua Menerima</span>
+                                    </button>
+                                    <span class="text-slate-300">•</span>
+                                    <button
+                                        type="button"
+                                        @click="editFormRincian.forEach((r) => (r.is_menerima = false))"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer transition-colors whitespace-nowrap"
+                                        title="Nonaktifkan seluruh sub-kategori / jenjang"
+                                    >
+                                        <X class="w-3.5 h-3.5 stroke-[2.5]" />
+                                        <span>Semua Off</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div
                                 class="rounded-xl border border-slate-200 overflow-x-auto max-h-60 overflow-y-auto"
                             >
                                 <table
-                                    class="w-full min-w-[500px] text-left text-xs border-collapse"
+                                    class="w-full min-w-[560px] text-left text-xs border-collapse"
                                 >
                                     <thead
                                         class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[10px] sticky top-0 z-10 shadow-2xs"
@@ -5619,6 +5644,9 @@ onUnmounted(() => {
                                         <tr>
                                             <th class="p-3">
                                                 Sub-Kategori / Jenjang
+                                            </th>
+                                            <th class="p-3 text-center w-20">
+                                                Status
                                             </th>
                                             <th class="p-3">
                                                 Peruntukan Porsi
@@ -5644,12 +5672,35 @@ onUnmounted(() => {
                                         <tr
                                             v-for="(r, rIdx) in editFormRincian"
                                             :key="r.sub_kategori || rIdx"
-                                            class="hover:bg-white"
+                                            :class="[
+                                                'transition-colors',
+                                                r.is_menerima !== false
+                                                    ? 'hover:bg-slate-50/60'
+                                                    : 'bg-slate-50/80 opacity-60'
+                                            ]"
                                         >
                                             <td
                                                 class="p-3 font-bold text-slate-900"
                                             >
-                                                {{ r.sub_kategori }}
+                                                <span :class="[r.is_menerima !== false ? 'text-slate-900 font-bold' : 'text-slate-400 line-through']">
+                                                    {{ r.sub_kategori }}
+                                                </span>
+                                            </td>
+                                            <td class="p-2 text-center whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    @click="r.is_menerima = !r.is_menerima"
+                                                    :class="[
+                                                        'inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-all cursor-pointer shadow-2xs select-none hover:scale-105 active:scale-95',
+                                                        r.is_menerima !== false
+                                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
+                                                            : 'bg-rose-50 text-rose-500 border-rose-300 hover:bg-rose-100 hover:border-rose-400'
+                                                    ]"
+                                                    :title="r.is_menerima !== false ? 'Status: Menerima (Klik untuk nonaktifkan)' : 'Status: Tidak Menerima (Klik untuk aktifkan)'"
+                                                >
+                                                    <Check v-if="r.is_menerima !== false" class="w-4 h-4 stroke-[2.5]" />
+                                                    <X v-else class="w-4 h-4 stroke-[2.5]" />
+                                                </button>
                                             </td>
                                             <td class="p-3">
                                                 <Badge
@@ -5669,33 +5720,51 @@ onUnmounted(() => {
                                                 <input
                                                     type="number"
                                                     min="0"
+                                                    :disabled="r.is_menerima === false"
                                                     v-model.number="
                                                         r.jumlah_laki_laki
                                                     "
-                                                    class="w-20 text-center text-xs font-bold rounded-lg border-slate-300 p-1.5 focus:ring-primary focus:border-primary"
+                                                    :class="[
+                                                        'w-20 text-center text-xs font-bold rounded-lg p-1.5 focus:ring-primary focus:border-primary',
+                                                        r.is_menerima !== false
+                                                            ? 'border-slate-300 bg-white text-slate-900'
+                                                            : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                    ]"
                                                 />
                                             </td>
                                             <td class="p-2 text-center">
                                                 <input
                                                     type="number"
                                                     min="0"
+                                                    :disabled="r.is_menerima === false"
                                                     v-model.number="
                                                         r.jumlah_perempuan
                                                     "
-                                                    class="w-20 text-center text-xs font-bold rounded-lg border-slate-300 p-1.5 focus:ring-primary focus:border-primary"
+                                                    :class="[
+                                                        'w-20 text-center text-xs font-bold rounded-lg p-1.5 focus:ring-primary focus:border-primary',
+                                                        r.is_menerima !== false
+                                                            ? 'border-slate-300 bg-white text-slate-900'
+                                                            : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                    ]"
                                                 />
                                             </td>
                                             <td
-                                                class="p-3 text-right font-black text-slate-900"
+                                                class="p-3 text-right font-black"
+                                                :class="r.is_menerima !== false ? 'text-slate-900' : 'text-slate-400'"
                                             >
-                                                {{
-                                                    (Number(
-                                                        r.jumlah_laki_laki,
-                                                    ) || 0) +
-                                                    (Number(
-                                                        r.jumlah_perempuan,
-                                                    ) || 0)
-                                                }}
+                                                <span v-if="r.is_menerima !== false">
+                                                    {{
+                                                        (Number(
+                                                            r.jumlah_laki_laki,
+                                                        ) || 0) +
+                                                        (Number(
+                                                            r.jumlah_perempuan,
+                                                        ) || 0)
+                                                    }}
+                                                </span>
+                                                <span v-else class="italic font-semibold text-slate-400">
+                                                    0 <span class="text-[10px] font-normal text-slate-400">(Off)</span>
+                                                </span>
                                             </td>
                                         </tr>
                                     </tbody>

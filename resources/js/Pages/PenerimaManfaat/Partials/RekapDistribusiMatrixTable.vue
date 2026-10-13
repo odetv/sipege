@@ -7,6 +7,10 @@ import {
     MapPin,
     Building2,
     CalendarCheck,
+    Utensils,
+    Eye,
+    Info,
+    Sparkles,
 } from "lucide-vue-next";
 import { formatTanggalIndo } from "@/Services/exportPetugasHelper";
 
@@ -17,9 +21,17 @@ const props = defineProps({
     tanggalSelesai: { type: String, default: "" },
     matrixDistribusi: { type: Object, default: () => ({}) },
     matrixStatus: { type: Object, default: () => ({}) }, // fallback compatibility
+    woByDateMap: { type: Object, default: () => ({}) },
+    matrixDetailMap: { type: Object, default: () => ({}) },
 });
 
-const emit = defineEmits(["cycleStatus", "toggleKolomStatus", "openDetail"]);
+const emit = defineEmits([
+    "cycleStatus",
+    "toggleKolomStatus",
+    "openDetail",
+    "openWoDetail",
+    "openCellDetail",
+]);
 
 const activeMatrix = computed(() => {
     return props.matrixDistribusi && Object.keys(props.matrixDistribusi).length > 0
@@ -75,22 +87,45 @@ function getRowHariKirim(item) {
     return count;
 }
 
+// Hitung total akumulasi riil dari porsi WO pada tanggal-tanggal status 'T'
 function getRowTotalAkumulasi(item) {
-    const porsiHarian = Number(item.total_porsi_harian) || 0;
-    return porsiHarian * getRowHariKirim(item);
+    let sum = 0;
+    props.dateColumns.forEach((col) => {
+        const st = getCellStatus(item.id, col.dateStr, col.isSunday);
+        if (st === "T") {
+            const det = props.matrixDetailMap?.[item.id]?.[col.dateStr];
+            if (det && det.has_wo) {
+                sum += Number(det.total_penerima) || 0;
+            } else {
+                sum += Number(item.total_porsi_harian) || 0;
+            }
+        }
+    });
+    return sum;
 }
 
+// Total porsi terkirim pada kolom tanggal tertentu
 function getColTotalPorsi(col) {
     if (col.isSunday) return 0;
     let sum = 0;
     props.items.forEach((it) => {
         const st = getCellStatus(it.id, col.dateStr, col.isSunday);
         if (st === "T") {
-            sum += Number(it.total_porsi_harian) || 0;
+            const det = props.matrixDetailMap?.[it.id]?.[col.dateStr];
+            if (det && det.has_wo) {
+                sum += Number(det.total_penerima) || 0;
+            } else {
+                sum += Number(it.total_porsi_harian) || 0;
+            }
         }
     });
     return sum;
 }
+
+// Total hari yang memiliki Work Order
+const totalHariAdaWo = computed(() => {
+    return props.dateColumns.filter((c) => props.woByDateMap && props.woByDateMap[c.dateStr]).length;
+});
 </script>
 
 <template>
@@ -103,6 +138,14 @@ function getColTotalPorsi(col) {
                 </span>
                 <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-800">
                     {{ dateColumns.length }} Kolom Tanggal
+                </span>
+                <span
+                    v-if="totalHariAdaWo > 0"
+                    class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-200 flex items-center gap-1"
+                    title="Jumlah hari dalam periode yang memiliki data Work Order terencana"
+                >
+                    <Utensils class="w-3 h-3 text-teal-600" />
+                    {{ totalHariAdaWo }} Hari Terjadwal WO
                 </span>
             </div>
 
@@ -120,6 +163,9 @@ function getColTotalPorsi(col) {
                 </span>
                 <span class="inline-flex items-center gap-1 font-medium text-slate-400" title="Belum Dicatat (Kosong)">
                     <span class="w-2.5 h-2.5 rounded-sm border border-dashed border-slate-300 bg-white"></span>(Kosong)
+                </span>
+                <span class="inline-flex items-center gap-1 font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200" title="Kolom Tanggal Terhubung dengan Work Order (WO)">
+                    <span class="w-2 h-2 rounded-full bg-emerald-600"></span>Ada WO
                 </span>
             </div>
         </div>
@@ -165,15 +211,29 @@ function getColTotalPorsi(col) {
                             :key="col.dateStr"
                             @click="$emit('toggleKolomStatus', col.dateStr)"
                             :class="[
-                                'py-2 px-1 text-center min-w-[34px] max-w-[34px] border-r border-slate-200 select-none transition-all cursor-pointer hover:bg-slate-200/80 active:scale-95',
+                                'py-1.5 px-0.5 text-center min-w-[36px] max-w-[36px] border-r border-slate-200 select-none transition-all cursor-pointer hover:bg-slate-200/80 active:scale-95 relative group/col',
                                 col.isToday
                                     ? 'bg-emerald-100/80 font-black text-emerald-950'
                                     : (col.isSunday ? 'bg-red-50/70 text-red-700 font-semibold' : (col.isWeekend ? 'bg-amber-50/50 text-amber-800' : ''))
                             ]"
-                            :title="`${col.dayName}, ${col.dateStr} (Klik tanggal untuk ganti status: T ➜ P ➜ L ➜ Kosong)`"
+                            :title="woByDateMap && woByDateMap[col.dateStr] 
+                                ? `${col.dayName}, ${col.dateStr}\nWO: ${woByDateMap[col.dateStr].nomor_wo} (${woByDateMap[col.dateStr].nama_menu})\nTotal Sasaran: ${woByDateMap[col.dateStr].total_pm} PM\nStatus WO: ${woByDateMap[col.dateStr].status}\n(Klik tanggal untuk ubah status seluruh baris. Klik badge WO untuk rincian menu)`
+                                : `${col.dayName}, ${col.dateStr} (Klik tanggal untuk ganti status: T ➜ P ➜ L ➜ Kosong)`"
                         >
                             <div class="text-[9px] leading-tight opacity-75 uppercase">{{ col.dayName }}</div>
                             <div class="text-[11px] leading-tight font-extrabold mt-0.5">{{ col.dayNum }}</div>
+
+                            <!-- Indikator Badge Work Order jika ada WO pada tanggal ini -->
+                            <div v-if="woByDateMap && woByDateMap[col.dateStr]" class="mt-0.5 flex justify-center">
+                                <button
+                                    type="button"
+                                    @click.stop="$emit('openWoDetail', col.dateStr)"
+                                    class="px-1 py-0.2 rounded text-[8px] font-black tracking-tighter bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-0.5"
+                                    title="Klik untuk melihat Detail Work Order & Menu MBG"
+                                >
+                                    <span>WO</span>
+                                </button>
+                            </div>
                         </th>
 
                         <!-- Kolom Rekapitulasi Sisi Kanan -->
@@ -209,8 +269,22 @@ function getColTotalPorsi(col) {
 
                         <!-- Sticky 2: Nama & Identitas -->
                         <td class="py-2 px-3 sticky left-9 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-100">
-                            <div class="font-bold text-slate-900 line-clamp-1" :title="item.nama_kelompok">
-                                {{ item.nama_kelompok }}
+                            <div class="flex items-center justify-between gap-1.5">
+                                <div
+                                    class="font-bold text-slate-900 line-clamp-1 cursor-pointer hover:text-emerald-700 transition-colors"
+                                    :title="item.nama_kelompok + ' (Klik untuk lihat rekap riwayat WO & porsi)'"
+                                    @click="$emit('openDetail', item)"
+                                >
+                                    {{ item.nama_kelompok }}
+                                </div>
+                                <button
+                                    type="button"
+                                    @click.stop="$emit('openDetail', item)"
+                                    class="p-0.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors shrink-0"
+                                    title="Lihat Rekap Riwayat KPM & Detail WO"
+                                >
+                                    <Eye class="w-3.5 h-3.5" />
+                                </button>
                             </div>
                             <div class="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                                 <span class="font-medium text-slate-600">{{ item.tipe_identitas || 'NPSN' }}: {{ item.kode_identitas || '-' }}</span>
@@ -238,20 +312,22 @@ function getColTotalPorsi(col) {
                             v-for="col in dateColumns"
                             :key="col.dateStr"
                             :class="[
-                                'py-1 px-0.5 text-center border-r border-slate-100 transition-colors',
+                                'py-1 px-0.5 text-center border-r border-slate-100 transition-colors relative group/cell',
                                 col.isToday
                                     ? 'bg-emerald-50/50'
                                     : (col.isSunday ? 'bg-red-50/20' : (col.isWeekend ? 'bg-amber-50/15' : ''))
                             ]"
                         >
-                            <div class="flex items-center justify-center">
+                            <div class="flex items-center justify-center relative">
                                 <!-- Status: T (Terkirim - Emerald) -->
                                 <button
                                     v-if="getCellStatus(item.id, col.dateStr, col.isSunday) === 'T'"
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] flex items-center justify-center shadow-2xs transition-transform active:scale-95 cursor-pointer"
-                                    :title="`${item.nama_kelompok} (${col.dateStr}): Terkirim (${item.total_porsi_harian} Porsi). Klik untuk ubah ke Proses.`"
+                                    :title="matrixDetailMap?.[item.id]?.[col.dateStr]?.has_wo
+                                        ? `${item.nama_kelompok} (${col.dateStr})\nWO: ${matrixDetailMap[item.id][col.dateStr].nomor_wo} - ${matrixDetailMap[item.id][col.dateStr].nama_menu} (${matrixDetailMap[item.id][col.dateStr].wo_status})\nPorsi: ${matrixDetailMap[item.id][col.dateStr].porsi_kecil} PK • ${matrixDetailMap[item.id][col.dateStr].porsi_besar} PB (Total: ${matrixDetailMap[item.id][col.dateStr].total_penerima} PM)\nStatus Distribusi: Terkirim (T)\nKlik tombol untuk ubah ke Proses.`
+                                        : `${item.nama_kelompok} (${col.dateStr}): Terkirim (${item.total_porsi_harian} Porsi). Klik untuk ubah ke Proses.`"
                                 >
                                     T
                                 </button>
@@ -262,7 +338,9 @@ function getColTotalPorsi(col) {
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] flex items-center justify-center shadow-2xs transition-transform active:scale-95 cursor-pointer"
-                                    :title="`${item.nama_kelompok} (${col.dateStr}): Terjadwal/Proses. Klik untuk ubah ke Libur.`"
+                                    :title="matrixDetailMap?.[item.id]?.[col.dateStr]?.has_wo
+                                        ? `${item.nama_kelompok} (${col.dateStr})\nWO: ${matrixDetailMap[item.id][col.dateStr].nomor_wo} - ${matrixDetailMap[item.id][col.dateStr].nama_menu} (${matrixDetailMap[item.id][col.dateStr].wo_status})\nPorsi Terjadwal: ${matrixDetailMap[item.id][col.dateStr].total_penerima} PM\nStatus Distribusi: Proses / Terjadwal (P)\nKlik tombol untuk ubah ke Libur.`
+                                        : `${item.nama_kelompok} (${col.dateStr}): Terjadwal/Proses. Klik untuk ubah ke Libur.`"
                                 >
                                     P
                                 </button>
@@ -273,7 +351,9 @@ function getColTotalPorsi(col) {
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-                                    :title="`${item.nama_kelompok} (${col.dateStr}): Libur Operasional. Klik untuk kosongkan.`"
+                                    :title="matrixDetailMap?.[item.id]?.[col.dateStr]?.has_wo
+                                        ? `${item.nama_kelompok} (${col.dateStr})\nWO: ${matrixDetailMap[item.id][col.dateStr].nomor_wo} - ${matrixDetailMap[item.id][col.dateStr].nama_menu}\nStatus Jadwal: Libur / Tidak Menerima\nKlik tombol untuk kosongkan.`
+                                        : `${item.nama_kelompok} (${col.dateStr}): Libur Operasional. Klik untuk kosongkan.`"
                                 >
                                     L
                                 </button>
@@ -287,6 +367,17 @@ function getColTotalPorsi(col) {
                                     :title="`${item.nama_kelompok} (${col.dateStr}): Belum ada pencatatan. Klik untuk set Terkirim (T).`"
                                 >
                                     -
+                                </button>
+
+                                <!-- Tombol Kecil Info WO Titik Ini (Muncul saat hover jika ada WO) -->
+                                <button
+                                    v-if="matrixDetailMap?.[item.id]?.[col.dateStr]?.has_wo"
+                                    type="button"
+                                    @click.stop="$emit('openCellDetail', item, col.dateStr)"
+                                    class="opacity-0 group-hover/cell:opacity-100 absolute -top-1 -right-1 z-10 w-3.5 h-3.5 rounded-full bg-slate-800 hover:bg-emerald-700 text-white flex items-center justify-center text-[8px] font-bold shadow-xs transition-opacity cursor-pointer"
+                                    :title="'Lihat Rincian WO Titik Ini (' + matrixDetailMap[item.id][col.dateStr].nomor_wo + ')'"
+                                >
+                                    i
                                 </button>
                             </div>
                         </td>

@@ -731,36 +731,173 @@ class KelompokPenerimaManfaatController extends Controller
         // Hitung selisih hari
         $totalHari = (int) $startDate->diffInDays($endDate) + 1;
 
+        // Ambil data Work Order yang dibuat dalam rentang tanggal beserta rincian kelompoknya
+        $workOrders = WorkOrder::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)
+            ->whereBetween('tanggal_distribusi', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->with(['kelompoks'])
+            ->get();
+
+        $woByDateMap = [];
+        foreach ($workOrders as $wo) {
+            $tglKey = $wo->tanggal_distribusi instanceof Carbon
+                ? $wo->tanggal_distribusi->format('Y-m-d')
+                : substr((string)$wo->tanggal_distribusi, 0, 10);
+
+            $subMenus = $wo->sub_menus ?: array_values(array_filter([
+                $wo->sub_menu_1,
+                $wo->sub_menu_2,
+                $wo->sub_menu_3,
+                $wo->sub_menu_4,
+                $wo->sub_menu_5,
+            ]));
+
+            $woKelompoks = $wo->kelompoks->map(function ($wk) {
+                return [
+                    'id' => $wk->id,
+                    'kelompok_id' => $wk->kelompok_id,
+                    'nama_kelompok' => $wk->nama_kelompok,
+                    'kategori' => $wk->kategori,
+                    'is_menerima' => (bool) $wk->is_menerima,
+                    'porsi_kecil' => (int) $wk->porsi_kecil,
+                    'porsi_besar' => (int) $wk->porsi_besar,
+                    'total_penerima' => (int) $wk->total_penerima,
+                    'status_alergi' => (bool) $wk->status_alergi,
+                    'detail_alergi' => $wk->detail_alergi ?: [],
+                    'rincian' => $wk->rincian ?: [],
+                ];
+            });
+
+            $woByDateMap[$tglKey] = [
+                'id' => $wo->id,
+                'uuid' => $wo->uuid,
+                'nomor_wo' => $wo->nomor_wo,
+                'nama_menu' => $wo->nama_menu,
+                'status' => $wo->status,
+                'siklus_ke' => (int) $wo->siklus_ke,
+                'total_pm' => (int) $wo->total_pm,
+                'total_pk' => (int) $wo->total_pk,
+                'total_pb' => (int) $wo->total_pb,
+                'total_alergi' => (int) $wo->total_alergi,
+                'total_kelompok' => (int) $wo->total_kelompok,
+                'sub_menus' => $subMenus,
+                'kelompoks' => $woKelompoks,
+                'total_kelompok_menerima' => $woKelompoks->where('is_menerima', true)->count(),
+                'total_kelompok_libur' => $woKelompoks->where('is_menerima', false)->count(),
+            ];
+        }
+
         // Ambil data catatan distribusi yang tersimpan di database
         $distribusiRecords = DistribusiPenerimaManfaat::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)
             ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get();
 
-        $matrixDistribusiMap = [];
+        $savedDistribusiMap = [];
         foreach ($distribusiRecords as $rec) {
             $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
-            $matrixDistribusiMap[$rec->kelompok_id][$tglStr] = $rec->status;
+            $savedDistribusiMap[$rec->kelompok_id][$tglStr] = $rec->status;
         }
 
-        $distribusiList = $allKelompok->map(function ($kpm) use ($matrixDistribusiMap, $totalHari) {
+        // Bangun matrixDetailMap dan matrixDistribusiMap
+        $matrixDistribusiMap = [];
+        $matrixDetailMap = [];
+
+        foreach ($allKelompok as $kpm) {
+            $kId = $kpm->id;
+            $matrixDetailMap[$kId] = [];
+            $matrixDistribusiMap[$kId] = [];
+
+            $curDate = $startDate->copy();
+            while ($curDate->lte($endDate)) {
+                $dateStr = $curDate->format('Y-m-d');
+                $isSunday = $curDate->isSunday();
+
+                $woInfo = $woByDateMap[$dateStr] ?? null;
+                $wok = null;
+
+                if ($woInfo && !empty($woInfo['kelompoks'])) {
+                    $wok = collect($woInfo['kelompoks'])->first(function ($item) use ($kId, $kpm) {
+                        return (int)$item['kelompok_id'] === (int)$kId || $item['nama_kelompok'] === $kpm->nama_kelompok;
+                    });
+                }
+
+                // Tentukan status distribusi untuk tanggal ini:
+                $savedStatus = $savedDistribusiMap[$kId][$dateStr] ?? null;
+
+                if ($savedStatus !== null && $savedStatus !== '') {
+                    $finalStatus = $savedStatus;
+                } elseif ($woInfo && $wok) {
+                    if (!$wok['is_menerima']) {
+                        $finalStatus = 'L'; // Libur / tidak menerima di WO
+                    } else {
+                        $woStatus = strtolower((string)$woInfo['status']);
+                        if (in_array($woStatus, ['selesai', 'siap produksi', 'terkirim'])) {
+                            $finalStatus = 'T'; // Terkirim
+                        } else {
+                            $finalStatus = 'P'; // Proses/Terjadwal
+                        }
+                    }
+                } elseif ($isSunday) {
+                    $finalStatus = 'L';
+                } else {
+                    $finalStatus = '';
+                }
+
+                $matrixDistribusiMap[$kId][$dateStr] = $finalStatus;
+
+                $matrixDetailMap[$kId][$dateStr] = [
+                    'dateStr' => $dateStr,
+                    'status' => $finalStatus,
+                    'has_wo' => $woInfo !== null,
+                    'wo_id' => $woInfo ? $woInfo['id'] : null,
+                    'wo_uuid' => $woInfo ? $woInfo['uuid'] : null,
+                    'nomor_wo' => $woInfo ? $woInfo['nomor_wo'] : null,
+                    'nama_menu' => $woInfo ? $woInfo['nama_menu'] : null,
+                    'wo_status' => $woInfo ? $woInfo['status'] : null,
+                    'sub_menus' => $woInfo ? $woInfo['sub_menus'] : [],
+                    'is_menerima' => $wok ? $wok['is_menerima'] : ($woInfo ? false : null),
+                    'porsi_kecil' => $wok ? $wok['porsi_kecil'] : (int)$kpm->total_porsi_kecil,
+                    'porsi_besar' => $wok ? $wok['porsi_besar'] : (int)$kpm->total_porsi_besar,
+                    'total_penerima' => $wok ? $wok['total_penerima'] : (int)$kpm->total_penerima,
+                    'status_alergi' => $wok ? $wok['status_alergi'] : false,
+                    'detail_alergi' => $wok ? $wok['detail_alergi'] : [],
+                    'rincian' => $wok ? $wok['rincian'] : ($kpm->rincian ?? []),
+                ];
+
+                $curDate->addDay();
+            }
+        }
+
+        $distribusiList = $allKelompok->map(function ($kpm) use ($matrixDistribusiMap, $matrixDetailMap, $totalHari) {
             $kId = $kpm->id;
             $basePk = (int) $kpm->total_porsi_kecil;
             $basePb = (int) $kpm->total_porsi_besar;
             $baseTotal = (int) $kpm->total_penerima;
             $totalPorsiHarian = $basePk + $basePb;
 
-            // Hitung hari kirim hanya dari yang berstatus 'T'
+            // Hitung akumulasi riil dari porsi WO pada tanggal-tanggal berstatus 'T'
             $kpmDates = $matrixDistribusiMap[$kId] ?? [];
+            $kpmDetails = $matrixDetailMap[$kId] ?? [];
+
             $totalHariKirim = 0;
-            foreach ($kpmDates as $st) {
+            $totalPkAkumulasi = 0;
+            $totalPbAkumulasi = 0;
+            $totalPorsiAkumulasi = 0;
+
+            foreach ($kpmDates as $dStr => $st) {
                 if ($st === 'T') {
                     $totalHariKirim++;
+                    $det = $kpmDetails[$dStr] ?? null;
+                    if ($det && $det['has_wo']) {
+                        $totalPkAkumulasi += (int) $det['porsi_kecil'];
+                        $totalPbAkumulasi += (int) $det['porsi_besar'];
+                        $totalPorsiAkumulasi += (int) $det['total_penerima'];
+                    } else {
+                        $totalPkAkumulasi += $basePk;
+                        $totalPbAkumulasi += $basePb;
+                        $totalPorsiAkumulasi += $totalPorsiHarian;
+                    }
                 }
             }
-
-            $totalPorsiAkumulasi = $totalPorsiHarian * $totalHariKirim;
-            $totalPkAkumulasi = $basePk * $totalHariKirim;
-            $totalPbAkumulasi = $basePb * $totalHariKirim;
 
             return [
                 'id' => $kpm->id,
@@ -791,6 +928,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'status_distribusi' => $totalHariKirim > 0 ? 'Terkirim Sebagian' : 'Belum Ada Pengiriman',
                 'persentase_layanan' => $totalHari > 0 ? round(($totalHariKirim / $totalHari) * 100) : 0,
                 'history_dates' => $kpmDates,
+                'history_details' => $kpmDetails,
             ];
         });
 
@@ -825,6 +963,8 @@ class KelompokPenerimaManfaatController extends Controller
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialDistribusiMap' => $matrixDistribusiMap,
+            'woByDateMap' => $woByDateMap,
+            'matrixDetailMap' => $matrixDetailMap,
             'filters' => [
                 'mode' => $mode,
                 'tanggal_mulai' => $startDate->format('Y-m-d'),
@@ -865,15 +1005,40 @@ class KelompokPenerimaManfaatController extends Controller
 
         $kelompoks = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->get()->keyBy('id');
 
+        // Kumpulkan semua tanggal unik untuk mencari referensi Work Order yang relevan
+        $allDates = [];
+        foreach ($matrix as $dates) {
+            if (is_array($dates)) {
+                foreach (array_keys($dates) as $d) {
+                    $allDates[$d] = true;
+                }
+            }
+        }
+        $datesList = array_keys($allDates);
+        $wos = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+            ->whereIn('tanggal_distribusi', $datesList)
+            ->with('kelompoks')
+            ->get();
+        $wosByDate = [];
+        foreach ($wos as $wo) {
+            $tKey = $wo->tanggal_distribusi instanceof Carbon ? $wo->tanggal_distribusi->format('Y-m-d') : substr((string)$wo->tanggal_distribusi, 0, 10);
+            $wosByDate[$tKey] = $wo->kelompoks->keyBy('kelompok_id');
+        }
+
         foreach ($matrix as $kelompokId => $dates) {
             if (!is_array($dates)) continue;
             $kpm = $kelompoks->get((int) $kelompokId);
-            $pk = $kpm ? (int) $kpm->total_porsi_kecil : 0;
-            $pb = $kpm ? (int) $kpm->total_porsi_besar : 0;
-            $total = $pk + $pb;
+            $basePk = $kpm ? (int) $kpm->total_porsi_kecil : 0;
+            $basePb = $kpm ? (int) $kpm->total_porsi_besar : 0;
+            $baseTotal = $basePk + $basePb;
 
             foreach ($dates as $tgl => $status) {
                 if (in_array($status, $allowedStatuses)) {
+                    $woKel = $wosByDate[$tgl][(int) $kelompokId] ?? null;
+                    $pk = $woKel ? (int) $woKel->porsi_kecil : $basePk;
+                    $pb = $woKel ? (int) $woKel->porsi_besar : $basePb;
+                    $total = $woKel ? (int) $woKel->total_penerima : $baseTotal;
+
                     $records[] = [
                         'kelompok_id' => (int) $kelompokId,
                         'unit_sppg_id' => $unitSppg->id,

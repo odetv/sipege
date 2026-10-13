@@ -6,6 +6,7 @@ import RekapDistribusiControlBar from "./Partials/RekapDistribusiControlBar.vue"
 import RekapDistribusiKpiCards from "./Partials/RekapDistribusiKpiCards.vue";
 import RekapDistribusiMatrixTable from "./Partials/RekapDistribusiMatrixTable.vue";
 import RekapDistribusiExportModal from "./Partials/RekapDistribusiExportModal.vue";
+import RekapDistribusiWoDetailModal from "./Partials/RekapDistribusiWoDetailModal.vue";
 import { downloadRekapDistribusiExcel } from "@/Services/exportDistribusiHelper";
 
 const props = defineProps({
@@ -21,6 +22,8 @@ const props = defineProps({
     initialTanggalSelesai: { type: String, default: "" },
     initialPeriodeId: { type: [String, Number], default: "all" },
     initialDistribusiMap: { type: Object, default: () => ({}) },
+    woByDateMap: { type: Object, default: () => ({}) },
+    matrixDetailMap: { type: Object, default: () => ({}) },
     filters: { type: Object, default: () => ({}) },
 });
 
@@ -488,9 +491,14 @@ const computedSummary = computed(() => {
             if (matrixDistribusi.value[it.id]?.[col.dateStr] === "T") {
                 hariKirim++;
                 totalSlotTerkirim++;
+                const det = props.matrixDetailMap?.[it.id]?.[col.dateStr];
+                if (det && det.has_wo) {
+                    totalPorsiAkumulasi += (Number(det.total_penerima) || 0);
+                } else {
+                    totalPorsiAkumulasi += (Number(it.total_porsi_harian) || 0);
+                }
             }
         });
-        totalPorsiAkumulasi += (Number(it.total_porsi_harian) || 0) * hariKirim;
     });
 
     const totalPenerima = list.reduce((sum, it) => sum + (Number(it.total_penerima) || 0), 0);
@@ -512,6 +520,36 @@ const computedSummary = computed(() => {
         rata_rata_porsi_per_kelompok: list.length > 0 ? Math.round(totalPorsiHarian / list.length) : 0,
     };
 });
+
+// ─── Modal Detail Work Order (WO) ─────────────────────────────────────────────
+const showWoModal = ref(false);
+const woModalMode = ref("date"); // 'date' | 'cell' | 'kpm'
+const selectedDateForWo = ref("");
+const selectedWoForModal = ref(null);
+const selectedKpmForModal = ref(null);
+const selectedCellDetailForModal = ref(null);
+
+function handleOpenWoDetail(dateStr) {
+    selectedDateForWo.value = dateStr;
+    selectedWoForModal.value = props.woByDateMap?.[dateStr] || null;
+    woModalMode.value = "date";
+    showWoModal.value = true;
+}
+
+function handleOpenCellDetail(item, dateStr) {
+    selectedDateForWo.value = dateStr;
+    selectedKpmForModal.value = item;
+    selectedCellDetailForModal.value = props.matrixDetailMap?.[item.id]?.[dateStr] || null;
+    selectedWoForModal.value = props.woByDateMap?.[dateStr] || null;
+    woModalMode.value = "cell";
+    showWoModal.value = true;
+}
+
+function handleOpenKpmDetail(item) {
+    selectedKpmForModal.value = item;
+    woModalMode.value = "kpm";
+    showWoModal.value = true;
+}
 
 // ─── Ekspor Excel ─────────────────────────────────────────────────────────────
 const isExporting = ref(false);
@@ -637,10 +675,27 @@ function showToast(msg) {
                 :tanggalMulai="tanggalMulai"
                 :tanggalSelesai="tanggalSelesai"
                 :matrixDistribusi="matrixDistribusi"
+                :woByDateMap="woByDateMap"
+                :matrixDetailMap="matrixDetailMap"
                 @cycleStatus="cycleStatus"
                 @toggleKolomStatus="toggleKolomStatus"
+                @openWoDetail="handleOpenWoDetail"
+                @openCellDetail="handleOpenCellDetail"
+                @openDetail="handleOpenKpmDetail"
             />
         </div>
+
+        <!-- ─── Modal Dialog Detail Work Order & Distribusi ─────────────────── -->
+        <RekapDistribusiWoDetailModal
+            :isOpen="showWoModal"
+            :mode="woModalMode"
+            :selectedDate="selectedDateForWo"
+            :selectedWo="selectedWoForModal"
+            :selectedKpm="selectedKpmForModal"
+            :selectedDetail="selectedCellDetailForModal"
+            :dateColumns="dateColumns"
+            @close="showWoModal = false"
+        />
 
         <!-- ─── Modal Dialog Ekspor Excel ───────────────────────────────────── -->
         <RekapDistribusiExportModal
