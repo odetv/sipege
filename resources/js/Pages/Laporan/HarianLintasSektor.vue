@@ -452,6 +452,24 @@ const selisihPenerimaManfaatList = computed(() => {
     const allKelompoks = props.workOrder?.kelompoks || [];
     if (!allKelompoks || allKelompoks.length === 0) return [];
 
+    // Cek apakah ada Sekolah yang menerima secara global di WO ini
+    const adaSekolahMenerima = allKelompoks.some((k) => {
+        const kel = k.kelompok || {};
+        const kat = (kel.kategori || k.kategori || "").toLowerCase();
+        const isMenerima = k.is_menerima !== false;
+        const total = Number(k.total_penerima) || 0;
+        return kat !== "posyandu" && isMenerima && total > 0;
+    });
+
+    // Cek apakah ada Posyandu yang menerima secara global di WO ini
+    const adaPosyanduMenerima = allKelompoks.some((k) => {
+        const kel = k.kelompok || {};
+        const kat = (kel.kategori || k.kategori || "").toLowerCase();
+        const isMenerima = k.is_menerima !== false;
+        const total = Number(k.total_penerima) || 0;
+        return kat === "posyandu" && isMenerima && total > 0;
+    });
+
     const results = [];
 
     allKelompoks.forEach((k) => {
@@ -462,6 +480,15 @@ const selisihPenerimaManfaatList = computed(() => {
             kel.nama_kelompok ||
             k.nama_kelompok ||
             (isPosyandu ? "Posyandu" : "Sekolah");
+
+        // Jika sama sekali dari seluruh Sekolah atau seluruh Posyandu tidak ada,
+        // maka itu bukan selisih tetapi memang tidak ada pendistribusian secara global (kosongin saja).
+        if (isPosyandu && !adaPosyanduMenerima) {
+            return;
+        }
+        if (!isPosyandu && !adaSekolahMenerima) {
+            return;
+        }
 
         // 1. Data Awal (Penetapan Master Kelompok)
         const rincianAwalRaw =
@@ -480,39 +507,62 @@ const selisihPenerimaManfaatList = computed(() => {
         const totalAwal = totalAwalMaster > 0 ? totalAwalMaster : bAwal.total;
 
         // 2. Data Rill Terdistribusi
-        let totalRill = 0;
-        let bRill = {
-            siswa: 0,
-            guru: 0,
-            tendik: 0,
-            bumil: 0,
-            busui: 0,
-            balita: 0,
-            total: 0,
-        };
         const rincianRillRaw =
-            k.is_menerima !== false
-                ? Array.isArray(k.rincian) && k.rincian.length > 0
-                    ? k.rincian
-                    : rincianAwalRaw
-                : [];
+            Array.isArray(k.rincian) && k.rincian.length > 0
+                ? k.rincian
+                : rincianAwalRaw;
 
-        if (k.is_menerima !== false) {
-            bRill = extractBreakdownSubKategori(
-                rincianRillRaw,
-                kat,
-                k.total_penerima,
+        // Cek apakah betul-betul full semua sub kategorinya tidak menerima
+        let isFullTidakMenerima = false;
+        if (k.is_menerima === false) {
+            isFullTidakMenerima = true;
+        } else if (Array.isArray(k.rincian) && k.rincian.length > 0) {
+            const hasAnyMenerima = k.rincian.some(
+                (r) =>
+                    r.is_menerima !== false &&
+                    (Number(r.total) ||
+                        Number(r.jumlah_laki_laki || 0) +
+                            Number(r.jumlah_perempuan || 0)) > 0,
             );
-            totalRill = Number(k.total_penerima ?? bRill.total) || bRill.total;
+            if (!hasAnyMenerima) {
+                isFullTidakMenerima = true;
+            }
+        } else if (Number(k.total_penerima) === 0) {
+            isFullTidakMenerima = true;
         }
+
+        // Kasus: Full semua sub kategori tidak menerima
+        if (isFullTidakMenerima) {
+            results.push({
+                nama,
+                isPosyandu,
+                isFullTidakMenerima: true,
+                totalAwal,
+                totalRill: 0,
+                totalSelisih: totalAwal,
+                tidakMenerima: [],
+                rincianStr: "Tidak Menerima MBG",
+                teks: `- ${nama} = Tidak Menerima MBG`,
+            });
+            return;
+        }
+
+        // Hitung porsi riil terdistribusi (hanya yang is_menerima !== false)
+        const rincianAktif = rincianRillRaw.filter(
+            (r) => r.is_menerima !== false,
+        );
+        const bRill = extractBreakdownSubKategori(
+            rincianAktif,
+            kat,
+            k.total_penerima,
+        );
+        const totalRill =
+            Number(k.total_penerima ?? bRill.total) || bRill.total;
 
         // 3. Selisih
         const totalSelisih = Math.max(0, totalAwal - totalRill);
 
-        // Hanya dianggap selisih jika ada pendistribusian (totalRill > 0 dan totalSelisih > 0).
-        // Jika sama sekali tidak ada pendistribusian pada sekolah/posyandu tersebut (totalRill === 0 atau is_menerima false),
-        // maka bukan selisih melainkan memang tidak ada pendistribusian terjadwal, sehingga dikosongkan.
-        if (k.is_menerima !== false && totalRill > 0 && totalSelisih > 0) {
+        if (totalSelisih > 0) {
             const tidakMenerima = [];
 
             if (rincianAwalRaw.length > 0) {
@@ -526,24 +576,23 @@ const selisihPenerimaManfaatList = computed(() => {
                         ) || 0;
 
                     let totR = 0;
-                    if (
-                        k.is_menerima !== false &&
-                        Array.isArray(rincianRillRaw)
-                    ) {
+                    if (Array.isArray(rincianRillRaw)) {
                         const match = rincianRillRaw.find(
                             (rr) =>
                                 (rr.sub_kategori || "").trim().toLowerCase() ===
                                 subName.trim().toLowerCase(),
                         );
                         if (match) {
-                            totR =
-                                Number(
-                                    match.total ??
-                                        Number(match.jumlah_laki_laki || 0) +
-                                            Number(
-                                                match.jumlah_perempuan || 0,
-                                            ),
-                                ) || 0;
+                            if (match.is_menerima !== false) {
+                                totR =
+                                    Number(
+                                        match.total ??
+                                            Number(match.jumlah_laki_laki || 0) +
+                                                Number(
+                                                    match.jumlah_perempuan || 0,
+                                                ),
+                                    ) || 0;
+                            }
                         }
                     }
 
@@ -599,6 +648,7 @@ const selisihPenerimaManfaatList = computed(() => {
             results.push({
                 nama,
                 isPosyandu,
+                isFullTidakMenerima: false,
                 totalAwal,
                 totalRill,
                 totalSelisih,
@@ -2145,9 +2195,15 @@ const activeTab = ref("narasi");
                                 class="flex items-center justify-between font-bold text-slate-900"
                             >
                                 <span>{{ s.nama }}</span>
-                                <span class="font-black text-rose-600"
-                                    >Selisih: -{{ s.totalSelisih }} Porsi</span
+                                <span
+                                    v-if="s.isFullTidakMenerima"
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
                                 >
+                                    Tidak Menerima MBG
+                                </span>
+                                <span v-else class="font-black text-rose-600">
+                                    Selisih: -{{ s.totalSelisih }} Porsi
+                                </span>
                             </div>
                             <p
                                 class="text-[11px] text-slate-600 leading-relaxed font-mono"
