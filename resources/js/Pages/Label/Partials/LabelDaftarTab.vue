@@ -236,12 +236,29 @@ async function handleDownload(item, type) {
     };
 
     try {
-        const dateSuffix = (
-            (item.tanggal_produksi || "").substring(0, 10) || "label"
-        ).replace(/-/g, "");
+        const sumberPrefix = item.work_order_id ? "WO" : "Manual";
+        const rawTgl = (item.tanggal_produksi || "").substring(0, 10);
+        let yyyyMmDd = "";
+        if (rawTgl && rawTgl.includes("-")) {
+            const parts = rawTgl.split("-");
+            if (parts.length === 3 && parts[0].length === 4) {
+                yyyyMmDd = `${parts[0]}${parts[1].padStart(2, "0")}${parts[2].padStart(2, "0")}`;
+            }
+        }
+        if (!yyyyMmDd || yyyyMmDd.length !== 8) {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            yyyyMmDd = `${y}${m}${day}`;
+        }
+
+        const jenisCetak = type === "single" ? "Tunggal" : "Kolase";
+        const idSppg = (props.unitSppg?.id_sppg || "SPPG").trim();
+        const templateCode = item.template_id === "template-02" ? "T2" : "T1";
+        const filename = `Label_${templateCode}_${jenisCetak}_${sumberPrefix}-${yyyyMmDd}_${idSppg}.pdf`;
 
         if (type === "single") {
-            const filename = `Label_${item.nomor_label || "BGN"}_1PerHal_${dateSuffix}.pdf`;
             await downloadPdfSingleMode({
                 printableKelompokList: kelompokList,
                 getRenderElement: getSandboxSavedCardElement,
@@ -252,7 +269,6 @@ async function handleDownload(item, type) {
                 },
             });
         } else if (type === "a4_grid") {
-            const filename = `Label_${item.nomor_label || "BGN"}_LembarA4_${dateSuffix}.pdf`;
             await downloadPdfA4GridMode({
                 printableKelompokList: kelompokList,
                 getRenderElement: getSandboxSavedCardElement,
@@ -427,14 +443,26 @@ function formatTanggalIndo(dateStr) {
                             :key="item.id"
                             class="p-4 space-y-3 hover:bg-slate-50/60 transition-colors"
                         >
-                            <!-- Card Header: Nomor Label Badge & Index -->
+                            <!-- Card Header: Nomor Label Badge & Index & Template -->
                             <div class="flex items-center justify-between gap-2">
-                                <div class="flex items-center gap-1.5">
+                                <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="text-[11px] font-mono font-bold text-slate-400">#{{ (currentPage - 1) * perPage + idx + 1 }}</span>
                                     <span class="font-mono font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 text-xs">
                                         {{ item.nomor_label }}
                                     </span>
                                 </div>
+                                <span
+                                    v-if="item.template_id === 'template-02'"
+                                    class="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0"
+                                >
+                                    Template 02
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0"
+                                >
+                                    Template 01
+                                </span>
                             </div>
 
                             <!-- Menu Name & Description -->
@@ -454,7 +482,6 @@ function formatTanggalIndo(dateStr) {
                                     <div class="overflow-hidden">
                                         <p class="text-[9.5px] text-slate-400 font-bold uppercase leading-none">Distribusi</p>
                                         <p class="font-bold text-slate-800 text-[11px] truncate mt-0.5">{{ formatTanggalIndo(item.tanggal_produksi) }}</p>
-                                        <p class="text-[10px] text-slate-500 font-medium">{{ item.jam_produksi || "12:14" }} • Maks {{ item.batas_konsumsi || "12:14" }}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1.5 text-slate-700 bg-slate-50 p-2 rounded-xl border border-slate-100">
@@ -497,8 +524,8 @@ function formatTanggalIndo(dateStr) {
                             <thead>
                                 <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10.5px] tracking-wider">
                                     <th class="py-3 px-4 w-12 text-center">No</th>
-                                    <th class="py-3 px-4">Label & Menu</th>
-                                    <th class="py-3 px-4">Waktu Distribusi</th>
+                                    <th class="py-3 px-4">Nama Menu & Tanggal Distribusi</th>
+                                    <th class="py-3 px-4 text-center w-36">Template</th>
                                     <th class="py-3 px-4">Sasaran & Porsi</th>
                                     <th class="py-3 px-4 text-center w-28">Aksi</th>
                                 </tr>
@@ -509,14 +536,14 @@ function formatTanggalIndo(dateStr) {
                                     :key="item.id"
                                     class="hover:bg-slate-50/80 transition-colors group"
                                 >
-                                    <!-- No -->
+                                    <!-- 1. No -->
                                     <td class="py-3.5 px-4 text-center font-mono font-bold text-slate-400">
                                         {{ (currentPage - 1) * perPage + idx + 1 }}
                                     </td>
 
-                                    <!-- Label & Menu -->
-                                    <td class="py-3.5 px-4 min-w-[240px]">
-                                        <div class="space-y-1">
+                                    <!-- 2. [Nama Menu, Tanggal Distribusi] -->
+                                    <td class="py-3.5 px-4 min-w-[280px]">
+                                        <div class="space-y-1.5">
                                             <div class="flex items-center gap-2">
                                                 <span class="font-mono font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20 text-[11px]">
                                                     {{ item.nomor_label }}
@@ -525,33 +552,33 @@ function formatTanggalIndo(dateStr) {
                                             <div class="font-bold text-slate-900 text-xs sm:text-sm">
                                                 {{ item.nama_menu }}
                                             </div>
-                                            <p v-if="item.petunjuk_menu && item.petunjuk_menu !== item.nama_menu" class="text-[11px] text-slate-500 line-clamp-1 max-w-sm italic">
+                                            <p v-if="item.petunjuk_menu && item.petunjuk_menu !== item.nama_menu" class="text-[11px] text-slate-500 line-clamp-1 max-w-md italic">
                                                 {{ item.petunjuk_menu }}
                                             </p>
-                                        </div>
-                                    </td>
-
-                                    <!-- Tanggal & Jam Produksi -->
-                                    <td class="py-3.5 px-4 min-w-[170px] whitespace-nowrap">
-                                        <div class="space-y-1">
-                                            <div class="flex items-center gap-1.5 font-bold text-slate-800">
-                                                <Calendar class="h-3.5 w-3.5 text-primary" />
+                                            <div class="flex items-center gap-1.5 pt-0.5 text-[11px] font-bold text-slate-800">
+                                                <Calendar class="h-3.5 w-3.5 text-primary shrink-0" />
                                                 <span>{{ formatTanggalIndo(item.tanggal_produksi) }}</span>
                                             </div>
-                                            <div class="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                                                <span class="flex items-center gap-1">
-                                                    <Clock class="h-3 w-3 text-slate-400" />
-                                                    <span>{{ item.jam_produksi || "12:14" }}</span>
-                                                </span>
-                                                <span class="text-slate-300">•</span>
-                                                <span class="text-amber-700 font-semibold">
-                                                    Maks: {{ item.batas_konsumsi || "12:14" }}
-                                                </span>
-                                            </div>
                                         </div>
                                     </td>
 
-                                    <!-- Sasaran & Porsi -->
+                                    <!-- 3. Template -->
+                                    <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                                        <span
+                                            v-if="item.template_id === 'template-02'"
+                                            class="inline-block px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                                        >
+                                            Template 02
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-block px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                        >
+                                            Template 01
+                                        </span>
+                                    </td>
+
+                                    <!-- 4. Sasaran & Porsi -->
                                     <td class="py-3.5 px-4 min-w-[170px] whitespace-nowrap">
                                         <div class="space-y-1">
                                             <div class="font-extrabold text-slate-900 flex items-center gap-1.5">

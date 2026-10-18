@@ -42,6 +42,7 @@ import {
     PlusCircle,
     Minus,
     PhoneCall,
+    Database,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
@@ -2310,10 +2311,69 @@ watch(
     { immediate: true },
 );
 
+// Responsive Preview Scaler: Menjaga proporsi & tata letak 1:1 identik di semua perangkat (Desktop, Tablet, HP)
+const previewContainerRef = ref(null);
+const previewScale = ref(1);
+
+const updatePreviewScale = () => {
+    if (!previewContainerRef.value) return;
+    const containerW = previewContainerRef.value.clientWidth;
+    const padding = containerW < 500 ? 24 : 40;
+    const availW = Math.max(100, containerW - padding);
+    const nativeW = selectedTemplateId.value === "template-02" ? 440 : 555;
+
+    if (availW < nativeW) {
+        previewScale.value = Number((availW / nativeW).toFixed(4));
+    } else {
+        previewScale.value = 1;
+    }
+};
+
+const previewScalerStyle = computed(() => {
+    const isTpl02 = selectedTemplateId.value === "template-02";
+    const nativeW = isTpl02 ? 440 : 555;
+    const nativeH = isTpl02 ? 305 : 370;
+    const s = previewScale.value;
+
+    if (s >= 1) {
+        return {
+            width: `${nativeW}px`,
+            height: `${nativeH}px`,
+            flexShrink: 0,
+        };
+    }
+
+    const scaledW = Math.round(nativeW * s);
+    const scaledH = Math.round(nativeH * s);
+
+    return {
+        width: `${nativeW}px`,
+        height: `${nativeH}px`,
+        transform: `scale(${s})`,
+        transformOrigin: "center center",
+        flexShrink: 0,
+        margin: `-${Math.round((nativeH - scaledH) / 2)}px -${Math.round((nativeW - scaledW) / 2)}px`,
+    };
+});
+
 onMounted(() => {
     if (!props.editingLabel) {
         initManualConfigsFromGroups();
     }
+    nextTick(() => {
+        updatePreviewScale();
+        window.addEventListener("resize", updatePreviewScale);
+        if (window.ResizeObserver && previewContainerRef.value) {
+            const ro = new ResizeObserver(() => {
+                updatePreviewScale();
+            });
+            ro.observe(previewContainerRef.value);
+        }
+    });
+});
+
+watch(selectedTemplateId, () => {
+    nextTick(updatePreviewScale);
 });
 
 watch(
@@ -3299,26 +3359,50 @@ async function startDownload(type = null) {
     };
 
     try {
-        const dateSuffix = (tanggalProduksi.value || todayStr).replace(
-            /-/g,
-            "",
-        );
-        const tipeSlug =
-            filterCetakTipe.value === "alergi"
-                ? "Alergi"
-                : filterCetakTipe.value === "normal"
-                  ? "Normal"
-                  : filterCetakTipe.value === "tambahan"
-                    ? "Tambahan"
-                    : filterCetakTipe.value === "tambahan_organoleptik"
-                      ? "Tambahan_Organoleptik"
-                      : filterCetakTipe.value === "tambahan_sampel"
-                        ? "Tambahan_Sampel"
-                        : filterCetakTipe.value === "tambahan_buffer"
-                          ? "Tambahan_Buffer"
-                          : filterCetakTipe.value === "pm"
-                            ? "PM_Saja"
-                            : "Semua";
+        // 1. Prefix Sumber Data: WO vs Manual
+        const sumberPrefix = labelMode.value === "manual" ? "Manual" : "WO";
+
+        // 2. Format Tanggal YYYYMMDD
+        const rawTgl = tanggalProduksi.value || todayStr;
+        let yyyyMmDd = "";
+        if (rawTgl && rawTgl.includes("-")) {
+            const parts = rawTgl.split("-");
+            if (parts.length === 3 && parts[0].length === 4) {
+                yyyyMmDd = `${parts[0]}${parts[1].padStart(2, "0")}${parts[2].padStart(2, "0")}`;
+            }
+        }
+        if (!yyyyMmDd || yyyyMmDd.length !== 8) {
+            const d = new Date(rawTgl);
+            if (!isNaN(d.getTime())) {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const day = String(d.getDate()).padStart(2, "0");
+                yyyyMmDd = `${y}${m}${day}`;
+            } else {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, "0");
+                const day = String(now.getDate()).padStart(2, "0");
+                yyyyMmDd = `${y}${m}${day}`;
+            }
+        }
+
+        // 3. Tipe Cetak: Tunggal, Kolase, Kustom
+        const jenisCetak =
+            selectedType === "single"
+                ? "Tunggal"
+                : selectedType === "custom"
+                  ? "Kustom"
+                  : "Kolase";
+
+        // 4. ID SPPG
+        const idSppg = (props.unitSppg?.id_sppg || "SPPG").trim();
+
+        // 5. Kode Template (T1 = Template 01, T2 = Template 02)
+        const templateCode = selectedTemplateId.value === "template-02" ? "T2" : "T1";
+
+        // 6. Nama File PDF Standar Resmi
+        const filename = `Label_${templateCode}_${jenisCetak}_${sumberPrefix}-${yyyyMmDd}_${idSppg}.pdf`;
 
         const globalConfig = {
             namaSppg: namaSppg.value,
@@ -3342,7 +3426,6 @@ async function startDownload(type = null) {
         if (selectedTemplateId.value === "template-02") {
             // Template 02 (Standar Layout Excel BGN - Pure Vector/Text PDF)
             if (selectedType === "single") {
-                const filename = `Label_BGN_Tpl02_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
                 await downloadPdfTemplate02SingleMode({
                     printableItems: itemsToPrint,
                     printableKelompokList: printableKelompokList.value,
@@ -3358,7 +3441,6 @@ async function startDownload(type = null) {
                     },
                 });
             } else if (selectedType === "a4" || selectedType === "custom") {
-                const filename = `Label_BGN_Tpl02_${tipeSlug}_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
                 await downloadPdfTemplate02A4GridMode({
                     printableItems: itemsToPrint,
                     printableKelompokList: printableKelompokList.value,
@@ -3377,7 +3459,6 @@ async function startDownload(type = null) {
         } else {
             // Template 01 (Visual Kartu Grafis Modern)
             if (selectedType === "single") {
-                const filename = `Label_BGN_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
                 await downloadPdfSingleMode({
                     printableItems: itemsToPrint,
                     printableKelompokList: printableKelompokList.value,
@@ -3393,7 +3474,6 @@ async function startDownload(type = null) {
                     },
                 });
             } else if (selectedType === "a4" || selectedType === "custom") {
-                const filename = `Label_BGN_${tipeSlug}_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
                 await downloadPdfA4GridMode({
                     printableItems: itemsToPrint,
                     printableKelompokList: printableKelompokList.value,
@@ -3643,7 +3723,7 @@ async function startPrintDirect() {
 
                             <select
                                 v-model="filterCetakTipe"
-                                class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg pl-2.5 sm:pl-3 pr-8 sm:pr-8.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                                 title="Pilih porsi yang akan dicetak atau diunduh"
                             >
                                 <option value="semua">
@@ -3718,7 +3798,7 @@ async function startPrintDirect() {
                                 <!-- <span class="hidden md:inline">Reset</span> -->
                             </Button>
 
-                            <!-- Tombol SIMPAN LABEL -->
+                            <!-- Tombol SIMPAN LABEL (Hanya Icon Save) -->
                             <Button
                                 type="button"
                                 @click="saveLabelToDatabase"
@@ -3726,7 +3806,7 @@ async function startPrintDirect() {
                                     printableKelompokList.length === 0 ||
                                     isSaving
                                 "
-                                className="h-8 sm:h-9 px-3 sm:px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 rounded-xl shadow-xs cursor-pointer"
+                                className="h-8 sm:h-9 px-2.5 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center rounded-xl shadow-xs cursor-pointer"
                                 :title="
                                     editingLabel
                                         ? 'Perbarui data label ini di Daftar Label'
@@ -3737,17 +3817,10 @@ async function startPrintDirect() {
                                     v-if="isSaving"
                                     class="h-4 w-4 animate-spin shrink-0"
                                 />
-                                <BookmarkCheck
+                                <Save
                                     v-else
                                     class="h-4 w-4 shrink-0"
                                 />
-                                <span class="hidden sm:inline">{{
-                                    isSaving
-                                        ? "Menyimpan..."
-                                        : editingLabel
-                                          ? "Simpan Perubahan"
-                                          : "Simpan"
-                                }}</span>
                             </Button>
 
                             <!-- Select Format & Download PDF Button -->
@@ -3756,7 +3829,7 @@ async function startPrintDirect() {
                             >
                                 <select
                                     v-model="downloadFormatOption"
-                                    class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 sm:px-2.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                    class="h-8 sm:h-9 bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg pl-2.5 sm:pl-3 pr-8 sm:pr-8.5 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                                 >
                                     <option value="single">
                                         Label Tunggal
@@ -3835,10 +3908,10 @@ async function startPrintDirect() {
                                 class="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 flex-wrap"
                             >
                                 <div class="flex items-center gap-2">
-                                    <span
-                                        class="text-xs font-bold text-slate-700"
-                                        >Sumber Data:</span
-                                    >
+                                    <Database
+                                        class="h-4 w-4 text-slate-500 shrink-0"
+                                        title="Sumber Data"
+                                    />
                                     <div
                                         class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200"
                                     >
@@ -3846,29 +3919,25 @@ async function startPrintDirect() {
                                             type="button"
                                             @click="setLabelMode('auto')"
                                             :class="[
-                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center',
                                                 labelMode === 'auto'
                                                     ? 'bg-white text-primary shadow-2xs font-extrabold'
                                                     : 'text-slate-600 hover:text-slate-900',
                                             ]"
                                         >
-                                            <Utensils class="h-3.5 w-3.5" />
-                                            <span
-                                                >⚡ Otomatis (Work Order)</span
-                                            >
+                                            <span>Otomatis (WO)</span>
                                         </button>
                                         <button
                                             type="button"
                                             @click="setLabelMode('manual')"
                                             :class="[
-                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center',
                                                 labelMode === 'manual'
                                                     ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
                                                     : 'text-slate-600 hover:text-slate-900',
                                             ]"
                                         >
-                                            <Edit3 class="h-3.5 w-3.5" />
-                                            <span>✍️ Input Manual</span>
+                                            <span>Manual (Kustom)</span>
                                         </button>
                                     </div>
                                 </div>
@@ -6866,63 +6935,69 @@ async function startPrintDirect() {
                             </div>
                         </div>
 
-                        <!-- Card Preview Container -->
+                        <!-- Card Preview Container (Auto Responsive Scaler to maintain exact 1:1 layout on all devices) -->
                         <div
-                            class="p-4 bg-slate-100/80 rounded-3xl border border-slate-200 flex items-center justify-center shadow-inner"
+                            ref="previewContainerRef"
+                            class="p-3 sm:p-5 bg-slate-100/80 rounded-3xl border border-slate-200 flex items-center justify-center shadow-inner overflow-hidden min-h-[220px] sm:min-h-[350px]"
                         >
-                            <!-- Template 02: Layout Standar Excel BGN (Teks Murni) -->
-                            <LabelCardItemTemplate02
-                                v-if="selectedTemplateId === 'template-02'"
-                                :unit-sppg="unitSppg"
-                                :nama-sppg="namaSppg"
-                                :zona-waktu="zonaWaktu"
-                                :tinggi-isolasi-cm="tinggiIsolasiCm"
-                                :tanggal-produksi="tanggalProduksi"
-                                :jam-produksi="jamProduksi"
-                                :tampilkan-jam-produksi="gunakanJamProduksi"
-                                :tanggal-expired="tanggalExpired"
-                                :jam-expired="jamExpired"
-                                :tampilkan-jam-expired="gunakanJamExpired"
-                                :waktu-maksimal="waktuMaksimal"
-                                :teks-larangan-header="teksLaranganHeader"
-                                :teks-larangan-sub="teksLaranganSub"
-                                :tipe-label="activeLabelTab"
-                                :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
-                                :jenis-alergi="currentPreviewJenisAlergi"
-                                :tag-alergi="currentPreviewTag"
-                                :menu-items="currentPreviewMenuItems"
-                                :gizi-data="currentPreviewGiziData"
-                                :harga-items="hargaItems"
-                                :kelompok="previewKelompok"
-                                :kontak-baris1="kontakPengaduanBaris1"
-                                :kontak-baris2="kontakPengaduanBaris2"
-                                :kontak-baris3="kontakPengaduanBaris3"
-                                :kontak-baris4="kontakPengaduanBaris4"
-                            />
-                            <!-- Template 01: Visual Kartu Grafis Modern (Eksisting) -->
-                            <LabelCardItem
-                                v-else
-                                :unit-sppg="unitSppg"
-                                :nama-sppg="namaSppg"
-                                :zona-waktu="zonaWaktu"
-                                :tinggi-isolasi-cm="tinggiIsolasiCm"
-                                :tanggal-produksi="tanggalProduksi"
-                                :jam-produksi="jamProduksi"
-                                :tampilkan-jam-produksi="gunakanJamProduksi"
-                                :tanggal-expired="tanggalExpired"
-                                :jam-expired="jamExpired"
-                                :tampilkan-jam-expired="gunakanJamExpired"
-                                :waktu-maksimal="waktuMaksimal"
-                                :teks-larangan-header="teksLaranganHeader"
-                                :teks-larangan-sub="teksLaranganSub"
-                                :tipe-label="activeLabelTab"
-                                :jenis-alergi="currentPreviewJenisAlergi"
-                                :tag-alergi="currentPreviewTag"
-                                :menu-items="currentPreviewMenuItems"
-                                :gizi-data="currentPreviewGiziData"
-                                :harga-items="hargaItems"
-                                :kelompok="previewKelompok"
-                            />
+                            <div
+                                :style="previewScalerStyle"
+                                class="flex items-center justify-center transition-transform duration-150"
+                            >
+                                <!-- Template 02: Layout Standar Excel BGN (Teks Murni) -->
+                                <LabelCardItemTemplate02
+                                    v-if="selectedTemplateId === 'template-02'"
+                                    :unit-sppg="unitSppg"
+                                    :nama-sppg="namaSppg"
+                                    :zona-waktu="zonaWaktu"
+                                    :tinggi-isolasi-cm="tinggiIsolasiCm"
+                                    :tanggal-produksi="tanggalProduksi"
+                                    :jam-produksi="jamProduksi"
+                                    :tampilkan-jam-produksi="gunakanJamProduksi"
+                                    :tanggal-expired="tanggalExpired"
+                                    :jam-expired="jamExpired"
+                                    :tampilkan-jam-expired="gunakanJamExpired"
+                                    :waktu-maksimal="waktuMaksimal"
+                                    :teks-larangan-header="teksLaranganHeader"
+                                    :teks-larangan-sub="teksLaranganSub"
+                                    :tipe-label="activeLabelTab"
+                                    :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
+                                    :jenis-alergi="currentPreviewJenisAlergi"
+                                    :tag-alergi="currentPreviewTag"
+                                    :menu-items="currentPreviewMenuItems"
+                                    :gizi-data="currentPreviewGiziData"
+                                    :harga-items="hargaItems"
+                                    :kelompok="previewKelompok"
+                                    :kontak-baris1="kontakPengaduanBaris1"
+                                    :kontak-baris2="kontakPengaduanBaris2"
+                                    :kontak-baris3="kontakPengaduanBaris3"
+                                    :kontak-baris4="kontakPengaduanBaris4"
+                                />
+                                <!-- Template 01: Visual Kartu Grafis Modern (Eksisting) -->
+                                <LabelCardItem
+                                    v-else
+                                    :unit-sppg="unitSppg"
+                                    :nama-sppg="namaSppg"
+                                    :zona-waktu="zonaWaktu"
+                                    :tinggi-isolasi-cm="tinggiIsolasiCm"
+                                    :tanggal-produksi="tanggalProduksi"
+                                    :jam-produksi="jamProduksi"
+                                    :tampilkan-jam-produksi="gunakanJamProduksi"
+                                    :tanggal-expired="tanggalExpired"
+                                    :jam-expired="jamExpired"
+                                    :tampilkan-jam-expired="gunakanJamExpired"
+                                    :waktu-maksimal="waktuMaksimal"
+                                    :teks-larangan-header="teksLaranganHeader"
+                                    :teks-larangan-sub="teksLaranganSub"
+                                    :tipe-label="activeLabelTab"
+                                    :jenis-alergi="currentPreviewJenisAlergi"
+                                    :tag-alergi="currentPreviewTag"
+                                    :menu-items="currentPreviewMenuItems"
+                                    :gizi-data="currentPreviewGiziData"
+                                    :harga-items="hargaItems"
+                                    :kelompok="previewKelompok"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -7110,7 +7185,11 @@ async function startPrintDirect() {
                 left: -9999px;
                 top: 0;
                 width: 555px;
+                min-width: 555px;
+                max-width: 555px;
                 height: 370px;
+                min-height: 370px;
+                max-height: 370px;
                 pointer-events: none;
                 overflow: hidden;
                 z-index: -99999;
@@ -7119,7 +7198,15 @@ async function startPrintDirect() {
         >
             <div
                 ref="sandboxCardRef"
-                style="width: 555px; height: 370px; background: white"
+                style="
+                    width: 555px;
+                    min-width: 555px;
+                    max-width: 555px;
+                    height: 370px;
+                    min-height: 370px;
+                    max-height: 370px;
+                    background: white;
+                "
             >
                 <LabelCardItem
                     :key="`${sandboxParams.kelompok?.id || '0'}_${sandboxParams.tipeLabel}_${sandboxParams.jenisAlergi}_${sandboxParams.tagAlergi}_${(sandboxParams.menuItems || []).join('|')}_${sandboxParams.giziData?.energi_pb || ''}_${sandboxParams.giziData?.energi_pk || ''}`"

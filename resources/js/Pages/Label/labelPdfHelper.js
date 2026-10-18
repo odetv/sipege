@@ -14,9 +14,8 @@ async function captureElementToCanvas(element) {
         );
     }
 
-    const rect = element.getBoundingClientRect();
-    const elementW = Math.round(rect.width) || 555;
-    const elementH = Math.round(rect.height) || 370;
+    const elementW = 555;
+    const elementH = 370;
 
     return await html2canvas(element, {
         scale: 2.5, // 2.5x gives ~400 DPI crystal clarity & blazing speed
@@ -26,10 +25,10 @@ async function captureElementToCanvas(element) {
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: elementW,
-        windowHeight: elementH,
-        width: elementW,
-        height: elementH,
+        windowWidth: 555,
+        windowHeight: 370,
+        width: 555,
+        height: 370,
     });
 }
 

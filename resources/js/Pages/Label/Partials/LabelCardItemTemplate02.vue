@@ -256,56 +256,56 @@ const giziDisplay = computed(() => {
 const menuFontSizeClass = computed(() => {
     const len = menuItemsFormatted.value.length;
     if (len > 130) {
-        return "text-[5.5px] sm:text-[6.2px] leading-[1.2]";
+        return "text-[6.2px] leading-[1.2]";
     }
     if (len > 90) {
-        return "text-[6.2px] sm:text-[7px] leading-[1.2]";
+        return "text-[7px] leading-[1.2]";
     }
     if (len > 50) {
-        return "text-[7px] sm:text-[7.8px] leading-[1.2]";
+        return "text-[7.8px] leading-[1.2]";
     }
-    return "text-[7.8px] sm:text-[8.5px] leading-tight";
+    return "text-[8.5px] leading-tight";
 });
 
 const sppgFontSizeClass = computed(() => {
     const len = displayNameSppg.value.length;
     if (len > 48) {
-        return "text-[7px] sm:text-[8px]";
+        return "text-[8px]";
     }
     if (len > 36) {
-        return "text-[8px] sm:text-[9.2px]";
+        return "text-[9.2px]";
     }
     if (len > 25) {
-        return "text-[9.2px] sm:text-[10.5px]";
+        return "text-[10.5px]";
     }
-    return "text-[10px] sm:text-[11.5px]";
+    return "text-[11.5px]";
 });
 const menuTypeFontSizeClass = computed(() => {
     const len = menuTypeLabel.value.length;
     if (len > 32) {
-        return "text-[5.5px] sm:text-[6.2px] tracking-tight";
+        return "text-[6.2px] tracking-tight";
     }
     if (len > 24) {
-        return "text-[6.2px] sm:text-[7px] tracking-tight";
+        return "text-[7px] tracking-tight";
     }
     if (len > 14) {
-        return "text-[7px] sm:text-[7.8px]";
+        return "text-[7.8px]";
     }
-    return "text-[8px] sm:text-[8.5px]";
+    return "text-[8.5px]";
 });
 </script>
 
 <template>
     <div
-        class="bgn-label-card-template02 w-full max-w-[430px] bg-white border-2 border-slate-900 rounded-sm shadow-md overflow-hidden flex flex-col font-sans select-none text-slate-950 text-[10px]"
-        style="aspect-ratio: 88 / 61.05;"
+        class="bgn-label-card-template02 w-[440px] min-w-[440px] max-w-[440px] h-[305px] min-h-[305px] max-h-[305px] bg-white border-2 border-slate-900 rounded-sm shadow-md overflow-hidden flex flex-col select-none text-slate-950 text-[10px]"
+        style="width: 440px; min-width: 440px; max-width: 440px; height: 305px; min-height: 305px; max-height: 305px; aspect-ratio: 88 / 61.05;"
     >
         <!-- 1. Row 1: AREA PEREKAT LABEL (Excel Row 1, Height ~39.95pt / ~23%) -->
         <div
             class="h-[22%] border-b border-dashed border-slate-400 bg-white flex items-center justify-center px-2 shrink-0"
         >
             <span
-                class="text-[7px] sm:text-[8px] font-mono italic tracking-wider text-slate-400 font-normal text-center select-none"
+                class="text-[8px] font-mono italic tracking-wider text-slate-400 font-normal text-center select-none"
             >
                 - - - - - - - - - AREA PEREKAT LABEL - - - - - - - - -
             </span>
@@ -319,16 +319,16 @@ const menuTypeFontSizeClass = computed(() => {
                 <img
                     src="/images/logo/label_bgn_logo_template2.png"
                     alt="Logo BGN"
-                    class="h-6 sm:h-7 w-auto object-contain"
+                    class="h-7 w-auto object-contain"
                 />
             </div>
             <div class="text-right flex-1 min-w-0 flex flex-col justify-center items-end">
-                <div class="text-[7px] sm:text-[7.8px] text-slate-700 font-normal leading-none tracking-tight">
+                <div class="text-[7.8px] text-slate-700 font-normal leading-none tracking-tight">
                     SATUAN PELAYANAN PEMENUHAN GIZI
                 </div>
                 <div
                     :class="[
-                        'font-black text-slate-950 uppercase tracking-tight truncate w-full text-right mt-0.5 sm:mt-1 leading-none',
+                        'font-black text-slate-950 uppercase tracking-tight truncate w-full text-right mt-1 leading-none',
                         sppgFontSizeClass
                     ]"
                     :title="displayNameSppg"
@@ -346,7 +346,7 @@ const menuTypeFontSizeClass = computed(() => {
             <div
                 class="w-[40%] bg-[#9DC3E6] border-r border-slate-900 px-1.5 py-0.5 flex flex-col justify-center leading-tight shrink-0 overflow-hidden"
             >
-                <span class="text-[7px] sm:text-[7.8px] font-black text-slate-900 leading-none">
+                <span class="text-[7.8px] font-black text-slate-900 leading-none">
                     MENU
                 </span>
                 <span
@@ -381,7 +381,7 @@ const menuTypeFontSizeClass = computed(() => {
         >
             <!-- Col A: TANGGAL / WAKTU PRODUKSI (~20%) -->
             <div
-                class="w-[20%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[6.5px] sm:text-[7.5px] font-black text-slate-900 shrink-0"
+                class="w-[20%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7.5px] font-black text-slate-900 shrink-0"
             >
                 <template v-if="isShowingJamProduksi">
                     <span>WAKTU</span>
@@ -395,7 +395,7 @@ const menuTypeFontSizeClass = computed(() => {
             <!-- Col B-C: Tanggal DD-MM-YYYY (atau DD-MM-YYYY HH:mm WITA) (~40%) -->
             <div
                 class="w-[40%] bg-[#BDD7EE] border-r border-slate-900 px-1 py-0.5 flex items-center justify-center font-black text-slate-900 shrink-0 leading-tight text-center"
-                :class="isShowingJamProduksi ? 'text-[7.5px] sm:text-[9.5px]' : 'text-[9px] sm:text-[11px]'"
+                :class="isShowingJamProduksi ? 'text-[9.5px]' : 'text-[11px]'"
             >
                 {{ formattedTanggalProduksi }}
             </div>
@@ -405,10 +405,10 @@ const menuTypeFontSizeClass = computed(() => {
                 v-if="isMergedWaktuBatas"
                 class="w-[40%] bg-[#9DC3E6] px-1 py-0.5 flex flex-col justify-center items-center leading-tight text-center shrink-0 overflow-hidden"
             >
-                <span class="text-[5.5px] sm:text-[6.5px] font-black uppercase text-slate-900 leading-none tracking-tight">
+                <span class="text-[6.5px] font-black uppercase text-slate-900 leading-none tracking-tight">
                     WAKTU BATAS AMAN KONSUMSI
                 </span>
-                <span class="text-[7.5px] sm:text-[9px] font-black text-slate-950 uppercase leading-tight mt-0.5 truncate max-w-full">
+                <span class="text-[9px] font-black text-slate-950 uppercase leading-tight mt-0.5 truncate max-w-full">
                     {{ formattedWaktuBatas }}
                 </span>
             </div>
@@ -417,14 +417,14 @@ const menuTypeFontSizeClass = computed(() => {
             <template v-else>
                 <!-- Col D: WAKTU BATAS AMAN KONSUMSI (~24%) -->
                 <div
-                    class="w-[24%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[6px] sm:text-[7px] font-black text-slate-900 shrink-0"
+                    class="w-[24%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7px] font-black text-slate-900 shrink-0"
                 >
                     <span>WAKTU BATAS</span>
                     <span>AMAN KONSUMSI</span>
                 </div>
                 <!-- Col E: Jam Batas Aman (~16%) -->
                 <div
-                    class="w-[16%] bg-[#BDD7EE] px-0.5 py-0.5 flex items-center justify-center text-[7px] sm:text-[8px] font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap"
+                    class="w-[16%] bg-[#BDD7EE] px-0.5 py-0.5 flex items-center justify-center text-[8px] font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap"
                 >
                     {{ formattedWaktuBatas }}
                 </div>
@@ -439,10 +439,10 @@ const menuTypeFontSizeClass = computed(() => {
             <div
                 class="w-[40%] bg-[#E2EFDA] border-r border-slate-900 p-1.5 flex flex-col justify-between leading-tight shrink-0"
             >
-                <div class="text-[7.5px] sm:text-[8.5px] font-black text-slate-900">
+                <div class="text-[8.5px] font-black text-slate-900">
                     KONTAK PENGADUAN
                 </div>
-                <div class="text-[6.5px] sm:text-[7.5px] font-medium text-slate-800 space-y-0.5 leading-tight">
+                <div class="text-[7.5px] font-medium text-slate-800 space-y-0.5 leading-tight">
                     <div class="truncate">{{ contactDisplayLines[0] }}</div>
                     <div class="truncate">{{ contactDisplayLines[1] }}</div>
                     <div class="truncate">{{ contactDisplayLines[2] }}</div>
@@ -454,7 +454,7 @@ const menuTypeFontSizeClass = computed(() => {
             <div class="w-[60%] flex flex-col shrink-0">
                 <!-- Header Gizi (Row 6) -->
                 <div
-                    class="h-[20%] bg-[#FFE699] border-b border-slate-900 flex text-[6.5px] sm:text-[7.5px] font-black text-slate-900 items-center shrink-0"
+                    class="h-[20%] bg-[#FFE699] border-b border-slate-900 flex text-[7.5px] font-black text-slate-900 items-center shrink-0"
                 >
                     <div class="w-[33.5%] border-r border-slate-900 text-center leading-none py-0.5">
                         KANDUNGAN GIZI
@@ -468,7 +468,7 @@ const menuTypeFontSizeClass = computed(() => {
                 </div>
 
                 <!-- 5 Rows Gizi (Rows 7-11) -->
-                <div class="h-[80%] flex flex-col bg-[#FFF2CC] justify-between text-[6.5px] sm:text-[7.2px] text-slate-900">
+                <div class="h-[80%] flex flex-col bg-[#FFF2CC] justify-between text-[7.2px] text-slate-900">
                     <!-- Row 7: Energi -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
                         <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
@@ -537,12 +537,26 @@ const menuTypeFontSizeClass = computed(() => {
         <div
             class="h-[11%] bg-[#FFC000] border-t border-slate-900 px-2 flex flex-col items-center justify-center text-center shrink-0"
         >
-            <span class="text-[7.5px] sm:text-[8.5px] font-black text-slate-950 uppercase leading-none">
+            <span class="text-[8.5px] font-black text-slate-950 uppercase leading-none">
                 {{ teksLaranganHeader || 'TIDAK BOLEH DIBAWA PULANG.' }}
             </span>
-            <span class="text-[7.5px] sm:text-[8.5px] font-black text-slate-950 uppercase leading-none mt-0.5">
+            <span class="text-[8.5px] font-black text-slate-950 uppercase leading-none mt-0.5">
                 {{ teksLaranganSub || 'SEGERA KONSUMSI SETELAH DITERIMA!' }}
             </span>
         </div>
     </div>
 </template>
+
+<style scoped>
+.bgn-label-card-template02 {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    box-sizing: border-box !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+}
+
+.bgn-label-card-template02 * {
+    box-sizing: border-box !important;
+    font-family: inherit;
+}
+</style>

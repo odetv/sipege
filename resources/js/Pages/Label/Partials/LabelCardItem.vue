@@ -192,7 +192,7 @@ const menuFontSizeStyle = computed(() => {
     const len = formattedMenuText.value.length;
     let baseSize = 10.5;
     let baseLineHeight = "1.2";
-    let basePadding = "2px 8px 5px 8px";
+    let basePadding = "0px 8px 0px 8px";
 
     if (len > 120) {
         baseSize = 8;
@@ -328,12 +328,15 @@ const resolvedGizi = computed(() => {
         class="bgn-label-card"
         style="
             width: 555px;
-            max-width: 100%;
+            min-width: 555px;
+            max-width: 555px;
             height: 370px;
+            min-height: 370px;
+            max-height: 370px;
             background-color: #ffffff;
             color: #1e3a8a;
             font-family:
-                Arial, &quot;Helvetica Neue&quot;, Helvetica, sans-serif !important;
+                'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
             box-sizing: border-box;
             user-select: none;
             overflow: hidden;
@@ -373,7 +376,7 @@ const resolvedGizi = computed(() => {
                     textAlign: 'center',
                 }"
             >
-                {{ isAlergi ? '- - - - - - - - - - AREA TEMPEL ISOLASI • KEMASAN PORSI ALERGI - - - - - - - - - -' : '- - - - - - - - - - AREA TEMPEL ISOLASI / PEREKAT KEMASAN - - - - - - - - - -' }}
+                {{ isAlergi ? '- - - - - - - - - - AREA PEREKAT LABEL • KEMASAN PORSI ALERGI - - - - - - - - - -' : '- - - - - - - - - - AREA PEREKAT LABEL - - - - - - - - - -' }}
             </div>
         </div>
 
@@ -496,7 +499,7 @@ const resolvedGizi = computed(() => {
                         style="
                             display: block;
                             line-height: 1;
-                            transform: translateY(-3px);
+                            transform: translateY(-6px);
                         "
                         >{{ bannerBadgeText }}</span
                     >
@@ -522,7 +525,7 @@ const resolvedGizi = computed(() => {
                             width: 100%;
                             line-height: inherit;
                             vertical-align: middle;
-                            transform: translateY(-3px);
+                            transform: translateY(-6px);
                         "
                     >
                         {{ formattedMenuText }}
@@ -559,7 +562,7 @@ const resolvedGizi = computed(() => {
                                 marginBottom: dyn.tglLabelMarginBottom,
                                 paddingLeft: '1px',
                                 display: 'block',
-                                transform: 'translateY(-1.5px)',
+                                transform: 'translateY(-3.5px)',
                             }"
                         >
                             {{
@@ -591,7 +594,7 @@ const resolvedGizi = computed(() => {
                                 style="
                                     display: block;
                                     line-height: 1;
-                                    transform: translateY(-3.5px);
+                                    transform: translateY(-7.5px);
                                 "
                                 >{{ formattedDateDisplay }}</span
                             >
@@ -626,7 +629,7 @@ const resolvedGizi = computed(() => {
                                 marginBottom: '2px',
                                 padding: '0',
                                 whiteSpace: 'nowrap',
-                                transform: 'translateY(-3px)',
+                                transform: 'translateY(-5.5px)',
                             }"
                         >
                             {{ headerWaktuMaksimalDisplay }}
@@ -640,7 +643,7 @@ const resolvedGizi = computed(() => {
                                 margin: '0',
                                 padding: '0',
                                 whiteSpace: 'nowrap',
-                                transform: 'translateY(-3px)',
+                                transform: 'translateY(-5.5px)',
                             }"
                         >
                             {{ formattedWaktuMaksimalDisplay }}
@@ -677,7 +680,7 @@ const resolvedGizi = computed(() => {
                                 padding: '0',
                                 whiteSpace: 'nowrap',
                                 width: '100%',
-                                transform: 'translateY(-3px)',
+                                transform: 'translateY(-5px)',
                             }"
                         >
                             {{
@@ -697,7 +700,7 @@ const resolvedGizi = computed(() => {
                                 padding: '0',
                                 whiteSpace: 'nowrap',
                                 width: '100%',
-                                transform: 'translateY(-3px)',
+                                transform: 'translateY(-5px)',
                             }"
                         >
                             {{ teksLaranganSub || "DILARANG MEMBAWA PULANG!" }}
@@ -732,7 +735,7 @@ const resolvedGizi = computed(() => {
                                 color: '#1e293b',
                                 lineHeight: '1',
                                 whiteSpace: 'nowrap',
-                                transform: 'translateY(-2px)',
+                                transform: 'translateY(-3.5px)',
                                 display: 'block',
                             }"
                         >
@@ -776,7 +779,7 @@ const resolvedGizi = computed(() => {
                                             display: flex;
                                             align-items: center;
                                             height: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-3.5px);
                                             line-height: 1;
                                         "
                                     >
@@ -815,14 +818,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.energi_pk
@@ -852,14 +855,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.energi_pb
@@ -887,7 +890,7 @@ const resolvedGizi = computed(() => {
                                             display: flex;
                                             align-items: center;
                                             height: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-3.5px);
                                             line-height: 1;
                                         "
                                     >
@@ -926,14 +929,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.karbo_pk
@@ -963,14 +966,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.karbo_pb
@@ -998,7 +1001,7 @@ const resolvedGizi = computed(() => {
                                             display: flex;
                                             align-items: center;
                                             height: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-3.5px);
                                             line-height: 1;
                                         "
                                     >
@@ -1037,14 +1040,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.prot_pk
@@ -1074,14 +1077,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.prot_pb
@@ -1109,7 +1112,7 @@ const resolvedGizi = computed(() => {
                                             display: flex;
                                             align-items: center;
                                             height: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-3.5px);
                                             line-height: 1;
                                         "
                                     >
@@ -1148,14 +1151,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.lmk_pk
@@ -1185,14 +1188,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.lmk_pb
@@ -1220,7 +1223,7 @@ const resolvedGizi = computed(() => {
                                             display: flex;
                                             align-items: center;
                                             height: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-3.5px);
                                             line-height: 1;
                                         "
                                     >
@@ -1259,14 +1262,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.serat_pk
@@ -1296,14 +1299,14 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4px);
                                         "
                                     >
                                         <span
                                             style="
                                                 display: block;
                                                 line-height: 1;
-                                                transform: translateY(-1.5px);
+                                                transform: translateY(-1px);
                                             "
                                             >{{
                                                 resolvedGizi.serat_pb
@@ -1338,7 +1341,7 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4.5px);
                                         "
                                     >
                                         <span
@@ -1385,7 +1388,7 @@ const resolvedGizi = computed(() => {
                                             justify-content: center;
                                             height: 100%;
                                             width: 100%;
-                                            transform: translateY(-2px);
+                                            transform: translateY(-4.5px);
                                         "
                                     >
                                         <span
@@ -1422,11 +1425,12 @@ const resolvedGizi = computed(() => {
 .bgn-label-card {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
     box-sizing: border-box !important;
 }
 
 .bgn-label-card * {
     box-sizing: border-box !important;
+    font-family: inherit;
 }
 </style>
