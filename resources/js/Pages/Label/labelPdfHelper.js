@@ -772,19 +772,44 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     const hR6_11 = hR6 + (hR_gizi * 5); // 17.75 mm
     const hR12 = 6.40;   // Row 12: Warning banner
 
-    // Colors
-    const colBlueHeader = [157, 195, 230];   // #9DC3E6
-    const colBlueLight = [189, 215, 238];    // #BDD7EE
-    const colGreenSoft = [226, 239, 218];    // #E2EFDA
-    const colYellowHead = [255, 230, 153];   // #FFE699
-    const colYellowBody = [255, 242, 204];   // #FFF2CC
-    const colGoldWarning = [255, 192, 0];    // #FFC000
+    // Helper hex to RGB
+    const hexToRgb = (hex, defaultRgb = [255, 255, 255]) => {
+        if (!hex || hex === "transparent" || hex === "none" || hex === "white") return [255, 255, 255];
+        const clean = String(hex).replace("#", "").trim();
+        if (clean.length === 3) {
+            const r = parseInt(clean[0] + clean[0], 16);
+            const g = parseInt(clean[1] + clean[1], 16);
+            const b = parseInt(clean[2] + clean[2], 16);
+            return isNaN(r) || isNaN(g) || isNaN(b) ? defaultRgb : [r, g, b];
+        }
+        if (clean.length === 6) {
+            const num = parseInt(clean, 16);
+            if (isNaN(num)) return defaultRgb;
+            return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+        }
+        return defaultRgb;
+    };
+
+    // Colors from globalConfig or defaults
+    const customColors = globalConfig.template02Colors || globalConfig.customColors || {};
+    const colAreaPerekat = hexToRgb(customColors.areaPerekat, [255, 255, 255]);
+    const colHeaderSppg  = hexToRgb(customColors.headerSppg, [255, 255, 255]);
+    const colMenuHeader  = hexToRgb(customColors.menuLabel, [157, 195, 230]);   // #9DC3E6
+    const colMenuBody    = hexToRgb(customColors.menuValue, [189, 215, 238]);   // #BDD7EE
+    const colTglHeader   = hexToRgb(customColors.tglLabel, [157, 195, 230]);    // #9DC3E6
+    const colTglBody     = hexToRgb(customColors.tglValue, [189, 215, 238]);    // #BDD7EE
+    const colBatasHeader = hexToRgb(customColors.batasKonsumsi, [157, 195, 230]); // #9DC3E6
+    const colBatasBody   = hexToRgb(customColors.batasKonsumsiVal, [189, 215, 238]); // #BDD7EE
+    const colGreenSoft   = hexToRgb(customColors.kontak, [226, 239, 218]);      // #E2EFDA
+    const colYellowHead  = hexToRgb(customColors.giziHeader, [255, 230, 153]);  // #FFE699
+    const colYellowBody  = hexToRgb(customColors.giziBody, [255, 242, 204]);    // #FFF2CC
+    const colGoldWarning = hexToRgb(customColors.footer, [255, 192, 0]);       // #FFC000
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
 
     // ================= 1. ROW 1: AREA PEREKAT LABEL =================
-    doc.setFillColor(255, 255, 255);
+    doc.setFillColor(...colAreaPerekat);
     doc.rect(x, y, cardW, hR1, "FD");
     doc.setFont("helvetica", "italic");
     doc.setFontSize(4.8);
@@ -793,7 +818,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
 
     // ================= 2. ROW 2-3: LOGO & HEADER SPPG =================
     const yR2 = y + hR1;
-    doc.setFillColor(255, 255, 255);
+    doc.setFillColor(...colHeaderSppg);
     doc.rect(x, yR2, cardW, hR2_3, "FD");
 
     // Logo BGN on the left
@@ -829,7 +854,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
 
     // ================= 3. ROW 4: MENU & SUB-MENU =================
     const yR4 = yR2 + hR2_3;
-    doc.setFillColor(...colBlueHeader);
+    doc.setFillColor(...colMenuHeader);
     doc.rect(x, yR4, wAB, hR4, "FD");
 
     let menuTypeTitle = "NORMAL";
@@ -860,7 +885,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     doc.setFontSize(typeFontSize);
     doc.text(menuTypeTitle, x + 1.5, yR4 + 5.1);
 
-    doc.setFillColor(...colBlueLight);
+    doc.setFillColor(...colMenuBody);
     doc.rect(x + wAB, yR4, wCDE, hR4, "FD");
 
     const menuItems = Array.isArray(item.menuItems) && item.menuItems.length > 0
@@ -892,7 +917,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
 
     // ================= 4. ROW 5: TANGGAL PRODUKSI & BATAS AMAN =================
     const yR5 = yR4 + hR4;
-    doc.setFillColor(...colBlueHeader);
+    doc.setFillColor(...colTglHeader);
     doc.rect(x, yR5, wA, hR5, "FD");
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -906,7 +931,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     const labelProduksiHeader = isShowingJamProduksi ? "WAKTU\nPRODUKSI" : "TANGGAL\nPRODUKSI";
     doc.text(labelProduksiHeader, x + 1.5, yR5 + 2.8);
 
-    doc.setFillColor(...colBlueLight);
+    doc.setFillColor(...colTglBody);
     doc.rect(x + wA, yR5, wBC, hR5, "FD");
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -927,7 +952,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
 
     if (isMergedWaktu) {
         // MERGE: Kotak D & E digabung menjadi satu banner rapi
-        doc.setFillColor(...colBlueHeader);
+        doc.setFillColor(...colBatasHeader);
         doc.rect(x + wA + wBC, yR5, wDE, hR5, "FD");
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
@@ -939,14 +964,14 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
         doc.text(waktuText, x + wA + wBC + (wDE / 2), yR5 + 5.0, { align: "center" });
     } else {
         // TIDAK DI-MERGE (Format jam singkat e.g. 10:00 WITA)
-        doc.setFillColor(...colBlueHeader);
+        doc.setFillColor(...colBatasHeader);
         doc.rect(x + wA + wBC, yR5, wD, hR5, "FD");
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(4.8);
         doc.text("WAKTU BATAS\nAMAN KONSUMSI", x + wA + wBC + 1.5, yR5 + 2.8);
 
-        doc.setFillColor(...colBlueLight);
+        doc.setFillColor(...colBatasBody);
         doc.rect(x + wA + wBC + wD, yR5, wE, hR5, "FD");
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
@@ -1009,7 +1034,7 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     // 1. Gambar seluruh kotak sel gizi terlebih dahulu agar state fill color murni konsisten kuning pastel (#FFF2CC)
     for (let i = 0; i < giziRows.length; i++) {
         const rowY = yR6 + hR6 + (i * hR_gizi);
-        doc.setFillColor(255, 242, 204);
+        doc.setFillColor(...colYellowBody);
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.2);
         doc.rect(x + wAB, rowY, wC, hR_gizi, "FD");

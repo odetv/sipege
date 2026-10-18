@@ -43,6 +43,8 @@ import {
     Minus,
     PhoneCall,
     Database,
+    Palette,
+    Ban,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
@@ -99,6 +101,62 @@ const labelMode = ref("auto");
 
 // Pilihan Template Desain Label: 'template-01' (Grafis Modern) | 'template-02' (Standar Excel / Teks Murni)
 const selectedTemplateId = ref("template-01");
+
+// Kustomisasi Warna Template 02
+const defaultTemplate02Colors = {
+    areaPerekat: "#ffffff",
+    headerSppg: "#ffffff",
+    menuLabel: "#9DC3E6",
+    menuValue: "#BDD7EE",
+    tglLabel: "#9DC3E6",
+    tglValue: "#BDD7EE",
+    batasKonsumsi: "#9DC3E6",
+    batasKonsumsiVal: "#BDD7EE",
+    kontak: "#E2EFDA",
+    giziHeader: "#FFE699",
+    giziBody: "#FFF2CC",
+    footer: "#FFC000",
+};
+
+const template02Colors = ref({ ...defaultTemplate02Colors });
+
+const template02Sections = [
+    { key: "menuLabel", label: "Judul Menu (Header)", desc: "Kotak kiri MENU & jenis porsi", default: "#9DC3E6" },
+    { key: "menuValue", label: "Isi Menu Makanan", desc: "Kotak kanan rincian masakan", default: "#BDD7EE" },
+    { key: "tglLabel", label: "Header Tanggal Produksi", desc: "Kotak kiri TANGGAL/WAKTU PRODUKSI", default: "#9DC3E6" },
+    { key: "tglValue", label: "Isi Tanggal Produksi", desc: "Kotak tanggal produksi makanan", default: "#BDD7EE" },
+    { key: "batasKonsumsi", label: "Waktu Batas Konsumsi", desc: "Kotak batas aman konsumsi makanan", default: "#9DC3E6" },
+    { key: "kontak", label: "Kontak Pengaduan", desc: "Kotak info medsos & email BGN", default: "#E2EFDA" },
+    { key: "giziHeader", label: "Header Tabel Gizi", desc: "Baris judul Kandungan Gizi, PK, PB", default: "#FFE699" },
+    { key: "giziBody", label: "Isi Tabel Gizi", desc: "5 baris nutrisi (Energi, Karbo, dsb)", default: "#FFF2CC" },
+    { key: "footer", label: "Banner Peringatan (Bawah)", desc: "Larangan membawa pulang makanan", default: "#FFC000" },
+    { key: "headerSppg", label: "Header SPPG & Logo", desc: "Area instansi & logo BGN atas", default: "#ffffff" },
+    { key: "areaPerekat", label: "Area Perekat Label", desc: "Area garis putus-putus paling atas", default: "#ffffff" },
+];
+
+const clearSectionColor = (key) => {
+    template02Colors.value[key] = "#ffffff";
+    if (key === "batasKonsumsi") {
+        template02Colors.value.batasKonsumsiVal = "#ffffff";
+    }
+};
+
+const resetSectionColor = (key) => {
+    template02Colors.value[key] = defaultTemplate02Colors[key];
+    if (key === "batasKonsumsi") {
+        template02Colors.value.batasKonsumsiVal = defaultTemplate02Colors.batasKonsumsiVal;
+    }
+};
+
+const clearAllTemplate02Colors = () => {
+    Object.keys(defaultTemplate02Colors).forEach((k) => {
+        template02Colors.value[k] = "#ffffff";
+    });
+};
+
+const resetAllTemplate02Colors = () => {
+    template02Colors.value = { ...defaultTemplate02Colors };
+};
 
 // Selected Work Order ID
 const selectedWoId = ref(
@@ -2298,6 +2356,12 @@ watch(
                             },
                         };
                     }
+                    if (parsed.template02Colors) {
+                        template02Colors.value = {
+                            ...defaultTemplate02Colors,
+                            ...parsed.template02Colors,
+                        };
+                    }
                 } catch {
                     // ignore
                 }
@@ -2871,6 +2935,7 @@ function saveLabelToDatabase() {
             manual_allergy_configs: manualAllergyConfigs.value,
             selected_manual_allergies: selectedManualAllergies.value,
             extra_label_buffers: extraLabelBuffers.value,
+            template02Colors: template02Colors.value,
         }),
     };
 
@@ -3173,6 +3238,7 @@ async function getSandboxCardElement(itemOrKelompok) {
     await new Promise((resolve) => setTimeout(resolve, 50));
     return (
         sandboxCardRef.value?.querySelector(".bgn-label-card") ||
+        sandboxCardRef.value?.querySelector(".bgn-label-card-template02") ||
         sandboxCardRef.value
     );
 }
@@ -3421,6 +3487,7 @@ async function startDownload(type = null) {
             kontakBaris4: kontakPengaduanBaris4.value,
             menuItems: menuItems.value,
             giziData: giziData.value,
+            template02Colors: { ...template02Colors.value },
         };
 
         if (selectedTemplateId.value === "template-02") {
@@ -3579,6 +3646,7 @@ async function startPrintDirect() {
                 kontakBaris4: kontakPengaduanBaris4.value,
                 menuItems: menuItems.value,
                 giziData: giziData.value,
+                template02Colors: { ...template02Colors.value },
             };
             await printPdfTemplate02SingleMode({
                 printableItems: itemsToPrint,
@@ -4124,6 +4192,114 @@ async function startPrintDirect() {
                                 <span>
                                     * Kontak pengaduan ini aktif baik di Sumber Data Otomatis WO maupun Input Manual. Anda bebas mengubah teks secara langsung atau klik tombol reset untuk kembali ke data SPPG.
                                 </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Pengaturan Kustomisasi Warna Bagian Label (Khusus Template 02) -->
+                    <Card
+                        v-if="selectedTemplateId === 'template-02'"
+                        className="bg-white border-slate-200/80 shadow-2xs animate-in fade-in"
+                    >
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        >
+                            <div>
+                                <CardTitle
+                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                                >
+                                    <Palette class="h-4 w-4 text-indigo-600 shrink-0" />
+                                    <span>Kustomisasi Warna Bagian (Template 02)</span>
+                                </CardTitle>
+                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                    Pilih warna latar tiap bagian atau gunakan tombol hapus warna untuk latar putih polos.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                <button
+                                    type="button"
+                                    @click="clearAllTemplate02Colors"
+                                    class="px-2.5 py-1 rounded-md text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                    title="Hapus seluruh warna latar (semua bagian menjadi putih polos / tanpa warna)"
+                                >
+                                    <Ban class="h-3 w-3 text-rose-600" />
+                                    <span>Hapus Semua Warna</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="resetAllTemplate02Colors"
+                                    class="px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                    title="Kembalikan semua warna ke warna bawaan standar BGN Template 02"
+                                >
+                                    <RotateCcw class="h-3 w-3 text-slate-500" />
+                                    <span>Reset Bawaan</span>
+                                </button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-2 text-xs">
+                            <div class="grid grid-cols-1 gap-2">
+                                <div
+                                    v-for="sec in template02Sections"
+                                    :key="sec.key"
+                                    class="flex items-center justify-between gap-3 p-2 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-indigo-200 transition-all"
+                                >
+                                    <!-- Info Bagian -->
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <!-- Swatch Preview Box -->
+                                        <div
+                                            class="w-7 h-7 rounded-lg border border-slate-300 shadow-2xs shrink-0 flex items-center justify-center relative overflow-hidden transition-colors"
+                                            :style="{ backgroundColor: template02Colors[sec.key] || '#ffffff' }"
+                                        >
+                                            <Ban
+                                                v-if="template02Colors[sec.key] === '#ffffff' || template02Colors[sec.key] === 'transparent'"
+                                                class="h-3.5 w-3.5 text-rose-400 opacity-60"
+                                            />
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="font-bold text-slate-800 text-xs leading-none truncate">{{ sec.label }}</p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5 truncate">{{ sec.desc }}</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Kontrol Warna -->
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <!-- Color Picker Input -->
+                                        <div class="relative flex items-center" :title="`Pilih warna untuk ${sec.label}`">
+                                            <input
+                                                type="color"
+                                                v-model="template02Colors[sec.key]"
+                                                class="w-7 h-7 rounded-lg border border-slate-300 cursor-pointer p-0.5 bg-white shadow-2xs hover:scale-105 transition-transform"
+                                            />
+                                        </div>
+
+                                        <!-- Tombol Hapus Warna -->
+                                        <button
+                                            type="button"
+                                            @click="clearSectionColor(sec.key)"
+                                            :class="[
+                                                'px-2 py-1 rounded-lg text-[10.5px] font-bold border transition-all cursor-pointer flex items-center gap-1 shadow-2xs',
+                                                template02Colors[sec.key] === '#ffffff' || template02Colors[sec.key] === 'transparent'
+                                                    ? 'bg-rose-50 text-rose-600 border-rose-200/80 font-extrabold'
+                                                    : 'bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border-slate-200 hover:border-rose-200'
+                                            ]"
+                                            :title="`Hapus warna latar ${sec.label} (jadikan putih polos)`"
+                                        >
+                                            <Ban class="h-3 w-3 shrink-0" />
+                                            <span>Hapus Warna</span>
+                                        </button>
+
+                                        <!-- Tombol Reset Default per Bagian -->
+                                        <button
+                                            v-if="template02Colors[sec.key] !== sec.default"
+                                            type="button"
+                                            @click="resetSectionColor(sec.key)"
+                                            class="p-1 rounded-lg bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-200 transition-colors cursor-pointer"
+                                            :title="`Kembalikan ${sec.label} ke warna standar bawaan`"
+                                        >
+                                            <RotateCcw class="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -6972,6 +7148,7 @@ async function startPrintDirect() {
                                     :kontak-baris2="kontakPengaduanBaris2"
                                     :kontak-baris3="kontakPengaduanBaris3"
                                     :kontak-baris4="kontakPengaduanBaris4"
+                                    :custom-colors="template02Colors"
                                 />
                                 <!-- Template 01: Visual Kartu Grafis Modern (Eksisting) -->
                                 <LabelCardItem
@@ -7208,7 +7385,37 @@ async function startPrintDirect() {
                     background: white;
                 "
             >
+                <LabelCardItemTemplate02
+                    v-if="selectedTemplateId === 'template-02'"
+                    :unit-sppg="unitSppg"
+                    :nama-sppg="namaSppg"
+                    :zona-waktu="zonaWaktu"
+                    :tinggi-isolasi-cm="tinggiIsolasiCm"
+                    :tanggal-produksi="tanggalProduksi"
+                    :jam-produksi="jamProduksi"
+                    :tampilkan-jam-produksi="gunakanJamProduksi"
+                    :tanggal-expired="tanggalExpired"
+                    :jam-expired="jamExpired"
+                    :tampilkan-jam-expired="gunakanJamExpired"
+                    :waktu-maksimal="waktuMaksimal"
+                    :teks-larangan-header="teksLaranganHeader"
+                    :teks-larangan-sub="teksLaranganSub"
+                    :tipe-label="sandboxParams.tipeLabel"
+                    :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
+                    :jenis-alergi="sandboxParams.jenisAlergi"
+                    :tag-alergi="sandboxParams.tagAlergi"
+                    :menu-items="sandboxParams.menuItems"
+                    :gizi-data="sandboxParams.giziData"
+                    :harga-items="hargaItems"
+                    :kelompok="sandboxParams.kelompok"
+                    :kontak-baris1="kontakPengaduanBaris1"
+                    :kontak-baris2="kontakPengaduanBaris2"
+                    :kontak-baris3="kontakPengaduanBaris3"
+                    :kontak-baris4="kontakPengaduanBaris4"
+                    :custom-colors="template02Colors"
+                />
                 <LabelCardItem
+                    v-else
                     :key="`${sandboxParams.kelompok?.id || '0'}_${sandboxParams.tipeLabel}_${sandboxParams.jenisAlergi}_${sandboxParams.tagAlergi}_${(sandboxParams.menuItems || []).join('|')}_${sandboxParams.giziData?.energi_pb || ''}_${sandboxParams.giziData?.energi_pk || ''}`"
                     :unit-sppg="unitSppg"
                     :nama-sppg="namaSppg"

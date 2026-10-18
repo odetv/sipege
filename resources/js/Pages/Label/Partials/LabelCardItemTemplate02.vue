@@ -119,7 +119,38 @@ const props = defineProps({
         type: String,
         default: "",
     },
+    customColors: {
+        type: Object,
+        default: () => ({}),
+    },
 });
+
+const DEFAULT_COLORS = {
+    areaPerekat: "#ffffff",
+    headerSppg: "#ffffff",
+    menuLabel: "#9DC3E6",
+    menuValue: "#BDD7EE",
+    tglLabel: "#9DC3E6",
+    tglValue: "#BDD7EE",
+    batasKonsumsi: "#9DC3E6",
+    batasKonsumsiVal: "#BDD7EE",
+    kontak: "#E2EFDA",
+    giziHeader: "#FFE699",
+    giziBody: "#FFF2CC",
+    footer: "#FFC000",
+};
+
+const getBgColor = (key) => {
+    if (!props.customColors) return DEFAULT_COLORS[key] || "#ffffff";
+    const val = props.customColors[key];
+    if (val === undefined || val === null) {
+        return DEFAULT_COLORS[key] || "#ffffff";
+    }
+    if (val === "" || val === "transparent" || val === "none") {
+        return "#ffffff";
+    }
+    return val;
+};
 
 const displayNameSppg = computed(() => {
     if (props.namaSppg && props.namaSppg.trim()) {
@@ -302,7 +333,8 @@ const menuTypeFontSizeClass = computed(() => {
     >
         <!-- 1. Row 1: AREA PEREKAT LABEL (Excel Row 1, Height ~39.95pt / ~23%) -->
         <div
-            class="h-[22%] border-b border-dashed border-slate-400 bg-white flex items-center justify-center px-2 shrink-0"
+            class="h-[22%] border-b border-dashed border-slate-400 flex items-center justify-center px-2 shrink-0 transition-colors"
+            :style="{ backgroundColor: getBgColor('areaPerekat') }"
         >
             <span
                 class="text-[8px] font-mono italic tracking-wider text-slate-400 font-normal text-center select-none"
@@ -313,7 +345,8 @@ const menuTypeFontSizeClass = computed(() => {
 
         <!-- 2. Row 2-3: LOGO BGN & HEADER SPPG (Excel Row 2-3, Height ~28.2pt / ~16%) -->
         <div
-            class="h-[16%] border-b border-slate-900 bg-white flex items-center justify-between px-2 py-0.5 shrink-0"
+            class="h-[16%] border-b border-slate-900 flex items-center justify-between px-2 py-0.5 shrink-0 transition-colors"
+            :style="{ backgroundColor: getBgColor('headerSppg') }"
         >
             <div class="flex items-center shrink-0 mr-2">
                 <img
@@ -344,7 +377,8 @@ const menuTypeFontSizeClass = computed(() => {
         >
             <!-- Col A-B: MENU NORMAL / ALERGI (Width ~40%) -->
             <div
-                class="w-[40%] bg-[#9DC3E6] border-r border-slate-900 px-1.5 py-0.5 flex flex-col justify-center leading-tight shrink-0 overflow-hidden"
+                class="w-[40%] border-r border-slate-900 px-1.5 py-0.5 flex flex-col justify-center leading-tight shrink-0 overflow-hidden transition-colors"
+                :style="{ backgroundColor: getBgColor('menuLabel') }"
             >
                 <span class="text-[7.8px] font-black text-slate-900 leading-none">
                     MENU
@@ -361,7 +395,8 @@ const menuTypeFontSizeClass = computed(() => {
             </div>
             <!-- Col C-E: Sub-menu items (Width ~60%) -->
             <div
-                class="w-[60%] bg-[#BDD7EE] px-1.5 py-0 flex flex-col justify-center shrink-0 overflow-hidden h-full"
+                class="w-[60%] px-1.5 py-0 flex flex-col justify-center shrink-0 overflow-hidden h-full transition-colors"
+                :style="{ backgroundColor: getBgColor('menuValue') }"
             >
                 <div
                     :class="[
@@ -381,7 +416,8 @@ const menuTypeFontSizeClass = computed(() => {
         >
             <!-- Col A: TANGGAL / WAKTU PRODUKSI (~20%) -->
             <div
-                class="w-[20%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7.5px] font-black text-slate-900 shrink-0"
+                class="w-[20%] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7.5px] font-black text-slate-900 shrink-0 transition-colors"
+                :style="{ backgroundColor: getBgColor('tglLabel') }"
             >
                 <template v-if="isShowingJamProduksi">
                     <span>WAKTU</span>
@@ -394,8 +430,9 @@ const menuTypeFontSizeClass = computed(() => {
             </div>
             <!-- Col B-C: Tanggal DD-MM-YYYY (atau DD-MM-YYYY HH:mm WITA) (~40%) -->
             <div
-                class="w-[40%] bg-[#BDD7EE] border-r border-slate-900 px-1 py-0.5 flex items-center justify-center font-black text-slate-900 shrink-0 leading-tight text-center"
+                class="w-[40%] border-r border-slate-900 px-1 py-0.5 flex items-center justify-center font-black text-slate-900 shrink-0 leading-tight text-center transition-colors"
                 :class="isShowingJamProduksi ? 'text-[9.5px]' : 'text-[11px]'"
+                :style="{ backgroundColor: getBgColor('tglValue') }"
             >
                 {{ formattedTanggalProduksi }}
             </div>
@@ -403,7 +440,8 @@ const menuTypeFontSizeClass = computed(() => {
             <!-- Jika di-merge (Teks batas aman berupa teks narasi / panjang) -->
             <div
                 v-if="isMergedWaktuBatas"
-                class="w-[40%] bg-[#9DC3E6] px-1 py-0.5 flex flex-col justify-center items-center leading-tight text-center shrink-0 overflow-hidden"
+                class="w-[40%] px-1 py-0.5 flex flex-col justify-center items-center leading-tight text-center shrink-0 overflow-hidden transition-colors"
+                :style="{ backgroundColor: getBgColor('batasKonsumsi') }"
             >
                 <span class="text-[6.5px] font-black uppercase text-slate-900 leading-none tracking-tight">
                     WAKTU BATAS AMAN KONSUMSI
@@ -417,14 +455,16 @@ const menuTypeFontSizeClass = computed(() => {
             <template v-else>
                 <!-- Col D: WAKTU BATAS AMAN KONSUMSI (~24%) -->
                 <div
-                    class="w-[24%] bg-[#9DC3E6] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7px] font-black text-slate-900 shrink-0"
+                    class="w-[24%] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7px] font-black text-slate-900 shrink-0 transition-colors"
+                    :style="{ backgroundColor: getBgColor('batasKonsumsi') }"
                 >
                     <span>WAKTU BATAS</span>
                     <span>AMAN KONSUMSI</span>
                 </div>
                 <!-- Col E: Jam Batas Aman (~16%) -->
                 <div
-                    class="w-[16%] bg-[#BDD7EE] px-0.5 py-0.5 flex items-center justify-center text-[8px] font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap"
+                    class="w-[16%] px-0.5 py-0.5 flex items-center justify-center text-[8px] font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap transition-colors"
+                    :style="{ backgroundColor: getBgColor('batasKonsumsiVal') }"
                 >
                     {{ formattedWaktuBatas }}
                 </div>
@@ -437,7 +477,8 @@ const menuTypeFontSizeClass = computed(() => {
         >
             <!-- Col A-B: KONTAK PENGADUAN (Width ~40%) -->
             <div
-                class="w-[40%] bg-[#E2EFDA] border-r border-slate-900 p-1.5 flex flex-col justify-between leading-tight shrink-0"
+                class="w-[40%] border-r border-slate-900 p-1.5 flex flex-col justify-between leading-tight shrink-0 transition-colors"
+                :style="{ backgroundColor: getBgColor('kontak') }"
             >
                 <div class="text-[8.5px] font-black text-slate-900">
                     KONTAK PENGADUAN
@@ -454,7 +495,8 @@ const menuTypeFontSizeClass = computed(() => {
             <div class="w-[60%] flex flex-col shrink-0">
                 <!-- Header Gizi (Row 6) -->
                 <div
-                    class="h-[20%] bg-[#FFE699] border-b border-slate-900 flex text-[7.5px] font-black text-slate-900 items-center shrink-0"
+                    class="h-[20%] border-b border-slate-900 flex text-[7.5px] font-black text-slate-900 items-center shrink-0 transition-colors"
+                    :style="{ backgroundColor: getBgColor('giziHeader') }"
                 >
                     <div class="w-[33.5%] border-r border-slate-900 text-center leading-none py-0.5">
                         KANDUNGAN GIZI
@@ -468,7 +510,10 @@ const menuTypeFontSizeClass = computed(() => {
                 </div>
 
                 <!-- 5 Rows Gizi (Rows 7-11) -->
-                <div class="h-[80%] flex flex-col bg-[#FFF2CC] justify-between text-[7.2px] text-slate-900">
+                <div
+                    class="h-[80%] flex flex-col justify-between text-[7.2px] text-slate-900 transition-colors"
+                    :style="{ backgroundColor: getBgColor('giziBody') }"
+                >
                     <!-- Row 7: Energi -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
                         <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
@@ -535,7 +580,8 @@ const menuTypeFontSizeClass = computed(() => {
 
         <!-- 6. Row 12: FOOTER PERINGATAN (Excel Row 12, Height ~18pt / ~10.5%) -->
         <div
-            class="h-[11%] bg-[#FFC000] border-t border-slate-900 px-2 flex flex-col items-center justify-center text-center shrink-0"
+            class="h-[11%] border-t border-slate-900 px-2 flex flex-col items-center justify-center text-center shrink-0 transition-colors"
+            :style="{ backgroundColor: getBgColor('footer') }"
         >
             <span class="text-[8.5px] font-black text-slate-950 uppercase leading-none">
                 {{ teksLaranganHeader || 'TIDAK BOLEH DIBAWA PULANG.' }}
