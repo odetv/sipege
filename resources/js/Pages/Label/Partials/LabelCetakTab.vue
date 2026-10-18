@@ -9,6 +9,7 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import LabelCardItem from "./LabelCardItem.vue";
+import LabelCardItemTemplate02 from "./LabelCardItemTemplate02.vue";
 import {
     Tag,
     Printer,
@@ -40,12 +41,17 @@ import {
     ShieldAlert,
     PlusCircle,
     Minus,
+    PhoneCall,
 } from "lucide-vue-next";
 import {
     downloadPdfSingleMode,
     downloadPdfA4GridMode,
     printPdfSingleMode,
     calculateA4TotalPages,
+    downloadPdfTemplate02SingleMode,
+    downloadPdfTemplate02A4GridMode,
+    printPdfTemplate02SingleMode,
+    getSocialMediaTpl02,
 } from "../labelPdfHelper.js";
 
 const props = defineProps({
@@ -89,6 +95,9 @@ const todayStr = getTodayDateString();
 
 // Mode cetak label: 'auto' (Sesuai Work Order) | 'manual' (Input Bebas)
 const labelMode = ref("auto");
+
+// Pilihan Template Desain Label: 'template-01' (Grafis Modern) | 'template-02' (Standar Excel / Teks Murni)
+const selectedTemplateId = ref("template-01");
 
 // Selected Work Order ID
 const selectedWoId = ref(
@@ -145,6 +154,29 @@ const gunakanJamExpired = ref(false);
 const waktuMaksimal = ref("2 JAM SETELAH DITERIMA!");
 const teksLaranganHeader = ref("MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT.");
 const teksLaranganSub = ref("DILARANG MEMBAWA PULANG!");
+
+// Parameter Kontak Pengaduan (Khusus Template 02: Tampil di Sumber Data Otomatis WO maupun Input Manual)
+const defaultSmInit = getSocialMediaTpl02(namaSppg.value);
+const kontakPengaduanBaris1 = ref("Email: halo@bgn.go.id");
+const kontakPengaduanBaris2 = ref(defaultSmInit.ig);
+const kontakPengaduanBaris3 = ref(defaultSmInit.tiktok);
+const kontakPengaduanBaris4 = ref(defaultSmInit.fb);
+const isKontakEdited = ref(false);
+
+const syncKontakOtomatis = (sppgName = namaSppg.value) => {
+    const sm = getSocialMediaTpl02(sppgName);
+    kontakPengaduanBaris1.value = "Email: halo@bgn.go.id";
+    kontakPengaduanBaris2.value = sm.ig;
+    kontakPengaduanBaris3.value = sm.tiktok;
+    kontakPengaduanBaris4.value = sm.fb;
+    isKontakEdited.value = false;
+};
+
+watch(namaSppg, (newVal) => {
+    if (!isKontakEdited.value) {
+        syncKontakOtomatis(newVal);
+    }
+});
 
 // Mode Tab Editor/Preview Label Aktif: 'normal' | 'alergi'
 const activeLabelTab = ref("normal");
@@ -3288,38 +3320,95 @@ async function startDownload(type = null) {
                             ? "PM_Saja"
                             : "Semua";
 
-        if (selectedType === "single") {
-            const filename = `Label_BGN_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
-            await downloadPdfSingleMode({
-                printableItems: itemsToPrint,
-                printableKelompokList: printableKelompokList.value,
-                customCount: totalCount,
-                getRenderElement: getSandboxCardElement,
-                filename,
-                isCancelled: () => isDownloadCancelled.value,
-                onProgress: (p) => {
-                    downloadProgress.value = {
-                        ...downloadProgress.value,
-                        ...p,
-                    };
-                },
-            });
-        } else if (selectedType === "a4" || selectedType === "custom") {
-            const filename = `Label_BGN_${tipeSlug}_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
-            await downloadPdfA4GridMode({
-                printableItems: itemsToPrint,
-                printableKelompokList: printableKelompokList.value,
-                customCount: totalCount,
-                getRenderElement: getSandboxCardElement,
-                filename,
-                isCancelled: () => isDownloadCancelled.value,
-                onProgress: (p) => {
-                    downloadProgress.value = {
-                        ...downloadProgress.value,
-                        ...p,
-                    };
-                },
-            });
+        const globalConfig = {
+            namaSppg: namaSppg.value,
+            tanggalProduksi: tanggalProduksi.value,
+            jamProduksi: jamProduksi.value,
+            tampilkanJamProduksi: gunakanJamProduksi.value,
+            jamExpired: jamExpired.value,
+            tampilkanJamExpired: gunakanJamExpired.value,
+            zonaWaktu: zonaWaktu.value,
+            waktuMaksimal: waktuMaksimal.value,
+            teksLaranganHeader: teksLaranganHeader.value,
+            teksLaranganSub: teksLaranganSub.value,
+            kontakBaris1: kontakPengaduanBaris1.value,
+            kontakBaris2: kontakPengaduanBaris2.value,
+            kontakBaris3: kontakPengaduanBaris3.value,
+            kontakBaris4: kontakPengaduanBaris4.value,
+            menuItems: menuItems.value,
+            giziData: giziData.value,
+        };
+
+        if (selectedTemplateId.value === "template-02") {
+            // Template 02 (Standar Layout Excel BGN - Pure Vector/Text PDF)
+            if (selectedType === "single") {
+                const filename = `Label_BGN_Tpl02_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
+                await downloadPdfTemplate02SingleMode({
+                    printableItems: itemsToPrint,
+                    printableKelompokList: printableKelompokList.value,
+                    customCount: totalCount,
+                    globalConfig,
+                    filename,
+                    isCancelled: () => isDownloadCancelled.value,
+                    onProgress: (p) => {
+                        downloadProgress.value = {
+                            ...downloadProgress.value,
+                            ...p,
+                        };
+                    },
+                });
+            } else if (selectedType === "a4" || selectedType === "custom") {
+                const filename = `Label_BGN_Tpl02_${tipeSlug}_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
+                await downloadPdfTemplate02A4GridMode({
+                    printableItems: itemsToPrint,
+                    printableKelompokList: printableKelompokList.value,
+                    customCount: totalCount,
+                    globalConfig,
+                    filename,
+                    isCancelled: () => isDownloadCancelled.value,
+                    onProgress: (p) => {
+                        downloadProgress.value = {
+                            ...downloadProgress.value,
+                            ...p,
+                        };
+                    },
+                });
+            }
+        } else {
+            // Template 01 (Visual Kartu Grafis Modern)
+            if (selectedType === "single") {
+                const filename = `Label_BGN_${tipeSlug}_9x6cm_${totalCount}Pcs_${dateSuffix}.pdf`;
+                await downloadPdfSingleMode({
+                    printableItems: itemsToPrint,
+                    printableKelompokList: printableKelompokList.value,
+                    customCount: totalCount,
+                    getRenderElement: getSandboxCardElement,
+                    filename,
+                    isCancelled: () => isDownloadCancelled.value,
+                    onProgress: (p) => {
+                        downloadProgress.value = {
+                            ...downloadProgress.value,
+                            ...p,
+                        };
+                    },
+                });
+            } else if (selectedType === "a4" || selectedType === "custom") {
+                const filename = `Label_BGN_${tipeSlug}_Lembar_A4_${totalCount}Label_${dateSuffix}.pdf`;
+                await downloadPdfA4GridMode({
+                    printableItems: itemsToPrint,
+                    printableKelompokList: printableKelompokList.value,
+                    customCount: totalCount,
+                    getRenderElement: getSandboxCardElement,
+                    filename,
+                    isCancelled: () => isDownloadCancelled.value,
+                    onProgress: (p) => {
+                        downloadProgress.value = {
+                            ...downloadProgress.value,
+                            ...p,
+                        };
+                    },
+                });
+            }
         }
 
         if (!isDownloadCancelled.value) {
@@ -3392,15 +3481,45 @@ async function startPrintDirect() {
     };
 
     try {
-        await printPdfSingleMode({
-            printableItems: itemsToPrint,
-            printableKelompokList: printableKelompokList.value,
-            getRenderElement: getSandboxCardElement,
-            isCancelled: () => isDownloadCancelled.value,
-            onProgress: (p) => {
-                downloadProgress.value = { ...downloadProgress.value, ...p };
-            },
-        });
+        if (selectedTemplateId.value === "template-02") {
+            const globalConfig = {
+                namaSppg: namaSppg.value,
+                tanggalProduksi: tanggalProduksi.value,
+                jamProduksi: jamProduksi.value,
+                tampilkanJamProduksi: gunakanJamProduksi.value,
+                jamExpired: jamExpired.value,
+                tampilkanJamExpired: gunakanJamExpired.value,
+                zonaWaktu: zonaWaktu.value,
+                waktuMaksimal: waktuMaksimal.value,
+                teksLaranganHeader: teksLaranganHeader.value,
+                teksLaranganSub: teksLaranganSub.value,
+                kontakBaris1: kontakPengaduanBaris1.value,
+                kontakBaris2: kontakPengaduanBaris2.value,
+                kontakBaris3: kontakPengaduanBaris3.value,
+                kontakBaris4: kontakPengaduanBaris4.value,
+                menuItems: menuItems.value,
+                giziData: giziData.value,
+            };
+            await printPdfTemplate02SingleMode({
+                printableItems: itemsToPrint,
+                printableKelompokList: printableKelompokList.value,
+                globalConfig,
+                isCancelled: () => isDownloadCancelled.value,
+                onProgress: (p) => {
+                    downloadProgress.value = { ...downloadProgress.value, ...p };
+                },
+            });
+        } else {
+            await printPdfSingleMode({
+                printableItems: itemsToPrint,
+                printableKelompokList: printableKelompokList.value,
+                getRenderElement: getSandboxCardElement,
+                isCancelled: () => isDownloadCancelled.value,
+                onProgress: (p) => {
+                    downloadProgress.value = { ...downloadProgress.value, ...p };
+                },
+            });
+        }
 
         if (!isDownloadCancelled.value) {
             downloadSuccess.value = true;
@@ -3478,22 +3597,44 @@ async function startPrintDirect() {
                         class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                     >
                         <div>
-                            <div class="flex items-center gap-2 flex-wrap">
+                            <div class="flex items-center gap-3 flex-wrap">
                                 <CardTitle
                                     class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"
                                 >
                                     <Tag class="h-5 w-5 text-primary" />
                                     <span>Konfigurasi Label</span>
                                 </CardTitle>
-                                <!-- <span
-                                    class="bg-blue-100 text-blue-900 border border-blue-200 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"
+
+                                <!-- Pilihan Template Desain: Template 01 vs Template 02 -->
+                                <div
+                                    class="flex items-center gap-1 p-1 bg-slate-200/90 rounded-xl border border-slate-300"
                                 >
-                                    <span>Standar</span>
-                                </span> -->
+                                    <button
+                                        type="button"
+                                        @click="selectedTemplateId = 'template-01'"
+                                        :class="[
+                                            'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center',
+                                            selectedTemplateId === 'template-01'
+                                                ? 'bg-white text-blue-900 shadow-2xs font-extrabold ring-1 ring-blue-300'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                        ]"
+                                    >
+                                        <span>Template 01</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="selectedTemplateId = 'template-02'"
+                                        :class="[
+                                            'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center',
+                                            selectedTemplateId === 'template-02'
+                                                ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                        ]"
+                                    >
+                                        <span>Template 02</span>
+                                    </button>
+                                </div>
                             </div>
-                            <CardDescription class="text-xs sm:text-sm mt-0.5">
-                                Mendukung label sesuai kebutuhan SPPG.
-                            </CardDescription>
                         </div>
 
                         <!-- Action Buttons -->
@@ -3829,6 +3970,91 @@ async function startPrintDirect() {
                                             : preset + " cm"
                                     }}
                                 </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Pengaturan Kontak Pengaduan (Khusus Template 02: Tampil di Mode Otomatis WO maupun Input Manual) -->
+                    <Card
+                        v-if="selectedTemplateId === 'template-02'"
+                        className="bg-white border-slate-200/80 shadow-2xs animate-in fade-in"
+                    >
+                        <CardHeader
+                            className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between gap-2"
+                        >
+                            <CardTitle
+                                class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
+                            >
+                                <PhoneCall class="h-4 w-4 text-emerald-600" />
+                                <span>Kontak Pengaduan (Template 02)</span>
+                            </CardTitle>
+                            <button
+                                type="button"
+                                @click="syncKontakOtomatis()"
+                                class="px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                title="Kembalikan isi kontak pengaduan ke format standar SPPG"
+                            >
+                                <RotateCcw class="h-3 w-3" />
+                                <span>Reset Default SPPG</span>
+                            </button>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-3 text-xs">
+                            <div
+                                class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                            >
+                                <div>
+                                    <label class="font-bold text-slate-600"
+                                        >Baris 1 (Email):</label
+                                    >
+                                    <input
+                                        v-model="kontakPengaduanBaris1"
+                                        @input="isKontakEdited = true"
+                                        type="text"
+                                        placeholder="Email: halo@bgn.go.id"
+                                        class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="font-bold text-slate-600"
+                                        >Baris 2 (Instagram):</label
+                                    >
+                                    <input
+                                        v-model="kontakPengaduanBaris2"
+                                        @input="isKontakEdited = true"
+                                        type="text"
+                                        placeholder="Instagram: @sppg.tegallinggah"
+                                        class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="font-bold text-slate-600"
+                                        >Baris 3 (TikTok):</label
+                                    >
+                                    <input
+                                        v-model="kontakPengaduanBaris3"
+                                        @input="isKontakEdited = true"
+                                        type="text"
+                                        placeholder="Tiktok: @sppg.tegallinggah"
+                                        class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="font-bold text-slate-600"
+                                        >Baris 4 (Facebook / Lainnya):</label
+                                    >
+                                    <input
+                                        v-model="kontakPengaduanBaris4"
+                                        @input="isKontakEdited = true"
+                                        type="text"
+                                        placeholder="Facebook: SPPG Tegallinggah"
+                                        class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                <span>
+                                    * Kontak pengaduan ini aktif baik di Sumber Data Otomatis WO maupun Input Manual. Anda bebas mengubah teks secara langsung atau klik tombol reset untuk kembali ke data SPPG.
+                                </span>
                             </div>
                         </CardContent>
                     </Card>
@@ -4384,8 +4610,7 @@ async function startPrintDirect() {
                                         </div>
                                         <input
                                             v-model="jamProduksi"
-                                            type="text"
-                                            placeholder="12:14"
+                                            type="time"
                                             :disabled="!gunakanJamProduksi"
                                             class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         />
@@ -4415,8 +4640,7 @@ async function startPrintDirect() {
                                         </div>
                                         <input
                                             v-model="jamExpired"
-                                            type="text"
-                                            placeholder="Contoh: 14:14"
+                                            type="time"
                                             :disabled="!gunakanJamExpired"
                                             class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                         />
@@ -6361,11 +6585,27 @@ async function startPrintDirect() {
                                 <Sparkles class="h-4 w-4 text-primary" />
                                 <span>Live Preview Desain Label</span>
                             </h3>
-                            <span
-                                class="text-[11px] text-slate-500 font-medium"
-                            >
-                                Stiker Kemasan
-                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span
+                                    v-if="selectedTemplateId === 'template-02'"
+                                    class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1"
+                                >
+                                    <FileText class="h-3 w-3" />
+                                    <span>Template 02 (Excel)</span>
+                                </span>
+                                <span
+                                    v-else
+                                    class="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1"
+                                >
+                                    <Sparkles class="h-3 w-3 text-blue-600" />
+                                    <span>Template 01 (Modern)</span>
+                                </span>
+                                <span
+                                    class="text-[11px] text-slate-500 font-medium"
+                                >
+                                    Stiker Kemasan
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Segmented Switch Preview: Normal vs Alergi vs Tambahan -->
@@ -6630,7 +6870,38 @@ async function startPrintDirect() {
                         <div
                             class="p-4 bg-slate-100/80 rounded-3xl border border-slate-200 flex items-center justify-center shadow-inner"
                         >
+                            <!-- Template 02: Layout Standar Excel BGN (Teks Murni) -->
+                            <LabelCardItemTemplate02
+                                v-if="selectedTemplateId === 'template-02'"
+                                :unit-sppg="unitSppg"
+                                :nama-sppg="namaSppg"
+                                :zona-waktu="zonaWaktu"
+                                :tinggi-isolasi-cm="tinggiIsolasiCm"
+                                :tanggal-produksi="tanggalProduksi"
+                                :jam-produksi="jamProduksi"
+                                :tampilkan-jam-produksi="gunakanJamProduksi"
+                                :tanggal-expired="tanggalExpired"
+                                :jam-expired="jamExpired"
+                                :tampilkan-jam-expired="gunakanJamExpired"
+                                :waktu-maksimal="waktuMaksimal"
+                                :teks-larangan-header="teksLaranganHeader"
+                                :teks-larangan-sub="teksLaranganSub"
+                                :tipe-label="activeLabelTab"
+                                :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
+                                :jenis-alergi="currentPreviewJenisAlergi"
+                                :tag-alergi="currentPreviewTag"
+                                :menu-items="currentPreviewMenuItems"
+                                :gizi-data="currentPreviewGiziData"
+                                :harga-items="hargaItems"
+                                :kelompok="previewKelompok"
+                                :kontak-baris1="kontakPengaduanBaris1"
+                                :kontak-baris2="kontakPengaduanBaris2"
+                                :kontak-baris3="kontakPengaduanBaris3"
+                                :kontak-baris4="kontakPengaduanBaris4"
+                            />
+                            <!-- Template 01: Visual Kartu Grafis Modern (Eksisting) -->
                             <LabelCardItem
+                                v-else
                                 :unit-sppg="unitSppg"
                                 :nama-sppg="namaSppg"
                                 :zona-waktu="zonaWaktu"
