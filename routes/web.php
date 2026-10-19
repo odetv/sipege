@@ -3,6 +3,7 @@
 use App\Http\Controllers\AsetDigitalController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiziController;
+use App\Http\Controllers\KategoriKpmController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
@@ -153,8 +154,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/harian-lintas-sektor', [LaporanController::class, 'harianLintasSektor'])->name('harian-lintas-sektor');
     });
 
-    // Periode Operasional SPPG
-    Route::resource('periode', PeriodeController::class)->only(['index', 'store', 'update', 'destroy']);
+    // Menu Pengaturan SPPG (Periode & Kategori KPM)
+    Route::prefix('pengaturan')->group(function () {
+        Route::resource('periode', PeriodeController::class)
+            ->names('periode')
+            ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::prefix('kategori-kpm')->name('pengaturan.kategori-kpm.')->group(function () {
+            Route::get('/', [KategoriKpmController::class, 'index'])->name('index');
+            Route::post('/', [KategoriKpmController::class, 'store'])->name('store');
+            Route::put('/{id}', [KategoriKpmController::class, 'update'])->name('update');
+            Route::delete('/{id}', [KategoriKpmController::class, 'destroy'])->name('destroy');
+            Route::post('/reset', [KategoriKpmController::class, 'resetDefaults'])->name('reset');
+        });
+    });
+
+    // Redirect dari /periode ke /pengaturan/periode
+    Route::redirect('/periode', '/pengaturan/periode');
 
     // Menu Petunjuk (SOP, Juknis & Pedoman) SPPG
     Route::prefix('petunjuk')->name('petunjuk.')->group(function () {

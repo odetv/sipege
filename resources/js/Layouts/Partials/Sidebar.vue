@@ -27,6 +27,7 @@ import {
     Banknote,
     Package,
     Sliders,
+    Settings,
     Building,
     FileCheck2,
     ShieldCheck,
@@ -196,6 +197,17 @@ const isAsetDigitalActive = computed(() => {
     }
 });
 
+const isPengaturanActive = computed(() => {
+    try {
+        return (
+            route().current("pengaturan.*") ||
+            route().current("periode.*")
+        );
+    } catch {
+        return false;
+    }
+});
+
 const isLaporanSppgActive = computed(() => {
     try {
         return route().current("laporan.*");
@@ -214,6 +226,7 @@ function getInitialMenu() {
     if (isLabelActive.value) return "label";
     if (isPetunjukActive.value) return "petunjuk";
     if (isAsetDigitalActive.value) return "aset-digital";
+    if (isPengaturanActive.value) return "pengaturan";
     return null;
 }
 
@@ -250,6 +263,9 @@ const isPetunjukExpanded = computed(
 const isAsetDigitalExpanded = computed(
     () => activeExpandedMenu.value === "aset-digital",
 );
+const isPengaturanExpanded = computed(
+    () => activeExpandedMenu.value === "pengaturan",
+);
 
 const isSpjExpanded = computed(() => activeKeuanganSubMenu.value === "spj");
 const isLaporanExpanded = computed(
@@ -277,6 +293,8 @@ watch(
             activeExpandedMenu.value = "petunjuk";
         } else if (isAsetDigitalActive.value) {
             activeExpandedMenu.value = "aset-digital";
+        } else if (isPengaturanActive.value) {
+            activeExpandedMenu.value = "pengaturan";
         } else {
             activeExpandedMenu.value = null;
         }
@@ -371,6 +389,14 @@ function toggleAsetDigitalMenu() {
     }
     activeExpandedMenu.value =
         activeExpandedMenu.value === "aset-digital" ? null : "aset-digital";
+}
+
+function togglePengaturanMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "pengaturan" ? null : "pengaturan";
 }
 
 const currentUser = computed(() => {
@@ -1502,38 +1528,6 @@ function logout() {
                     ></div>
                 </Link>
 
-                <!-- 8. Menu Periode -->
-                <Link
-                    :href="route('periode.index')"
-                    :title="isCollapsed ? 'Periode' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('periode.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <CalendarRange class="h-4 w-4 shrink-0" />
-                    <span
-                        :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Periode</span
-                    >
-                    <div
-                        v-if="route().current('periode.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
-                            isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
-                        ]"
-                    ></div>
-                </Link>
 
                 <!-- 7. Menu Petunjuk (Accordion with Submenu: SOP, Juknis, Pedoman) -->
                 <div class="space-y-0.5">
@@ -1762,6 +1756,77 @@ function logout() {
                         >
                             <FileText class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Kop Dokumen</span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 9. Menu Pengaturan (Accordion with Submenu: Periode & Kategori KPM) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Pengaturan Button -->
+                    <button
+                        type="button"
+                        @click="togglePengaturanMenu"
+                        :title="isCollapsed ? 'Pengaturan' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isPengaturanActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <Settings class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Pengaturan</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isPengaturanExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items: Periode & Kategori KPM -->
+                    <div
+                        v-if="!isCollapsed && isPengaturanExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- Sub-menu 1: Periode -->
+                        <Link
+                            :href="route('periode.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('periode.*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarRange class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Periode</span>
+                        </Link>
+
+                        <!-- Sub-menu 2: Kategori KPM -->
+                        <Link
+                            :href="route('pengaturan.kategori-kpm.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('pengaturan.kategori-kpm.*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Tag class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kategori KPM</span>
                         </Link>
                     </div>
                 </div>
