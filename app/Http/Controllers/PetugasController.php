@@ -171,7 +171,7 @@ class PetugasController extends Controller
                 ->get();
 
             $totalHarian = (int) $petugas->where('status', 'Aktif')->sum(function ($p) {
-                return (int) $p->gaji_harian_bgn + (int) $p->bonus_harian_mitra;
+                return (int) $p->gaji_harian_bgn;
             });
 
             $summary['total_petugas'] = $petugas->count();
@@ -222,6 +222,221 @@ class PetugasController extends Controller
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialPresensiMap' => $presensiMap,
         ]);
+    }
+
+    /**
+     * Menampilkan halaman Rekap Bonus Petugas SPPG.
+     */
+    public function rekapBonus(Request $request): Response
+    {
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+
+        $petugas = [];
+        $summary = [
+            'total_petugas' => 0,
+            'total_aktif' => 0,
+            'total_nonaktif' => 0,
+            'total_bonus_harian' => 0,
+            'total_pengeluaran_bonus_periodik' => 0,
+            'total_pengeluaran_bonus_bulanan' => 0,
+        ];
+        $daftarJabatan = [];
+        $periodes = [];
+        $presensiMap = [];
+
+        $mode = $request->input('mode', 'bulanan');
+        $tglMulai = $request->input('tanggal_mulai');
+        $tglSelesai = $request->input('tanggal_selesai');
+        $periodeId = $request->input('periode_id');
+
+        if ($tglMulai && $tglSelesai) {
+            $startDate = Carbon::parse($tglMulai)->startOfDay();
+            $endDate = Carbon::parse($tglSelesai)->startOfDay();
+        } elseif ($periodeId && $periodeId !== 'all') {
+            $p = Periode::find($periodeId);
+            if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
+                $startDate = $p->tanggal_mulai->copy()->startOfDay();
+                $endDate = $p->tanggal_selesai->copy()->startOfDay();
+            } else {
+                $startDate = Carbon::today();
+                $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+            }
+        } else {
+            $latestPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
+            $today = Carbon::today();
+
+            $targetPeriode = null;
+            if (
+                $latestPeriode &&
+                $latestPeriode->tanggal_mulai &&
+                $latestPeriode->tanggal_selesai &&
+                $today->between($latestPeriode->tanggal_mulai->copy()->startOfDay(), $latestPeriode->tanggal_selesai->copy()->startOfDay())
+            ) {
+                $targetPeriode = $latestPeriode;
+            } else {
+                $activePeriodeDb = Periode::whereDate('tanggal_mulai', '<=', $today->format('Y-m-d'))
+                    ->whereDate('tanggal_selesai', '>=', $today->format('Y-m-d'))
+                    ->orderBy('nomor_periode', 'desc')
+                    ->first();
+                if ($activePeriodeDb) {
+                    $targetPeriode = $activePeriodeDb;
+                }
+            }
+
+            if ($targetPeriode) {
+                $startDate = $targetPeriode->tanggal_mulai->copy()->startOfDay();
+                $endDate = $targetPeriode->tanggal_selesai->copy()->startOfDay();
+                $periodeId = (string) $targetPeriode->id;
+                $diffDays = $startDate->diffInDays($endDate) + 1;
+                $mode = $diffDays <= 14 ? 'periodik' : ($diffDays <= 28 ? 'bulanan' : 'custom');
+            } else {
+                $startDate = Carbon::today();
+                if ($mode === 'periodik') {
+                    $endDate = $startDate->copy()->addDays(13);
+                } else {
+                    $endDate = $startDate->copy()->addDays(27);
+                }
+            }
+        }
+
+        if ($endDate->lt($startDate)) {
+            $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+        }
+
+        if (!$periodeId || $periodeId === 'all') {
+            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
+                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
+                ->first();
+            if ($matchedPeriode) {
+                $periodeId = (string) $matchedPeriode->id;
+            }
+        }
+
+        if ($unitSppg) {
+            $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $totalBonusHarian = (int) $petugas->where('status', 'Aktif')->sum('bonus_harian_mitra');
+
+            $summary['total_petugas'] = $petugas->count();
+            $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
+            $summary['total_nonaktif'] = $petugas->where('status', 'Nonaktif')->count();
+            $summary['total_bonus_harian'] = $totalBonusHarian;
+            $summary['total_pengeluaran_bonus_periodik'] = $totalBonusHarian * 14;
+            $summary['total_pengeluaran_bonus_bulanan'] = $totalBonusHarian * 28;
+
+            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+
+            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+                $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
+                $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+                return [
+                    'id' => $p->id,
+                    'nomor_periode' => $p->nomor_periode,
+                    'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'status' => $p->status,
+                    'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
+                ];
+            });
+
+            $petugasIds = $petugas->pluck('id')->all();
+            $presensiRecords = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
+                ->whereIn('petugas_id', $petugasIds)
+                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->get();
+
+            foreach ($presensiRecords as $rec) {
+                $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
+                $presensiMap[$rec->petugas_id][$tglStr] = $rec->status;
+            }
+        }
+
+        return Inertia::render('Petugas/RekapBonus', [
+            'petugas' => $petugas,
+            'summary' => $summary,
+            'daftarJabatan' => $daftarJabatan,
+            'periodes' => $periodes,
+            'unitSppg' => $unitSppg,
+            'initialMode' => $mode,
+            'initialTanggalMulai' => $startDate->format('Y-m-d'),
+            'initialTanggalSelesai' => $endDate->format('Y-m-d'),
+            'initialPeriodeId' => $periodeId ?? 'all',
+            'initialPresensiMap' => $presensiMap,
+        ]);
+    }
+
+    /**
+     * Menampilkan halaman Rekap BPJS Ketenagakerjaan Petugas SPPG.
+     */
+    public function rekapBpjsTk(Request $request): Response
+    {
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+
+        $petugas = [];
+        $summary = [
+            'total_petugas' => 0,
+            'total_aktif' => 0,
+            'total_terdaftar_bpjs' => 0,
+            'total_iuran_bulanan' => 0,
+            'total_iuran_periodik' => 0,
+        ];
+        $daftarJabatan = [];
+
+        if ($unitSppg) {
+            $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $summary['total_petugas'] = $petugas->count();
+            $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
+            $summary['total_terdaftar_bpjs'] = $petugas->where('iuran_bpjs_tk', '>', 0)->count();
+            $summary['total_iuran_bulanan'] = (int) $petugas->where('status', 'Aktif')->sum('iuran_bpjs_tk');
+            $summary['total_iuran_periodik'] = (int) round($summary['total_iuran_bulanan'] / 2);
+
+            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+        }
+
+        return Inertia::render('Petugas/RekapBpjsTk', [
+            'petugas' => $petugas,
+            'summary' => $summary,
+            'daftarJabatan' => $daftarJabatan,
+            'unitSppg' => $unitSppg,
+        ]);
+    }
+
+    /**
+     * Update iuran BPJS TK (bisa serentak atau per personil).
+     */
+    public function updateIuranBpjsTk(Request $request): RedirectResponse
+    {
+        $user = $request->user()->load('unitSppg');
+        $unitSppg = $user->unitSppg;
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        if ($request->has('petugas_id') && $request->has('iuran_bpjs_tk')) {
+            $p = Petugas::where('unit_sppg_id', $unitSppg->id)->find($request->input('petugas_id'));
+            if ($p) {
+                $p->update(['iuran_bpjs_tk' => max(0, (int) $request->input('iuran_bpjs_tk'))]);
+            }
+            return back()->with('success', 'Iuran BPJS TK petugas berhasil diperbarui.');
+        }
+
+        if ($request->has('nominal_serentak')) {
+            $nominal = max(0, (int) $request->input('nominal_serentak'));
+            Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Aktif')
+                ->update(['iuran_bpjs_tk' => $nominal]);
+            return back()->with('success', 'Iuran BPJS TK seluruh personil aktif berhasil diatur serentak menjadi Rp ' . number_format($nominal, 0, ',', '.'));
+        }
+
+        return back()->with('error', 'Parameter tidak valid.');
     }
 
     /**
@@ -365,7 +580,7 @@ class PetugasController extends Controller
             'jabatan.required' => 'Jabatan / Divisi petugas wajib dipilih.',
             'jam_kerja.required' => 'Jam kerja petugas wajib diisi (rentang jam mulai s.d jam selesai).',
             'gaji_harian_bgn.required' => 'Gaji harian BGN wajib diisi (hanya angka, bisa 0).',
-            'bonus_harian_mitra.required' => 'Bonus harian mitra wajib diisi (hanya angka, bisa 0).',
+            'bonus_harian_mitra.required' => 'Bonus harian wajib diisi (hanya angka, bisa 0).',
             'iuran_bpjs_tk.required' => 'Iuran BPJS TK wajib diisi (hanya angka, bisa 0).',
             'status.required' => 'Status petugas wajib dipilih (Aktif atau Nonaktif).',
             'status.in' => 'Status petugas hanya boleh Aktif atau Nonaktif.',
@@ -430,7 +645,7 @@ class PetugasController extends Controller
             'jabatan.required' => 'Jabatan / Divisi petugas wajib dipilih.',
             'jam_kerja.required' => 'Jam kerja petugas wajib diisi (rentang jam mulai s.d jam selesai).',
             'gaji_harian_bgn.required' => 'Gaji harian BGN wajib diisi (hanya angka, bisa 0).',
-            'bonus_harian_mitra.required' => 'Bonus harian mitra wajib diisi (hanya angka, bisa 0).',
+            'bonus_harian_mitra.required' => 'Bonus harian wajib diisi (hanya angka, bisa 0).',
             'iuran_bpjs_tk.required' => 'Iuran BPJS TK wajib diisi (hanya angka, bisa 0).',
             'status.required' => 'Status petugas wajib dipilih (Aktif atau Nonaktif).',
             'status.in' => 'Status petugas hanya boleh Aktif atau Nonaktif.',

@@ -569,7 +569,7 @@ function validateForm() {
     }
 
     if (form.bonus_harian_mitra === null || form.bonus_harian_mitra === undefined || isNaN(form.bonus_harian_mitra)) {
-        errors.bonus_harian_mitra = "Bonus harian mitra wajib diisi (hanya angka, bisa 0).";
+        errors.bonus_harian_mitra = "Bonus harian wajib diisi (hanya angka, bisa 0).";
     }
 
     if (form.iuran_bpjs_tk === null || form.iuran_bpjs_tk === undefined || isNaN(form.iuran_bpjs_tk)) {
@@ -865,14 +865,14 @@ watch(
                     </div>
                 </div>
 
-                <!-- Card 3: Bonus Harian Mitra -->
+                <!-- Card 3: Bonus Harian -->
                 <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
                     <div class="p-2 sm:p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
                         <BadgePercent class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                     <div class="min-w-0 flex-1">
                         <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Bonus Mitra
+                            Bonus
                         </p>
                         <p class="text-xs sm:text-base font-bold text-slate-900 leading-tight truncate">
                             {{ formatRupiah(summary.total_bonus_harian_mitra) }}
@@ -1140,7 +1140,7 @@ watch(
                                             <span class="font-semibold text-slate-800">{{ formatRupiah(p.gaji_harian_bgn) }}</span>
                                         </div>
                                         <div v-if="p.bonus_harian_mitra > 0" class="flex items-center justify-between gap-2 text-amber-700">
-                                            <span class="text-amber-500">Mitra:</span>
+                                            <span class="text-amber-500">Bonus:</span>
                                             <span class="font-semibold">+{{ formatRupiah(p.bonus_harian_mitra) }}</span>
                                         </div>
                                         <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 pt-0.5 border-t border-slate-100">
@@ -1767,10 +1767,10 @@ watch(
                                     </p>
                                 </div>
 
-                                <!-- Bonus Harian Mitra -->
+                                <!-- Bonus Harian -->
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-700 mb-1">
-                                        Bonus Harian Mitra (Rp) <span class="text-rose-500">*</span>
+                                        Bonus Harian (Rp) <span class="text-rose-500">*</span>
                                     </label>
                                     <div class="relative">
                                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rp</span>
@@ -2038,7 +2038,7 @@ watch(
                                 <span class="font-bold text-slate-900">{{ formatRupiah(detailPetugas.gaji_harian_bgn) }} / hari</span>
                             </div>
                             <div class="flex items-center justify-between text-xs">
-                                <span class="text-slate-600">Bonus Harian Mitra:</span>
+                                <span class="text-slate-600">Bonus Harian:</span>
                                 <span class="font-bold text-amber-700">{{ formatRupiah(detailPetugas.bonus_harian_mitra) }} / hari</span>
                             </div>
                             <div class="flex items-center justify-between text-xs">

@@ -1004,7 +1004,7 @@ function copyRowRekening(id, text) {
                     </div>
                     <div class="min-w-0 flex-1">
                         <p class="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                            Total Gaji BGN (Tanpa Bonus Mitra)
+                            Total Gaji BGN (Tanpa Bonus)
                         </p>
                         <p class="text-xl sm:text-2xl font-black text-emerald-950 leading-tight truncate">
                             {{ formatRupiah(totalPayrollAmount) }}
@@ -1242,7 +1242,7 @@ function copyRowRekening(id, text) {
                                         {{ formatRupiah(r.rateHarianBgn) }}
                                     </span>
                                     <p v-if="r.bonusHarianMitra > 0" class="text-[9.5px] text-slate-400 font-medium">
-                                        +{{ formatRibuan(r.bonusHarianMitra) }} mitra
+                                        +{{ formatRibuan(r.bonusHarianMitra) }} bonus
                                     </p>
                                 </td>
 

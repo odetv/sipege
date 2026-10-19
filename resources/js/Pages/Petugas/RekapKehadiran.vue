@@ -629,7 +629,8 @@ const computedPetugasStats = computed(() => {
             });
         }
 
-        const honorPerHari = (parseInt(p.gaji_harian_bgn) || 0) + (parseInt(p.bonus_harian_mitra) || 0);
+        // Nominal hak honor presensi murni hanya dari Gaji BGN saja (Bonus dialihkan ke menu Rekap Bonus)
+        const honorPerHari = parseInt(p.gaji_harian_bgn) || 0;
         // Hadir Penuh dihitung 1 manday, Hadir Setengah Hari dihitung 0.5 manday (gaji harian dipotong setengah)
         const mandays = h + (h2 * 0.5);
         const totalHonor = mandays * honorPerHari;
@@ -1387,13 +1388,13 @@ function closeDetailModal() {
                                     </div>
                                 </td>
 
-                                <!-- Tarif Harian -->
+                                <!-- Tarif Harian (BGN) -->
                                 <td class="py-2 px-3 text-right font-medium text-slate-800 border-r border-slate-200">
                                     <p class="font-semibold text-slate-900 text-xs">
-                                        {{ formatRupiah((parseInt(p.gaji_harian_bgn) || 0) + (parseInt(p.bonus_harian_mitra) || 0)) }}
+                                        {{ formatRupiah(p.gaji_harian_bgn) }}
                                     </p>
                                     <p class="text-[9px] text-slate-500">
-                                        BGN {{ formatRibuan(p.gaji_harian_bgn) }}
+                                        BGN / Hari
                                     </p>
                                 </td>
 
@@ -1767,23 +1768,19 @@ function closeDetailModal() {
                                 </div>
                             </div>
 
-                            <!-- Komponen Honorarium Harian -->
+                            <!-- Komponen Honorarium Harian (Murni BGN) -->
                             <div class="p-3.5 rounded-xl border border-slate-200 space-y-2">
                                 <p class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                                    Komponen Honor Harian
+                                    Komponen Honor Harian (BGN)
                                 </p>
                                 <div class="flex justify-between text-xs text-slate-600 py-1 border-b border-slate-100">
                                     <span>Gaji Harian BGN:</span>
                                     <span class="font-bold text-slate-900">{{ formatRupiah(detailPetugas.gaji_harian_bgn) }}</span>
                                 </div>
-                                <div class="flex justify-between text-xs text-slate-600 py-1 border-b border-slate-100">
-                                    <span>Bonus Harian Mitra:</span>
-                                    <span class="font-bold text-slate-900">{{ formatRupiah(detailPetugas.bonus_harian_mitra) }}</span>
-                                </div>
                                 <div class="flex justify-between text-xs font-bold text-slate-800 pt-1">
-                                    <span>Total Honor per Hari:</span>
+                                    <span>Total Honor per Hari (BGN):</span>
                                     <span class="text-emerald-700">
-                                        {{ formatRupiah((parseInt(detailPetugas.gaji_harian_bgn) || 0) + (parseInt(detailPetugas.bonus_harian_mitra) || 0)) }}
+                                        {{ formatRupiah(detailPetugas.gaji_harian_bgn) }}
                                     </span>
                                 </div>
                             </div>

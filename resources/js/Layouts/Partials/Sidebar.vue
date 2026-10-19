@@ -568,6 +568,8 @@ function logout() {
                                 (route().current('petugas.index') || route().current('petugas.*')) &&
                                 !route().current('petugas.rekap-kehadiran') &&
                                 !route().current('petugas.kehadiran') &&
+                                !route().current('petugas.rekap-bonus') &&
+                                !route().current('petugas.rekap-bpjs-tk') &&
                                 !route().current('petugas.pembayaran-gaji')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
@@ -592,7 +594,35 @@ function logout() {
                             <span class="truncate">Rekap Kehadiran</span>
                         </Link>
 
-                        <!-- Sub-menu 3: Pembayaran Gaji (BNI Direct) -->
+                        <!-- Sub-menu 3: Rekap Bonus -->
+                        <Link
+                            :href="route('petugas.rekap-bonus')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petugas.rekap-bonus')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Coins class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rekap Bonus</span>
+                        </Link>
+
+                        <!-- Sub-menu 4: Rekap BPJS TK -->
+                        <Link
+                            :href="route('petugas.rekap-bpjs-tk')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petugas.rekap-bpjs-tk')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <ShieldCheck class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rekap BPJS TK</span>
+                        </Link>
+
+                        <!-- Sub-menu 5: Pembayaran Gaji (BNI Direct) -->
                         <Link
                             :href="route('petugas.pembayaran-gaji')"
                             :class="[

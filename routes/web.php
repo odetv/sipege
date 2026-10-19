@@ -125,10 +125,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Supplier Rekanan SPPG
     Route::resource('supplier', SupplierController::class);
 
-    // Petugas SPPG (Daftar Petugas, Rekap Kehadiran & Pembayaran Gaji BNI Direct)
+    // Petugas SPPG (Daftar Petugas, Rekap Kehadiran, Rekap Bonus, Rekap BPJS TK & Pembayaran Gaji BNI Direct)
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
     Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');
+    Route::get('/petugas/rekap-bonus', [PetugasController::class, 'rekapBonus'])->name('petugas.rekap-bonus');
+    Route::get('/petugas/rekap-bpjs-tk', [PetugasController::class, 'rekapBpjsTk'])->name('petugas.rekap-bpjs-tk');
+    Route::post('/petugas/rekap-bpjs-tk/update-iuran', [PetugasController::class, 'updateIuranBpjsTk'])->name('petugas.rekap-bpjs-tk.update-iuran');
     Route::get('/petugas/pembayaran-gaji', [PetugasController::class, 'pembayaranGaji'])->name('petugas.pembayaran-gaji');
     Route::post('/petugas/pembayaran-gaji/generate-bni-csv', [PetugasController::class, 'generateBniDirectCsv'])->name('petugas.pembayaran-gaji.generate-csv');
     Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');

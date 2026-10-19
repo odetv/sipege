@@ -300,10 +300,10 @@ function buildRekapSheet(workbook, {
 
     head1Values.push('Presensi & Kehadiran', '', '', '', '', '');
     head1Values.push('Iuran BPJS TK\n(Tidak Terhitung)');
-    head1Values.push('Bonus Harian\nMitra');
+    head1Values.push('Bonus Harian');
     head1Values.push('Gaji Harian\nBGN');
-    head1Values.push('Total Gaji BGN\n(tanpa menghitung harian mitra)');
-    head1Values.push('Total Pendapatan Keseluruhan\n(mitra dan bgn)');
+    head1Values.push('Total Gaji BGN\n(tanpa menghitung bonus)');
+    head1Values.push('Total Pendapatan Keseluruhan\n(gaji & bonus)');
 
     const rHead1 = sheet.addRow(head1Values);
     rHead1.height = 26;
@@ -688,7 +688,7 @@ function buildRingkasanDivisiSheet(workbook, {
         'Sakit (S)',
         'Tanpa Ket. (TK)',
         'Total Gaji BGN',
-        'Total Bonus Mitra',
+        'Total Bonus',
         'Total Pendapatan'
     ]);
     rHeadS2.height = 24;
@@ -910,6 +910,425 @@ export async function downloadRekapAbsenGajiExcel({
         ? `Hari_Ini_${actualStartStr}`
         : (isBulanan ? 'Bulanan_28_Hari' : (Number(modeHariKerja) === 14 ? 'Periodik_14_Hari' : `Rentang_${actualStartStr}_sd_${actualEndStr}`));
     const filename = `Rekap_Presensi_dan_Gaji_Petugas_SPPG_${cycleSuffix}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Export File Excel untuk Rekapitulasi Hak Bonus Harian Petugas SPPG
+ */
+export async function downloadRekapBonusExcel({
+    petugas = [],
+    presensiMap = {},
+    dateList = [],
+    startDate = null,
+    endDate = null,
+    unitSppg = null,
+    periode = null,
+    modeLabel = 'Bulanan (28 Hari Kerja)',
+}) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SIPEGE - SPPG System';
+    workbook.created = new Date();
+
+    let logoBgnId = null;
+    let logoYayasanId = null;
+    try {
+        if (LOGO_BGN_RAW_BASE64) {
+            logoBgnId = workbook.addImage({ base64: LOGO_BGN_RAW_BASE64, extension: 'png' });
+        }
+        if (LOGO_YAYASAN_RAW_BASE64) {
+            logoYayasanId = workbook.addImage({ base64: LOGO_YAYASAN_RAW_BASE64, extension: 'png' });
+        }
+    } catch (e) {
+        console.warn('Gagal memuat logo:', e);
+    }
+
+    const sheet = workbook.addWorksheet('Rekap Bonus', {
+        pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+
+    const maxCols = 10;
+    sheet.columns = [
+        { width: 6 },   // 1: No
+        { width: 28 },  // 2: Nama Petugas
+        { width: 22 },  // 3: Jabatan / Divisi
+        { width: 18 },  // 4: Bonus Harian (Rp)
+        { width: 12 },  // 5: Hadir Penuh (H)
+        { width: 12 },  // 6: Hadir ½ Hari
+        { width: 16 },  // 7: Total Mandays
+        { width: 22 },  // 8: Total Hak Bonus (Rp)
+        { width: 20 },  // 9: Rekening BNI
+        { width: 16 },  // 10: Status
+    ];
+
+    applyKopSurat(sheet, maxCols, logoBgnId, logoYayasanId, unitSppg);
+
+    sheet.addRow([]);
+    sheet.getRow(5).height = 10;
+
+    const rJudul = sheet.addRow(['REKAPITULASI HAK BONUS HARIAN PETUGAS SPPG']);
+    sheet.mergeCells(`A${rJudul.number}:J${rJudul.number}`);
+    rJudul.getCell(1).font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FF0F172A' } };
+    rJudul.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rJudul.height = 22;
+
+    const periodeNama = periode?.label || (periode?.nomor_periode ? `Periode ${periode.nomor_periode}` : 'Periode Operasional Berjalan');
+    const rangeText = (startDate && endDate)
+        ? `Rentang: ${formatTanggalIndo(startDate)} s.d. ${formatTanggalIndo(endDate)}`
+        : `Standar: ${modeLabel}`;
+
+    const rSub = sheet.addRow([
+        `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | ${periodeNama} | ${rangeText}`
+    ]);
+    sheet.mergeCells(`A${rSub.number}:J${rSub.number}`);
+    rSub.getCell(1).font = { name: 'Arial', size: 9.5, italic: true, color: { argb: 'FF475569' } };
+    rSub.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rSub.height = 18;
+
+    sheet.addRow([]);
+    sheet.getRow(8).height = 8;
+
+    const rHeader = sheet.addRow([
+        'No',
+        'Nama Petugas',
+        'Divisi / Jabatan',
+        'Bonus Harian (Rp)',
+        'Hadir (H)',
+        '½ Hari',
+        'Total Mandays',
+        'Total Hak Bonus (Rp)',
+        'Nomor Rekening',
+        'Status'
+    ]);
+    rHeader.height = 24;
+
+    const headerBorder = {
+        top: { style: 'medium', color: { argb: 'FF047857' } },
+        bottom: { style: 'medium', color: { argb: 'FF047857' } },
+        left: { style: 'thin', color: { argb: 'FF065F46' } },
+        right: { style: 'thin', color: { argb: 'FF065F46' } },
+    };
+
+    rHeader.eachCell({ includeEmpty: true }, cell => {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = headerBorder;
+    });
+
+    const borderThin = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    };
+
+    let startDataRow = 10;
+    let totalPenerima = 0;
+    let sumMandays = 0;
+    let sumBonus = 0;
+
+    petugas.forEach((p, idx) => {
+        const rowNum = startDataRow + idx;
+        const isAktif = p.status === 'Aktif';
+        const pAtt = presensiMap[p.id] || {};
+
+        let effHadirPenuh = 0;
+        let effHadirSetengah = 0;
+
+        dateList.forEach(dt => {
+            if (!isAktif) return;
+            const st = pAtt[dt.dateStr] || pAtt[dt.label] || '';
+            if (st === 'H') effHadirPenuh++;
+            else if (st === 'H2' || st === '½') effHadirSetengah++;
+        });
+
+        const effMandays = effHadirPenuh + (effHadirSetengah * 0.5);
+        const rateBonus = parseInt(p.bonus_harian_mitra) || 0;
+        const totalBonus = effMandays * rateBonus;
+
+        if (isAktif) {
+            totalPenerima++;
+            sumMandays += effMandays;
+            sumBonus += totalBonus;
+        }
+
+        const row = sheet.addRow([
+            idx + 1,
+            p.nama || '-',
+            p.jabatan || '-',
+            rateBonus,
+            effHadirPenuh,
+            effHadirSetengah,
+            effMandays,
+            totalBonus,
+            p.nomor_rekening ? `${p.jenis_bank || 'BNI'} - ${p.nomor_rekening}` : '-',
+            p.status || 'Aktif',
+        ]);
+        row.height = 20;
+
+        const isEven = idx % 2 === 1;
+        const rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            cell.font = { name: 'Arial', size: 9 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            cell.border = borderThin;
+            cell.alignment = { vertical: 'middle' };
+
+            if (colNumber === 1 || colNumber === 10) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            } else if (colNumber === 2) {
+                cell.font = { name: 'Arial', size: 9, bold: true };
+            } else if (colNumber === 4 || colNumber === 8) {
+                cell.numFmt = '#,##0';
+                cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            } else if (colNumber >= 5 && colNumber <= 7) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                if (colNumber === 7) {
+                    cell.font = { name: 'Arial', size: 9, bold: true };
+                }
+            }
+        });
+    });
+
+    // Baris Grand Total
+    const rTot = sheet.addRow([
+        '',
+        `TOTAL (${petugas.length} Petugas)`,
+        '',
+        '',
+        '',
+        '',
+        sumMandays,
+        sumBonus,
+        '',
+        ''
+    ]);
+    rTot.height = 22;
+    rTot.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF065F46' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+        cell.border = {
+            top: { style: 'medium', color: { argb: 'FF059669' } },
+            bottom: { style: 'medium', color: { argb: 'FF059669' } },
+            left: { style: 'thin', color: { argb: 'FF6EE7B7' } },
+            right: { style: 'thin', color: { argb: 'FF6EE7B7' } },
+        };
+        cell.alignment = { vertical: 'middle' };
+        if (colNumber === 7) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colNumber === 8) {
+            cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+    });
+
+    const actualStartStr = startDate || (dateList && dateList[0]?.dateStr) || 'tanggal';
+    const actualEndStr = endDate || (dateList && dateList[dateList.length - 1]?.dateStr) || actualStartStr;
+    const filename = `Rekap_Bonus_Petugas_SPPG_${actualStartStr}_sd_${actualEndStr}.xlsx`;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Export File Excel untuk Rekapitulasi Iuran BPJS Ketenagakerjaan Petugas SPPG
+ */
+export async function downloadRekapBpjsTkExcel({
+    petugas = [],
+    unitSppg = null,
+}) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SIPEGE - SPPG System';
+    workbook.created = new Date();
+
+    let logoBgnId = null;
+    let logoYayasanId = null;
+    try {
+        if (LOGO_BGN_RAW_BASE64) {
+            logoBgnId = workbook.addImage({ base64: LOGO_BGN_RAW_BASE64, extension: 'png' });
+        }
+        if (LOGO_YAYASAN_RAW_BASE64) {
+            logoYayasanId = workbook.addImage({ base64: LOGO_YAYASAN_RAW_BASE64, extension: 'png' });
+        }
+    } catch (e) {
+        console.warn('Gagal memuat logo:', e);
+    }
+
+    const sheet = workbook.addWorksheet('Rekap BPJS TK', {
+        pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+
+    const maxCols = 10;
+    sheet.columns = [
+        { width: 6 },   // 1: No
+        { width: 28 },  // 2: Nama Petugas
+        { width: 22 },  // 3: NIK (KTP)
+        { width: 8 },   // 4: L/P
+        { width: 16 },  // 5: Tgl Lahir
+        { width: 8 },   // 6: Usia
+        { width: 24 },  // 7: Divisi / Jabatan
+        { width: 14 },  // 8: Status
+        { width: 20 },  // 9: Iuran BPJS TK (Rp)
+        { width: 22 },  // 10: Program Jaminan
+    ];
+
+    applyKopSurat(sheet, maxCols, logoBgnId, logoYayasanId, unitSppg);
+
+    sheet.addRow([]);
+    sheet.getRow(5).height = 10;
+
+    const rJudul = sheet.addRow(['REKAPITULASI IURAN KEPESERTAAN BPJS KETENAGAKERJAAN PETUGAS SPPG']);
+    sheet.mergeCells(`A${rJudul.number}:J${rJudul.number}`);
+    rJudul.getCell(1).font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FF0F172A' } };
+    rJudul.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rJudul.height = 22;
+
+    const rSub = sheet.addRow([
+        `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | Program: JKK (Jaminan Kecelakaan Kerja) & JKM (Jaminan Kematian)`
+    ]);
+    sheet.mergeCells(`A${rSub.number}:J${rSub.number}`);
+    rSub.getCell(1).font = { name: 'Arial', size: 9.5, italic: true, color: { argb: 'FF475569' } };
+    rSub.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rSub.height = 18;
+
+    sheet.addRow([]);
+    sheet.getRow(8).height = 8;
+
+    const rHeader = sheet.addRow([
+        'No',
+        'Nama Petugas',
+        'NIK (KTP)',
+        'L/P',
+        'Tanggal Lahir',
+        'Usia',
+        'Divisi / Jabatan',
+        'Status',
+        'Iuran Premi / Bulan',
+        'Cakupan Program'
+    ]);
+    rHeader.height = 24;
+
+    const headerBorder = {
+        top: { style: 'medium', color: { argb: 'FF0369A1' } },
+        bottom: { style: 'medium', color: { argb: 'FF0369A1' } },
+        left: { style: 'thin', color: { argb: 'FF075985' } },
+        right: { style: 'thin', color: { argb: 'FF075985' } },
+    };
+
+    rHeader.eachCell({ includeEmpty: true }, cell => {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = headerBorder;
+    });
+
+    const borderThin = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    };
+
+    let startDataRow = 10;
+    let sumIuran = 0;
+
+    petugas.forEach((p, idx) => {
+        const iuran = parseInt(p.iuran_bpjs_tk) || 0;
+        if (p.status === 'Aktif') {
+            sumIuran += iuran;
+        }
+
+        const row = sheet.addRow([
+            idx + 1,
+            p.nama || '-',
+            p.nik ? `'${p.nik}` : '-',
+            p.jenis_kelamin || '-',
+            p.tanggal_lahir ? formatTanggalIndo(p.tanggal_lahir) : '-',
+            p.umur ? `${p.umur} th` : '-',
+            p.jabatan || '-',
+            p.status || 'Aktif',
+            iuran,
+            iuran > 0 ? 'JKK & JKM (Aktif)' : 'Belum Didaftarkan',
+        ]);
+        row.height = 20;
+
+        const isEven = idx % 2 === 1;
+        const rowBg = isEven ? 'FFF0F9FF' : 'FFFFFFFF';
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            cell.font = { name: 'Arial', size: 9 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            cell.border = borderThin;
+            cell.alignment = { vertical: 'middle' };
+
+            if (colNumber === 1 || colNumber === 4 || colNumber === 6 || colNumber === 8) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            } else if (colNumber === 2) {
+                cell.font = { name: 'Arial', size: 9, bold: true };
+            } else if (colNumber === 9) {
+                cell.numFmt = '#,##0';
+                cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                cell.font = { name: 'Arial', size: 9, bold: true };
+            } else if (colNumber === 10) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            }
+        });
+    });
+
+    // Baris Total Iuran
+    const rTot = sheet.addRow([
+        '',
+        `TOTAL IURAN PREMI (${petugas.length} Petugas)`,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        sumIuran,
+        'Per Bulan'
+    ]);
+    rTot.height = 22;
+    rTot.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF0369A1' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+        cell.border = {
+            top: { style: 'medium', color: { argb: 'FF0284C7' } },
+            bottom: { style: 'medium', color: { argb: 'FF0284C7' } },
+            left: { style: 'thin', color: { argb: 'FFBAE6FD' } },
+            right: { style: 'thin', color: { argb: 'FFBAE6FD' } },
+        };
+        cell.alignment = { vertical: 'middle' };
+        if (colNumber === 9) {
+            cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        } else if (colNumber === 10) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+    });
+
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const filename = `Rekap_BPJS_Ketenagakerjaan_Petugas_SPPG_${nowStr}.xlsx`;
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
