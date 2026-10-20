@@ -662,12 +662,97 @@ const parsedJadwalOperasional = computed(() => {
         props.workOrder?.jadwal_operasional ||
         props.workOrder?.raw?.jadwal_operasional;
     if (!j) return null;
-    if (typeof j === "object") return j;
-    try {
-        return JSON.parse(j);
-    } catch {
-        return null;
+    let obj = j;
+    if (typeof obj === "string") {
+        try {
+            obj = JSON.parse(obj);
+        } catch {
+            return null;
+        }
     }
+    if (!obj || typeof obj !== "object") return null;
+    const res = { ...obj };
+    if (!res.pengolahan_sesi_1 && res.pengolahan) res.pengolahan_sesi_1 = { ...res.pengolahan };
+    if (!res.pemorsian_sesi_1 && res.pemorsian) res.pemorsian_sesi_1 = { ...res.pemorsian };
+    if (!res.distribusi_sesi_1 && res.distribusi) res.distribusi_sesi_1 = { ...res.distribusi };
+    return res;
+});
+
+function getStageWeight(key) {
+    if (key === "persiapan") return 100;
+    if (key === "pengolahan") return 200;
+    if (key.startsWith("pengolahan_sesi_")) {
+        const num = parseInt(key.replace("pengolahan_sesi_", ""), 10) || 1;
+        return 200 + num;
+    }
+    if (key === "pemorsian") return 300;
+    if (key.startsWith("pemorsian_sesi_")) {
+        const num = parseInt(key.replace("pemorsian_sesi_", ""), 10) || 1;
+        return 300 + num;
+    }
+    if (key?.includes("organolaptik") || key?.includes("organoleptik")) return 400;
+    if (key === "distribusi") return 500;
+    if (key.startsWith("distribusi_sesi_")) {
+        const num = parseInt(key.replace("distribusi_sesi_", ""), 10) || 1;
+        return 500 + num;
+    }
+    if (key === "pengambilan_ompreng") return 600;
+    if (key.startsWith("pengambilan_ompreng_sesi_")) {
+        const num = parseInt(key.replace("pengambilan_ompreng_sesi_", ""), 10) || 1;
+        return 600 + num;
+    }
+    if (key === "pencucian_ompreng") return 700;
+    if (key.startsWith("pencucian_ompreng_sesi_")) {
+        const num = parseInt(key.replace("pencucian_ompreng_sesi_", ""), 10) || 1;
+        return 700 + num;
+    }
+    return 999;
+}
+
+const displayJadwalOperasionalList = computed(() => {
+    const raw = parsedJadwalOperasional.value;
+    if (!raw || typeof raw !== "object") return [];
+
+    const list = [];
+    if (Array.isArray(raw._stage_order) && raw._stage_order.length > 0) {
+        raw._stage_order.forEach((k) => {
+            const item = raw[k];
+            if (!item || typeof item !== "object" || item.aktif === false) return;
+            if (!item.mulai && !item.selesai) return;
+            list.push({
+                key: k,
+                nama: item.nama || k,
+                mulai: item.mulai || "--:--",
+                selesai: item.selesai || "--:--",
+            });
+        });
+    } else {
+        const validKeys = Object.keys(raw).filter((k) => {
+            if (k.startsWith("_")) return false;
+            const item = raw[k];
+            if (!item || typeof item !== "object") return false;
+            if (item.aktif === false) return false;
+            return Boolean(item.mulai || item.selesai);
+        });
+
+        validKeys.sort((a, b) => getStageWeight(a) - getStageWeight(b));
+
+        validKeys.forEach((k) => {
+            const item = raw[k];
+            list.push({
+                key: k,
+                nama: item.nama || k,
+                mulai: item.mulai || "--:--",
+                selesai: item.selesai || "--:--",
+            });
+        });
+    }
+
+    return list.map((item, idx) => ({
+        ...item,
+        no: idx + 1,
+        label: `${idx + 1}. ${item.nama}`,
+    }));
 });
 
 // Porsi Tambahan Produksi (Organoleptik, Sampel, Buffer)
@@ -2038,7 +2123,7 @@ function getSubMenuLabelForBahan(it) {
 
                     <!-- Waktu Kegiatan Operasional SPPG -->
                     <div
-                        v-if="parsedJadwalOperasional"
+                        v-if="displayJadwalOperasionalList && displayJadwalOperasionalList.length > 0"
                         class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-3.5 shadow-2xs"
                     >
                         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -2049,27 +2134,20 @@ function getSubMenuLabelForBahan(it) {
                                 </h4>
                             </div>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                6 Tahapan Kerja
+                                {{ displayJadwalOperasionalList.length }} Tahapan Kerja
                             </span>
                         </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                             <div
-                                v-for="(keg, kKey) in {
-                                    persiapan: '1. Persiapan',
-                                    pengolahan: '2. Pengolahan',
-                                    pemorsian: '3. Pemorsian',
-                                    uji_organolaptik: '4. Uji Organolaptik',
-                                    distribusi: '5. Distribusi',
-                                    pencucian_ompreng: '6. Pencucian Ompreng'
-                                }"
-                                :key="kKey"
+                                v-for="item in displayJadwalOperasionalList"
+                                :key="item.key"
                                 class="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 text-center space-y-1"
                             >
                                 <span class="text-[10px] font-bold text-slate-500 uppercase block truncate">
-                                    {{ keg }}
+                                    {{ item.label }}
                                 </span>
                                 <div class="text-xs font-black text-indigo-900 font-mono">
-                                    {{ parsedJadwalOperasional[kKey]?.mulai || '--:--' }} s.d {{ parsedJadwalOperasional[kKey]?.selesai || '--:--' }}
+                                    {{ item.mulai }} s.d {{ item.selesai }}
                                 </div>
                             </div>
                         </div>

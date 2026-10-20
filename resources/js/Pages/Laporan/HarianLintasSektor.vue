@@ -158,52 +158,168 @@ const namaKepalaSppg = computed(() => {
     return props.kepalaSppg || "I Gede Gelgel Abdiutama, S.Kom.";
 });
 
-// Jadwal Kegiatan Operasional (6 Tahapan)
+// Jadwal Kegiatan Operasional (9 Tahapan)
 const defaultJadwal = [
-    { nama: "Persiapan", mulai: "19.00", selesai: "03.00" },
-    { nama: "Pengolahan", mulai: "01.00", selesai: "09.00" },
-    { nama: "Pemorsian", mulai: "04.00", selesai: "12.00" },
-    { nama: "Uji Organolaptik", mulai: "05.00", selesai: "06.00" },
-    { nama: "Distribusi", mulai: "06.00", selesai: "14.00" },
-    { nama: "Pencucian Ompreng", mulai: "12.00", selesai: "20.00" },
+    { key: "persiapan", nama: "Proses Persiapan", mulai: "19.00", selesai: "03.00" },
+    { key: "pengolahan_sesi_1", nama: "Proses Pengolahan Sesi 1", mulai: "02.00", selesai: "05.00" },
+    { key: "pengolahan_sesi_2", nama: "Proses Pengolahan Sesi 2", mulai: "07.00", selesai: "10.00" },
+    { key: "pemorsian_sesi_1", nama: "Proses Pemorsian Sesi 1", mulai: "04.00", selesai: "09.00" },
+    { key: "pemorsian_sesi_2", nama: "Proses Pemorsian Sesi 2", mulai: "11.00", selesai: "12.00" },
+    { key: "distribusi_sesi_1", nama: "Proses Pendistribusian Sesi 1", mulai: "07.00", selesai: "09.00" },
+    { key: "distribusi_sesi_2", nama: "Proses Pendistribusian Sesi 2", mulai: "11.00", selesai: "12.00" },
+    { key: "pengambilan_ompreng", nama: "Proses Pengambilan Alat Makan Ompreng", mulai: "10.00", selesai: "14.00" },
+    { key: "pencucian_ompreng", nama: "Proses Pencucian Alat Makan Ompreng", mulai: "12.00", selesai: "20.00" },
 ];
 
+function formatNamaKegiatan(rawNama, key) {
+    if (!rawNama && !key) return "Kegiatan Operasional";
+    let nama = (rawNama || "").trim();
+    if (!nama) {
+        if (key === "persiapan") return "Proses Persiapan";
+        if (key === "pengolahan") return "Proses Pengolahan";
+        if (key === "pemorsian") return "Proses Pemorsian";
+        if (key?.includes("organoleptik") || key?.includes("organolaptik")) return "Uji Organoleptik";
+        if (key === "distribusi") return "Proses Pendistribusian";
+        if (key === "pengambilan_ompreng") return "Proses Pengambilan Alat Makan Ompreng";
+        if (key === "pencucian_ompreng") return "Proses Pencucian Alat Makan Ompreng";
+        nama = key;
+    }
+
+    if (nama.toLowerCase().startsWith("proses ") || nama.toLowerCase().startsWith("uji ")) {
+        return nama;
+    }
+
+    if (nama.toLowerCase() === "distribusi") {
+        return "Proses Pendistribusian";
+    }
+    if (nama.toLowerCase() === "pencucian ompreng") {
+        return "Proses Pencucian Alat Makan Ompreng";
+    }
+    if (nama.toLowerCase() === "pengambilan ompreng") {
+        return "Proses Pengambilan Alat Makan Ompreng";
+    }
+
+    return `Proses ${nama}`;
+}
+
+function getStageWeight(key) {
+    if (key === "persiapan") return 100;
+    if (key === "pengolahan") return 200;
+    if (key.startsWith("pengolahan_sesi_")) {
+        const num = parseInt(key.replace("pengolahan_sesi_", ""), 10) || 1;
+        return 200 + num;
+    }
+    if (key === "pemorsian") return 300;
+    if (key.startsWith("pemorsian_sesi_")) {
+        const num = parseInt(key.replace("pemorsian_sesi_", ""), 10) || 1;
+        return 300 + num;
+    }
+    if (key.includes("organolaptik") || key.includes("organoleptik")) return 400;
+    if (key === "distribusi") return 500;
+    if (key.startsWith("distribusi_sesi_")) {
+        const num = parseInt(key.replace("distribusi_sesi_", ""), 10) || 1;
+        return 500 + num;
+    }
+    if (key === "pengambilan_ompreng") return 600;
+    if (key.startsWith("pengambilan_ompreng_sesi_")) {
+        const num = parseInt(key.replace("pengambilan_ompreng_sesi_", ""), 10) || 1;
+        return 600 + num;
+    }
+    if (key === "pencucian_ompreng") return 700;
+    if (key.startsWith("pencucian_ompreng_sesi_")) {
+        const num = parseInt(key.replace("pencucian_ompreng_sesi_", ""), 10) || 1;
+        return 700 + num;
+    }
+    return 999;
+}
+
 const jadwalOperasionalList = computed(() => {
-    const raw = props.workOrder?.jadwal_operasional;
-    if (!raw) return defaultJadwal;
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!parsed || typeof parsed !== "object") return defaultJadwal;
+    let raw = props.workOrder?.jadwal_operasional;
+    if (!raw && props.workOrder?.catatan) {
+        if (typeof props.workOrder.catatan === "object") {
+            raw = props.workOrder.catatan.jadwal_operasional;
+        } else if (typeof props.workOrder.catatan === "string") {
+            try {
+                const parsedCatatan = JSON.parse(props.workOrder.catatan);
+                raw = parsedCatatan?.jadwal_operasional;
+            } catch {}
+        }
+    }
 
-    const keys = [
-        "persiapan",
-        "pengolahan",
-        "pemorsian",
-        "uji_organolaptik",
-        "distribusi",
-        "pencucian_ompreng",
-    ];
-    const labels = {
-        persiapan: "Persiapan",
-        pengolahan: "Pengolahan",
-        pemorsian: "Pemorsian",
-        uji_organolaptik: "Uji Organolaptik",
-        distribusi: "Distribusi",
-        pencucian_ompreng: "Pencucian Ompreng",
-    };
+    let parsed = null;
+    if (raw) {
+        if (typeof raw === "string") {
+            try {
+                parsed = JSON.parse(raw);
+            } catch {}
+        } else if (typeof raw === "object") {
+            parsed = raw;
+        }
+    }
 
-    return keys.map((k) => {
-        const item = parsed[k] || {};
-        const def = defaultJadwal.find((d) => d.nama === labels[k]) || {};
-        const mulaiRaw = item.mulai ? item.mulai.replace(":", ".") : def.mulai;
-        const selesaiRaw = item.selesai
-            ? item.selesai.replace(":", ".")
-            : def.selesai;
-        return {
-            nama: labels[k],
-            mulai: mulaiRaw,
-            selesai: selesaiRaw,
-        };
-    });
+    if (!parsed || typeof parsed !== "object") {
+        return defaultJadwal.map((d) => ({
+            key: d.key,
+            nama: d.nama,
+            mulai: d.mulai,
+            selesai: d.selesai,
+        }));
+    }
+
+    const list = [];
+
+    // 1. Jika ada _stage_order, ikuti urutan tersebut langsung
+    if (Array.isArray(parsed._stage_order) && parsed._stage_order.length > 0) {
+        parsed._stage_order.forEach((k) => {
+            const item = parsed[k];
+            if (!item || typeof item !== "object" || item.aktif === false) return;
+            if (!item.mulai && !item.selesai) return;
+            const def = defaultJadwal.find((d) => d.key === k) || {};
+            const mulaiRaw = item.mulai ? item.mulai.replace(":", ".") : (def.mulai || "");
+            const selesaiRaw = item.selesai ? item.selesai.replace(":", ".") : (def.selesai || "");
+            list.push({
+                key: k,
+                nama: formatNamaKegiatan(item.nama, k),
+                mulai: mulaiRaw,
+                selesai: selesaiRaw,
+            });
+        });
+    } else {
+        // 2. Baca apa adanya seluruh data kegiatan dari WO tanpa membuat sesi fiktif
+        const validKeys = Object.keys(parsed).filter((k) => {
+            if (k.startsWith("_")) return false;
+            const item = parsed[k];
+            if (!item || typeof item !== "object") return false;
+            if (item.aktif === false) return false;
+            return Boolean(item.mulai || item.selesai);
+        });
+
+        validKeys.sort((a, b) => getStageWeight(a) - getStageWeight(b));
+
+        validKeys.forEach((k) => {
+            const item = parsed[k];
+            const mulaiRaw = item.mulai ? item.mulai.replace(":", ".") : "--.--";
+            const selesaiRaw = item.selesai ? item.selesai.replace(":", ".") : "--.--";
+            list.push({
+                key: k,
+                nama: formatNamaKegiatan(item.nama, k),
+                mulai: mulaiRaw,
+                selesai: selesaiRaw,
+            });
+        });
+    }
+
+    // 3. Hanya jika WO kosong sama sekali, tampilkan default template
+    if (list.length === 0) {
+        return defaultJadwal.map((d) => ({
+            key: d.key,
+            nama: d.nama,
+            mulai: d.mulai,
+            selesai: d.selesai,
+        }));
+    }
+
+    return list;
 });
 
 // Kelompok Penerima Manfaat

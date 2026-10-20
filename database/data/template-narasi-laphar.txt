@@ -10,8 +10,15 @@ Mohon ijin melaporkan kegiatan *[Nama SPPG, Sesuai database jangan di uppercase]
 - Nama Kepala SPPG: [Nama Kepala SPPG]
 
 *1. Waktu Kegiatan Operasional*
-- Pukul [Jam Mulai] s.d [Jam Selesai] [Sesuai Bagian kegiatanya]
-- dst
+- Pukul 19.00 s.d 03.00 Proses Persiapan
+- Pukul 02.00 s.d 05.00 Proses Pengolahan Sesi 1
+- Pukul 07.00 s.d 10.00 Proses Pengolahan Sesi 2
+- Pukul 04.00 s.d 09.00 Proses Pemorsian Sesi 1
+- Pukul 11.00 s.d 12.00 Proses Pemorsian Sesi 2
+- Pukul 07.00 s.d 09.00 Proses Pendistribusian Sesi 1
+- Pukul 11.00 s.d 12.00 Proses Pendistribusian Sesi 2
+- Pukul 10.00 s.d 14.00 Proses Pengambilan Alat Makan Ompreng
+- Pukul 12.00 s.d 20.00 Proses Pencucian Alat Makan Ompreng
 
 *2. Rincian Pembagian Penyaluran MBG Kepada Penerima Manfaat*
 Terdapat sebanyak [Total Porsi Keseluruhan] porsi dengan rincian sebagai berikut:

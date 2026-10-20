@@ -554,31 +554,87 @@ export function buildWorkOrderFullExportData(wo) {
         grandTotalProduksi,
     };
 
-    // 10. Jadwal Waktu Kegiatan Operasional SPPG (6 Tahapan)
+    // 10. Jadwal Waktu Kegiatan Operasional SPPG (Fleksibel Multi-Sesi)
     let jadwalRaw = wo.jadwal_operasional || raw.jadwal_operasional || wo.catatan?.jadwal_operasional || {};
     if (typeof jadwalRaw === 'string') {
         try { jadwalRaw = JSON.parse(jadwalRaw); } catch { jadwalRaw = {}; }
     }
-    const defaultJadwalConfig = [
-        { key: 'persiapan', no: 1, nama: 'Persiapan', defMulai: '19:00', defSelesai: '03:00', deskripsi: 'Persiapan bahan baku, sortasi & bumbu' },
-        { key: 'pengolahan', no: 2, nama: 'Pengolahan', defMulai: '02:00', defSelesai: '10:00', deskripsi: 'Pengolahan & pemasakan seluruh menu' },
-        { key: 'pemorsian', no: 3, nama: 'Pemorsian', defMulai: '04:00', defSelesai: '12:00', deskripsi: 'Pengepakan & pemorsian ke ompreng' },
-        { key: 'uji_organolaptik', no: 4, nama: 'Uji Organolaptik', defMulai: '05:00', defSelesai: '06:00', deskripsi: 'Uji sensori mutu rasa, aroma, tekstur & suhu' },
-        { key: 'distribusi', no: 5, nama: 'Distribusi', defMulai: '06:00', defSelesai: '14:00', deskripsi: 'Pengantaran makanan ke kelompok sasaran' },
-        { key: 'pencucian_ompreng', no: 6, nama: 'Pencucian Ompreng', defMulai: '12:00', defSelesai: '20:00', deskripsi: 'Penerimaan kembali & sanitasi ompreng' },
-    ];
-    const jadwalOperasionalRows = defaultJadwalConfig.map(cfg => {
-        const item = jadwalRaw[cfg.key] || {};
-        return {
-            key: cfg.key,
-            no: cfg.no,
-            nama: cfg.nama,
-            mulai: item.mulai || cfg.defMulai,
-            selesai: item.selesai || cfg.defSelesai,
-            rentang: `${item.mulai || cfg.defMulai} - ${item.selesai || cfg.defSelesai}`,
-            deskripsi: cfg.deskripsi,
-        };
-    });
+
+    function getStageWeight(key) {
+        if (key === "persiapan") return 100;
+        if (key === "pengolahan") return 200;
+        if (key.startsWith("pengolahan_sesi_")) {
+            const num = parseInt(key.replace("pengolahan_sesi_", ""), 10) || 1;
+            return 200 + num;
+        }
+        if (key === "pemorsian") return 300;
+        if (key.startsWith("pemorsian_sesi_")) {
+            const num = parseInt(key.replace("pemorsian_sesi_", ""), 10) || 1;
+            return 300 + num;
+        }
+        if (key?.includes("organolaptik") || key?.includes("organoleptik")) return 400;
+        if (key === "distribusi") return 500;
+        if (key.startsWith("distribusi_sesi_")) {
+            const num = parseInt(key.replace("distribusi_sesi_", ""), 10) || 1;
+            return 500 + num;
+        }
+        if (key === "pengambilan_ompreng") return 600;
+        if (key.startsWith("pengambilan_ompreng_sesi_")) {
+            const num = parseInt(key.replace("pengambilan_ompreng_sesi_", ""), 10) || 1;
+            return 600 + num;
+        }
+        if (key === "pencucian_ompreng") return 700;
+        if (key.startsWith("pencucian_ompreng_sesi_")) {
+            const num = parseInt(key.replace("pencucian_ompreng_sesi_", ""), 10) || 1;
+            return 700 + num;
+        }
+        return 999;
+    }
+
+    let jadwalOperasionalRows = [];
+    if (Array.isArray(jadwalRaw._stage_order) && jadwalRaw._stage_order.length > 0) {
+        jadwalRaw._stage_order.forEach((k, idx) => {
+            const item = jadwalRaw[k];
+            if (!item || typeof item !== "object" || item.aktif === false) return;
+            if (!item.mulai && !item.selesai) return;
+            const mulai = item.mulai || '--:--';
+            const selesai = item.selesai || '--:--';
+            jadwalOperasionalRows.push({
+                key: k,
+                no: idx + 1,
+                nama: item.nama || k,
+                mulai,
+                selesai,
+                rentang: `${mulai} - ${selesai}`,
+                deskripsi: `Pukul ${mulai.replace(':', '.')} s.d ${selesai.replace(':', '.')} • ${item.nama || k}`,
+            });
+        });
+    } else {
+        const validKeys = Object.keys(jadwalRaw).filter((k) => {
+            if (k.startsWith("_")) return false;
+            const item = jadwalRaw[k];
+            if (!item || typeof item !== "object") return false;
+            if (item.aktif === false) return false;
+            return Boolean(item.mulai || item.selesai);
+        });
+
+        validKeys.sort((a, b) => getStageWeight(a) - getStageWeight(b));
+
+        validKeys.forEach((k, idx) => {
+            const item = jadwalRaw[k];
+            const mulai = item.mulai || '--:--';
+            const selesai = item.selesai || '--:--';
+            jadwalOperasionalRows.push({
+                key: k,
+                no: idx + 1,
+                nama: item.nama || k,
+                mulai,
+                selesai,
+                rentang: `${mulai} - ${selesai}`,
+                deskripsi: `Pukul ${mulai.replace(':', '.')} s.d ${selesai.replace(':', '.')} • ${item.nama || k}`,
+            });
+        });
+    }
 
     return {
         noWO,
@@ -1255,7 +1311,7 @@ export async function exportWorkOrderExcel(wo) {
     sheet1.addRow([]); // Gap Baris Kosong
 
     // Tabel 6: Jadwal Waktu Kegiatan Operasional SPPG
-    const rT6Head = sheet1.addRow(['Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (6 Tahapan Kerja)']);
+    const rT6Head = sheet1.addRow(['Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (9 Tahapan Kerja)']);
     sheet1.mergeCells(`A${rT6Head.number}:H${rT6Head.number}`);
     rT6Head.getCell(1).font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF312E81' } };
 

@@ -12,6 +12,8 @@ import {
     Users,
     Calendar,
     CalendarCheck,
+    CalendarRange,
+    CalendarDays,
     CheckCircle2,
     AlertCircle,
     Download,
@@ -30,7 +32,10 @@ import {
     Info,
     ShieldAlert,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Sparkles,
+    Trash2,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -45,6 +50,7 @@ const props = defineProps({
     initialPeriodeId: { type: [String, Number], default: "all" },
     initialPresensiMap: { type: Object, default: () => ({}) },
     mandaysMap: { type: Object, default: () => ({}) },
+    initialSelectedDates: { type: Array, default: () => [] },
 });
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -89,6 +95,7 @@ const todayStr = computed(() => {
 function normalizeModeGaji(m) {
     if (!m) return "";
     const val = String(m).toLowerCase();
+    if (val === "custom_dates" || val === "loncat") return "custom_dates";
     if (val === "hari_ini" || val === "today") return "hari_ini";
     if (val === "periode" || val === "periodik" || val === "period") return "periode";
     if (val === "rentang" || val === "bulanan" || val === "range" || val === "custom") return "rentang";
@@ -96,7 +103,6 @@ function normalizeModeGaji(m) {
 }
 
 // ─── State Filter & Mode Perhitungan ──────────────────────────────────────────
-// Sesuai permintaan user: defaultnya hari ini
 const modeSkala = ref(normalizeModeGaji(props.initialMode) || "hari_ini");
 const selectedPeriodeId = ref(props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all");
 const tanggalMulai = ref(props.initialTanggalMulai || todayStr.value);
@@ -104,7 +110,41 @@ const tanggalSelesai = ref(props.initialTanggalSelesai || todayStr.value);
 const modePerhitungan = ref("presensi");
 const isFilterAllTime = ref(false);
 
+// Mode Pemilihan Tanggal: 'range' (Deret Rentang / Periode) vs 'custom_dates' (Pilih Bebas / Loncat-loncat)
+const dateSelectionType = ref(
+    props.initialMode === "custom_dates" || (props.initialSelectedDates && props.initialSelectedDates.length > 0)
+        ? "custom_dates"
+        : "range"
+);
+
+function getDatesInRange(startStr, endStr) {
+    if (!startStr || !endStr) return [];
+    const list = [];
+    const cur = new Date(startStr + "T00:00:00");
+    const end = new Date(endStr + "T00:00:00");
+    if (isNaN(cur.getTime()) || isNaN(end.getTime())) return [];
+    let count = 0;
+    while (cur <= end && count < 120) {
+        const y = cur.getFullYear();
+        const m = String(cur.getMonth() + 1).padStart(2, "0");
+        const d = String(cur.getDate()).padStart(2, "0");
+        list.push(`${y}-${m}-${d}`);
+        cur.setDate(cur.getDate() + 1);
+        count++;
+    }
+    return list;
+}
+
+const selectedDates = ref(
+    props.initialSelectedDates && props.initialSelectedDates.length > 0
+        ? [...props.initialSelectedDates]
+        : (tanggalMulai.value === tanggalSelesai.value ? [tanggalMulai.value] : getDatesInRange(tanggalMulai.value, tanggalSelesai.value))
+);
+
 const rentangHariCount = computed(() => {
+    if (dateSelectionType.value === "custom_dates") {
+        return selectedDates.value.length;
+    }
     if (!tanggalMulai.value || !tanggalSelesai.value) return 0;
     const start = new Date(tanggalMulai.value + "T00:00:00");
     const end = new Date(tanggalSelesai.value + "T00:00:00");
@@ -140,10 +180,13 @@ const selectedPeriode = computed(() => {
     return props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
 });
 
-const is14HariActive = computed(() => rentangHariCount.value === 14);
-const is28HariActive = computed(() => rentangHariCount.value === 28);
+const is14HariActive = computed(() => dateSelectionType.value === "range" && rentangHariCount.value === 14);
+const is28HariActive = computed(() => dateSelectionType.value === "range" && rentangHariCount.value === 28);
 
 const labelSiklus = computed(() => {
+    if (dateSelectionType.value === "custom_dates") {
+        return `Pilihan Bebas: ${selectedDates.value.length} Tanggal (Loncat-loncat)`;
+    }
     if (selectedPeriode.value) {
         return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${rentangHariCount.value} Hari Kerja)`;
     }
@@ -237,6 +280,11 @@ function onPeriodeSelectChange() {
 }
 
 function applyFilterTanggal() {
+    if (dateSelectionType.value === "custom_dates") {
+        applyCustomDatesFilter();
+        return;
+    }
+
     router.get(
         route("petugas.pembayaran-gaji"),
         {
@@ -244,6 +292,33 @@ function applyFilterTanggal() {
             tanggal_selesai: tanggalSelesai.value,
             periode_id: selectedPeriodeId.value,
             filter_mode: modeSkala.value,
+            mode: modePerhitungan.value,
+        },
+        { preserveState: true, preserveScroll: true }
+    );
+}
+
+function applyCustomDatesFilter() {
+    if (selectedDates.value.length === 0) {
+        alert("Pilih minimal 1 tanggal terlebih dahulu.");
+        return;
+    }
+    const sorted = [...selectedDates.value].sort();
+    tanggalMulai.value = sorted[0];
+    tanggalSelesai.value = sorted[sorted.length - 1];
+
+    if (!isRemarkCustom.value) {
+        remark.value = computeDefaultRemark();
+    }
+
+    router.get(
+        route("petugas.pembayaran-gaji"),
+        {
+            filter_mode: "custom_dates",
+            selected_dates: sorted.join(","),
+            tanggal_mulai: sorted[0],
+            tanggal_selesai: sorted[sorted.length - 1],
+            periode_id: "all",
             mode: modePerhitungan.value,
         },
         { preserveState: true, preserveScroll: true }
@@ -264,6 +339,197 @@ function onDateFilterChange(payload) {
 
     applyFilterTanggal();
 }
+
+// ─── Multi-Date Picker Calendar Logic (Loncat-loncat Tanggal) ───────────────
+const monthNamesIndo = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+const dayHeaders = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+const availableYears = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
+
+function formatDateStr(year, month, day) {
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${m}-${d}`;
+}
+
+const initialCalDate = (props.initialSelectedDates && props.initialSelectedDates.length > 0)
+    ? new Date(props.initialSelectedDates[0] + "T00:00:00")
+    : (props.initialTanggalMulai ? new Date(props.initialTanggalMulai + "T00:00:00") : new Date());
+
+const calMonth1 = ref(isNaN(initialCalDate.getTime()) ? new Date().getMonth() : initialCalDate.getMonth());
+const calYear1 = ref(isNaN(initialCalDate.getTime()) ? new Date().getFullYear() : initialCalDate.getFullYear());
+
+const calMonth2 = computed(() => (calMonth1.value + 1) % 12);
+const calYear2 = computed(() => (calMonth1.value === 11 ? calYear1.value + 1 : calYear1.value));
+
+function prevCalMonth() {
+    if (calMonth1.value === 0) {
+        calMonth1.value = 11;
+        calYear1.value -= 1;
+    } else {
+        calMonth1.value -= 1;
+    }
+}
+
+function nextCalMonth() {
+    if (calMonth1.value === 11) {
+        calMonth1.value = 0;
+        calYear1.value += 1;
+    } else {
+        calMonth1.value += 1;
+    }
+}
+
+function buildMonthDays(monthIdx, yearVal) {
+    const firstDay = new Date(yearVal, monthIdx, 1);
+    const startDayOffset = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(yearVal, monthIdx + 1, 0).getDate();
+    const prevMonthDays = new Date(yearVal, monthIdx, 0).getDate();
+
+    const days = [];
+
+    // Leading days from previous month
+    for (let i = startDayOffset - 1; i >= 0; i--) {
+        const dNum = prevMonthDays - i;
+        const pMonth = monthIdx === 0 ? 11 : monthIdx - 1;
+        const pYear = monthIdx === 0 ? yearVal - 1 : yearVal;
+        const dateStr = formatDateStr(pYear, pMonth, dNum);
+        days.push({
+            dayNum: dNum,
+            dateStr,
+            isCurrentMonth: false,
+            dayOfWeek: (startDayOffset - 1 - i),
+        });
+    }
+
+    // Days in current month
+    for (let d = 1; d <= daysInMonth; d++) {
+        const curDate = new Date(yearVal, monthIdx, d);
+        const dayOfWeek = (curDate.getDay() + 6) % 7;
+        const dateStr = formatDateStr(yearVal, monthIdx, d);
+        days.push({
+            dayNum: d,
+            dateStr,
+            isCurrentMonth: true,
+            dayOfWeek,
+        });
+    }
+
+    // Trailing days from next month
+    const targetTotal = days.length > 35 ? 42 : 35;
+    const remaining = targetTotal - days.length;
+    for (let d = 1; d <= remaining; d++) {
+        const nMonth = monthIdx === 11 ? 0 : monthIdx + 1;
+        const nYear = monthIdx === 11 ? yearVal + 1 : yearVal;
+        const curDate = new Date(nYear, nMonth, d);
+        const dayOfWeek = (curDate.getDay() + 6) % 7;
+        const dateStr = formatDateStr(nYear, nMonth, d);
+        days.push({
+            dayNum: d,
+            dateStr,
+            isCurrentMonth: false,
+            dayOfWeek,
+        });
+    }
+
+    return days;
+}
+
+const month1Days = computed(() => buildMonthDays(calMonth1.value, calYear1.value));
+const month2Days = computed(() => buildMonthDays(calMonth2.value, calYear2.value));
+
+function isDateSelected(dateStr) {
+    return selectedDates.value.includes(dateStr);
+}
+
+function toggleDate(dateStr) {
+    const idx = selectedDates.value.indexOf(dateStr);
+    if (idx >= 0) {
+        selectedDates.value.splice(idx, 1);
+    } else {
+        selectedDates.value.push(dateStr);
+        selectedDates.value.sort();
+    }
+}
+
+function removeSelectedDate(dateStr) {
+    const idx = selectedDates.value.indexOf(dateStr);
+    if (idx >= 0) {
+        selectedDates.value.splice(idx, 1);
+    }
+}
+
+function selectWorkdays(monthIdx, yearVal, includeSaturday = false) {
+    const daysInMonth = new Date(yearVal, monthIdx + 1, 0).getDate();
+    const toAdd = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+        const cur = new Date(yearVal, monthIdx, d);
+        const dayOfWeek = (cur.getDay() + 6) % 7;
+        const isWorkday = includeSaturday ? dayOfWeek < 6 : dayOfWeek < 5;
+        if (isWorkday) {
+            toAdd.push(formatDateStr(yearVal, monthIdx, d));
+        }
+    }
+    const set = new Set([...selectedDates.value, ...toAdd]);
+    selectedDates.value = Array.from(set).sort();
+}
+
+function selectAllMonthDays(monthIdx, yearVal) {
+    const daysInMonth = new Date(yearVal, monthIdx + 1, 0).getDate();
+    const toAdd = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+        toAdd.push(formatDateStr(yearVal, monthIdx, d));
+    }
+    const set = new Set([...selectedDates.value, ...toAdd]);
+    selectedDates.value = Array.from(set).sort();
+}
+
+function selectTodayOnly() {
+    selectedDates.value = [todayStr.value];
+}
+
+function clearAllSelectedDates() {
+    selectedDates.value = [];
+}
+
+function convertRangeToCustomDates() {
+    const list = getDatesInRange(tanggalMulai.value, tanggalSelesai.value);
+    selectedDates.value = list.length > 0 ? list : [todayStr.value];
+    dateSelectionType.value = "custom_dates";
+}
+
+function switchDateSelectionType(type) {
+    if (dateSelectionType.value === type) return;
+    dateSelectionType.value = type;
+
+    if (type === "range") {
+        if (selectedPeriodeId.value && selectedPeriodeId.value !== "all") {
+            modeSkala.value = "periode";
+        } else {
+            modeSkala.value = tanggalMulai.value === tanggalSelesai.value ? "hari_ini" : "rentang";
+        }
+        applyFilterTanggal();
+    } else if (type === "custom_dates") {
+        if (selectedDates.value.length === 0) {
+            selectedDates.value = getDatesInRange(tanggalMulai.value, tanggalSelesai.value);
+            if (selectedDates.value.length === 0) {
+                selectedDates.value = [todayStr.value];
+            }
+        }
+    }
+}
+
+watch(
+    selectedDates,
+    () => {
+        if (!isRemarkCustom.value && dateSelectionType.value === "custom_dates") {
+            remark.value = computeDefaultRemark();
+        }
+    },
+    { deep: true }
+);
 
 // BNI Direct Inhouse Headers
 const rekDebet = ref(props.summary?.rek_debet_default || "5268080021123800");
@@ -295,6 +561,17 @@ function formatDDMMYYYY(dStr) {
 }
 
 function computeDefaultRemark(startStr, endStr) {
+    if (dateSelectionType.value === "custom_dates" && selectedDates.value.length > 0) {
+        const sorted = [...selectedDates.value].sort();
+        const count = sorted.length;
+        if (count === 1) {
+            return `Gaji Petugas SPPG ${formatDDMMYYYY(sorted[0])}`;
+        }
+        const first = formatDDMMYYYY(sorted[0]);
+        const last = formatDDMMYYYY(sorted[count - 1]);
+        return `Gaji Petugas SPPG (${count} Tgl: ${first} s/d ${last})`;
+    }
+
     const start = startStr || tanggalMulai.value;
     const end = endStr || tanggalSelesai.value || start;
 
@@ -899,16 +1176,309 @@ function copyRowRekening(id, text) {
                 </button>
             </div>
 
-            <!-- ─── Control Bar: Reusable PeriodDateFilterBar & Mode Perhitungan ─── -->
-            <PeriodDateFilterBar
-                v-model:startDate="tanggalMulai"
-                v-model:endDate="tanggalSelesai"
-                v-model:mode="modeSkala"
-                v-model:periodeId="selectedPeriodeId"
-                v-model:isAllTime="isFilterAllTime"
-                :periodes="periodes"
-                @change="onDateFilterChange"
-            />
+            <!-- ─── TAB SWITCHER MODE TANGGAL: DERET RENTANG vs LONCAT-LONCAT ─── -->
+            <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                    <button
+                        type="button"
+                        @click="switchDateSelectionType('range')"
+                        :class="[
+                            'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer',
+                            dateSelectionType === 'range'
+                                ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                                : 'text-slate-600 hover:text-slate-900'
+                        ]"
+                    >
+                        <CalendarRange class="h-3.5 w-3.5" />
+                        <span>Deret Rentang Tanggal / Periode</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="switchDateSelectionType('custom_dates')"
+                        :class="[
+                            'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer',
+                            dateSelectionType === 'custom_dates'
+                                ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                                : 'text-slate-600 hover:text-slate-900'
+                        ]"
+                    >
+                        <CalendarCheck class="h-3.5 w-3.5" />
+                        <span>Pilih Tanggal Bebas (Loncat-loncat)</span>
+                        <span
+                            v-if="selectedDates.length > 0"
+                            class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800"
+                        >
+                            {{ selectedDates.length }} Tgl
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Info Ringkasan Mode Aktif -->
+                <div class="flex items-center justify-between sm:justify-end gap-2 text-xs px-2">
+                    <span class="text-slate-500 font-medium">Mode Aktif:</span>
+                    <span v-if="dateSelectionType === 'range'" class="font-bold text-slate-800">
+                        {{ formatTanggalIndo(tanggalMulai) }}
+                        <template v-if="tanggalMulai !== tanggalSelesai">
+                            ➜ {{ formatTanggalIndo(tanggalSelesai) }}
+                        </template>
+                        <span class="text-slate-400 font-normal ml-1">({{ rentangHariCount }} hari)</span>
+                    </span>
+                    <span v-else class="font-bold text-emerald-700">
+                        {{ selectedDates.length }} Tanggal Dipilih (Diskrit/Loncat)
+                    </span>
+                </div>
+            </div>
+
+            <!-- ─── Panel 1: Deret Rentang Tanggal / Periode ─── -->
+            <div v-show="dateSelectionType === 'range'" class="space-y-2">
+                <PeriodDateFilterBar
+                    v-model:startDate="tanggalMulai"
+                    v-model:endDate="tanggalSelesai"
+                    v-model:mode="modeSkala"
+                    v-model:periodeId="selectedPeriodeId"
+                    v-model:isAllTime="isFilterAllTime"
+                    :periodes="periodes"
+                    @change="onDateFilterChange"
+                >
+                    <template #extra>
+                        <button
+                            type="button"
+                            @click="convertRangeToCustomDates"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 transition-colors cursor-pointer"
+                            title="Ubah rentang ini ke mode pilihan tanggal bebas agar bisa uncheck / loncat tanggal"
+                        >
+                            <Sparkles class="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Pilih Tanggal Bebas dari Rentang Ini</span>
+                        </button>
+                    </template>
+                </PeriodDateFilterBar>
+            </div>
+
+            <!-- ─── Panel 2: Multi-Date Calendar (Pilih Tanggal Bebas / Loncat-loncat) ─── -->
+            <div
+                v-show="dateSelectionType === 'custom_dates'"
+                class="bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200"
+            >
+                <!-- Top Toolbar: Navigasi Bulan & Tombol Preset Cepat -->
+                <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <!-- Navigasi Bulan -->
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            @click="prevCalMonth"
+                            class="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                            title="Bulan Sebelumnya"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm font-bold text-slate-800">
+                                {{ monthNamesIndo[calMonth1] }} {{ calYear1 }}
+                            </span>
+                            <span class="text-slate-400 font-bold hidden sm:inline">&amp;</span>
+                            <span class="text-sm font-bold text-slate-800 hidden sm:inline">
+                                {{ monthNamesIndo[calMonth2] }} {{ calYear2 }}
+                            </span>
+                        </div>
+
+                        <button
+                            type="button"
+                            @click="nextCalMonth"
+                            class="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                            title="Bulan Berikutnya"
+                        >
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <!-- Tombol Preset Cepat -->
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[11px] text-slate-400 font-medium mr-1">Preset Cepat:</span>
+                        <button
+                            type="button"
+                            @click="selectWorkdays(calMonth1, calYear1, false)"
+                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                        >
+                            + Sen-Jum ({{ monthNamesIndo[calMonth1] }})
+                        </button>
+                        <button
+                            type="button"
+                            @click="selectWorkdays(calMonth1, calYear1, true)"
+                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                        >
+                            + Sen-Sab ({{ monthNamesIndo[calMonth1] }})
+                        </button>
+                        <button
+                            type="button"
+                            @click="selectAllMonthDays(calMonth1, calYear1)"
+                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                        >
+                            + Semua Hari ({{ monthNamesIndo[calMonth1] }})
+                        </button>
+                        <button
+                            type="button"
+                            @click="selectTodayOnly"
+                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                        >
+                            Hari Ini
+                        </button>
+                        <button
+                            type="button"
+                            @click="clearAllSelectedDates"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-rose-700 transition-colors cursor-pointer"
+                            title="Bersihkan semua tanggal yang dipilih"
+                        >
+                            <Trash2 class="h-3 w-3" />
+                            <span>Hapus Semua</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kalender 2 Bulan Bersebelahan (Grid) -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Bulan 1 -->
+                    <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/40">
+                        <div class="text-center font-bold text-xs text-slate-800 mb-2">
+                            {{ monthNamesIndo[calMonth1] }} {{ calYear1 }}
+                        </div>
+                        <!-- Day Headers -->
+                        <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
+                            <span v-for="h in dayHeaders" :key="h" :class="h === 'Min' ? 'text-rose-400' : ''">
+                                {{ h }}
+                            </span>
+                        </div>
+                        <!-- Days Grid -->
+                        <div class="grid grid-cols-7 gap-1">
+                            <button
+                                v-for="d in month1Days"
+                                :key="d.dateStr"
+                                type="button"
+                                @click="d.isCurrentMonth && toggleDate(d.dateStr)"
+                                :disabled="!d.isCurrentMonth"
+                                :class="[
+                                    'h-8 sm:h-9 rounded-lg text-xs font-semibold flex items-center justify-center relative transition-all cursor-pointer',
+                                    !d.isCurrentMonth
+                                        ? 'opacity-20 pointer-events-none text-slate-400'
+                                        : isDateSelected(d.dateStr)
+                                        ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-600'
+                                        : d.dateStr === todayStr
+                                        ? 'border-2 border-emerald-400 text-emerald-800 font-bold hover:bg-emerald-50'
+                                        : d.dayOfWeek === 6
+                                        ? 'text-rose-500 hover:bg-rose-50'
+                                        : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800'
+                                ]"
+                            >
+                                <span>{{ d.dayNum }}</span>
+                                <span
+                                    v-if="isDateSelected(d.dateStr)"
+                                    class="absolute bottom-0.5 right-1 text-[8px] font-black"
+                                >
+                                    ✓
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bulan 2 -->
+                    <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/40">
+                        <div class="text-center font-bold text-xs text-slate-800 mb-2">
+                            {{ monthNamesIndo[calMonth2] }} {{ calYear2 }}
+                        </div>
+                        <!-- Day Headers -->
+                        <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
+                            <span v-for="h in dayHeaders" :key="h" :class="h === 'Min' ? 'text-rose-400' : ''">
+                                {{ h }}
+                            </span>
+                        </div>
+                        <!-- Days Grid -->
+                        <div class="grid grid-cols-7 gap-1">
+                            <button
+                                v-for="d in month2Days"
+                                :key="d.dateStr"
+                                type="button"
+                                @click="d.isCurrentMonth && toggleDate(d.dateStr)"
+                                :disabled="!d.isCurrentMonth"
+                                :class="[
+                                    'h-8 sm:h-9 rounded-lg text-xs font-semibold flex items-center justify-center relative transition-all cursor-pointer',
+                                    !d.isCurrentMonth
+                                        ? 'opacity-20 pointer-events-none text-slate-400'
+                                        : isDateSelected(d.dateStr)
+                                        ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-600'
+                                        : d.dateStr === todayStr
+                                        ? 'border-2 border-emerald-400 text-emerald-800 font-bold hover:bg-emerald-50'
+                                        : d.dayOfWeek === 6
+                                        ? 'text-rose-500 hover:bg-rose-50'
+                                        : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800'
+                                ]"
+                            >
+                                <span>{{ d.dayNum }}</span>
+                                <span
+                                    v-if="isDateSelected(d.dateStr)"
+                                    class="absolute bottom-0.5 right-1 text-[8px] font-black"
+                                >
+                                    ✓
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tray Chips Tanggal yang Dipilih -->
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                            <span>Daftar Tanggal Terpilih:</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                {{ selectedDates.length }} Tanggal
+                            </span>
+                        </span>
+                        <span class="text-[11px] text-slate-400">
+                            Klik tanda ✕ pada tanggal untuk menghapus
+                        </span>
+                    </div>
+
+                    <!-- Scrollable / Wrapping Chips -->
+                    <div v-if="selectedDates.length > 0" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                        <span
+                            v-for="dStr in selectedDates"
+                            :key="dStr"
+                            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-emerald-300 text-[11px] font-semibold text-emerald-900 shadow-2xs group"
+                        >
+                            <span>{{ formatDateIndo(dStr) }}</span>
+                            <button
+                                type="button"
+                                @click="removeSelectedDate(dStr)"
+                                class="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                title="Hapus tanggal ini"
+                            >
+                                <X class="h-3 w-3" />
+                            </button>
+                        </span>
+                    </div>
+                    <div v-else class="text-xs text-slate-400 italic py-1">
+                        Belum ada tanggal yang dipilih. Klik tanggal pada kalender di atas atau gunakan preset cepat.
+                    </div>
+                </div>
+
+                <!-- Action Button: Terapkan Tanggal Pilihan -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                    <p class="text-[11px] text-slate-500">
+                        💡 <b>Info:</b> Mandays presensi dan gaji petugas akan dihitung otomatis sesuai kehadiran personil pada <b>{{ selectedDates.length }} tanggal</b> yang dipilih di atas.
+                    </p>
+
+                    <button
+                        type="button"
+                        @click="applyCustomDatesFilter"
+                        :disabled="selectedDates.length === 0"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                        <Check class="h-4 w-4" />
+                        <span>Terapkan Tanggal Terpilih ({{ selectedDates.length }} Hari)</span>
+                    </button>
+                </div>
+            </div>
 
             <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
 
@@ -938,7 +1508,7 @@ function copyRowRekening(id, text) {
                             <span class="flex items-center gap-1.5 flex-wrap">
                                 <span>Keterangan Transfer (Remark BNI)</span>
                                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
-                                    {{ tanggalMulai === tanggalSelesai ? 'Gaji Petugas SPPG DD-MM-YYYY' : 'Gaji Petugas SPPG DD-MM-YYYY s/d DD-MM-YYYY' }}
+                                    {{ dateSelectionType === 'custom_dates' ? `Pilihan Bebas (${selectedDates.length} Tgl)` : (tanggalMulai === tanggalSelesai ? 'Gaji Petugas SPPG DD-MM-YYYY' : 'Gaji Petugas SPPG DD-MM-YYYY s/d DD-MM-YYYY') }}
                                 </span>
                             </span>
                             <button
@@ -958,7 +1528,7 @@ function copyRowRekening(id, text) {
                                 @input="isRemarkCustom = true"
                                 type="text"
                                 maxlength="83"
-                                :placeholder="tanggalMulai === tanggalSelesai ? 'Gaji Petugas SPPG DD-MM-YYYY' : 'Gaji Petugas SPPG DD-MM-YYYY s/d DD-MM-YYYY'"
+                                :placeholder="dateSelectionType === 'custom_dates' ? `Gaji Petugas SPPG (${selectedDates.length} Tgl Pilihan)` : (tanggalMulai === tanggalSelesai ? 'Gaji Petugas SPPG DD-MM-YYYY' : 'Gaji Petugas SPPG DD-MM-YYYY s/d DD-MM-YYYY')"
                                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:ring-1 focus:ring-primary focus:border-primary bg-white"
                             />
                         </div>
@@ -1215,11 +1785,17 @@ function copyRowRekening(id, text) {
                                 <!-- Kehadiran & Mandays -->
                                 <td class="px-4 py-3">
                                     <div v-if="modePerhitungan === 'presensi'" class="space-y-0.5 text-xs">
-                                        <div class="flex items-center gap-1.5">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
                                             <span class="font-bold text-emerald-700 text-sm">
                                                 {{ r.mandaysInfo.mandays }}
                                             </span>
                                             <span class="text-slate-500 font-medium text-[11px]">mandays</span>
+                                            <span
+                                                v-if="dateSelectionType === 'custom_dates'"
+                                                class="text-[9.5px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200"
+                                            >
+                                                {{ selectedDates.length }} tgl dipilih
+                                            </span>
                                         </div>
                                         <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
                                             <span>H: {{ r.mandaysInfo.hadir }}</span>
@@ -1233,6 +1809,9 @@ function copyRowRekening(id, text) {
                                         <span class="font-semibold text-teal-800">
                                             Penuh {{ rentangHariCount }} Hari Kerja
                                         </span>
+                                        <p v-if="dateSelectionType === 'custom_dates'" class="text-[10px] text-teal-600 font-medium">
+                                            ({{ selectedDates.length }} tanggal bebas)
+                                        </p>
                                     </div>
                                 </td>
 

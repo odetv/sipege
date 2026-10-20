@@ -691,45 +691,73 @@ class PetugasController extends Controller
         $mandaysMap = [];
 
         $mode = $request->input('mode', 'hari_ini');
-        $filterMode = $request->input('filter_mode', $mode); // 'hari_ini' | 'periode' | 'rentang'
+        $filterMode = $request->input('filter_mode', $mode); // 'hari_ini' | 'periode' | 'rentang' | 'custom_dates'
         $tglMulai = $request->input('tanggal_mulai');
         $tglSelesai = $request->input('tanggal_selesai');
         $periodeId = $request->input('periode_id', 'all');
+        $selectedDatesParam = $request->input('selected_dates');
 
-        // Jika mode eksplisit adalah 'periode' dan ada periode_id valid
-        if (($filterMode === 'periode' || $mode === 'periode') && $periodeId && $periodeId !== 'all') {
-            $p = Periode::find($periodeId);
-            if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
-                $startDate = $p->tanggal_mulai->copy()->startOfDay();
-                $endDate = $p->tanggal_selesai->copy()->startOfDay();
-            }
-        }
-
-        // Jika ada parameter tanggal_mulai dan tanggal_selesai (misal mode Rentang atau Hari Ini)
-        if (!isset($startDate) || !isset($endDate)) {
-            if ($tglMulai && $tglSelesai) {
-                $startDate = Carbon::parse($tglMulai)->startOfDay();
-                $endDate = Carbon::parse($tglSelesai)->startOfDay();
+        $selectedDatesList = [];
+        if ($filterMode === 'custom_dates' || !empty($selectedDatesParam)) {
+            if (is_array($selectedDatesParam)) {
+                $rawList = $selectedDatesParam;
+            } elseif (is_string($selectedDatesParam) && trim($selectedDatesParam) !== '') {
+                $rawList = explode(',', $selectedDatesParam);
             } else {
-                // Default sesuai permintaan user: Pembayaran gaji defaultnya hari ini
-                $startDate = Carbon::today();
-                $endDate = Carbon::today();
-                $filterMode = 'hari_ini';
-                $periodeId = 'all';
+                $rawList = [];
             }
+
+            foreach ($rawList as $d) {
+                $trimmed = trim($d);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $trimmed)) {
+                    $selectedDatesList[] = $trimmed;
+                }
+            }
+            $selectedDatesList = array_values(array_unique($selectedDatesList));
+            sort($selectedDatesList);
         }
 
-        if ($endDate->lt($startDate)) {
-            $endDate = $startDate->copy();
-        }
+        if (!empty($selectedDatesList)) {
+            $filterMode = 'custom_dates';
+            $startDate = Carbon::parse($selectedDatesList[0])->startOfDay();
+            $endDate = Carbon::parse(end($selectedDatesList))->startOfDay();
+            $periodeId = 'all';
+        } else {
+            // Jika mode eksplisit adalah 'periode' dan ada periode_id valid
+            if (($filterMode === 'periode' || $mode === 'periode') && $periodeId && $periodeId !== 'all') {
+                $p = Periode::find($periodeId);
+                if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
+                    $startDate = $p->tanggal_mulai->copy()->startOfDay();
+                    $endDate = $p->tanggal_selesai->copy()->startOfDay();
+                }
+            }
 
-        // Sinkronisasi otomatis: jika rentang tanggal cocok persis dengan salah satu periode di DB
-        if ((!$periodeId || $periodeId === 'all') && $startDate->ne($endDate)) {
-            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
-                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
-                ->first();
-            if ($matchedPeriode) {
-                $periodeId = $matchedPeriode->id;
+            // Jika ada parameter tanggal_mulai dan tanggal_selesai (misal mode Rentang atau Hari Ini)
+            if (!isset($startDate) || !isset($endDate)) {
+                if ($tglMulai && $tglSelesai) {
+                    $startDate = Carbon::parse($tglMulai)->startOfDay();
+                    $endDate = Carbon::parse($tglSelesai)->startOfDay();
+                } else {
+                    // Default sesuai permintaan user: Pembayaran gaji defaultnya hari ini
+                    $startDate = Carbon::today();
+                    $endDate = Carbon::today();
+                    $filterMode = 'hari_ini';
+                    $periodeId = 'all';
+                }
+            }
+
+            if ($endDate->lt($startDate)) {
+                $endDate = $startDate->copy();
+            }
+
+            // Sinkronisasi otomatis: jika rentang tanggal cocok persis dengan salah satu periode di DB
+            if ((!$periodeId || $periodeId === 'all') && $startDate->ne($endDate)) {
+                $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
+                    ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
+                    ->first();
+                if ($matchedPeriode) {
+                    $periodeId = $matchedPeriode->id;
+                }
             }
         }
 
@@ -762,10 +790,14 @@ class PetugasController extends Controller
 
             // Ambil data absensi
             $petugasIds = $petugas->pluck('id')->all();
-            $presensiRecords = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
-                ->whereIn('petugas_id', $petugasIds)
-                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                ->get();
+            $presensiQuery = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
+                ->whereIn('petugas_id', $petugasIds);
+
+            if ($filterMode === 'custom_dates' && !empty($selectedDatesList)) {
+                $presensiRecords = $presensiQuery->whereIn('tanggal', $selectedDatesList)->get();
+            } else {
+                $presensiRecords = $presensiQuery->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])->get();
+            }
 
             foreach ($presensiRecords as $rec) {
                 $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
@@ -830,6 +862,7 @@ class PetugasController extends Controller
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialPresensiMap' => $presensiMap,
             'mandaysMap' => $mandaysMap,
+            'initialSelectedDates' => $selectedDatesList,
         ]);
     }
 

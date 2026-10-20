@@ -3267,104 +3267,176 @@ function clearError(field) {
 // ==========================================
 const DEFAULT_JADWAL_OPERASIONAL = {
     persiapan: {
-        nama: "Persiapan",
+        nama: "Proses Persiapan",
         mulai: "19:00",
         selesai: "03:00",
         deskripsi:
             "Pukul 19.00 s.d 03.00 • Persiapan bahan baku, sortasi & bumbu",
     },
-    pengolahan: {
-        nama: "Pengolahan",
+    pengolahan_sesi_1: {
+        nama: "Proses Pengolahan Sesi 1",
         mulai: "02:00",
+        selesai: "05:00",
+        deskripsi:
+            "Pukul 02.00 s.d 05.00 • Pengolahan & pemasakan menu sesi 1",
+    },
+    pengolahan_sesi_2: {
+        nama: "Proses Pengolahan Sesi 2",
+        mulai: "07:00",
         selesai: "10:00",
         deskripsi:
-            "Pukul 02.00 s.d 10.00 • Pengolahan & pemasakan seluruh menu",
+            "Pukul 07.00 s.d 10.00 • Pengolahan & pemasakan menu sesi 2",
     },
-    pemorsian: {
-        nama: "Pemorsian",
+    pemorsian_sesi_1: {
+        nama: "Proses Pemorsian Sesi 1",
         mulai: "04:00",
-        selesai: "12:00",
-        deskripsi: "Pukul 04.00 s.d 12.00 • Pengepakan & pemorsian ke ompreng",
-    },
-    uji_organolaptik: {
-        nama: "Uji Organolaptik",
-        mulai: "05:00",
-        selesai: "06:00",
+        selesai: "09:00",
         deskripsi:
-            "Pukul 05.00 s.d 06.00 • Uji sensori rasa, aroma, tekstur & suhu",
+            "Pukul 04.00 s.d 09.00 • Pengepakan & pemorsian ke ompreng sesi 1",
     },
-    distribusi: {
-        nama: "Distribusi",
-        mulai: "06:00",
+    pemorsian_sesi_2: {
+        nama: "Proses Pemorsian Sesi 2",
+        mulai: "11:00",
+        selesai: "12:00",
+        deskripsi:
+            "Pukul 11.00 s.d 12.00 • Pengepakan & pemorsian ke ompreng sesi 2",
+    },
+    distribusi_sesi_1: {
+        nama: "Proses Pendistribusian Sesi 1",
+        mulai: "07:00",
+        selesai: "09:00",
+        deskripsi:
+            "Pukul 07.00 s.d 09.00 • Pengantaran & pendistribusian sesi 1",
+    },
+    distribusi_sesi_2: {
+        nama: "Proses Pendistribusian Sesi 2",
+        mulai: "11:00",
+        selesai: "12:00",
+        deskripsi:
+            "Pukul 11.00 s.d 12.00 • Pengantaran & pendistribusian sesi 2",
+    },
+    pengambilan_ompreng: {
+        nama: "Proses Pengambilan Alat Makan Ompreng",
+        mulai: "10:00",
         selesai: "14:00",
         deskripsi:
-            "Pukul 06.00 s.d 14.00 • Pengantaran makanan ke kelompok sasaran",
+            "Pukul 10.00 s.d 14.00 • Pengambilan wadah/alat makan ompreng",
     },
     pencucian_ompreng: {
-        nama: "Pencucian Ompreng",
+        nama: "Proses Pencucian Alat Makan Ompreng",
         mulai: "12:00",
         selesai: "20:00",
         deskripsi:
-            "Pukul 12.00 s.d 20.00 • Penerimaan kembali & sanitasi ompreng",
+            "Pukul 12.00 s.d 20.00 • Pencucian & sanitasi alat makan ompreng",
     },
 };
 
-const jadwalOperasionalList = {
-    persiapan: {
-        no: 1,
-        nama: "Persiapan",
-        defaultMulai: "19:00",
-        defaultSelesai: "03:00",
-        deskripsi:
-            "Pukul 19.00 s.d 03.00 • Persiapan bahan baku, sortasi & bumbu",
-    },
-    pengolahan: {
-        no: 2,
-        nama: "Pengolahan",
-        defaultMulai: "01:00",
-        defaultSelesai: "09:00",
-        deskripsi:
-            "Pukul 01.00 s.d 09.00 • Pengolahan & pemasakan seluruh menu",
-    },
-    pemorsian: {
-        no: 3,
-        nama: "Pemorsian",
-        defaultMulai: "04:00",
-        defaultSelesai: "12:00",
-        deskripsi: "Pukul 04.00 s.d 12.00 • Pengepakan & pemorsian ke ompreng",
-    },
-    uji_organolaptik: {
-        no: 4,
-        nama: "Uji Organolaptik",
-        defaultMulai: "05:00",
-        defaultSelesai: "06:00",
-        deskripsi:
-            "Pukul 05.00 s.d 06.00 • Uji sensori rasa, aroma, tekstur & suhu",
-    },
-    distribusi: {
-        no: 5,
-        nama: "Distribusi",
-        defaultMulai: "06:00",
-        defaultSelesai: "14:00",
-        deskripsi:
-            "Pukul 06.00 s.d 14.00 • Pengantaran makanan ke kelompok sasaran",
-    },
-    pencucian_ompreng: {
-        no: 6,
-        nama: "Pencucian Ompreng",
-        defaultMulai: "12:00",
-        defaultSelesai: "20:00",
-        deskripsi:
-            "Pukul 12.00 s.d 20.00 • Penerimaan kembali & sanitasi ompreng",
-    },
-};
+// Jumlah Sesi Operasional per Kategori (Fleksibel, bisa ditambah sesuai kebutuhan)
+const sesiCount = ref({
+    pengolahan: 2,
+    pemorsian: 2,
+    distribusi: 2,
+    pengambilan_ompreng: 1,
+    pencucian_ompreng: 1,
+});
+
+function tambahSesi(category) {
+    if (sesiCount.value[category] !== undefined) {
+        sesiCount.value[category]++;
+        const newKey = `${category}_sesi_${sesiCount.value[category]}`;
+        if (!jadwalOperasional.value[newKey]) {
+            jadwalOperasional.value[newKey] = { mulai: "", selesai: "" };
+        }
+    }
+}
+
+function hapusSesiTerakhir(category) {
+    hapusSesi(category, sesiCount.value[category]);
+}
+
+function hapusSesi(category, sesiNum) {
+    const current = sesiCount.value[category] || 1;
+    if (current <= 1) return; // minimal 1 sesi
+
+    clearError(`jadwal_${category}_sesi_${current}`);
+    clearError(`jadwal_${category}_sesi_${current}_mulai`);
+    clearError(`jadwal_${category}_sesi_${current}_selesai`);
+
+    for (let i = sesiNum; i < current; i++) {
+        const currKey = `${category}_sesi_${i}`;
+        const nextKey = `${category}_sesi_${i + 1}`;
+        jadwalOperasional.value[currKey] = {
+            mulai: jadwalOperasional.value[nextKey]?.mulai || "",
+            selesai: jadwalOperasional.value[nextKey]?.selesai || "",
+        };
+    }
+    delete jadwalOperasional.value[`${category}_sesi_${current}`];
+    sesiCount.value[category]--;
+}
+
+function loadSesiCountFromSource(source) {
+    if (!source || typeof source !== "object") {
+        return {
+            pengolahan: 2,
+            pemorsian: 2,
+            distribusi: 2,
+            pengambilan_ompreng: 1,
+            pencucian_ompreng: 1,
+        };
+    }
+
+    if (source._sesi_count && typeof source._sesi_count === "object") {
+        return {
+            pengolahan: Math.max(1, Number(source._sesi_count.pengolahan) || 1),
+            pemorsian: Math.max(1, Number(source._sesi_count.pemorsian) || 1),
+            distribusi: Math.max(1, Number(source._sesi_count.distribusi) || 1),
+            pengambilan_ompreng: Math.max(1, Number(source._sesi_count.pengambilan_ompreng) || 1),
+            pencucian_ompreng: Math.max(1, Number(source._sesi_count.pencucian_ompreng) || 1),
+        };
+    }
+
+    const counts = {
+        pengolahan: 1,
+        pemorsian: 1,
+        distribusi: 1,
+        pengambilan_ompreng: 1,
+        pencucian_ompreng: 1,
+    };
+
+    const keys = Object.keys(source);
+    ["pengolahan", "pemorsian", "distribusi", "pengambilan_ompreng", "pencucian_ompreng"].forEach((cat) => {
+        let maxNum = 1;
+        keys.forEach((k) => {
+            const match = k.match(new RegExp(`^${cat}_sesi_(\\d+)$`));
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum && source[k] && source[k].aktif !== false) {
+                    maxNum = num;
+                }
+            }
+        });
+        if (maxNum === 1 && source._opsi_sesi && source._opsi_sesi[cat]) {
+            maxNum = 2;
+        } else if (maxNum === 1 && (cat === "pengolahan" || cat === "pemorsian" || cat === "distribusi")) {
+            if (source[`${cat}_sesi_2`] && (source[`${cat}_sesi_2`].mulai || source[`${cat}_sesi_2`].selesai) && source[`${cat}_sesi_2`].aktif !== false) {
+                maxNum = 2;
+            }
+        }
+        counts[cat] = maxNum;
+    });
+
+    return counts;
+}
 
 const EMPTY_JADWAL_OPERASIONAL = {
     persiapan: { mulai: "", selesai: "" },
-    pengolahan: { mulai: "", selesai: "" },
-    pemorsian: { mulai: "", selesai: "" },
-    uji_organolaptik: { mulai: "", selesai: "" },
-    distribusi: { mulai: "", selesai: "" },
+    pengolahan_sesi_1: { mulai: "", selesai: "" },
+    pengolahan_sesi_2: { mulai: "", selesai: "" },
+    pemorsian_sesi_1: { mulai: "", selesai: "" },
+    pemorsian_sesi_2: { mulai: "", selesai: "" },
+    distribusi_sesi_1: { mulai: "", selesai: "" },
+    distribusi_sesi_2: { mulai: "", selesai: "" },
+    pengambilan_ompreng: { mulai: "", selesai: "" },
     pencucian_ompreng: { mulai: "", selesai: "" },
 };
 
@@ -3372,9 +3444,168 @@ const jadwalOperasional = ref(
     JSON.parse(JSON.stringify(EMPTY_JADWAL_OPERASIONAL)),
 );
 
+// Daftar tahapan yang aktif secara dinamis sesuai pilihan sesi
+const activeJadwalList = computed(() => {
+    const list = {};
+    let no = 1;
+
+    // 1. Persiapan
+    list.persiapan = {
+        key: "persiapan",
+        category: "persiapan",
+        no: no++,
+        nama: "Proses Persiapan",
+        defaultMulai: "19:00",
+        defaultSelesai: "03:00",
+        deskripsi: "Pukul 19.00 s.d 03.00 • Persiapan bahan baku, sortasi & bumbu",
+        isSesi: false,
+        sesiNum: 1,
+        totalSesi: 1,
+    };
+
+    // 2. Pengolahan
+    const countPengolahan = Math.max(1, Number(sesiCount.value.pengolahan) || 1);
+    for (let i = 1; i <= countPengolahan; i++) {
+        const key = `pengolahan_sesi_${i}`;
+        const nama = countPengolahan === 1
+            ? "Proses Pengolahan"
+            : `Proses Pengolahan Sesi ${i}`;
+        const defMulai = i === 1 ? "02:00" : (i === 2 ? "07:00" : "");
+        const defSelesai = i === 1 ? "05:00" : (i === 2 ? "10:00" : "");
+        list[key] = {
+            key,
+            category: "pengolahan",
+            no: no++,
+            nama,
+            defaultMulai: defMulai,
+            defaultSelesai: defSelesai,
+            deskripsi: countPengolahan === 1
+                ? "Pukul 02.00 s.d 05.00 • Pengolahan & pemasakan seluruh menu"
+                : `Pengolahan & pemasakan menu sesi ${i}`,
+            isSesi: true,
+            sesiKey: "pengolahan",
+            sesiNum: i,
+            totalSesi: countPengolahan,
+        };
+    }
+
+    // 3. Pemorsian
+    const countPemorsian = Math.max(1, Number(sesiCount.value.pemorsian) || 1);
+    for (let i = 1; i <= countPemorsian; i++) {
+        const key = `pemorsian_sesi_${i}`;
+        const nama = countPemorsian === 1
+            ? "Proses Pemorsian"
+            : `Proses Pemorsian Sesi ${i}`;
+        const defMulai = i === 1 ? "04:00" : (i === 2 ? "11:00" : "");
+        const defSelesai = i === 1 ? "09:00" : (i === 2 ? "12:00" : "");
+        list[key] = {
+            key,
+            category: "pemorsian",
+            no: no++,
+            nama,
+            defaultMulai: defMulai,
+            defaultSelesai: defSelesai,
+            deskripsi: countPemorsian === 1
+                ? "Pukul 04.00 s.d 09.00 • Pengepakan & pemorsian ke ompreng"
+                : `Pengepakan & pemorsian ke ompreng sesi ${i}`,
+            isSesi: true,
+            sesiKey: "pemorsian",
+            sesiNum: i,
+            totalSesi: countPemorsian,
+        };
+    }
+
+    // 4. Pendistribusian
+    const countDistribusi = Math.max(1, Number(sesiCount.value.distribusi) || 1);
+    for (let i = 1; i <= countDistribusi; i++) {
+        const key = `distribusi_sesi_${i}`;
+        const nama = countDistribusi === 1
+            ? "Proses Pendistribusian"
+            : `Proses Pendistribusian Sesi ${i}`;
+        const defMulai = i === 1 ? "07:00" : (i === 2 ? "11:00" : "");
+        const defSelesai = i === 1 ? "09:00" : (i === 2 ? "12:00" : "");
+        list[key] = {
+            key,
+            category: "distribusi",
+            no: no++,
+            nama,
+            defaultMulai: defMulai,
+            defaultSelesai: defSelesai,
+            deskripsi: countDistribusi === 1
+                ? "Pukul 07.00 s.d 09.00 • Pengantaran makanan ke kelompok sasaran"
+                : `Pengantaran & pendistribusian makanan sesi ${i}`,
+            isSesi: true,
+            sesiKey: "distribusi",
+            sesiNum: i,
+            totalSesi: countDistribusi,
+        };
+    }
+
+    // 5. Pengambilan Ompreng
+    const countPengambilan = Math.max(1, Number(sesiCount.value.pengambilan_ompreng) || 1);
+    for (let i = 1; i <= countPengambilan; i++) {
+        const key = countPengambilan === 1 ? "pengambilan_ompreng" : `pengambilan_ompreng_sesi_${i}`;
+        const nama = countPengambilan === 1
+            ? "Proses Pengambilan Alat Makan Ompreng"
+            : `Proses Pengambilan Alat Makan Ompreng Sesi ${i}`;
+        const defMulai = i === 1 ? "10:00" : "";
+        const defSelesai = i === 1 ? "14:00" : "";
+        list[key] = {
+            key,
+            category: "pengambilan_ompreng",
+            no: no++,
+            nama,
+            defaultMulai: defMulai,
+            defaultSelesai: defSelesai,
+            deskripsi: countPengambilan === 1
+                ? "Pukul 10.00 s.d 14.00 • Pengambilan wadah/alat makan ompreng"
+                : `Pengambilan wadah/alat makan ompreng sesi ${i}`,
+            isSesi: countPengambilan > 1,
+            sesiKey: "pengambilan_ompreng",
+            sesiNum: i,
+            totalSesi: countPengambilan,
+        };
+    }
+
+    // 6. Pencucian Ompreng
+    const countPencucian = Math.max(1, Number(sesiCount.value.pencucian_ompreng) || 1);
+    for (let i = 1; i <= countPencucian; i++) {
+        const key = countPencucian === 1 ? "pencucian_ompreng" : `pencucian_ompreng_sesi_${i}`;
+        const nama = countPencucian === 1
+            ? "Proses Pencucian Alat Makan Ompreng"
+            : `Proses Pencucian Alat Makan Ompreng Sesi ${i}`;
+        const defMulai = i === 1 ? "12:00" : "";
+        const defSelesai = i === 1 ? "20:00" : "";
+        list[key] = {
+            key,
+            category: "pencucian_ompreng",
+            no: no++,
+            nama,
+            defaultMulai: defMulai,
+            defaultSelesai: defSelesai,
+            deskripsi: countPencucian === 1
+                ? "Pukul 12.00 s.d 20.00 • Pencucian & sanitasi alat makan ompreng"
+                : `Pencucian & sanitasi alat makan ompreng sesi ${i}`,
+            isSesi: countPencucian > 1,
+            sesiKey: "pencucian_ompreng",
+            sesiNum: i,
+            totalSesi: countPencucian,
+        };
+    }
+
+    return list;
+});
+
+// Alias jadwalOperasionalList tetap disediakan agar kompatibel
+const jadwalOperasionalList = activeJadwalList;
+
+const totalJadwalTarget = computed(() => {
+    return Object.keys(activeJadwalList.value).length;
+});
+
 const totalJadwalTerisi = computed(() => {
     let count = 0;
-    Object.keys(jadwalOperasionalList).forEach((k) => {
+    Object.keys(activeJadwalList.value).forEach((k) => {
         const item = jadwalOperasional.value?.[k];
         if (item?.mulai && item?.selesai) {
             count++;
@@ -3384,22 +3615,66 @@ const totalJadwalTerisi = computed(() => {
 });
 
 function resetJadwalOperasionalToEmpty() {
-    jadwalOperasional.value = JSON.parse(
-        JSON.stringify(EMPTY_JADWAL_OPERASIONAL),
-    );
+    const empty = {};
+    Object.keys(activeJadwalList.value).forEach((k) => {
+        empty[k] = { mulai: "", selesai: "" };
+    });
+    jadwalOperasional.value = empty;
 }
 
 function resetJadwalOperasionalToDefault() {
-    jadwalOperasional.value = JSON.parse(
-        JSON.stringify(DEFAULT_JADWAL_OPERASIONAL),
-    );
+    sesiCount.value = {
+        pengolahan: 2,
+        pemorsian: 2,
+        distribusi: 2,
+        pengambilan_ompreng: 1,
+        pencucian_ompreng: 1,
+    };
+
+    jadwalOperasional.value = {
+        persiapan: { mulai: "19:00", selesai: "03:00" },
+        pengolahan_sesi_1: { mulai: "02:00", selesai: "05:00" },
+        pengolahan_sesi_2: { mulai: "07:00", selesai: "10:00" },
+        pemorsian_sesi_1: { mulai: "04:00", selesai: "09:00" },
+        pemorsian_sesi_2: { mulai: "11:00", selesai: "12:00" },
+        distribusi_sesi_1: { mulai: "07:00", selesai: "09:00" },
+        distribusi_sesi_2: { mulai: "11:00", selesai: "12:00" },
+        pengambilan_ompreng: { mulai: "10:00", selesai: "14:00" },
+        pencucian_ompreng: { mulai: "12:00", selesai: "20:00" },
+    };
+
     clearError("jadwal_operasional");
-    Object.keys(jadwalOperasionalList).forEach((k) => {
+    Object.keys(activeJadwalList.value).forEach((k) => {
         clearError("jadwal_" + k);
         clearError("jadwal_" + k + "_mulai");
         clearError("jadwal_" + k + "_selesai");
     });
 }
+
+const payloadJadwalOperasional = computed(() => {
+    const res = {};
+    const stageOrder = [];
+    Object.keys(activeJadwalList.value).forEach((k) => {
+        const item = activeJadwalList.value[k];
+        res[k] = {
+            nama: item.nama,
+            mulai: jadwalOperasional.value[k]?.mulai || "",
+            selesai: jadwalOperasional.value[k]?.selesai || "",
+            aktif: true,
+            sesi_num: item.sesiNum || 1,
+            category: item.category || k,
+        };
+        stageOrder.push(k);
+    });
+    res._stage_order = stageOrder;
+    res._sesi_count = { ...sesiCount.value };
+    res._opsi_sesi = {
+        pengolahan: (sesiCount.value.pengolahan || 1) > 1,
+        pemorsian: (sesiCount.value.pemorsian || 1) > 1,
+        distribusi: (sesiCount.value.distribusi || 1) > 1,
+    };
+    return res;
+});
 
 // Helper konversi otomatis tombol koma (,) menjadi titik (.) pada input desimal
 function handleDecimalKeydown(event) {
@@ -3650,9 +3925,9 @@ function validateStep1() {
         }
     }
 
-    // Validasi Waktu Kegiatan Operasional (Wajib diisi seluruhnya)
+    // Validasi Waktu Kegiatan Operasional (Wajib diisi seluruhnya untuk tahapan yang aktif)
     let emptyJadwalFound = false;
-    Object.keys(jadwalOperasionalList).forEach((kKey) => {
+    Object.keys(activeJadwalList.value).forEach((kKey) => {
         const item = jadwalOperasional.value?.[kKey];
         const isMulaiEmpty = !item || !item.mulai || !String(item.mulai).trim();
         const isSelesaiEmpty = !item || !item.selesai || !String(item.selesai).trim();
@@ -3666,7 +3941,7 @@ function validateStep1() {
         }
         if (isMulaiEmpty || isSelesaiEmpty) {
             errs["jadwal_" + kKey] =
-                `Waktu ${jadwalOperasionalList[kKey].nama} belum lengkap. Jam mulai & jam selesai wajib diisi.`;
+                `Waktu ${activeJadwalList.value[kKey].nama} belum lengkap. Jam mulai & jam selesai wajib diisi.`;
         }
     });
     if (emptyJadwalFound) {
@@ -6539,7 +6814,7 @@ function getPayload(statusStr, stepNumber = 3) {
         food_cost_pb: totalFoodCostPBNormal.value,
         total_anggaran_master: grandTotalDraftMaster.value,
         catatan: catatanTim.value,
-        jadwal_operasional: jadwalOperasional.value,
+        jadwal_operasional: payloadJadwalOperasional.value,
         porsi_tambahan: porsiTambahanPayload.value,
         items: (bahanCalculations.value || []).map((b) => ({
             sub_menu_key: b.sub_menu_key || null,
@@ -6787,32 +7062,38 @@ watch(
             }
 
             // 0. Populate jadwal_operasional
-            if (
-                wo.jadwal_operasional &&
-                typeof wo.jadwal_operasional === "object"
-            ) {
+            const sourceJadwal =
+                wo.jadwal_operasional && typeof wo.jadwal_operasional === "object"
+                    ? wo.jadwal_operasional
+                    : wo.catatan &&
+                      typeof wo.catatan === "object" &&
+                      wo.catatan.jadwal_operasional
+                    ? wo.catatan.jadwal_operasional
+                    : null;
+
+            if (sourceJadwal) {
+                const rawJ = { ...sourceJadwal };
+                sesiCount.value = loadSesiCountFromSource(rawJ);
+                if (!rawJ.pengolahan_sesi_1 && rawJ.pengolahan) rawJ.pengolahan_sesi_1 = { ...rawJ.pengolahan };
+                if (!rawJ.pemorsian_sesi_1 && rawJ.pemorsian) rawJ.pemorsian_sesi_1 = { ...rawJ.pemorsian };
+                if (!rawJ.distribusi_sesi_1 && rawJ.distribusi) rawJ.distribusi_sesi_1 = { ...rawJ.distribusi };
+
                 const loaded = {};
-                Object.keys(EMPTY_JADWAL_OPERASIONAL).forEach((k) => {
+                Object.keys(activeJadwalList.value).forEach((k) => {
                     loaded[k] = {
-                        mulai: wo.jadwal_operasional[k]?.mulai || "",
-                        selesai: wo.jadwal_operasional[k]?.selesai || "",
+                        mulai: rawJ[k]?.mulai || "",
+                        selesai: rawJ[k]?.selesai || "",
                     };
                 });
-                jadwalOperasional.value = loaded;
-            } else if (
-                wo.catatan &&
-                typeof wo.catatan === "object" &&
-                wo.catatan.jadwal_operasional
-            ) {
-                const loaded = {};
-                Object.keys(EMPTY_JADWAL_OPERASIONAL).forEach((k) => {
-                    loaded[k] = {
-                        mulai: wo.catatan.jadwal_operasional[k]?.mulai || "",
-                        selesai: wo.catatan.jadwal_operasional[k]?.selesai || "",
-                    };
-                });
-                jadwalOperasional.value = loaded;
+                jadwalOperasional.value = { ...rawJ, ...loaded };
             } else {
+                sesiCount.value = {
+                    pengolahan: 2,
+                    pemorsian: 2,
+                    distribusi: 2,
+                    pengambilan_ompreng: 1,
+                    pencucian_ompreng: 1,
+                };
                 resetJadwalOperasionalToEmpty();
             }
 
@@ -8499,25 +8780,25 @@ watch(
                                     <p
                                         class="text-[11px] text-slate-500 mt-0.5"
                                     >
-                                        Tentukan jam pelaksanaan 6 tahapan operasional. Seluruh tahapan wajib diisi sebelum lanjut.
+                                        Tentukan jam pelaksanaan tahapan operasional. Seluruh tahapan aktif wajib diisi sebelum lanjut.
                                     </p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <!-- Status Badge Real-time -->
                                 <span
-                                    v-if="totalJadwalTerisi === 6"
+                                    v-if="totalJadwalTerisi === totalJadwalTarget"
                                     class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs"
                                 >
                                     <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600" />
-                                    <span>Terisi Lengkap (6/6)</span>
+                                    <span>Terisi Lengkap ({{ totalJadwalTarget }}/{{ totalJadwalTarget }})</span>
                                 </span>
                                 <span
                                     v-else
                                     class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
                                 >
                                     <AlertTriangle class="h-3.5 w-3.5 text-amber-600" />
-                                    <span>{{ totalJadwalTerisi }}/6 Terisi</span>
+                                    <span>{{ totalJadwalTerisi }}/{{ totalJadwalTarget }} Terisi</span>
                                 </span>
 
                                 <!-- Tombol Set Jam Default -->
@@ -8533,7 +8814,158 @@ watch(
                             </div>
                         </div>
 
-                        <!-- Grid 6 Kegiatan Operasional -->
+                        <!-- Pengaturan Jumlah Sesi Operasional (Fleksibel) -->
+                        <div class="p-3.5 bg-gradient-to-r from-indigo-50/80 via-white to-indigo-50/50 rounded-xl border border-indigo-100 shadow-2xs space-y-2.5 text-xs">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <Layers class="h-4 w-4 text-indigo-600 shrink-0" />
+                                    <span class="font-bold text-slate-900">Pengaturan Jumlah Sesi:</span>
+                                    <span class="text-[11px] text-slate-500 hidden md:inline">Tambah atau kurangi sesi sesuai kebutuhan SPPG (1 sesi, 2 sesi, 3 sesi, dst).</span>
+                                </div>
+                                <span class="text-[11px] text-indigo-700 font-bold bg-indigo-100/70 px-2 py-0.5 rounded-full shrink-0">
+                                    Total {{ totalJadwalTarget }} Tahapan Operasional
+                                </span>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                                <!-- Pengolahan -->
+                                <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
+                                    <span class="font-bold text-slate-800">Pengolahan:</span>
+                                    <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
+                                        <button
+                                            type="button"
+                                            @click="hapusSesiTerakhir('pengolahan')"
+                                            :disabled="sesiCount.pengolahan <= 1"
+                                            class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Kurangi 1 Sesi Pengolahan"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
+                                            {{ sesiCount.pengolahan }} Sesi
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="tambahSesi('pengolahan')"
+                                            class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Tambah Sesi Pengolahan"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Pemorsian -->
+                                <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
+                                    <span class="font-bold text-slate-800">Pemorsian:</span>
+                                    <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
+                                        <button
+                                            type="button"
+                                            @click="hapusSesiTerakhir('pemorsian')"
+                                            :disabled="sesiCount.pemorsian <= 1"
+                                            class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Kurangi 1 Sesi Pemorsian"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
+                                            {{ sesiCount.pemorsian }} Sesi
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="tambahSesi('pemorsian')"
+                                            class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Tambah Sesi Pemorsian"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Distribusi -->
+                                <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
+                                    <span class="font-bold text-slate-800">Distribusi:</span>
+                                    <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
+                                        <button
+                                            type="button"
+                                            @click="hapusSesiTerakhir('distribusi')"
+                                            :disabled="sesiCount.distribusi <= 1"
+                                            class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Kurangi 1 Sesi Pendistribusian"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
+                                            {{ sesiCount.distribusi }} Sesi
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="tambahSesi('distribusi')"
+                                            class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Tambah Sesi Pendistribusian"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Pengambilan Ompreng -->
+                                <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
+                                    <span class="font-bold text-slate-800">Pengambilan:</span>
+                                    <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
+                                        <button
+                                            type="button"
+                                            @click="hapusSesiTerakhir('pengambilan_ompreng')"
+                                            :disabled="sesiCount.pengambilan_ompreng <= 1"
+                                            class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Kurangi 1 Sesi Pengambilan"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
+                                            {{ sesiCount.pengambilan_ompreng }} Sesi
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="tambahSesi('pengambilan_ompreng')"
+                                            class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Tambah Sesi Pengambilan"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Pencucian Ompreng -->
+                                <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
+                                    <span class="font-bold text-slate-800">Pencucian:</span>
+                                    <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
+                                        <button
+                                            type="button"
+                                            @click="hapusSesiTerakhir('pencucian_ompreng')"
+                                            :disabled="sesiCount.pencucian_ompreng <= 1"
+                                            class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Kurangi 1 Sesi Pencucian"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
+                                            {{ sesiCount.pencucian_ompreng }} Sesi
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="tambahSesi('pencucian_ompreng')"
+                                            class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
+                                            title="Tambah Sesi Pencucian"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Grid Kegiatan Operasional -->
                         <div
                             class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5"
                         >
@@ -8554,7 +8986,7 @@ watch(
                                 <div
                                     class="flex items-center justify-between mb-1.5"
                                 >
-                                    <div class="flex items-center gap-1.5">
+                                    <div class="flex items-center gap-1.5 min-w-0">
                                         <span
                                             class="h-5 w-5 rounded-lg text-[10.5px] font-black flex items-center justify-center shrink-0"
                                             :class="[
@@ -8566,31 +8998,43 @@ watch(
                                             {{ kegiatan.no }}
                                         </span>
                                         <span
-                                            class="text-xs font-black text-slate-800"
+                                            class="text-xs font-black text-slate-800 truncate"
+                                            :title="kegiatan.nama"
                                         >
                                             {{ kegiatan.nama }}
                                         </span>
                                     </div>
-                                    <span
-                                        v-if="jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai"
-                                        class="text-[10px] font-bold font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 flex items-center gap-1"
-                                    >
-                                        <Check class="h-2.5 w-2.5 text-emerald-600" />
-                                        {{ jadwalOperasional[kKey].mulai }} s.d {{ jadwalOperasional[kKey].selesai }}
-                                    </span>
-                                    <span
-                                        v-else-if="validationErrors['jadwal_' + kKey] || validationErrors['jadwal_' + kKey + '_mulai'] || validationErrors['jadwal_' + kKey + '_selesai']"
-                                        class="text-[10px] font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/70 flex items-center gap-1"
-                                    >
-                                        <AlertCircle class="h-2.5 w-2.5 text-rose-600" />
-                                        Wajib Diisi
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
-                                    >
-                                        --:-- s.d --:--
-                                    </span>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button
+                                            v-if="kegiatan.isSesi && kegiatan.totalSesi > 1 && kegiatan.sesiNum > 1"
+                                            type="button"
+                                            @click="hapusSesi(kegiatan.sesiKey, kegiatan.sesiNum)"
+                                            class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition-colors cursor-pointer"
+                                            title="Hapus sesi ini"
+                                        >
+                                            <Trash2 class="h-3.5 w-3.5" />
+                                        </button>
+                                        <span
+                                            v-if="jadwalOperasional[kKey]?.mulai && jadwalOperasional[kKey]?.selesai"
+                                            class="text-[10px] font-bold font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 flex items-center gap-1"
+                                        >
+                                            <Check class="h-2.5 w-2.5 text-emerald-600" />
+                                            {{ jadwalOperasional[kKey].mulai }} s.d {{ jadwalOperasional[kKey].selesai }}
+                                        </span>
+                                        <span
+                                            v-else-if="validationErrors['jadwal_' + kKey] || validationErrors['jadwal_' + kKey + '_mulai'] || validationErrors['jadwal_' + kKey + '_selesai']"
+                                            class="text-[10px] font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/70 flex items-center gap-1"
+                                        >
+                                            <AlertCircle class="h-2.5 w-2.5 text-rose-600" />
+                                            Wajib Diisi
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
+                                        >
+                                            --:-- s.d --:--
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p
@@ -17365,18 +17809,18 @@ watch(
                                             Waktu Kegiatan Operasional
                                         </h4>
                                         <span
-                                            v-if="totalJadwalTerisi === 6"
+                                            v-if="totalJadwalTerisi === totalJadwalTarget"
                                             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
                                         >
                                             <CheckCircle2 class="h-3 w-3 text-emerald-600" />
-                                            6 Tahapan Lengkap
+                                            {{ totalJadwalTarget }} Tahapan Lengkap
                                         </span>
                                         <span
                                             v-else
                                             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300"
                                         >
                                             <AlertTriangle class="h-3 w-3 text-amber-600" />
-                                            {{ totalJadwalTerisi }}/6 Terisi
+                                            {{ totalJadwalTerisi }}/{{ totalJadwalTarget }} Terisi
                                         </span>
                                     </div>
                                     <p class="text-xs text-slate-500 mt-0.5">
@@ -17386,8 +17830,8 @@ watch(
                             </div>
                         </div>
 
-                        <!-- Grid 6 Kartu Tahapan Operasional -->
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+                        <!-- Grid Kartu Tahapan Operasional -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                             <div
                                 v-for="(kegiatan, kKey) in jadwalOperasionalList"
                                 :key="'review-jadwal-' + kKey"
