@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AsetDigitalController;
+use App\Http\Controllers\BackupRestoreController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KategoriKpmController;
@@ -167,6 +168,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{id}', [KategoriKpmController::class, 'destroy'])->name('destroy');
             Route::post('/reset', [KategoriKpmController::class, 'resetDefaults'])->name('reset');
         });
+
+        Route::get('/backup-restore', [BackupRestoreController::class, 'index'])->name('pengaturan.backup-restore.index');
     });
 
     // Redirect dari /periode ke /pengaturan/periode

@@ -182,7 +182,7 @@ class PetugasController extends Controller
             $summary['total_pengeluaran_bulanan'] = $totalHarian * 28; // 28 hari kerja operasional (bulanan)
 
             $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
-            
+
             // Format dropdown periode lengkap dengan rentang tanggalnya
             $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
@@ -1148,10 +1148,16 @@ class PetugasController extends Controller
                 $success = true;
             } catch (\Throwable $e) {
                 if ($wb !== null) {
-                    try { $wb->Close(false); } catch (\Throwable $ex) {}
+                    try {
+                        $wb->Close(false);
+                    } catch (\Throwable $ex) {
+                    }
                 }
                 if ($excel !== null) {
-                    try { $excel->Quit(); } catch (\Throwable $ex) {}
+                    try {
+                        $excel->Quit();
+                    } catch (\Throwable $ex) {
+                    }
                 }
             }
         }
@@ -1186,4 +1192,3 @@ class PetugasController extends Controller
         ])->deleteFileAfterSend(true);
     }
 }
-

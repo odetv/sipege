@@ -14,6 +14,7 @@ import {
     X,
     ChevronDown,
     Database,
+    DatabaseBackup,
     BarChart3,
     Utensils,
     CalendarDays,
@@ -1827,6 +1828,20 @@ function logout() {
                         >
                             <Tag class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Kategori KPM</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Backup & Restore -->
+                        <Link
+                            :href="route('pengaturan.backup-restore.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('pengaturan.backup-restore.*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <DatabaseBackup class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Backup & Restore</span>
                         </Link>
                     </div>
                 </div>
