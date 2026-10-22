@@ -56,6 +56,10 @@ import {
     printPdfTemplate02SingleMode,
     getSocialMediaTpl02,
 } from "../labelPdfHelper.js";
+import {
+    getRincianBatasMakanList,
+    getDefaultBatasMakan,
+} from "@/Services/penerimaManfaatConfig";
 
 const props = defineProps({
     user: {
@@ -102,8 +106,24 @@ const labelMode = ref("auto");
 // Pilihan Template Desain Label: 'template-01' (Grafis Modern) | 'template-02' (Standar Excel / Teks Murni)
 const selectedTemplateId = ref("template-01");
 
-// Kustomisasi Warna Template 02
+// Default Kustomisasi Warna Template 02: Langsung Tanpa Warna (#ffffff)
 const defaultTemplate02Colors = {
+    areaPerekat: "#ffffff",
+    headerSppg: "#ffffff",
+    menuLabel: "#ffffff",
+    menuValue: "#ffffff",
+    tglLabel: "#ffffff",
+    tglValue: "#ffffff",
+    batasKonsumsi: "#ffffff",
+    batasKonsumsiVal: "#ffffff",
+    kontak: "#ffffff",
+    giziHeader: "#ffffff",
+    giziBody: "#ffffff",
+    footer: "#ffffff",
+};
+
+// Palet warna standar BGN yang saat ini sudah digunakan
+const presetWarnaBgnTemplate02 = {
     areaPerekat: "#ffffff",
     headerSppg: "#ffffff",
     menuLabel: "#9DC3E6",
@@ -120,18 +140,24 @@ const defaultTemplate02Colors = {
 
 const template02Colors = ref({ ...defaultTemplate02Colors });
 
+const isTemplate02Colored = computed(() => {
+    return Object.values(template02Colors.value).some(
+        (val) => val && val.toLowerCase() !== "#ffffff" && val !== "transparent" && val !== "none",
+    );
+});
+
 const template02Sections = [
-    { key: "menuLabel", label: "Judul Menu (Header)", desc: "Kotak kiri MENU & jenis porsi", default: "#9DC3E6" },
-    { key: "menuValue", label: "Isi Menu Makanan", desc: "Kotak kanan rincian masakan", default: "#BDD7EE" },
-    { key: "tglLabel", label: "Header Tanggal Produksi", desc: "Kotak kiri TANGGAL/WAKTU PRODUKSI", default: "#9DC3E6" },
-    { key: "tglValue", label: "Isi Tanggal Produksi", desc: "Kotak tanggal produksi makanan", default: "#BDD7EE" },
-    { key: "batasKonsumsi", label: "Waktu Batas Konsumsi", desc: "Kotak batas aman konsumsi makanan", default: "#9DC3E6" },
-    { key: "kontak", label: "Kontak Pengaduan", desc: "Kotak info medsos & email BGN", default: "#E2EFDA" },
-    { key: "giziHeader", label: "Header Tabel Gizi", desc: "Baris judul Kandungan Gizi, PK, PB", default: "#FFE699" },
-    { key: "giziBody", label: "Isi Tabel Gizi", desc: "5 baris nutrisi (Energi, Karbo, dsb)", default: "#FFF2CC" },
-    { key: "footer", label: "Banner Peringatan (Bawah)", desc: "Larangan membawa pulang makanan", default: "#FFC000" },
-    { key: "headerSppg", label: "Header SPPG & Logo", desc: "Area instansi & logo BGN atas", default: "#ffffff" },
-    { key: "areaPerekat", label: "Area Perekat Label", desc: "Area garis putus-putus paling atas", default: "#ffffff" },
+    { key: "menuLabel", label: "Judul Menu (Header)", desc: "Kotak kiri MENU & jenis porsi", presetColor: "#9DC3E6" },
+    { key: "menuValue", label: "Isi Menu Makanan", desc: "Kotak kanan rincian masakan", presetColor: "#BDD7EE" },
+    { key: "tglLabel", label: "Header Tanggal Produksi", desc: "Kotak kiri TANGGAL/WAKTU PRODUKSI", presetColor: "#9DC3E6" },
+    { key: "tglValue", label: "Isi Tanggal Produksi", desc: "Kotak tanggal produksi makanan", presetColor: "#BDD7EE" },
+    { key: "batasKonsumsi", label: "Waktu Batas Konsumsi", desc: "Kotak batas aman konsumsi makanan", presetColor: "#9DC3E6" },
+    { key: "kontak", label: "Kontak Pengaduan", desc: "Kotak info medsos & email BGN", presetColor: "#E2EFDA" },
+    { key: "giziHeader", label: "Header Tabel Gizi", desc: "Baris judul Kandungan Gizi, PK, PB", presetColor: "#FFE699" },
+    { key: "giziBody", label: "Isi Tabel Gizi", desc: "5 baris nutrisi (Energi, Karbo, dsb)", presetColor: "#FFF2CC" },
+    { key: "footer", label: "Banner Peringatan (Bawah)", desc: "Larangan membawa pulang makanan", presetColor: "#FFC000" },
+    { key: "headerSppg", label: "Header SPPG & Logo", desc: "Area instansi & logo BGN atas", presetColor: "#ffffff" },
+    { key: "areaPerekat", label: "Area Perekat Label", desc: "Area garis putus-putus paling atas", presetColor: "#ffffff" },
 ];
 
 const clearSectionColor = (key) => {
@@ -141,17 +167,19 @@ const clearSectionColor = (key) => {
     }
 };
 
-const resetSectionColor = (key) => {
-    template02Colors.value[key] = defaultTemplate02Colors[key];
+const applySectionPresetColor = (key) => {
+    template02Colors.value[key] = presetWarnaBgnTemplate02[key] || "#ffffff";
     if (key === "batasKonsumsi") {
-        template02Colors.value.batasKonsumsiVal = defaultTemplate02Colors.batasKonsumsiVal;
+        template02Colors.value.batasKonsumsiVal = presetWarnaBgnTemplate02.batasKonsumsiVal || "#ffffff";
     }
 };
 
+const applyPresetWarnaTemplate02 = () => {
+    template02Colors.value = { ...presetWarnaBgnTemplate02 };
+};
+
 const clearAllTemplate02Colors = () => {
-    Object.keys(defaultTemplate02Colors).forEach((k) => {
-        template02Colors.value[k] = "#ffffff";
-    });
+    template02Colors.value = { ...defaultTemplate02Colors };
 };
 
 const resetAllTemplate02Colors = () => {
@@ -208,6 +236,64 @@ const gunakanJamProduksi = ref(false);
 const tanggalExpired = ref(todayStr);
 const jamExpired = ref("12:14");
 const gunakanJamExpired = ref(false);
+
+// Opsi Batas Konsumsi pada Mode Otomatis ('jam' = mengacu waktu batas makan masing2 PM, 'teks' = by teks baku/kustom)
+const tipeBatasKonsumsiAuto = ref("jam");
+
+function getBatasMakanDistribution(kelompok) {
+    if (!kelompok) {
+        return [{ jam: "10:00", count: 1, ratio: 1 }];
+    }
+    const rincianList = getRincianBatasMakanList(kelompok).filter(
+        (r) => r.is_menerima !== false,
+    );
+    if (!rincianList || rincianList.length === 0) {
+        const defaultJam = getDefaultBatasMakan(kelompok?.nama_kelompok, "");
+        return [
+            {
+                jam: defaultJam,
+                count: Number(kelompok?.total_penerima) || 1,
+                ratio: 1,
+            },
+        ];
+    }
+
+    const mapJam = {};
+    let totalPorsiRincian = 0;
+    for (const r of rincianList) {
+        const jam = String(
+            r.waktu_batas_makan ||
+                getDefaultBatasMakan(kelompok?.nama_kelompok, r.sub_kategori),
+        ).trim();
+        const porsi = Number(r.total) || 0;
+        if (!mapJam[jam]) {
+            mapJam[jam] = 0;
+        }
+        mapJam[jam] += porsi;
+        totalPorsiRincian += porsi;
+    }
+
+    const entries = Object.entries(mapJam);
+    if (entries.length === 0) {
+        const defaultJam = getDefaultBatasMakan(kelompok?.nama_kelompok, "");
+        return [
+            {
+                jam: defaultJam,
+                count: Number(kelompok?.total_penerima) || 1,
+                ratio: 1,
+            },
+        ];
+    }
+
+    return entries.map(([jam, count]) => ({
+        jam,
+        count,
+        ratio:
+            totalPorsiRincian > 0
+                ? count / totalPorsiRincian
+                : 1 / entries.length,
+    }));
+}
 
 // Parameter Waktu Maksimal & Larangan
 const waktuMaksimal = ref("2 JAM SETELAH DITERIMA!");
@@ -328,6 +414,7 @@ const activeKelompokList = computed(() => {
         return (props.kelompokList || []).map((k) => ({
             ...k,
             is_menerima: true,
+            rincian: k.rincian || [],
         }));
     }
 
@@ -336,6 +423,7 @@ const activeKelompokList = computed(() => {
         return (props.kelompokList || []).map((k) => ({
             ...k,
             is_menerima: true,
+            rincian: k.rincian || [],
         }));
     }
 
@@ -347,6 +435,21 @@ const activeKelompokList = computed(() => {
                 sk.nama_kelompok === masterK.nama_kelompok,
         );
         if (savedK) {
+            const masterRincian = Array.isArray(masterK.rincian) ? masterK.rincian : [];
+            const savedRincian = Array.isArray(savedK.rincian) ? savedK.rincian : [];
+            const mergedRincian = (savedRincian.length > 0 ? savedRincian : masterRincian).map((sr) => {
+                const mr = masterRincian.find((m) => m.sub_kategori === sr.sub_kategori);
+                return {
+                    ...sr,
+                    waktu_batas_makan:
+                        sr.waktu_batas_makan ||
+                        mr?.waktu_batas_makan ||
+                        getDefaultBatasMakan(masterK.nama_kelompok, sr.sub_kategori),
+                    is_menerima: sr.is_menerima !== undefined ? sr.is_menerima : mr?.is_menerima !== false,
+                    total: sr.total !== undefined ? sr.total : mr?.total || 0,
+                };
+            });
+
             return {
                 ...masterK,
                 nama_kelompok: savedK.nama_kelompok || masterK.nama_kelompok,
@@ -366,11 +469,13 @@ const activeKelompokList = computed(() => {
                         : masterK.total_penerima,
                 detail_alergi:
                     savedK.detail_alergi || masterK.keterangan_alergi || [],
+                rincian: mergedRincian,
             };
         }
         return {
             ...masterK,
             is_menerima: true,
+            rincian: masterK.rincian || [],
         };
     });
 });
@@ -902,9 +1007,8 @@ const isAllSelected = computed({
 });
 
 const printableKelompokList = computed(() => {
-    return activeKelompokList.value.filter(
-        (k) =>
-            k.is_menerima !== false && selectedKelompokIds.value.includes(k.id),
+    return activeKelompokList.value.filter((k) =>
+        selectedKelompokIds.value.includes(k.id),
     );
 });
 
@@ -1626,7 +1730,6 @@ function hasKelompokImpactedAlergi(k) {
 }
 
 function toggleKelompok(k) {
-    if (k.is_menerima === false) return;
     const idx = selectedKelompokIds.value.indexOf(k.id);
     if (idx > -1) {
         selectedKelompokIds.value.splice(idx, 1);
@@ -2536,6 +2639,9 @@ const printableItems = computed(() => {
                 count: totalNormalCount,
                 baseCount: count,
                 extraCount: extraNormal,
+                jamExpired: jamExpired.value,
+                tampilkanJamExpired: gunakanJamExpired.value,
+                waktuMaksimal: waktuMaksimal.value,
             });
         }
 
@@ -2565,6 +2671,9 @@ const printableItems = computed(() => {
                     count: totalAlergiCount,
                     baseCount: aCount,
                     extraCount: extraAlergi,
+                    jamExpired: jamExpired.value,
+                    tampilkanJamExpired: gunakanJamExpired.value,
+                    waktuMaksimal: waktuMaksimal.value,
                 });
             }
         });
@@ -2636,21 +2745,78 @@ const printableItems = computed(() => {
 
         // 1. Simpan Label Porsi Normal kelompok ini
         if (totalNormalCount > 0) {
-            normalList.push({
-                kelompok: k,
-                tipeLabel: "normal",
-                jenisAlergi: "",
-                tagAlergi: "",
-                menuItems: [...menuItems.value],
-                giziData: { ...giziData.value },
-                count: totalNormalCount,
-                baseCount: normalCount,
-                extraCount: extraNormal,
-            });
+            if (tipeBatasKonsumsiAuto.value === "jam") {
+                const dist = getBatasMakanDistribution(k);
+                if (dist.length <= 1) {
+                    const jam = dist[0]?.jam || getDefaultBatasMakan(k.nama_kelompok, "");
+                    normalList.push({
+                        kelompok: k,
+                        tipeLabel: "normal",
+                        jenisAlergi: "",
+                        tagAlergi: "",
+                        menuItems: [...menuItems.value],
+                        giziData: { ...giziData.value },
+                        count: totalNormalCount,
+                        baseCount: normalCount,
+                        extraCount: extraNormal,
+                        jamExpired: jam,
+                        tampilkanJamExpired: true,
+                        waktuMaksimal: waktuMaksimal.value,
+                    });
+                } else {
+                    let allocatedNormal = 0;
+                    dist.forEach((d, idx) => {
+                        const isLast = idx === dist.length - 1;
+                        const porsiThisJam = isLast
+                            ? Math.max(0, totalNormalCount - allocatedNormal)
+                            : Math.min(
+                                  totalNormalCount - allocatedNormal,
+                                  Math.round(totalNormalCount * d.ratio),
+                              );
+                        allocatedNormal += porsiThisJam;
+
+                        if (porsiThisJam > 0) {
+                            normalList.push({
+                                kelompok: k,
+                                tipeLabel: "normal",
+                                jenisAlergi: "",
+                                tagAlergi: "",
+                                menuItems: [...menuItems.value],
+                                giziData: { ...giziData.value },
+                                count: porsiThisJam,
+                                baseCount: porsiThisJam,
+                                extraCount: 0,
+                                jamExpired: d.jam,
+                                tampilkanJamExpired: true,
+                                waktuMaksimal: waktuMaksimal.value,
+                            });
+                        }
+                    });
+                }
+            } else {
+                normalList.push({
+                    kelompok: k,
+                    tipeLabel: "normal",
+                    jenisAlergi: "",
+                    tagAlergi: "",
+                    menuItems: [...menuItems.value],
+                    giziData: { ...giziData.value },
+                    count: totalNormalCount,
+                    baseCount: normalCount,
+                    extraCount: extraNormal,
+                    jamExpired: jamExpired.value,
+                    tampilkanJamExpired: false,
+                    waktuMaksimal: waktuMaksimal.value,
+                });
+            }
         }
 
         // 2. Simpan Label Porsi Alergi kelompok ini
         if (alergiBreakdown.length > 0) {
+            const distGroup = getBatasMakanDistribution(k);
+            const groupJam = distGroup[0]?.jam || getDefaultBatasMakan(k.nama_kelompok, "");
+            const isPakaiJam = tipeBatasKonsumsiAuto.value === "jam";
+
             for (const ab of alergiBreakdown) {
                 if (
                     filterCetakTipe.value === "semua" ||
@@ -2704,6 +2870,9 @@ const printableItems = computed(() => {
                             count: totalAlergiCount,
                             baseCount: ab.count,
                             extraCount: extraAlergi,
+                            jamExpired: isPakaiJam ? groupJam : jamExpired.value,
+                            tampilkanJamExpired: isPakaiJam,
+                            waktuMaksimal: waktuMaksimal.value,
                         });
                     }
                 }
@@ -2720,6 +2889,11 @@ const printableItems = computed(() => {
         kategori: "Internal SPPG",
     };
 
+    const firstK = kelompokList[0];
+    const distFirst = firstK ? getBatasMakanDistribution(firstK) : [];
+    const jamTambahan = distFirst[0]?.jam || jamExpired.value;
+    const isPakaiJamTambahan = tipeBatasKonsumsiAuto.value === "jam";
+
     const extraOrg = getExtraBufferForTambahan("organoleptik");
     const totalOrg = pt.organoleptik + extraOrg;
     if (totalOrg > 0) {
@@ -2734,6 +2908,9 @@ const printableItems = computed(() => {
             count: totalOrg,
             baseCount: pt.organoleptik,
             extraCount: extraOrg,
+            jamExpired: isPakaiJamTambahan ? jamTambahan : jamExpired.value,
+            tampilkanJamExpired: isPakaiJamTambahan,
+            waktuMaksimal: waktuMaksimal.value,
         });
     }
 
@@ -2751,6 +2928,9 @@ const printableItems = computed(() => {
             count: totalSampel,
             baseCount: pt.sampel,
             extraCount: extraSampel,
+            jamExpired: isPakaiJamTambahan ? jamTambahan : jamExpired.value,
+            tampilkanJamExpired: isPakaiJamTambahan,
+            waktuMaksimal: waktuMaksimal.value,
         });
     }
 
@@ -2768,6 +2948,9 @@ const printableItems = computed(() => {
             count: totalBuf,
             baseCount: pt.buffer,
             extraCount: extraBuf,
+            jamExpired: isPakaiJamTambahan ? jamTambahan : jamExpired.value,
+            tampilkanJamExpired: isPakaiJamTambahan,
+            waktuMaksimal: waktuMaksimal.value,
         });
     }
 
@@ -2783,6 +2966,9 @@ const printableItems = computed(() => {
             count: pt.total,
             baseCount: pt.total,
             extraCount: 0,
+            jamExpired: isPakaiJamTambahan ? jamTambahan : jamExpired.value,
+            tampilkanJamExpired: isPakaiJamTambahan,
+            waktuMaksimal: waktuMaksimal.value,
         });
     }
 
@@ -3186,6 +3372,9 @@ const sandboxParams = ref({
     tagAlergi: "",
     menuItems: [],
     giziData: {},
+    jamExpired: "12:14",
+    tampilkanJamExpired: false,
+    waktuMaksimal: "2 JAM SETELAH DITERIMA!",
 });
 
 const sandboxCardRef = ref(null);
@@ -3198,6 +3387,7 @@ async function getSandboxCardElement(itemOrKelompok) {
 
     const k = isItem ? itemOrKelompok.kelompok : itemOrKelompok;
     const tipe = isItem ? itemOrKelompok.tipeLabel || "normal" : "normal";
+    const subTambahan = isItem ? itemOrKelompok.subTipeTambahan || "" : "";
     const alergi = isItem ? itemOrKelompok.jenisAlergi || "" : "";
     const tag = isItem ? itemOrKelompok.tagAlergi || "" : "";
 
@@ -3225,13 +3415,33 @@ async function getSandboxCardElement(itemOrKelompok) {
                   : giziDataAlergi.value
               : giziData.value;
 
+    const itemJamExpired =
+        itemOrKelompok?.jamExpired ||
+        (labelMode.value === "auto" && tipeBatasKonsumsiAuto.value === "jam"
+            ? getBatasMakanDistribution(k)[0]?.jam || jamExpired.value
+            : jamExpired.value);
+
+    const itemTampilkanJam =
+        itemOrKelompok?.tampilkanJamExpired !== undefined
+            ? itemOrKelompok.tampilkanJamExpired
+            : labelMode.value === "auto"
+              ? tipeBatasKonsumsiAuto.value === "jam"
+              : gunakanJamExpired.value;
+
+    const itemWaktuMaksimal =
+        itemOrKelompok?.waktuMaksimal || waktuMaksimal.value;
+
     sandboxParams.value = {
         kelompok: k || null,
         tipeLabel: tipe,
+        subTipeTambahan: subTambahan,
         jenisAlergi: alergi,
         tagAlergi: tag,
         menuItems: mItems,
         giziData: gData,
+        jamExpired: itemJamExpired,
+        tampilkanJamExpired: itemTampilkanJam,
+        waktuMaksimal: itemWaktuMaksimal,
     };
 
     await nextTick();
@@ -3361,14 +3571,167 @@ const previewKelompok = computed(() => {
     return printableKelompokList.value[0] || activeKelompokList.value[0];
 });
 
-async function startDownload(type = null) {
+const currentPreviewJamExpired = computed(() => {
+    if (labelMode.value === "auto") {
+        if (tipeBatasKonsumsiAuto.value === "jam") {
+            const k = previewKelompok.value;
+            const dist = getBatasMakanDistribution(k);
+            return dist[0]?.jam || getDefaultBatasMakan(k?.nama_kelompok, "");
+        }
+        return jamExpired.value;
+    }
+    return jamExpired.value;
+});
+
+const currentPreviewTampilkanJamExpired = computed(() => {
+    if (labelMode.value === "auto") {
+        return tipeBatasKonsumsiAuto.value === "jam";
+    }
+    return gunakanJamExpired.value;
+});
+
+const currentPreviewWaktuMaksimal = computed(() => {
+    return waktuMaksimal.value;
+});
+
+// Daftar Waktu Batas Makan Unik dari Daftar PM yang Terpilih (Khusus Mode Otomatis Pakai Jam)
+const distinctWaktuList = computed(() => {
+    if (labelMode.value !== "auto" || tipeBatasKonsumsiAuto.value !== "jam") {
+        return [];
+    }
+    const map = new Map();
+
+    // 1. Ambil dari seluruh kelompok sasaran PM yang tercentang/terpilih
+    for (const k of printableKelompokList.value) {
+        const dist = getBatasMakanDistribution(k);
+        for (const d of dist) {
+            const jam = d.jam || "10:00";
+            if (!map.has(jam)) {
+                map.set(jam, {
+                    jam,
+                    jamClean: jam.replace(":", "-"),
+                    totalLabel: 0,
+                    kelompokSet: new Set(),
+                });
+            }
+            const entry = map.get(jam);
+            if (k.nama_kelompok) {
+                entry.kelompokSet.add(k.nama_kelompok);
+            }
+        }
+    }
+
+    // 2. Akumulasikan total label dari printableItems
+    for (const item of printableItems.value) {
+        const jam = item.jamExpired || "10:00";
+        if (!map.has(jam)) {
+            map.set(jam, {
+                jam,
+                jamClean: jam.replace(":", "-"),
+                totalLabel: 0,
+                kelompokSet: new Set(),
+            });
+        }
+        const entry = map.get(jam);
+        const count = item.count && Number(item.count) > 0 ? Number(item.count) : 1;
+        entry.totalLabel += count;
+        if (item.kelompok?.nama_kelompok) {
+            entry.kelompokSet.add(item.kelompok.nama_kelompok);
+        }
+    }
+
+    return Array.from(map.values())
+        .map((e) => ({
+            jam: e.jam,
+            jamClean: e.jamClean,
+            totalLabel: e.totalLabel,
+            kelompokList: Array.from(e.kelompokSet),
+        }))
+        .sort((a, b) => a.jam.localeCompare(b.jam));
+});
+
+const showWaktuDownloadModal = ref(false);
+const pendingDownloadFormat = ref("single");
+
+function getPreviewFilenameForJam(jam) {
+    const selectedType = pendingDownloadFormat.value || downloadFormatOption.value || "single";
+    const jenisCetak =
+        selectedType === "single"
+            ? "Tunggal"
+            : selectedType === "custom"
+              ? "Kustom"
+              : "Kolase";
+    const templateCode = selectedTemplateId.value === "template-02" ? "T2" : "T1";
+    const rawTgl = tanggalProduksi.value || todayStr;
+    let yyyyMmDd = "";
+    if (rawTgl && rawTgl.includes("-")) {
+        const parts = rawTgl.split("-");
+        if (parts.length === 3 && parts[0].length === 4) {
+            yyyyMmDd = `${parts[0]}${parts[1].padStart(2, "0")}${parts[2].padStart(2, "0")}`;
+        }
+    }
+    if (!yyyyMmDd || yyyyMmDd.length !== 8) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        yyyyMmDd = `${y}${m}${day}`;
+    }
+    const idSppg = (props.unitSppg?.id_sppg || "IDSPPG").trim();
+    const jamClean = (jam || "10:00").replace(":", "-");
+    return `Label_${templateCode}_Waktu_${jamClean}_${jenisCetak}_WO-${yyyyMmDd}_${idSppg}.pdf`;
+}
+
+function handleDownloadClick(format = null) {
+    const selectedFormat = format || downloadFormatOption.value || "single";
+    console.warn("DEBUG DOWNLOAD CLICK:", {
+        labelMode: labelMode.value,
+        tipeBatasKonsumsiAuto: tipeBatasKonsumsiAuto.value,
+        distinctWaktuList: distinctWaktuList.value,
+        printableKelompokCount: printableKelompokList.value.length,
+        selectedKelompokIds: selectedKelompokIds.value,
+    });
+    // Jika mode Gunakan Waktu dan terdapat lebih dari 1 waktu pada daftar PM yang terpilih
+    if (
+        labelMode.value === "auto" &&
+        tipeBatasKonsumsiAuto.value === "jam" &&
+        distinctWaktuList.value.length > 1
+    ) {
+        pendingDownloadFormat.value = selectedFormat;
+        showWaktuDownloadModal.value = true;
+        return;
+    }
+
+    // Jika hanya ada 1 waktu atau mode Gunakan Pesan, langsung unduh
+    const defaultJam = distinctWaktuList.value[0]?.jam || "10:00";
+    startDownload(selectedFormat, tipeBatasKonsumsiAuto.value === "jam" ? defaultJam : null);
+}
+
+function downloadSpecificWaktu(jam) {
+    showWaktuDownloadModal.value = false;
+    startDownload(pendingDownloadFormat.value, jam);
+}
+
+function downloadAllWaktuCombined() {
+    showWaktuDownloadModal.value = false;
+    startDownload(pendingDownloadFormat.value, null);
+}
+
+async function startDownload(type = null, targetJam = null) {
     const selectedType = type || downloadFormatOption.value || "single";
-    const itemsToPrint =
+    let baseItems =
         selectedType === "a4" || selectedType === "custom"
             ? expandedPrintableItemsA4.value
             : expandedPrintableItems.value;
 
-    if (itemsToPrint.length === 0) {
+    // Filter berdasarkan target jam jika ditentukan
+    if (targetJam && tipeBatasKonsumsiAuto.value === "jam") {
+        baseItems = baseItems.filter(
+            (item) => (item.jamExpired || "10:00") === targetJam,
+        );
+    }
+
+    if (baseItems.length === 0) {
         if (
             filterCetakTipe.value === "alergi" ||
             activeLabelTab.value === "alergi"
@@ -3377,10 +3740,12 @@ async function startDownload(type = null) {
                 "Tidak ada porsi alergi yang terdaftar pada kelompok sasaran terpilih untuk Work Order ini.",
             );
         } else {
-            alert("Tidak ada label yang dapat diunduh untuk filter terpilih.");
+            alert("Tidak ada label yang dapat diunduh untuk waktu atau filter terpilih.");
         }
         return;
     }
+
+    const itemsToPrint = baseItems;
 
     isDownloading.value = true;
     isDownloadCancelled.value = false;
@@ -3393,22 +3758,23 @@ async function startDownload(type = null) {
             ? parseInt(customLabelCount.value, 10) || itemsToPrint.length
             : itemsToPrint.length;
 
-    const tipeDesc =
-        filterCetakTipe.value === "alergi"
-            ? "Porsi Alergi"
-            : filterCetakTipe.value === "normal"
-              ? "Porsi Normal"
-              : filterCetakTipe.value === "tambahan"
-                ? "Porsi Tambahan"
-                : filterCetakTipe.value === "tambahan_organoleptik"
-                  ? "Porsi Tambahan Organoleptik"
-                  : filterCetakTipe.value === "tambahan_sampel"
-                    ? "Porsi Tambahan Sampel"
-                    : filterCetakTipe.value === "tambahan_buffer"
-                      ? "Porsi Tambahan Buffer"
-                      : filterCetakTipe.value === "pm"
-                        ? "Porsi PM Saja"
-                        : "Semua Porsi";
+    const tipeDesc = targetJam
+        ? `Waktu ${targetJam} WITA`
+        : filterCetakTipe.value === "alergi"
+          ? "Porsi Alergi"
+          : filterCetakTipe.value === "normal"
+            ? "Porsi Normal"
+            : filterCetakTipe.value === "tambahan"
+              ? "Porsi Tambahan"
+              : filterCetakTipe.value === "tambahan_organoleptik"
+                ? "Porsi Tambahan Organoleptik"
+                : filterCetakTipe.value === "tambahan_sampel"
+                  ? "Porsi Tambahan Sampel"
+                  : filterCetakTipe.value === "tambahan_buffer"
+                    ? "Porsi Tambahan Buffer"
+                    : filterCetakTipe.value === "pm"
+                      ? "Porsi PM Saja"
+                      : "Semua Porsi";
 
     downloadProgress.value = {
         current: 0,
@@ -3425,10 +3791,7 @@ async function startDownload(type = null) {
     };
 
     try {
-        // 1. Prefix Sumber Data: WO vs Manual
-        const sumberPrefix = labelMode.value === "manual" ? "Manual" : "WO";
-
-        // 2. Format Tanggal YYYYMMDD
+        // 1. Format Tanggal YYYYMMDD
         const rawTgl = tanggalProduksi.value || todayStr;
         let yyyyMmDd = "";
         if (rawTgl && rawTgl.includes("-")) {
@@ -3453,7 +3816,7 @@ async function startDownload(type = null) {
             }
         }
 
-        // 3. Tipe Cetak: Tunggal, Kolase, Kustom
+        // 2. Tipe Cetak: Tunggal, Kolase, Kustom
         const jenisCetak =
             selectedType === "single"
                 ? "Tunggal"
@@ -3461,22 +3824,40 @@ async function startDownload(type = null) {
                   ? "Kustom"
                   : "Kolase";
 
-        // 4. ID SPPG
-        const idSppg = (props.unitSppg?.id_sppg || "SPPG").trim();
+        // 3. ID SPPG
+        const idSppg = (props.unitSppg?.id_sppg || "IDSPPG").trim();
 
-        // 5. Kode Template (T1 = Template 01, T2 = Template 02)
+        // 4. Kode Template (T1 = Template 01, T2 = Template 02)
         const templateCode = selectedTemplateId.value === "template-02" ? "T2" : "T1";
 
-        // 6. Nama File PDF Standar Resmi
-        const filename = `Label_${templateCode}_${jenisCetak}_${sumberPrefix}-${yyyyMmDd}_${idSppg}.pdf`;
+        // 5. Nama File PDF Standar Baru:
+        // Gunakan Waktu: Label_T1_Waktu_10-00_Tunggal_WO-YYYYMMDD_IDSPPG.pdf
+        // Gunakan Pesan: Label_T1_Pesan_Kustom_WO-YYYYMMDD_IDSPPG.pdf
+        let filename = "";
+        if (tipeBatasKonsumsiAuto.value === "jam") {
+            const jamVal = targetJam || itemsToPrint[0]?.jamExpired || "10:00";
+            const jamClean = jamVal.replace(":", "-");
+            filename = `Label_${templateCode}_Waktu_${jamClean}_${jenisCetak}_WO-${yyyyMmDd}_${idSppg}.pdf`;
+        } else {
+            filename = `Label_${templateCode}_Pesan_${jenisCetak}_WO-${yyyyMmDd}_${idSppg}.pdf`;
+        }
+
+        const jamExpiredFinal =
+            targetJam ||
+            (labelMode.value === "auto" && tipeBatasKonsumsiAuto.value === "jam"
+                ? itemsToPrint[0]?.jamExpired || "10:00"
+                : jamExpired.value);
 
         const globalConfig = {
             namaSppg: namaSppg.value,
             tanggalProduksi: tanggalProduksi.value,
             jamProduksi: jamProduksi.value,
             tampilkanJamProduksi: gunakanJamProduksi.value,
-            jamExpired: jamExpired.value,
-            tampilkanJamExpired: gunakanJamExpired.value,
+            jamExpired: jamExpiredFinal,
+            tampilkanJamExpired:
+                labelMode.value === "auto"
+                    ? tipeBatasKonsumsiAuto.value === "jam"
+                    : gunakanJamExpired.value,
             zonaWaktu: zonaWaktu.value,
             waktuMaksimal: waktuMaksimal.value,
             teksLaranganHeader: teksLaranganHeader.value,
@@ -3634,8 +4015,14 @@ async function startPrintDirect() {
                 tanggalProduksi: tanggalProduksi.value,
                 jamProduksi: jamProduksi.value,
                 tampilkanJamProduksi: gunakanJamProduksi.value,
-                jamExpired: jamExpired.value,
-                tampilkanJamExpired: gunakanJamExpired.value,
+                jamExpired:
+                    labelMode.value === "auto" && tipeBatasKonsumsiAuto.value === "jam"
+                        ? getBatasMakanDistribution(previewKelompok.value)[0]?.jam || jamExpired.value
+                        : jamExpired.value,
+                tampilkanJamExpired:
+                    labelMode.value === "auto"
+                        ? tipeBatasKonsumsiAuto.value === "jam"
+                        : gunakanJamExpired.value,
                 zonaWaktu: zonaWaktu.value,
                 waktuMaksimal: waktuMaksimal.value,
                 teksLaranganHeader: teksLaranganHeader.value,
@@ -3934,7 +4321,7 @@ async function startPrintDirect() {
                                 </div>
                                 <Button
                                     type="button"
-                                    @click="startDownload(downloadFormatOption)"
+                                    @click="handleDownloadClick(downloadFormatOption)"
                                     :disabled="
                                         printableItems.length === 0 ||
                                         isDownloading
@@ -3969,54 +4356,24 @@ async function startPrintDirect() {
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <!-- ================= LEFT COLUMN: FORM INPUTS ================= -->
                 <div class="lg:col-span-6 space-y-5">
-                    <!-- 1. Mode Switcher & WO Selector -->
+                    <!-- 1. Menu & Format Waktu Batas Makan (Otomatis WO) -->
                     <Card className="bg-white border-slate-200/80 shadow-2xs">
+                        <CardHeader className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between">
+                            <CardTitle class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <Sparkles class="h-4 w-4 text-primary" />
+                                <span>Pilih Menu & Format Waktu Batas Makan</span>
+                            </CardTitle>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-primary border border-blue-200">
+                                Otomatis (WO)
+                            </span>
+                        </CardHeader>
                         <CardContent className="p-4 sm:p-5 space-y-4">
-                            <div
-                                class="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 flex-wrap"
-                            >
-                                <div class="flex items-center gap-2">
-                                    <Database
-                                        class="h-4 w-4 text-slate-500 shrink-0"
-                                        title="Sumber Data"
-                                    />
-                                    <div
-                                        class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200"
-                                    >
-                                        <button
-                                            type="button"
-                                            @click="setLabelMode('auto')"
-                                            :class="[
-                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center',
-                                                labelMode === 'auto'
-                                                    ? 'bg-white text-primary shadow-2xs font-extrabold'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                            ]"
-                                        >
-                                            <span>Otomatis (WO)</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="setLabelMode('manual')"
-                                            :class="[
-                                                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center',
-                                                labelMode === 'manual'
-                                                    ? 'bg-white text-amber-700 shadow-2xs font-extrabold'
-                                                    : 'text-slate-600 hover:text-slate-900',
-                                            ]"
-                                        >
-                                            <span>Manual (Kustom)</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Selector WO jika Mode Otomatis -->
-                            <div v-if="labelMode === 'auto'" class="space-y-3">
+                            <!-- Selector Menu Work Order -->
+                            <div class="space-y-3">
                                 <div class="space-y-1.5">
                                     <label
                                         class="text-xs font-bold text-slate-700"
-                                        >Pilih Work Order Menu:</label
+                                        >Pilih Menu:</label
                                     >
                                     <select
                                         v-model="selectedWoId"
@@ -4032,6 +4389,93 @@ async function startPrintDirect() {
                                             }})
                                         </option>
                                     </select>
+                                </div>
+
+                                <!-- Pilihan Format Waktu Batas Makan (Gunakan Waktu dan Gunakan Pesan) -->
+                                <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                            <Clock class="h-3.5 w-3.5 text-amber-600" />
+                                            <span>Format Waktu Batas Makan:</span>
+                                        </label>
+                                        <span
+                                            :class="[
+                                                'text-[10px] font-extrabold px-2 py-0.5 rounded-full border',
+                                                tipeBatasKonsumsiAuto === 'jam'
+                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                                            ]"
+                                        >
+                                            {{ tipeBatasKonsumsiAuto === 'jam' ? 'Gunakan Waktu' : 'Gunakan Pesan' }}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <!-- Opsi Pakai Jam -->
+                                        <button
+                                            type="button"
+                                            @click="tipeBatasKonsumsiAuto = 'jam'"
+                                            :class="[
+                                                'p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between relative',
+                                                tipeBatasKonsumsiAuto === 'jam'
+                                                    ? 'bg-amber-50/80 border-amber-400 text-amber-950 shadow-2xs ring-2 ring-amber-400/20'
+                                                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
+                                            ]"
+                                        >
+                                            <div class="flex items-center gap-2">
+                                                <input
+                                                    type="radio"
+                                                    :checked="tipeBatasKonsumsiAuto === 'jam'"
+                                                    class="text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 cursor-pointer"
+                                                />
+                                                <span class="font-extrabold text-xs">Gunakan Waktu</span>
+                                                <span class="ml-auto text-[10px] font-bold px-1.5 py-0.2 bg-amber-200/80 text-amber-900 rounded">Daftar PM</span>
+                                            </div>
+                                            <p class="text-[10.5px] text-amber-800/85 mt-1.5 leading-snug">
+                                                Mengacu pada jam waktu batas makan di masing-masing daftar PM (misal: SEBELUM JAM 10:00 WITA / 14:00 WITA).
+                                            </p>
+                                        </button>
+
+                                        <!-- Opsi Gunakan Pesan -->
+                                        <button
+                                            type="button"
+                                            @click="tipeBatasKonsumsiAuto = 'teks'"
+                                            :class="[
+                                                'p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between relative',
+                                                tipeBatasKonsumsiAuto === 'teks'
+                                                    ? 'bg-blue-50/80 border-blue-400 text-blue-950 shadow-2xs ring-2 ring-blue-400/20'
+                                                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
+                                            ]"
+                                        >
+                                            <div class="flex items-center gap-2">
+                                                <input
+                                                    type="radio"
+                                                    :checked="tipeBatasKonsumsiAuto === 'teks'"
+                                                    class="text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                                                />
+                                                <span class="font-extrabold text-xs">Gunakan Pesan</span>
+                                                <span class="ml-auto text-[10px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded">Standar</span>
+                                            </div>
+                                            <p class="text-[10.5px] text-blue-800/85 mt-1.5 leading-snug">
+                                                Format teks pesan batas konsumsi baku (misal: 2 JAM SETELAH DITERIMA!).
+                                            </p>
+                                        </button>
+                                    </div>
+
+                                    <!-- Input Teks Jika Memilih Gunakan Pesan -->
+                                    <div
+                                        v-if="tipeBatasKonsumsiAuto === 'teks'"
+                                        class="mt-2 p-2.5 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5"
+                                    >
+                                        <label class="text-[11px] font-bold text-blue-900 block">
+                                            Teks Pesan Batas Makan:
+                                        </label>
+                                        <input
+                                            v-model="waktuMaksimal"
+                                            type="text"
+                                            placeholder="Contoh: 2 JAM SETELAH DITERIMA!"
+                                            class="w-full px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-950 focus:ring-2 focus:ring-blue-400 outline-none"
+                                        />
+                                    </div>
                                 </div>
 
                                 <!-- Ringkasan Mode Otomatis -->
@@ -4067,7 +4511,7 @@ async function startPrintDirect() {
                                 class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
                             >
                                 <Layers class="h-4 w-4 text-primary" />
-                                <span>Area Tempel / Perekat Kemasan</span>
+                                <span>Area Perekat Label</span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 space-y-2.5 text-xs">
@@ -4212,27 +4656,40 @@ async function startPrintDirect() {
                                     <span>Kustomisasi Warna Bagian (Template 02)</span>
                                 </CardTitle>
                                 <p class="text-[11px] text-slate-500 mt-0.5">
-                                    Pilih warna latar tiap bagian atau gunakan tombol hapus warna untuk latar putih polos.
+                                    Secara bawaan tanpa warna (latar putih polos). Klik tombol <strong>Berikan Warna</strong> untuk menerapkan warna standar BGN.
                                 </p>
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                <!-- Tombol BERIKAN WARNA -->
+                                <button
+                                    type="button"
+                                    @click="applyPresetWarnaTemplate02"
+                                    :class="[
+                                        'px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-xs',
+                                        isTemplate02Colored
+                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 ring-2 ring-indigo-400/30'
+                                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                    ]"
+                                    title="Terapkan palet warna standar BGN (warna yang saat ini sudah digunakan)"
+                                >
+                                    <Palette class="h-3.5 w-3.5" />
+                                    <span>Berikan Warna</span>
+                                </button>
+
+                                <!-- Tombol TANPA WARNA (DEFAULT) -->
                                 <button
                                     type="button"
                                     @click="clearAllTemplate02Colors"
-                                    class="px-2.5 py-1 rounded-md text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                                    title="Hapus seluruh warna latar (semua bagian menjadi putih polos / tanpa warna)"
+                                    :class="[
+                                        'px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs',
+                                        !isTemplate02Colored
+                                            ? 'bg-slate-800 text-white hover:bg-slate-900 ring-2 ring-slate-400/30'
+                                            : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                    ]"
+                                    title="Jadikan tanpa warna / latar putih polos (default bawaan)"
                                 >
-                                    <Ban class="h-3 w-3 text-rose-600" />
-                                    <span>Hapus Semua Warna</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="resetAllTemplate02Colors"
-                                    class="px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                                    title="Kembalikan semua warna ke warna bawaan standar BGN Template 02"
-                                >
-                                    <RotateCcw class="h-3 w-3 text-slate-500" />
-                                    <span>Reset Bawaan</span>
+                                    <Ban class="h-3.5 w-3.5" />
+                                    <span>Tanpa Warna (Default)</span>
                                 </button>
                             </div>
                         </CardHeader>
@@ -4264,7 +4721,7 @@ async function startPrintDirect() {
                                     <!-- Kontrol Warna -->
                                     <div class="flex items-center gap-1.5 shrink-0">
                                         <!-- Color Picker Input -->
-                                        <div class="relative flex items-center" :title="`Pilih warna untuk ${sec.label}`">
+                                        <div class="relative flex items-center" :title="`Pilih warna custom untuk ${sec.label}`">
                                             <input
                                                 type="color"
                                                 v-model="template02Colors[sec.key]"
@@ -4272,31 +4729,26 @@ async function startPrintDirect() {
                                             />
                                         </div>
 
-                                        <!-- Tombol Hapus Warna -->
+                                        <!-- Tombol Beri Warna Preset per Bagian / Hapus Warna -->
                                         <button
+                                            v-if="template02Colors[sec.key] === '#ffffff' || template02Colors[sec.key] === 'transparent'"
+                                            type="button"
+                                            @click="applySectionPresetColor(sec.key)"
+                                            class="px-2 py-1 rounded-lg text-[10.5px] font-bold border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                            :title="`Beri warna standar untuk ${sec.label}`"
+                                        >
+                                            <Palette class="h-3 w-3 shrink-0 text-indigo-600" />
+                                            <span>Beri Warna</span>
+                                        </button>
+                                        <button
+                                            v-else
                                             type="button"
                                             @click="clearSectionColor(sec.key)"
-                                            :class="[
-                                                'px-2 py-1 rounded-lg text-[10.5px] font-bold border transition-all cursor-pointer flex items-center gap-1 shadow-2xs',
-                                                template02Colors[sec.key] === '#ffffff' || template02Colors[sec.key] === 'transparent'
-                                                    ? 'bg-rose-50 text-rose-600 border-rose-200/80 font-extrabold'
-                                                    : 'bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border-slate-200 hover:border-rose-200'
-                                            ]"
+                                            class="px-2 py-1 rounded-lg text-[10.5px] font-bold border border-rose-200 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                                             :title="`Hapus warna latar ${sec.label} (jadikan putih polos)`"
                                         >
-                                            <Ban class="h-3 w-3 shrink-0" />
+                                            <Ban class="h-3 w-3 shrink-0 text-rose-500" />
                                             <span>Hapus Warna</span>
-                                        </button>
-
-                                        <!-- Tombol Reset Default per Bagian -->
-                                        <button
-                                            v-if="template02Colors[sec.key] !== sec.default"
-                                            type="button"
-                                            @click="resetSectionColor(sec.key)"
-                                            class="p-1 rounded-lg bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                                            :title="`Kembalikan ${sec.label} ke warna standar bawaan`"
-                                        >
-                                            <RotateCcw class="h-3 w-3" />
                                         </button>
                                     </div>
                                 </div>
@@ -4322,10 +4774,7 @@ async function startPrintDirect() {
                                     <ShieldAlert
                                         class="h-4 w-4 text-amber-600"
                                     />
-                                    <span
-                                        >Identitas & Sasaran Jenis Alergen
-                                        (Terdampak WO)</span
-                                    >
+                                    <span>Sasaran Alergen</span>
                                 </div>
                                 <span
                                     class="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300"
@@ -4415,17 +4864,7 @@ async function startPrintDirect() {
                                 </p>
                             </div>
 
-                            <div class="pt-2 border-t border-amber-200/50">
-                                <label class="font-bold text-amber-900 block">
-                                    Kustom Teks Banner Badge Alergi (Opsional):
-                                </label>
-                                <input
-                                    v-model="customTagAlergi"
-                                    type="text"
-                                    placeholder="Otomatis (contoh: ⚠️ ALERGI: TELUR)"
-                                    class="w-full mt-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-bold text-amber-950 focus:ring-2 focus:ring-amber-400 outline-none"
-                                />
-                            </div>
+
 
                             <!-- Panel Rincian & Penyesuaian Sub Menu & Gizi Khusus Alergi Terpilih (Mode Otomatis) -->
                             <div
@@ -4733,1164 +5172,6 @@ async function startPrintDirect() {
                             </div>
                         </CardContent>
                     </Card>
-
-                    <!-- FORM & KONFIGURASI KHUSUS MODE MANUAL: TAB SELECTOR, IDENTITAS, MENU, GIZI & ALERGI -->
-                    <template v-if="labelMode === 'manual'">
-                        <!-- TAB SELECTOR UNTUK KONFIGURASI MENU: NORMAL vs ALERGI -->
-                        <div
-                            class="p-1.5 bg-slate-100 rounded-2xl border border-slate-200 flex items-center gap-1"
-                        >
-                            <button
-                                type="button"
-                                @click="activeLabelTab = 'normal'"
-                                :class="[
-                                    'flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer',
-                                    activeLabelTab === 'normal'
-                                        ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-300/60'
-                                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50',
-                                ]"
-                            >
-                                <Tag class="h-3.5 w-3.5 text-blue-600" />
-                                <span>🏷️ Konfigurasi Porsi Normal</span>
-                                <span
-                                    class="bg-blue-100 text-blue-800 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold"
-                                >
-                                    {{ totalPorsiNormal }} Porsi
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="activeLabelTab = 'alergi'"
-                                :class="[
-                                    'flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer',
-                                    activeLabelTab === 'alergi'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'text-amber-800 hover:text-amber-950 hover:bg-amber-100/50',
-                                ]"
-                            >
-                                <AlertTriangle class="h-3.5 w-3.5" />
-                                <span>⚠️ Konfigurasi Porsi Alergi</span>
-                                <span
-                                    class="bg-amber-100 text-amber-900 text-[10.5px] px-1.5 py-0.2 rounded-full font-bold"
-                                >
-                                    {{ totalPorsiAlergi }} Porsi
-                                </span>
-                            </button>
-                        </div>
-
-                        <!-- IDENTITAS & WAKTU -->
-                        <Card
-                            className="bg-white border-slate-200/80 shadow-2xs"
-                        >
-                            <CardHeader
-                                className="p-4 pb-2 border-b border-slate-100"
-                            >
-                                <CardTitle
-                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
-                                >
-                                    <Building2 class="h-4 w-4 text-primary" />
-                                    <span>Identitas Header & Waktu</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4 space-y-3 text-xs">
-                                <div
-                                    class="grid grid-cols-1 sm:grid-cols-3 gap-3"
-                                >
-                                    <div class="sm:col-span-2">
-                                        <label class="font-bold text-slate-600"
-                                            >Nama SPPG:</label
-                                        >
-                                        <input
-                                            v-model="namaSppg"
-                                            type="text"
-                                            class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Zona Waktu:</label
-                                        >
-                                        <select
-                                            v-model="zonaWaktu"
-                                            class="w-full mt-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
-                                        >
-                                            <option value="WIB">WIB</option>
-                                            <option value="WITA">WITA</option>
-                                            <option value="WIT">WIT</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div
-                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1"
-                                >
-                                    <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Tanggal Produksi:</label
-                                        >
-                                        <input
-                                            v-model="tanggalProduksi"
-                                            type="date"
-                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <div
-                                            class="flex items-center justify-between"
-                                        >
-                                            <label
-                                                class="font-bold text-slate-600"
-                                                >Jam Produksi:</label
-                                            >
-                                            <label
-                                                class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    v-model="gunakanJamProduksi"
-                                                    class="rounded text-primary focus:ring-primary h-3.5 w-3.5"
-                                                />
-                                                <span>Tampilkan Jam</span>
-                                            </label>
-                                        </div>
-                                        <input
-                                            v-model="jamProduksi"
-                                            type="time"
-                                            :disabled="!gunakanJamProduksi"
-                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                                        />
-                                    </div>
-                                    <div class="sm:col-span-2">
-                                        <div
-                                            class="flex items-center justify-between"
-                                        >
-                                            <label
-                                                class="font-bold text-slate-600"
-                                                >Jam Expired (Batas
-                                                Konsumsi):</label
-                                            >
-                                            <label
-                                                class="flex items-center gap-1.5 cursor-pointer select-none text-[11px] font-bold text-slate-600"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    v-model="gunakanJamExpired"
-                                                    class="rounded text-primary focus:ring-primary h-3.5 w-3.5"
-                                                />
-                                                <span
-                                                    >Gunakan Jam pada Batas
-                                                    Konsumsi</span
-                                                >
-                                            </label>
-                                        </div>
-                                        <input
-                                            v-model="jamExpired"
-                                            type="time"
-                                            :disabled="!gunakanJamExpired"
-                                            class="w-full mt-1 px-2.5 py-1.5 border border-slate-200 rounded-lg font-bold text-rose-600 focus:ring-2 focus:ring-rose-200 outline-none disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                                        />
-                                        <p
-                                            class="text-[10.5px] text-slate-400 mt-1"
-                                        >
-                                            * Jika dicentang, kotak oranye
-                                            'WAKTU MAKSIMAL KONSUMSI' akan
-                                            otomatis menampilkan jam batas
-                                            konsumsi (contoh: SEBELUM JAM 14:14
-                                            WITA).
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <!-- Pengaturan Waktu Konsumsi & Teks Larangan -->
-                        <Card
-                            className="bg-white border-slate-200/80 shadow-2xs"
-                        >
-                            <CardHeader
-                                className="p-4 pb-2 border-b border-slate-100"
-                            >
-                                <CardTitle
-                                    class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
-                                >
-                                    <Clock class="h-4 w-4 text-amber-600" />
-                                    <span
-                                        >Waktu Maksimal & Peringatan
-                                        Larangan</span
-                                    >
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4 space-y-3 text-xs">
-                                <div>
-                                    <label class="font-bold text-slate-600"
-                                        >Waktu Maksimal Konsumsi:</label
-                                    >
-                                    <input
-                                        v-model="waktuMaksimal"
-                                        type="text"
-                                        placeholder="2 JAM SETELAH DITERIMA!"
-                                        class="w-full mt-1 px-3 py-1.5 border border-amber-200 bg-amber-50/50 rounded-lg font-black text-amber-900 focus:ring-2 focus:ring-amber-200 outline-none"
-                                    />
-                                </div>
-                                <div
-                                    class="grid grid-cols-1 sm:grid-cols-2 gap-3"
-                                >
-                                    <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Teks Larangan (Baris 1):</label
-                                        >
-                                        <input
-                                            v-model="teksLaranganHeader"
-                                            type="text"
-                                            placeholder="MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT."
-                                            class="w-full mt-1 px-3 py-1.5 border border-rose-200 bg-rose-50/50 rounded-lg font-bold text-rose-900 focus:ring-2 focus:ring-rose-200 outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="font-bold text-slate-600"
-                                            >Teks Larangan (Baris 2):</label
-                                        >
-                                        <input
-                                            v-model="teksLaranganSub"
-                                            type="text"
-                                            placeholder="DILARANG MEMBAWA PULANG!"
-                                            class="w-full mt-1 px-3 py-1.5 border border-rose-200 bg-rose-50/50 rounded-lg font-black text-rose-900 focus:ring-2 focus:ring-rose-200 outline-none"
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <!-- SECTION 1: KONTEN PORSI NORMAL -->
-                        <template v-if="activeLabelTab === 'normal'">
-                            <!-- Input Jumlah Porsi Normal (Mode Manual) -->
-                            <Card
-                                className="bg-white border-slate-200/80 shadow-2xs"
-                            >
-                                <CardHeader
-                                    className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
-                                >
-                                    <CardTitle
-                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
-                                    >
-                                        <Tag class="h-4 w-4 text-blue-600" />
-                                        <span>Jumlah Porsi Label Normal</span>
-                                    </CardTitle>
-                                    <button
-                                        type="button"
-                                        @click="syncNormalPorsiFromKelompok"
-                                        class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer border border-blue-200"
-                                        title="Hitung otomatis dari total sasaran dikurangi porsi alergi"
-                                    >
-                                        <RotateCcw class="h-3 w-3" />
-                                        <span>Hitung dari Kelompok PM</span>
-                                    </button>
-                                </CardHeader>
-                                <CardContent className="p-4 space-y-2 text-xs">
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex-1">
-                                            <label
-                                                class="font-bold text-slate-700 block mb-1"
-                                            >
-                                                Total Porsi Normal yang
-                                                Dibuatkan Label:
-                                            </label>
-                                            <div class="relative">
-                                                <input
-                                                    v-model.number="
-                                                        manualPorsiNormal
-                                                    "
-                                                    type="number"
-                                                    min="0"
-                                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                                <span
-                                                    class="absolute right-3 top-2 text-xs font-bold text-slate-400"
-                                                    >Porsi / Lembar</span
-                                                >
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500">
-                                        * Menentukan berapa banyak lembar stiker
-                                        label kemasan porsi normal yang akan
-                                        dicetak.
-                                    </p>
-                                </CardContent>
-                            </Card>
-
-                            <!-- Komponen Menu Makanan Normal -->
-                            <Card
-                                className="bg-white border-slate-200/80 shadow-2xs"
-                            >
-                                <CardHeader
-                                    className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between"
-                                >
-                                    <CardTitle
-                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
-                                    >
-                                        <Utensils
-                                            class="h-4 w-4 text-primary"
-                                        />
-                                        <span
-                                            >Komponen Menu Makanan (Porsi
-                                            Normal)</span
-                                        >
-                                    </CardTitle>
-                                    <button
-                                        type="button"
-                                        @click="addMenuItem"
-                                        class="px-2.5 py-1 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-lg font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
-                                    >
-                                        <Plus class="h-3.5 w-3.5" />
-                                        <span>Tambah Menu</span>
-                                    </button>
-                                </CardHeader>
-                                <CardContent className="p-4 space-y-2 text-xs">
-                                    <div
-                                        v-for="(item, idx) in menuItems"
-                                        :key="idx"
-                                        class="flex items-center gap-2"
-                                    >
-                                        <span
-                                            class="font-mono font-bold text-slate-400 w-4"
-                                            >{{ idx + 1 }}.</span
-                                        >
-                                        <input
-                                            v-model="menuItems[idx]"
-                                            type="text"
-                                            :placeholder="
-                                                getMenuPlaceholder(idx)
-                                            "
-                                            class="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
-                                        />
-                                        <button
-                                            type="button"
-                                            @click="removeMenuItem(idx)"
-                                            class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                            title="Hapus baris ini"
-                                        >
-                                            <Trash2 class="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <!-- Kandungan Gizi Normal (AKG) -->
-                            <Card
-                                className="bg-white border-slate-200/80 shadow-2xs"
-                            >
-                                <CardHeader
-                                    className="p-4 pb-2 border-b border-slate-100"
-                                >
-                                    <CardTitle
-                                        class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2"
-                                    >
-                                        <Flame class="h-4 w-4 text-amber-500" />
-                                        <span
-                                            >Nilai Kandungan Gizi Porsi Normal
-                                            (AKG)</span
-                                        >
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-4 space-y-3 text-xs">
-                                    <!-- Porsi Besar -->
-                                    <div>
-                                        <p
-                                            class="font-bold text-slate-700 mb-1.5"
-                                        >
-                                            Porsi Besar:
-                                        </p>
-                                        <div class="grid grid-cols-5 gap-1.5">
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Energi (kcal)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.energi_pb
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Prot (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.prot_pb
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Lmk (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.lmk_pb
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Karbo (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.karbo_pb
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Serat (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.serat_pb
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Porsi Kecil -->
-                                    <div class="pt-2 border-t border-slate-100">
-                                        <p
-                                            class="font-bold text-slate-700 mb-1.5"
-                                        >
-                                            Porsi Kecil:
-                                        </p>
-                                        <div class="grid grid-cols-5 gap-1.5">
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Energi (kcal)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.energi_pk
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Prot (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.prot_pk
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Lmk (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.lmk_pk
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Karbo (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.karbo_pk
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label
-                                                    class="text-[10.5px] text-slate-500"
-                                                    >Serat (g)</label
-                                                >
-                                                <input
-                                                    v-model.number="
-                                                        giziData.serat_pk
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-primary/20 outline-none"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </template>
-
-                        <!-- SECTION 2: KONTEN PORSI ALERGI (DIET KHUSUS) -->
-                        <template v-else-if="activeLabelTab === 'alergi'">
-                            <!-- CARD 1: PILIH JENIS ALERGI YANG DIBUATKAN LABEL -->
-                            <Card
-                                className="bg-amber-50/40 border-amber-200/80 shadow-2xs"
-                            >
-                                <CardHeader
-                                    className="p-4 pb-2 border-b border-amber-200/60 flex flex-row items-center justify-between flex-wrap gap-2"
-                                >
-                                    <div class="flex items-center gap-2">
-                                        <ShieldAlert
-                                            class="h-4 w-4 text-amber-600"
-                                        />
-                                        <CardTitle
-                                            class="text-xs sm:text-sm font-bold text-amber-950"
-                                        >
-                                            Pilih Jenis Alergi yang Dibuatkan
-                                            Label
-                                        </CardTitle>
-                                    </div>
-                                    <span
-                                        class="text-[11px] font-extrabold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300"
-                                    >
-                                        {{ selectedManualAllergies.length }}
-                                        Alergi Dipilih • Total
-                                        {{ totalPorsiAlergi }} Porsi
-                                    </span>
-                                </CardHeader>
-                                <CardContent
-                                    className="p-4 space-y-3.5 text-xs"
-                                >
-                                    <!-- Action Bar Pintas -->
-                                    <div
-                                        class="flex items-center justify-between gap-2 flex-wrap"
-                                    >
-                                        <label class="font-bold text-amber-900">
-                                            Pilih Alergi Target:
-                                        </label>
-                                        <div class="flex items-center gap-1.5">
-                                            <button
-                                                type="button"
-                                                @click="
-                                                    selectAllDetectedAllergies
-                                                "
-                                                class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-bold text-[11px] transition-colors cursor-pointer border border-amber-300"
-                                            >
-                                                Pilih Semua Alergi dari PM
-                                            </button>
-                                            <button
-                                                type="button"
-                                                @click="
-                                                    clearAllSelectedAllergies
-                                                "
-                                                class="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 rounded-lg font-bold text-[11px] transition-colors cursor-pointer border border-slate-200 hover:border-rose-300"
-                                            >
-                                                Kosongkan Pilihan
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Grid Pilihan Jenis Alergi -->
-                                    <div
-                                        class="flex items-center gap-1.5 flex-wrap"
-                                    >
-                                        <button
-                                            type="button"
-                                            v-for="alergi in availableAllergiesList"
-                                            :key="alergi"
-                                            @click="
-                                                toggleAllergySelected(alergi)
-                                            "
-                                            :class="[
-                                                'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5',
-                                                selectedManualAllergies.includes(
-                                                    alergi,
-                                                )
-                                                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300',
-                                            ]"
-                                        >
-                                            <Check
-                                                v-if="
-                                                    selectedManualAllergies.includes(
-                                                        alergi,
-                                                    )
-                                                "
-                                                class="h-3.5 w-3.5 text-white"
-                                            />
-                                            <span>⚠️ {{ alergi }}</span>
-                                            <span
-                                                v-if="
-                                                    manualAllergyConfigs[alergi]
-                                                        ?.porsi
-                                                "
-                                                :class="[
-                                                    'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
-                                                    selectedManualAllergies.includes(
-                                                        alergi,
-                                                    )
-                                                        ? 'bg-amber-700/80 text-white'
-                                                        : 'bg-amber-100 text-amber-900',
-                                                ]"
-                                            >
-                                                {{
-                                                    manualAllergyConfigs[alergi]
-                                                        .porsi
-                                                }}
-                                                Porsi
-                                            </span>
-                                        </button>
-                                    </div>
-
-                                    <!-- Form Tambah Alergi Kustom -->
-                                    <div
-                                        class="pt-3 border-t border-amber-200/50 flex items-center gap-2"
-                                    >
-                                        <input
-                                            v-model="customAllergyInput"
-                                            @keyup.enter="addNewCustomAllergy"
-                                            type="text"
-                                            placeholder="Tambah jenis alergi lain (contoh: Cumi-cumi, Gluten, Gandum)..."
-                                            class="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-400 outline-none"
-                                        />
-                                        <button
-                                            type="button"
-                                            @click="addNewCustomAllergy"
-                                            class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
-                                        >
-                                            <Plus class="h-3.5 w-3.5" />
-                                            <span>Tambah</span>
-                                        </button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <!-- CARD 2: DETAIL KONFIGURASI MENU & GIZI TIAP ALERGI TERPILIH -->
-                            <Card
-                                v-if="
-                                    selectedManualAllergies.length > 0 &&
-                                    activeEditingAllergy &&
-                                    manualAllergyConfigs[activeEditingAllergy]
-                                "
-                                className="bg-white border-amber-200/80 shadow-2xs"
-                            >
-                                <CardHeader
-                                    className="p-4 pb-2 border-b border-amber-100 bg-amber-50/40"
-                                >
-                                    <div
-                                        class="flex items-center justify-between gap-2 flex-wrap pb-2"
-                                    >
-                                        <CardTitle
-                                            class="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-2"
-                                        >
-                                            <Utensils
-                                                class="h-4 w-4 text-amber-600"
-                                            />
-                                            <span
-                                                >Pengaturan Detail Alergi
-                                                Terpilih</span
-                                            >
-                                        </CardTitle>
-                                        <span
-                                            class="text-[11px] font-bold text-amber-800"
-                                        >
-                                            Pilih tab alergi di bawah untuk
-                                            mengedit menu & gizinya
-                                        </span>
-                                    </div>
-
-                                    <!-- Sub-Pill Tab Alergi Aktif yang Sedang Dikonfigurasi -->
-                                    <div
-                                        class="flex items-center gap-1.5 overflow-x-auto py-1"
-                                    >
-                                        <button
-                                            v-for="jenis in selectedManualAllergies"
-                                            :key="jenis"
-                                            type="button"
-                                            @click="
-                                                activeEditingAllergy = jenis;
-                                                selectedJenisAlergi = jenis;
-                                            "
-                                            :class="[
-                                                'px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 border',
-                                                activeEditingAllergy === jenis
-                                                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-black'
-                                                    : 'bg-white text-amber-900 border-amber-200 hover:bg-amber-50',
-                                            ]"
-                                        >
-                                            <AlertTriangle
-                                                class="h-3.5 w-3.5"
-                                            />
-                                            <span>{{ jenis }}</span>
-                                            <span
-                                                :class="[
-                                                    'px-1.5 py-0.2 rounded-full text-[10px] font-extrabold',
-                                                    activeEditingAllergy ===
-                                                    jenis
-                                                        ? 'bg-amber-700 text-white'
-                                                        : 'bg-amber-100 text-amber-900',
-                                                ]"
-                                            >
-                                                {{
-                                                    manualAllergyConfigs[jenis]
-                                                        ?.porsi || 0
-                                                }}
-                                                Porsi
-                                            </span>
-                                        </button>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-4 space-y-4 text-xs">
-                                    <!-- 1. Input Jumlah Porsi Khusus Alergi Ini -->
-                                    <div
-                                        class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between"
-                                        >
-                                            <label
-                                                class="font-bold text-amber-950 text-xs"
-                                            >
-                                                Jumlah Porsi Label Alergi:
-                                                <u class="text-amber-700">{{
-                                                    activeEditingAllergy
-                                                }}</u>
-                                            </label>
-                                            <span
-                                                class="text-[11px] font-extrabold text-amber-800"
-                                            >
-                                                Target Cetak Stiker
-                                            </span>
-                                        </div>
-                                        <div class="relative mt-1">
-                                            <input
-                                                v-model.number="
-                                                    manualAllergyConfigs[
-                                                        activeEditingAllergy
-                                                    ].porsi
-                                                "
-                                                type="number"
-                                                min="1"
-                                                class="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg font-black text-amber-950 text-sm focus:ring-2 focus:ring-amber-400 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-3 top-2.5 text-xs font-bold text-amber-600"
-                                                >Porsi / Lembar</span
-                                            >
-                                        </div>
-                                        <p
-                                            class="text-[10.5px] text-amber-800/80"
-                                        >
-                                            * Menentukan berapa lembar stiker
-                                            label kemasan yang dicetak khusus
-                                            bertanda alergi
-                                            {{ activeEditingAllergy }}.
-                                        </p>
-                                    </div>
-
-                                    <!-- 2. Komponen Menu Pengganti untuk Alergi Ini -->
-                                    <div
-                                        class="space-y-2 pt-2 border-t border-slate-100"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between flex-wrap gap-2"
-                                        >
-                                            <label
-                                                class="font-bold text-slate-800 text-xs flex items-center gap-1.5"
-                                            >
-                                                <Utensils
-                                                    class="h-3.5 w-3.5 text-amber-600"
-                                                />
-                                                <span
-                                                    >Komponen Menu Pengganti
-                                                    (Bebas
-                                                    {{
-                                                        activeEditingAllergy
-                                                    }}):</span
-                                                >
-                                            </label>
-                                            <div
-                                                class="flex items-center gap-1.5"
-                                            >
-                                                <button
-                                                    type="button"
-                                                    @click="
-                                                        copyMenuFromNormalToActiveAllergy
-                                                    "
-                                                    class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-slate-200"
-                                                    title="Salin komponen menu dari porsi normal"
-                                                >
-                                                    Salin dari Normal
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    @click="
-                                                        addCurrentAllergyMenuItem
-                                                    "
-                                                    class="px-2.5 py-1 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-amber-200"
-                                                >
-                                                    + Tambah Menu
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="space-y-1.5">
-                                            <div
-                                                v-for="(
-                                                    item, idx
-                                                ) in manualAllergyConfigs[
-                                                    activeEditingAllergy
-                                                ].menuItems"
-                                                :key="idx"
-                                                class="flex items-center gap-2"
-                                            >
-                                                <span
-                                                    class="font-mono font-bold text-amber-600 w-4 text-[11px]"
-                                                    >{{ idx + 1 }}.</span
-                                                >
-                                                <input
-                                                    v-model="
-                                                        manualAllergyConfigs[
-                                                            activeEditingAllergy
-                                                        ].menuItems[idx]
-                                                    "
-                                                    type="text"
-                                                    :placeholder="
-                                                        getMenuAlergiPlaceholder(
-                                                            idx,
-                                                        )
-                                                    "
-                                                    class="flex-1 px-3 py-1.5 border border-amber-200 bg-amber-50/30 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-amber-300 outline-none text-xs"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    @click="
-                                                        removeCurrentAllergyMenuItem(
-                                                            idx,
-                                                        )
-                                                    "
-                                                    class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                                    title="Hapus menu pengganti ini"
-                                                >
-                                                    <Trash2
-                                                        class="h-3.5 w-3.5"
-                                                    />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- 3. Nilai Kandungan Gizi Khusus Alergi Ini -->
-                                    <div
-                                        class="space-y-2 pt-3 border-t border-slate-100"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between flex-wrap gap-2"
-                                        >
-                                            <label
-                                                class="font-bold text-slate-800 text-xs flex items-center gap-1.5"
-                                            >
-                                                <Flame
-                                                    class="h-3.5 w-3.5 text-amber-500"
-                                                />
-                                                <span
-                                                    >Nilai Kandungan Gizi Khusus
-                                                    {{ activeEditingAllergy }}
-                                                    (AKG):</span
-                                                >
-                                            </label>
-                                            <button
-                                                type="button"
-                                                @click="
-                                                    copyGiziFromNormalToActiveAllergy
-                                                "
-                                                class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-colors cursor-pointer border border-slate-200"
-                                                title="Salin nilai gizi dari porsi normal"
-                                            >
-                                                Salin Gizi dari Normal
-                                            </button>
-                                        </div>
-
-                                        <!-- Porsi Besar -->
-                                        <div>
-                                            <p
-                                                class="font-bold text-slate-700 text-[11px] mb-1"
-                                            >
-                                                Porsi Besar:
-                                            </p>
-                                            <div
-                                                class="grid grid-cols-5 gap-1.5"
-                                            >
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Energi (kcal)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.energi_pb
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Prot (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.prot_pb
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Lmk (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.lmk_pb
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Karbo (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.karbo_pb
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Serat (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.serat_pb
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Porsi Kecil -->
-                                        <div class="pt-1.5">
-                                            <p
-                                                class="font-bold text-slate-700 text-[11px] mb-1"
-                                            >
-                                                Porsi Kecil:
-                                            </p>
-                                            <div
-                                                class="grid grid-cols-5 gap-1.5"
-                                            >
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Energi (kcal)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.energi_pk
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Prot (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.prot_pk
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Lmk (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.lmk_pk
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Karbo (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.karbo_pk
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        class="text-[10px] text-slate-500"
-                                                        >Serat (g)</label
-                                                    >
-                                                    <input
-                                                        v-model.number="
-                                                            manualAllergyConfigs[
-                                                                activeEditingAllergy
-                                                            ].giziData.serat_pk
-                                                        "
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        class="w-full mt-0.5 px-1 sm:px-2 py-1 border border-slate-200 rounded font-bold text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- 4. Kustom Teks Banner Badge Alergi -->
-                                    <div class="pt-3 border-t border-slate-100">
-                                        <label
-                                            class="font-bold text-amber-900 block text-xs"
-                                        >
-                                            Kustom Teks Banner Badge Alergi
-                                            (Opsional):
-                                        </label>
-                                        <input
-                                            v-model="customTagAlergi"
-                                            type="text"
-                                            :placeholder="`Otomatis (contoh: ⚠️ ALERGI: ${activeEditingAllergy.toUpperCase()})`"
-                                            class="w-full mt-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-bold text-amber-950 focus:ring-2 focus:ring-amber-400 outline-none text-xs"
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <!-- Alert Info Jika Belum Ada Alergi yang Dipilih -->
-                            <Card
-                                v-else
-                                className="bg-amber-50/40 border-amber-200/80 shadow-2xs"
-                            >
-                                <CardContent
-                                    className="p-6 text-center space-y-2"
-                                >
-                                    <ShieldAlert
-                                        class="h-8 w-8 text-amber-500 mx-auto"
-                                    />
-                                    <p class="font-bold text-amber-950 text-xs">
-                                        Belum Ada Jenis Alergi yang Dipilih
-                                    </p>
-                                    <p
-                                        class="text-[11px] text-amber-800/80 max-w-sm mx-auto"
-                                    >
-                                        Silakan klik satu atau beberapa jenis
-                                        alergi pada daftar di atas untuk
-                                        mengaktifkan cetakan label alergi dan
-                                        mengatur menu pengganti serta nilai
-                                        gizinya.
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </template>
-                    </template>
 
                     <!-- SASARAN KELOMPOK PENERIMA MANFAAT -->
                     <Card className="bg-white border-slate-200/80 shadow-2xs">
@@ -6831,13 +6112,29 @@ async function startPrintDirect() {
                                 <span>Live Preview Desain Label</span>
                             </h3>
                             <div class="flex items-center gap-1.5">
-                                <span
-                                    v-if="selectedTemplateId === 'template-02'"
-                                    class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1"
-                                >
-                                    <FileText class="h-3 w-3" />
-                                    <span>Template 02 (Excel)</span>
-                                </span>
+                                <template v-if="selectedTemplateId === 'template-02'">
+                                    <span
+                                        class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1"
+                                    >
+                                        <FileText class="h-3 w-3" />
+                                        <span>Template 02 (Excel)</span>
+                                    </span>
+                                    <!-- Tombol Cepat Berikan / Hapus Warna di Header Preview -->
+                                    <button
+                                        type="button"
+                                        @click="isTemplate02Colored ? clearAllTemplate02Colors() : applyPresetWarnaTemplate02()"
+                                        :class="[
+                                            'text-[10px] font-black px-2 py-0.5 rounded-full border transition-all cursor-pointer flex items-center gap-1 shadow-2xs',
+                                            isTemplate02Colored
+                                                ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
+                                                : 'bg-indigo-50 text-indigo-700 border-indigo-300 hover:bg-indigo-100'
+                                        ]"
+                                        :title="isTemplate02Colored ? 'Klik untuk kembalikan ke tanpa warna (polos)' : 'Klik untuk berikan warna standar BGN'"
+                                    >
+                                        <Palette class="h-3 w-3" />
+                                        <span>{{ isTemplate02Colored ? 'Warna Aktif (Klik utk Polos)' : 'Berikan Warna' }}</span>
+                                    </button>
+                                </template>
                                 <span
                                     v-else
                                     class="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -7131,9 +6428,9 @@ async function startPrintDirect() {
                                     :jam-produksi="jamProduksi"
                                     :tampilkan-jam-produksi="gunakanJamProduksi"
                                     :tanggal-expired="tanggalExpired"
-                                    :jam-expired="jamExpired"
-                                    :tampilkan-jam-expired="gunakanJamExpired"
-                                    :waktu-maksimal="waktuMaksimal"
+                                    :jam-expired="currentPreviewJamExpired"
+                                    :tampilkan-jam-expired="currentPreviewTampilkanJamExpired"
+                                    :waktu-maksimal="currentPreviewWaktuMaksimal"
                                     :teks-larangan-header="teksLaranganHeader"
                                     :teks-larangan-sub="teksLaranganSub"
                                     :tipe-label="activeLabelTab"
@@ -7161,12 +6458,13 @@ async function startPrintDirect() {
                                     :jam-produksi="jamProduksi"
                                     :tampilkan-jam-produksi="gunakanJamProduksi"
                                     :tanggal-expired="tanggalExpired"
-                                    :jam-expired="jamExpired"
-                                    :tampilkan-jam-expired="gunakanJamExpired"
-                                    :waktu-maksimal="waktuMaksimal"
+                                    :jam-expired="currentPreviewJamExpired"
+                                    :tampilkan-jam-expired="currentPreviewTampilkanJamExpired"
+                                    :waktu-maksimal="currentPreviewWaktuMaksimal"
                                     :teks-larangan-header="teksLaranganHeader"
                                     :teks-larangan-sub="teksLaranganSub"
                                     :tipe-label="activeLabelTab"
+                                    :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
                                     :jenis-alergi="currentPreviewJenisAlergi"
                                     :tag-alergi="currentPreviewTag"
                                     :menu-items="currentPreviewMenuItems"
@@ -7180,6 +6478,124 @@ async function startPrintDirect() {
                 </div>
             </div>
         </div>
+
+        <!-- Modal Pilihan Waktu Batas Makan untuk Download (Khusus saat Gunakan Waktu & Waktu > 1) -->
+        <Teleport to="body">
+            <div
+                v-if="showWaktuDownloadModal"
+                class="fixed inset-0 z-[99998] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+            >
+                <div
+                    class="bg-white rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95"
+                >
+                    <!-- Header Modal -->
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-9 w-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-2xs">
+                                <Clock class="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 class="font-black text-sm text-slate-900 leading-tight">
+                                    Pilih Waktu Batas Makan
+                                </h3>
+                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                    Terdapat {{ distinctWaktuList.length }} waktu berbeda pada kelompok sasaran terpilih
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="showWaktuDownloadModal = false"
+                            class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <!-- Petunjuk / Keterangan -->
+                    <div class="p-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs text-amber-950 space-y-1">
+                        <p class="font-bold flex items-center gap-1.5">
+                            <Sparkles class="h-3.5 w-3.5 text-amber-600" />
+                            <span>Silakan tentukan waktu yang ingin diunduh terlebih dahulu:</span>
+                        </p>
+                        <p class="text-[11px] text-amber-800 leading-relaxed">
+                            File PDF akan otomatis dipisahkan dan diberi nama spesifik sesuai waktu batas makan yang Anda pilih.
+                        </p>
+                    </div>
+
+                    <!-- List Pilihan Waktu -->
+                    <div class="space-y-2.5 max-h-[380px] overflow-y-auto pr-0.5">
+                        <div
+                            v-for="w in distinctWaktuList"
+                            :key="w.jam"
+                            class="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-primary/50 transition-all space-y-2"
+                        >
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-amber-500 text-white shadow-2xs flex items-center gap-1">
+                                        <Clock class="h-3.5 w-3.5" />
+                                        <span>Waktu {{ w.jam }} WITA</span>
+                                    </span>
+                                    <span class="text-xs font-extrabold text-slate-700">
+                                        {{ w.totalLabel }} Label
+                                    </span>
+                                </div>
+                                <span class="text-[10px] font-bold text-slate-400">
+                                    {{ w.kelompokList.length }} Kelompok PM
+                                </span>
+                            </div>
+
+                            <!-- Daftar Kelompok PM untuk Waktu Ini -->
+                            <div class="text-[11px] text-slate-600 leading-snug">
+                                <span class="font-semibold text-slate-500">Kelompok:</span>
+                                <span class="ml-1 text-slate-700 font-medium">
+                                    {{ w.kelompokList.slice(0, 3).join(', ') }}{{ w.kelompokList.length > 3 ? ` +${w.kelompokList.length - 3} lainnya` : '' }}
+                                </span>
+                            </div>
+
+                            <!-- Preview Nama File Sesuai Penamaan Baru -->
+                            <div class="p-2 bg-slate-100/80 rounded-xl font-mono text-[10.5px] text-slate-700 flex items-center gap-1.5 truncate border border-slate-200/60">
+                                <FileText class="h-3 w-3 text-slate-400 shrink-0" />
+                                <span class="truncate" :title="getPreviewFilenameForJam(w.jam)">
+                                    {{ getPreviewFilenameForJam(w.jam) }}
+                                </span>
+                            </div>
+
+                            <!-- Tombol Download Waktu Ini -->
+                            <Button
+                                type="button"
+                                @click="downloadSpecificWaktu(w.jam)"
+                                className="w-full h-8.5 bg-primary hover:bg-primary/90 text-white font-bold text-xs rounded-xl shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <Download class="h-3.5 w-3.5" />
+                                <span>Download Waktu {{ w.jam }} ({{ w.totalLabel }} Label)</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    <!-- Pilihan Alternatif: Download Semua Waktu Sekaligus -->
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="downloadAllWaktuCombined()"
+                            className="text-xs font-bold text-slate-700 border-slate-300 hover:bg-slate-100 rounded-xl cursor-pointer"
+                            title="Download seluruh label dari semua waktu batas makan sekaligus ke dalam satu file PDF"
+                        >
+                            <span>Download Semua Waktu (Gabungan)</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            @click="showWaktuDownloadModal = false"
+                            className="text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                        >
+                            Tutup
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
 
         <!-- Download Progress Modal -->
         <Teleport to="body">
@@ -7395,13 +6811,13 @@ async function startPrintDirect() {
                     :jam-produksi="jamProduksi"
                     :tampilkan-jam-produksi="gunakanJamProduksi"
                     :tanggal-expired="tanggalExpired"
-                    :jam-expired="jamExpired"
-                    :tampilkan-jam-expired="gunakanJamExpired"
-                    :waktu-maksimal="waktuMaksimal"
+                    :jam-expired="sandboxParams.jamExpired || jamExpired"
+                    :tampilkan-jam-expired="sandboxParams.tampilkanJamExpired !== undefined ? sandboxParams.tampilkanJamExpired : gunakanJamExpired"
+                    :waktu-maksimal="sandboxParams.waktuMaksimal || waktuMaksimal"
                     :teks-larangan-header="teksLaranganHeader"
                     :teks-larangan-sub="teksLaranganSub"
                     :tipe-label="sandboxParams.tipeLabel"
-                    :sub-tipe-tambahan="activeLabelTab === 'tambahan' ? selectedSubTambahan : ''"
+                    :sub-tipe-tambahan="sandboxParams.subTipeTambahan || (sandboxParams.tipeLabel === 'tambahan' ? selectedSubTambahan : '')"
                     :jenis-alergi="sandboxParams.jenisAlergi"
                     :tag-alergi="sandboxParams.tagAlergi"
                     :menu-items="sandboxParams.menuItems"
@@ -7416,7 +6832,7 @@ async function startPrintDirect() {
                 />
                 <LabelCardItem
                     v-else
-                    :key="`${sandboxParams.kelompok?.id || '0'}_${sandboxParams.tipeLabel}_${sandboxParams.jenisAlergi}_${sandboxParams.tagAlergi}_${(sandboxParams.menuItems || []).join('|')}_${sandboxParams.giziData?.energi_pb || ''}_${sandboxParams.giziData?.energi_pk || ''}`"
+                    :key="`${sandboxParams.kelompok?.id || '0'}_${sandboxParams.tipeLabel}_${sandboxParams.subTipeTambahan || ''}_${sandboxParams.jenisAlergi}_${sandboxParams.tagAlergi}_${(sandboxParams.menuItems || []).join('|')}_${sandboxParams.giziData?.energi_pb || ''}_${sandboxParams.giziData?.energi_pk || ''}`"
                     :unit-sppg="unitSppg"
                     :nama-sppg="namaSppg"
                     :zona-waktu="zonaWaktu"
@@ -7425,12 +6841,13 @@ async function startPrintDirect() {
                     :jam-produksi="jamProduksi"
                     :tampilkan-jam-produksi="gunakanJamProduksi"
                     :tanggal-expired="tanggalExpired"
-                    :jam-expired="jamExpired"
-                    :tampilkan-jam-expired="gunakanJamExpired"
-                    :waktu-maksimal="waktuMaksimal"
+                    :jam-expired="sandboxParams.jamExpired || jamExpired"
+                    :tampilkan-jam-expired="sandboxParams.tampilkanJamExpired !== undefined ? sandboxParams.tampilkanJamExpired : gunakanJamExpired"
+                    :waktu-maksimal="sandboxParams.waktuMaksimal || waktuMaksimal"
                     :teks-larangan-header="teksLaranganHeader"
                     :teks-larangan-sub="teksLaranganSub"
                     :tipe-label="sandboxParams.tipeLabel"
+                    :sub-tipe-tambahan="sandboxParams.subTipeTambahan || (sandboxParams.tipeLabel === 'tambahan' ? selectedSubTambahan : '')"
                     :jenis-alergi="sandboxParams.jenisAlergi"
                     :tag-alergi="sandboxParams.tagAlergi"
                     :menu-items="sandboxParams.menuItems"

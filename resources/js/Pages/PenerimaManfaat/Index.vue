@@ -330,6 +330,7 @@ const COLUMN_DEFINITIONS = [
     { key: "gender", label: "Gender (L/P)", default: true },
     { key: "porsi", label: "Porsi (PK/PB)", default: true },
     { key: "total", label: "Total Porsi", default: true },
+    { key: "batas_makan", label: "Waktu Batas Makan", default: true },
     { key: "waktu", label: "Waktu Daftar & Perbaharui", default: true },
     { key: "aksi", label: "Aksi", default: true },
 ];
@@ -342,6 +343,7 @@ const visibleColumns = ref({
     gender: true,
     porsi: true,
     total: true,
+    batas_makan: true,
     waktu: true,
     aksi: true,
 });

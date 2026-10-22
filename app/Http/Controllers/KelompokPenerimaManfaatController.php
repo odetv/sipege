@@ -154,6 +154,7 @@ class KelompokPenerimaManfaatController extends Controller
             'keterangan_alergi.*' => ['nullable'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
+            'rincian.*.waktu_batas_makan' => ['required', 'string', 'max:10'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
             'rincian.*.jumlah_perempuan' => ['required', 'integer', 'min:0'],
         ], [
@@ -179,6 +180,7 @@ class KelompokPenerimaManfaatController extends Controller
             'jumlah_kader.required_if' => 'Jumlah kader posyandu wajib diisi minimal 1 orang.',
             'jumlah_kader.min' => 'Jumlah kader posyandu minimal 1 orang.',
             'rincian.required' => 'Rincian jumlah penerima manfaat wajib diisi.',
+            'rincian.*.waktu_batas_makan.required' => 'Waktu batas makan setiap sub kategori wajib diisi.',
         ]);
 
         DB::transaction(function () use ($validated, $unitSppg) {
@@ -252,6 +254,7 @@ class KelompokPenerimaManfaatController extends Controller
                     'kelompok_penerima_manfaat_id' => $kelompok->id,
                     'sub_kategori' => $item['sub_kategori'],
                     'jenis_porsi' => $jenisPorsi,
+                    'waktu_batas_makan' => $item['waktu_batas_makan'] ?? '10:00',
                     'jumlah_laki_laki' => $l,
                     'jumlah_perempuan' => $p,
                     'total' => $l + $p,
@@ -445,6 +448,7 @@ class KelompokPenerimaManfaatController extends Controller
             'keterangan_alergi.*' => ['nullable'],
             'rincian' => ['required', 'array', 'min:1'],
             'rincian.*.sub_kategori' => ['required', 'string', 'max:255'],
+            'rincian.*.waktu_batas_makan' => ['required', 'string', 'max:10'],
             'rincian.*.jumlah_laki_laki' => ['required', 'integer', 'min:0'],
             'rincian.*.jumlah_perempuan' => ['required', 'integer', 'min:0'],
         ], [
@@ -470,6 +474,7 @@ class KelompokPenerimaManfaatController extends Controller
             'jumlah_kader.required_if' => 'Jumlah kader posyandu wajib diisi minimal 1 orang.',
             'jumlah_kader.min' => 'Jumlah kader posyandu minimal 1 orang.',
             'rincian.required' => 'Rincian jumlah penerima manfaat wajib diisi.',
+            'rincian.*.waktu_batas_makan.required' => 'Waktu batas makan setiap sub kategori wajib diisi.',
         ]);
 
         DB::transaction(function () use ($validated, $penerima_manfaat, $unitSppg) {
@@ -545,6 +550,7 @@ class KelompokPenerimaManfaatController extends Controller
                     'kelompok_penerima_manfaat_id' => $penerima_manfaat->id,
                     'sub_kategori' => $item['sub_kategori'],
                     'jenis_porsi' => $jenisPorsi,
+                    'waktu_batas_makan' => $item['waktu_batas_makan'] ?? '10:00',
                     'jumlah_laki_laki' => $l,
                     'jumlah_perempuan' => $p,
                     'total' => $l + $p,

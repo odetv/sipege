@@ -195,7 +195,9 @@ const filteredPetugas = computed(() => {
             p.nama.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
             p.nik.includes(searchQuery.value);
         const matchesJabatan =
-            filterJabatan.value === "all" || p.jabatan === filterJabatan.value;
+            filterJabatan.value === "all" ||
+            p.jabatan === filterJabatan.value ||
+            (p.jabatan && p.jabatan.toLowerCase().includes(filterJabatan.value.toLowerCase()));
         return matchesSearch && matchesJabatan;
     });
 });
@@ -419,9 +421,13 @@ function getJabatanBadgeClass(jabatan) {
 
                                 <td class="py-2.5 px-3 border-r border-slate-200">
                                     <p class="font-bold text-slate-900 leading-snug">{{ p.nama }}</p>
-                                    <div class="flex items-center gap-1 mt-0.5">
-                                        <span :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(p.jabatan)]">
-                                            {{ p.jabatan }}
+                                    <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                        <span
+                                            v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                            :key="jab"
+                                            :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                        >
+                                            {{ jab }}
                                         </span>
                                         <span v-if="p.status === 'Nonaktif'" class="px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 font-semibold">
                                             Nonaktif

@@ -72,7 +72,9 @@ const filteredPetugas = computed(() => {
             p.nik.includes(searchQuery.value);
 
         const matchesJabatan =
-            filterJabatan.value === "all" || p.jabatan === filterJabatan.value;
+            filterJabatan.value === "all" ||
+            p.jabatan === filterJabatan.value ||
+            (p.jabatan && p.jabatan.toLowerCase().includes(filterJabatan.value.toLowerCase()));
 
         const isTerdaftar = (parseInt(p.iuran_bpjs_tk) || 0) > 0;
         let matchesStatus = true;
@@ -389,9 +391,15 @@ function getJabatanBadgeClass(jabatan) {
                                 </td>
 
                                 <td class="py-2.5 px-3 border-r border-slate-200">
-                                    <span :class="['px-2 py-0.5 rounded text-[10px] border leading-none font-medium', getJabatanBadgeClass(p.jabatan)]">
-                                        {{ p.jabatan }}
-                                    </span>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span
+                                            v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                            :key="jab"
+                                            :class="['px-2 py-0.5 rounded text-[10px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                        >
+                                            {{ jab }}
+                                        </span>
+                                    </div>
                                 </td>
 
                                 <td class="py-2.5 px-2 text-center border-r border-slate-200">

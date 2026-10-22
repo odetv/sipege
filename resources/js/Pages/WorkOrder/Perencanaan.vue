@@ -55,6 +55,8 @@ import {
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
+    getDefaultBatasMakan,
+    getRincianBatasMakanList,
 } from "@/Services/penerimaManfaatConfig";
 import WorkOrderManualEditModal from "./Partials/WorkOrderManualEditModal.vue";
 import GiziPasteModal from "@/Components/GiziPasteModal.vue";
@@ -96,7 +98,16 @@ const currentTab = ref(props.activeTab || "perencanaan");
 // ─── STATE PERENCANAAN PRODUKSI (STEP 1) ────────────────────────────────────
 const isEditMode = ref(false);
 const editingWoId = ref(null);
+const isMetodeWoSelected = ref(false); // Wajib diklik terlebih dahulu oleh user agar dinyatakan terisi
 const metodeWo = ref("sistem"); // 'sistem' | 'manual'
+
+function pilihMetodeWo(mode) {
+    if (isEditMode.value) return;
+    metodeWo.value = mode;
+    isMetodeWoSelected.value = true;
+    activeManualTab.value = "perencanaan";
+    clearError("metodeWo");
+}
 
 // Tab Khusus Mode Manual: 'perencanaan' | 'formula'
 const activeManualTab = ref(
@@ -959,11 +970,11 @@ const DEFAULT_JADWAL_OPERASIONAL = {
     },
 };
 
-// Jumlah Sesi Operasional per Kategori (Fleksibel, bisa ditambah sesuai kebutuhan)
+// Jumlah Sesi Operasional per Kategori (Default 1 Sesi untuk semua kategori)
 const sesiCount = ref({
-    pengolahan: 2,
-    pemorsian: 2,
-    distribusi: 2,
+    pengolahan: 1,
+    pemorsian: 1,
+    distribusi: 1,
     pengambilan_ompreng: 1,
     pencucian_ompreng: 1,
 });
@@ -1005,9 +1016,9 @@ function hapusSesi(category, sesiNum) {
 function loadSesiCountFromSource(source) {
     if (!source || typeof source !== "object") {
         return {
-            pengolahan: 2,
-            pemorsian: 2,
-            distribusi: 2,
+            pengolahan: 1,
+            pemorsian: 1,
+            distribusi: 1,
             pengambilan_ompreng: 1,
             pencucian_ompreng: 1,
         };
@@ -1059,11 +1070,8 @@ function loadSesiCountFromSource(source) {
 const EMPTY_JADWAL_OPERASIONAL = {
     persiapan: { mulai: "", selesai: "" },
     pengolahan_sesi_1: { mulai: "", selesai: "" },
-    pengolahan_sesi_2: { mulai: "", selesai: "" },
     pemorsian_sesi_1: { mulai: "", selesai: "" },
-    pemorsian_sesi_2: { mulai: "", selesai: "" },
     distribusi_sesi_1: { mulai: "", selesai: "" },
-    distribusi_sesi_2: { mulai: "", selesai: "" },
     pengambilan_ompreng: { mulai: "", selesai: "" },
     pencucian_ompreng: { mulai: "", selesai: "" },
 };
@@ -1273,10 +1281,12 @@ function resetJadwalOperasionalToDefault() {
     };
 
     clearError("jadwal_operasional");
-    Object.keys(activeJadwalList.value).forEach((k) => {
-        clearError("jadwal_" + k);
-        clearError("jadwal_" + k + "_mulai");
-        clearError("jadwal_" + k + "_selesai");
+    nextTick(() => {
+        Object.keys(activeJadwalList.value).forEach((k) => {
+            clearError("jadwal_" + k);
+            clearError("jadwal_" + k + "_mulai");
+            clearError("jadwal_" + k + "_selesai");
+        });
     });
 }
 
@@ -1345,6 +1355,11 @@ function normalizeKelompokForWo(k) {
             jenis_porsi:
                 r.jenis_porsi ||
                 getJenisPorsiBySubKategori(r.sub_kategori, k.kategori),
+            is_menerima:
+                r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
+            waktu_batas_makan:
+                r.waktu_batas_makan ||
+                getDefaultBatasMakan(k.nama_kelompok, r.sub_kategori),
             jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
             jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
             total:
@@ -1358,6 +1373,8 @@ function normalizeKelompokForWo(k) {
                 id: null,
                 sub_kategori: sub,
                 jenis_porsi: jp,
+                is_menerima: true,
+                waktu_batas_makan: getDefaultBatasMakan(k.nama_kelompok, sub),
                 jumlah_laki_laki: 0,
                 jumlah_perempuan: 0,
                 total: 0,
@@ -1446,6 +1463,7 @@ function handleOpenModalEditPm(kelompok) {
     editFormRincian.value = JSON.parse(JSON.stringify(kelompok.rincian || [])).map((r) => ({
         ...r,
         is_menerima: r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
+        waktu_batas_makan: r.waktu_batas_makan || getDefaultBatasMakan(kelompok.nama_kelompok, r.sub_kategori),
     }));
     editFormKeteranganAlergi.value = JSON.parse(
         JSON.stringify(kelompok.keterangan_alergi || []),
@@ -1522,6 +1540,7 @@ function handleSimpanEditDetailPm() {
             jumlah_laki_laki: jmlL,
             jumlah_perempuan: jmlP,
             total: isMenerima ? (jmlL + jmlP) : 0,
+            waktu_batas_makan: r.waktu_batas_makan || getDefaultBatasMakan(editingKelompok.value?.nama_kelompok, r.sub_kategori),
         };
     });
 
@@ -1905,6 +1924,17 @@ function scrollToFirstError() {
             }
         }
 
+        if (validationErrors.value.metodeWo) {
+            const metodeEl = document.getElementById("container-pilihan-metode-wo");
+            if (metodeEl) {
+                metodeEl.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+                return;
+            }
+        }
+
         // Jika ada error di field atas, cari input/kontrol form error pertama
         const firstErrorEl = document.querySelector(
             "input.border-rose-400, input.border-rose-500, select.border-rose-400, select.border-rose-500, textarea.border-rose-400, textarea.border-rose-500, [data-error-target], #error-kelompok-target",
@@ -1943,6 +1973,10 @@ function scrollToFirstError() {
 
 function validateStep1() {
     const errs = {};
+    if (!isMetodeWoSelected.value) {
+        errs.metodeWo =
+            "Opsi tab mode (Sistem atau Manual) wajib diklik terlebih dahulu untuk menentukan alur kerja Work Order.";
+    }
     if (!tanggalRencana.value) {
         errs.tanggalRencana = "Tanggal rencana masak & distribusi wajib diisi.";
     } else {
@@ -2366,6 +2400,7 @@ function initForm(targetWo = null) {
         isEditMode.value = true;
         editingWoId.value = targetWo.id;
         metodeWo.value = targetWo.metode_wo || "sistem";
+        isMetodeWoSelected.value = true; // Mode edit: mode sudah ada dan terkunci
         tanggalRencana.value = targetWo.tanggal_distribusi;
         namaMenuAktif.value = targetWo.nama_menu || "";
 
@@ -2437,9 +2472,9 @@ function initForm(targetWo = null) {
             };
         } else {
             sesiCount.value = {
-                pengolahan: 2,
-                pemorsian: 2,
-                distribusi: 2,
+                pengolahan: 1,
+                pemorsian: 1,
+                distribusi: 1,
                 pengambilan_ompreng: 1,
                 pencucian_ompreng: 1,
             };
@@ -2468,8 +2503,14 @@ function initForm(targetWo = null) {
                     if (
                         Array.isArray(found.rincian) &&
                         found.rincian.length > 0
-                    )
-                        norm.rincian = found.rincian;
+                    ) {
+                        norm.rincian = found.rincian.map((r) => ({
+                            ...r,
+                            waktu_batas_makan:
+                                r.waktu_batas_makan ||
+                                getDefaultBatasMakan(master.nama_kelompok, r.sub_kategori),
+                        }));
+                    }
                     if (
                         Array.isArray(found.detail_alergi) &&
                         found.detail_alergi.length > 0
@@ -2636,6 +2677,7 @@ function initForm(targetWo = null) {
         isEditMode.value = false;
         editingWoId.value = null;
         metodeWo.value = "sistem";
+        isMetodeWoSelected.value = false; // Mode baru: wajib diklik oleh user
         activeManualTab.value = "perencanaan";
         tanggalRencana.value = getInitialAvailableDate();
         namaMenuAktif.value = "";
@@ -2676,6 +2718,13 @@ function initForm(targetWo = null) {
         };
         akgAlergi.value = {};
         catatanResep.value = "";
+        sesiCount.value = {
+            pengolahan: 1,
+            pemorsian: 1,
+            distribusi: 1,
+            pengambilan_ompreng: 1,
+            pencucian_ompreng: 1,
+        };
         resetJadwalOperasionalToEmpty();
         woKelompokList.value = props.kelompokList.map(normalizeKelompokForWo);
         organoleptikIsManuallyEdited.value = false;
@@ -3139,71 +3188,102 @@ onUnmounted(() => {
 
                             <!-- Toggle Pilihan Metode: Sistem vs Manual (Terkunci saat Mode Edit) -->
                             <div
-                                class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start md:self-auto"
+                                id="container-pilihan-metode-wo"
+                                data-error-target="metodeWo"
+                                class="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 self-start md:self-auto"
                             >
-                                <button
-                                    type="button"
-                                    :disabled="isEditMode"
-                                    @click="
-                                        if (!isEditMode) {
-                                            metodeWo = 'sistem';
-                                            activeManualTab = 'perencanaan';
-                                        }
-                                    "
+                                <div
+                                    class="flex items-center gap-1.5 p-1 rounded-xl border transition-all"
                                     :class="[
-                                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
-                                        metodeWo === 'sistem'
-                                            ? 'bg-white text-primary shadow-2xs font-black'
-                                            : 'text-slate-600 hover:text-slate-900',
-                                        isEditMode
-                                            ? 'cursor-not-allowed opacity-60 select-none'
-                                            : 'cursor-pointer',
+                                        validationErrors.metodeWo
+                                            ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-200'
+                                            : isMetodeWoSelected
+                                                ? (metodeWo === 'manual' ? 'bg-amber-50/80 border-amber-300' : 'bg-primary/5 border-primary/30')
+                                                : 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-200/60'
                                     ]"
-                                    :title="
-                                        isEditMode
-                                            ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
-                                            : 'Pilih Mode Sistem'
-                                    "
                                 >
-                                    <span>Sistem</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    :disabled="isEditMode"
-                                    @click="
-                                        if (!isEditMode) {
-                                            metodeWo = 'manual';
-                                            activeManualTab = 'perencanaan';
-                                        }
-                                    "
-                                    :class="[
-                                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
-                                        metodeWo === 'manual'
-                                            ? 'bg-amber-600 text-white shadow-2xs font-black'
-                                            : 'text-amber-900 hover:text-amber-950',
-                                        isEditMode
-                                            ? 'cursor-not-allowed opacity-60 select-none'
-                                            : 'cursor-pointer',
-                                    ]"
-                                    :title="
-                                        isEditMode
-                                            ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
-                                            : 'Pilih Mode Manual'
-                                    "
-                                >
-                                    <span>Manual</span>
-                                </button>
+                                    <button
+                                        type="button"
+                                        :disabled="isEditMode"
+                                        @click="pilihMetodeWo('sistem')"
+                                        :class="[
+                                            'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
+                                            isMetodeWoSelected && metodeWo === 'sistem'
+                                                ? 'bg-primary text-white shadow-2xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900 bg-white/70 hover:bg-white',
+                                            isEditMode
+                                                ? 'cursor-not-allowed opacity-60 select-none'
+                                                : 'cursor-pointer',
+                                        ]"
+                                        :title="
+                                            isEditMode
+                                                ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
+                                                : 'Pilih Mode Sistem'
+                                        "
+                                    >
+                                        <Check v-if="isMetodeWoSelected && metodeWo === 'sistem'" class="h-3.5 w-3.5 text-white" />
+                                        <span>Sistem</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :disabled="isEditMode"
+                                        @click="pilihMetodeWo('manual')"
+                                        :class="[
+                                            'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
+                                            isMetodeWoSelected && metodeWo === 'manual'
+                                                ? 'bg-amber-600 text-white shadow-2xs font-black'
+                                                : 'text-slate-600 hover:text-slate-900 bg-white/70 hover:bg-white',
+                                            isEditMode
+                                                ? 'cursor-not-allowed opacity-60 select-none'
+                                                : 'cursor-pointer',
+                                        ]"
+                                        :title="
+                                            isEditMode
+                                                ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
+                                                : 'Pilih Mode Manual'
+                                        "
+                                    >
+                                        <Check v-if="isMetodeWoSelected && metodeWo === 'manual'" class="h-3.5 w-3.5 text-white" />
+                                        <span>Manual</span>
+                                    </button>
 
-                                <span
-                                    v-if="isEditMode"
-                                    class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-bold flex items-center gap-1 ml-0.5 border border-amber-200/80"
-                                    title="Metode Work Order tidak dapat diubah saat mengedit Work Order yang sudah ada"
-                                >
-                                    <Lock class="h-3 w-3 text-amber-700" />
-                                    <span>Terkunci</span>
-                                </span>
+                                    <span
+                                        v-if="isEditMode"
+                                        class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-bold flex items-center gap-1 ml-0.5 border border-amber-200/80"
+                                        title="Metode Work Order tidak dapat diubah saat mengedit Work Order yang sudah ada"
+                                    >
+                                        <Lock class="h-3 w-3 text-amber-700" />
+                                        <span>Terkunci</span>
+                                    </span>
+                                </div>
+
+                                <!-- Indikator Status Wajib Klik / Terpilih -->
+                                <div class="flex items-center gap-1.5">
+                                    <span
+                                        v-if="!isMetodeWoSelected"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-800 bg-amber-100/90 border border-amber-300 animate-pulse shadow-2xs"
+                                    >
+                                        <AlertCircle class="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                        <span>Wajib Klik Salah Satu Mode</span>
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs"
+                                        :class="metodeWo === 'manual' ? 'text-amber-900 bg-amber-100/90 border border-amber-300' : 'text-emerald-800 bg-emerald-100/90 border border-emerald-300'"
+                                    >
+                                        <CheckCircle2 class="h-3.5 w-3.5 shrink-0" :class="metodeWo === 'manual' ? 'text-amber-700' : 'text-emerald-700'" />
+                                        <span>Mode {{ metodeWo === 'manual' ? 'Manual' : 'Sistem' }} Terpilih</span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
+                        <p
+                            v-if="validationErrors.metodeWo"
+                            class="text-xs font-bold text-rose-600 flex items-center gap-1.5 mt-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg"
+                        >
+                            <AlertTriangle class="h-4 w-4 text-rose-500 shrink-0" />
+                            <span>{{ validationErrors.metodeWo }}</span>
+                        </p>
                     </CardHeader>
                     <CardContent className="p-5 sm:p-6 space-y-6">
                         <!-- Form Identitas Perencanaan Produksi (1 Baris Bagi 3) -->
@@ -4937,6 +5017,9 @@ onUnmounted(() => {
                                                 >
                                                     Total PM
                                                 </th>
+                                                <th class="py-3.5 px-3 min-w-[200px]">
+                                                    Waktu Batas Makan
+                                                </th>
                                                 <th class="py-3.5 px-3">
                                                     Status Alergi
                                                 </th>
@@ -5074,6 +5157,43 @@ onUnmounted(() => {
                                                     "
                                                 >
                                                     {{ k.total_penerima }}
+                                                </td>
+
+                                                <!-- Waktu Batas Makan (Rincian per Kategori) -->
+                                                <td class="p-3 align-middle">
+                                                    <div
+                                                        v-if="getRincianBatasMakanList(k).length > 0"
+                                                        class="space-y-1 py-0.5"
+                                                    >
+                                                        <div
+                                                            v-for="(r, rIdx) in getRincianBatasMakanList(k)"
+                                                            :key="rIdx"
+                                                            class="flex items-center justify-between gap-2 text-[11px]"
+                                                            :class="
+                                                                k.status_menerima === false || r.is_menerima === false
+                                                                    ? 'text-slate-400 line-through opacity-70'
+                                                                    : 'text-slate-700'
+                                                            "
+                                                        >
+                                                            <span class="font-medium truncate max-w-[140px]">
+                                                                {{ r.sub_kategori }}:
+                                                            </span>
+                                                            <span
+                                                                class="inline-flex items-center px-1.5 py-0.5 rounded font-mono font-black text-[10px] border shadow-2xs shrink-0"
+                                                                :class="
+                                                                    k.status_menerima === false || r.is_menerima === false
+                                                                        ? 'bg-slate-100 text-slate-400 border-slate-200'
+                                                                        : r.waktu_batas_makan === '14:00'
+                                                                          ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                                          : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                                                "
+                                                            >
+                                                                <Clock class="h-2.5 w-2.5 mr-1 inline shrink-0" />
+                                                                {{ r.waktu_batas_makan || '10:00' }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <span v-else class="text-[11px] text-slate-400 italic">-</span>
                                                 </td>
 
                                                 <!-- Alergi (Detail Breakdown per Jenis) -->
@@ -6102,6 +6222,9 @@ onUnmounted(() => {
                                             <th class="p-3">
                                                 Peruntukan Porsi
                                             </th>
+                                            <th class="p-3 text-center min-w-[110px]">
+                                                Batas Makan
+                                            </th>
                                             <th
                                                 class="p-3 text-center min-w-[100px]"
                                             >
@@ -6166,6 +6289,19 @@ onUnmounted(() => {
                                                 >
                                                     {{ r.jenis_porsi }}
                                                 </Badge>
+                                            </td>
+                                            <td class="p-2 text-center whitespace-nowrap">
+                                                <input
+                                                    type="time"
+                                                    :disabled="r.is_menerima === false"
+                                                    v-model="r.waktu_batas_makan"
+                                                    :class="[
+                                                        'w-24 text-center text-xs font-semibold rounded-lg p-1.5 focus:ring-primary focus:border-primary',
+                                                        r.is_menerima !== false
+                                                            ? 'border-slate-300 bg-white text-slate-900'
+                                                            : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                    ]"
+                                                />
                                             </td>
                                             <td class="p-2 text-center">
                                                 <input

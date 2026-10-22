@@ -16,6 +16,7 @@ import {
     RotateCcw,
     HeartPulse,
 } from "lucide-vue-next";
+import { getRincianBatasMakanList } from "@/Services/penerimaManfaatConfig";
 
 defineProps({
     filteredKelompokList: {
@@ -142,6 +143,12 @@ function formatDateTimeWita(dateString) {
                             class="py-3.5 px-4 text-center w-28"
                         >
                             Total Porsi
+                        </th>
+                        <th
+                            v-if="visibleColumns.batas_makan"
+                            class="py-3.5 px-4 min-w-[200px]"
+                        >
+                            Waktu Batas Makan
                         </th>
                         <th
                             v-if="visibleColumns.waktu"
@@ -445,6 +452,36 @@ function formatDateTimeWita(dateString) {
                             >
                                 {{ item.total_penerima }}
                             </span>
+                        </td>
+
+                        <!-- Waktu Batas Makan (Rincian per Kategori) -->
+                        <td v-if="visibleColumns.batas_makan" class="py-4 px-4 align-middle">
+                            <div
+                                v-if="getRincianBatasMakanList(item).length > 0"
+                                class="space-y-1 py-0.5"
+                            >
+                                <div
+                                    v-for="(r, rIdx) in getRincianBatasMakanList(item)"
+                                    :key="rIdx"
+                                    class="flex items-center justify-between gap-2 text-[11px] text-slate-700"
+                                >
+                                    <span class="font-medium truncate max-w-[130px]">
+                                        {{ r.sub_kategori }}:
+                                    </span>
+                                    <span
+                                        class="inline-flex items-center px-1.5 py-0.5 rounded font-mono font-black text-[10px] border shadow-2xs shrink-0"
+                                        :class="
+                                            r.waktu_batas_makan === '14:00'
+                                                ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                        "
+                                    >
+                                        <Clock class="h-2.5 w-2.5 mr-1 inline shrink-0" />
+                                        {{ r.waktu_batas_makan || '10:00' }}
+                                    </span>
+                                </div>
+                            </div>
+                            <span v-else class="text-[11px] text-slate-400 italic">-</span>
                         </td>
 
                         <!-- Terdaftar Pada & Terakhir Diperbaharui -->

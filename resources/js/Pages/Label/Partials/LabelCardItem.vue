@@ -99,6 +99,10 @@ const props = defineProps({
         type: String,
         default: "",
     },
+    subTipeTambahan: {
+        type: String,
+        default: "",
+    },
 });
 
 const topIsolasiHeightPx = computed(() => {
@@ -140,28 +144,28 @@ const dyn = computed(() => {
         menuBadgePadding: `0 ${Math.round(12 * Math.min(1.25, s))}px`,
         bodyGap: Math.round(8 * s) + "px",
         leftColGap: Math.round(5 * s) + "px",
-        tglLabelFontSize: (9 * s).toFixed(1) + "px",
-        tglLabelMarginBottom: Math.round(5 * s) + "px",
-        tglBoxHeight: Math.round(26 * s) + "px",
-        tglBoxFontSize: (isShowingTime ? 10.5 * s : 13.5 * s).toFixed(1) + "px",
-        waktuBoxHeight: Math.round(36 * s) + "px",
-        waktuHeaderFontSize: (7.5 * s).toFixed(1) + "px",
-        waktuSubFontSize: (isShowingExpiredTime ? 10 * s : 11 * s).toFixed(1) + "px",
-        laranganBoxHeight: Math.round(38 * s) + "px",
-        laranganHeaderFontSize: (7.5 * s).toFixed(1) + "px",
-        laranganSubFontSize: (9.5 * s).toFixed(1) + "px",
+        tglLabelFontSize: (9.2 * s).toFixed(1) + "px",
+        tglLabelMarginBottom: Math.round(4 * s) + "px",
+        tglBoxHeight: Math.round(28 * s) + "px",
+        tglBoxFontSize: (isShowingTime ? 11 * s : 14 * s).toFixed(1) + "px",
+        waktuBoxHeight: Math.round(58 * s) + "px",
+        waktuHeaderFontSize: (9.5 * s).toFixed(1) + "px",
+        waktuSubFontSize: (isShowingExpiredTime ? 15 * s : 16 * s).toFixed(1) + "px",
+        laranganBoxHeight: Math.round(52 * s) + "px",
+        laranganHeaderFontSize: (9.8 * s).toFixed(1) + "px",
+        laranganSubFontSize: (13 * s).toFixed(1) + "px",
         rightColWidth: Math.round(176 * Math.min(1.2, s)) + "px",
         rightColPaddingLeft: Math.round(8 * s) + "px",
-        giziTitleFontSize: (9.5 * s).toFixed(1) + "px",
-        giziTitleMarginBottom: Math.round(4.5 * s) + "px",
-        tableSpacingY: Math.round(2.5 * s) + "px",
+        giziTitleFontSize: (10 * s).toFixed(1) + "px",
+        giziTitleMarginBottom: Math.round(4 * s) + "px",
+        tableSpacingY: Math.round(3.5 * s) + "px",
         tablePorsiColWidth: Math.round(36 * Math.min(1.2, s)) + "px",
-        tableRowHeight: Math.round(15 * s) + "px",
-        tableHeaderRowHeight: Math.round(19 * s) + "px",
-        tableLabelFontSize: (7.5 * s).toFixed(1) + "px",
-        tableUnitFontSize: (6 * s).toFixed(1) + "px",
-        tableValueFontSize: (7.5 * s).toFixed(1) + "px",
-        tableHeaderFontSize: (6.5 * s).toFixed(1) + "px",
+        tableRowHeight: Math.round(20 * s) + "px",
+        tableHeaderRowHeight: Math.round(23 * s) + "px",
+        tableLabelFontSize: (9 * s).toFixed(1) + "px",
+        tableUnitFontSize: (7 * s).toFixed(1) + "px",
+        tableValueFontSize: (9.5 * s).toFixed(1) + "px",
+        tableHeaderFontSize: (7.5 * s).toFixed(1) + "px",
     };
 });
 
@@ -252,6 +256,7 @@ const formattedDateDisplay = computed(() => {
 });
 
 const formattedWaktuMaksimalDisplay = computed(() => {
+    if (isTambahan.value) return "";
     if (
         props.tampilkanJamExpired &&
         props.jamExpired &&
@@ -264,6 +269,7 @@ const formattedWaktuMaksimalDisplay = computed(() => {
 });
 
 const headerWaktuMaksimalDisplay = computed(() => {
+    if (isTambahan.value) return "";
     if (
         props.tampilkanJamExpired &&
         props.jamExpired &&
@@ -291,6 +297,9 @@ const bannerBadgeText = computed(() => {
         return "⚠️ MENU ALERGI";
     }
     if (isTambahan.value) {
+        if (props.subTipeTambahan === "organoleptik") return "🔬 UJI ORGANOLEPTIK";
+        if (props.subTipeTambahan === "sampel") return "🧪 SAMPEL MAKANAN";
+        if (props.subTipeTambahan === "buffer") return "📦 BUFFER PRODUKSI";
         return "➕ PORSI TAMBAHAN";
     }
     return "MENU";
@@ -617,37 +626,39 @@ const resolvedGizi = computed(() => {
                             height: dyn.waktuBoxHeight,
                         }"
                     >
-                        <div
-                            :style="{
-                                fontSize: dyn.waktuHeaderFontSize,
-                                fontWeight: '900',
-                                color: '#c2410c',
-                                letterSpacing: '0.2px',
-                                textTransform: 'uppercase',
-                                lineHeight: '1',
-                                margin: '0',
-                                marginBottom: '2px',
-                                padding: '0',
-                                whiteSpace: 'nowrap',
-                                transform: 'translateY(-5.5px)',
-                            }"
-                        >
-                            {{ headerWaktuMaksimalDisplay }}
-                        </div>
-                        <div
-                            :style="{
-                                fontSize: dyn.waktuSubFontSize,
-                                fontWeight: '900',
-                                color: '#9a2c0c',
-                                lineHeight: '1',
-                                margin: '0',
-                                padding: '0',
-                                whiteSpace: 'nowrap',
-                                transform: 'translateY(-5.5px)',
-                            }"
-                        >
-                            {{ formattedWaktuMaksimalDisplay }}
-                        </div>
+                        <template v-if="!isTambahan">
+                            <div
+                                :style="{
+                                    fontSize: dyn.waktuHeaderFontSize,
+                                    fontWeight: '900',
+                                    color: '#c2410c',
+                                    letterSpacing: '0.2px',
+                                    textTransform: 'uppercase',
+                                    lineHeight: '1',
+                                    margin: '0',
+                                    marginBottom: '3px',
+                                    padding: '0',
+                                    whiteSpace: 'nowrap',
+                                    transform: 'translateY(-6.5px)',
+                                }"
+                            >
+                                {{ headerWaktuMaksimalDisplay }}
+                            </div>
+                            <div
+                                :style="{
+                                    fontSize: dyn.waktuSubFontSize,
+                                    fontWeight: '900',
+                                    color: '#9a2c0c',
+                                    lineHeight: '1',
+                                    margin: '0',
+                                    padding: '0',
+                                    whiteSpace: 'nowrap',
+                                    transform: 'translateY(-6.5px)',
+                                }"
+                            >
+                                {{ formattedWaktuMaksimalDisplay }}
+                            </div>
+                        </template>
                     </div>
 
                     <!-- 3. Box Merah LARANGAN KONSUMSI DI TEMPAT -->
@@ -676,11 +687,11 @@ const resolvedGizi = computed(() => {
                                 textTransform: 'uppercase',
                                 lineHeight: '1',
                                 margin: '0',
-                                marginBottom: '2px',
+                                marginBottom: '3px',
                                 padding: '0',
                                 whiteSpace: 'nowrap',
                                 width: '100%',
-                                transform: 'translateY(-5px)',
+                                transform: 'translateY(-6px)',
                             }"
                         >
                             {{
@@ -700,7 +711,7 @@ const resolvedGizi = computed(() => {
                                 padding: '0',
                                 whiteSpace: 'nowrap',
                                 width: '100%',
-                                transform: 'translateY(-5px)',
+                                transform: 'translateY(-6px)',
                             }"
                         >
                             {{ teksLaranganSub || "DILARANG MEMBAWA PULANG!" }}

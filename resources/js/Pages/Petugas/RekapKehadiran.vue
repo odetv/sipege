@@ -595,8 +595,12 @@ const filteredPetugas = computed(() => {
             if (!matchNama && !matchNik && !matchJabatan) return false;
         }
 
-        if (selectedJabatanFilter.value !== "all" && p.jabatan !== selectedJabatanFilter.value) {
-            return false;
+        if (selectedJabatanFilter.value !== "all") {
+            const jabStr = (p.jabatan || "").toLowerCase();
+            const filterVal = selectedJabatanFilter.value.toLowerCase();
+            if (!jabStr.includes(filterVal)) {
+                return false;
+            }
         }
 
         if (selectedStatusFilter.value !== "all" && p.status !== selectedStatusFilter.value) {
@@ -1381,8 +1385,12 @@ function closeDetailModal() {
                                             {{ p.nama }}
                                         </p>
                                         <div class="flex items-center gap-1 mt-0.5 flex-wrap">
-                                            <span :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(p.jabatan)]">
-                                                {{ p.jabatan }}
+                                            <span
+                                                v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                                :key="jab"
+                                                :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                            >
+                                                {{ jab }}
                                             </span>
                                         </div>
                                     </div>

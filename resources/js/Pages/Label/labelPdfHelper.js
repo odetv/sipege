@@ -753,14 +753,15 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     const cardH = 61.05;
 
     // Col widths (Sum = 88.0 mm)
-    const wA = 17.65;
-    const wB = 17.65;
-    const wAB = wA + wB; // 35.3 mm
-    const wC = 17.65;
-    const wD = 20.80;
-    const wE = 14.25;
-    const wCDE = wC + wD + wE; // 52.7 mm
-    const wBC = wB + wC; // 35.3 mm
+    // 5 kolom dibuat seragam dan seimbang (Col D dan Col E / Porsi Kecil & Porsi Besar sama lebar)
+    const wA = 17.60;
+    const wB = 17.60;
+    const wAB = wA + wB; // 35.20 mm
+    const wC = 17.60;
+    const wD = 17.60;
+    const wE = 17.60;
+    const wCDE = wC + wD + wE; // 52.80 mm
+    const wBC = wB + wC; // 35.20 mm
 
     // Row heights (Sum = 61.05 mm)
     const hR1 = 14.10;   // Row 1: Area Perekat
@@ -790,20 +791,20 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
         return defaultRgb;
     };
 
-    // Colors from globalConfig or defaults
+    // Colors from globalConfig or defaults (default is pure white / uncolored [255, 255, 255])
     const customColors = globalConfig.template02Colors || globalConfig.customColors || {};
     const colAreaPerekat = hexToRgb(customColors.areaPerekat, [255, 255, 255]);
     const colHeaderSppg  = hexToRgb(customColors.headerSppg, [255, 255, 255]);
-    const colMenuHeader  = hexToRgb(customColors.menuLabel, [157, 195, 230]);   // #9DC3E6
-    const colMenuBody    = hexToRgb(customColors.menuValue, [189, 215, 238]);   // #BDD7EE
-    const colTglHeader   = hexToRgb(customColors.tglLabel, [157, 195, 230]);    // #9DC3E6
-    const colTglBody     = hexToRgb(customColors.tglValue, [189, 215, 238]);    // #BDD7EE
-    const colBatasHeader = hexToRgb(customColors.batasKonsumsi, [157, 195, 230]); // #9DC3E6
-    const colBatasBody   = hexToRgb(customColors.batasKonsumsiVal, [189, 215, 238]); // #BDD7EE
-    const colGreenSoft   = hexToRgb(customColors.kontak, [226, 239, 218]);      // #E2EFDA
-    const colYellowHead  = hexToRgb(customColors.giziHeader, [255, 230, 153]);  // #FFE699
-    const colYellowBody  = hexToRgb(customColors.giziBody, [255, 242, 204]);    // #FFF2CC
-    const colGoldWarning = hexToRgb(customColors.footer, [255, 192, 0]);       // #FFC000
+    const colMenuHeader  = hexToRgb(customColors.menuLabel, [255, 255, 255]);
+    const colMenuBody    = hexToRgb(customColors.menuValue, [255, 255, 255]);
+    const colTglHeader   = hexToRgb(customColors.tglLabel, [255, 255, 255]);
+    const colTglBody     = hexToRgb(customColors.tglValue, [255, 255, 255]);
+    const colBatasHeader = hexToRgb(customColors.batasKonsumsi, [255, 255, 255]);
+    const colBatasBody   = hexToRgb(customColors.batasKonsumsiVal, [255, 255, 255]);
+    const colGreenSoft   = hexToRgb(customColors.kontak, [255, 255, 255]);
+    const colYellowHead  = hexToRgb(customColors.giziHeader, [255, 255, 255]);
+    const colYellowBody  = hexToRgb(customColors.giziBody, [255, 255, 255]);
+    const colGoldWarning = hexToRgb(customColors.footer, [255, 255, 255]);
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
@@ -946,11 +947,21 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
     }
     doc.text(tglText, x + wA + (wBC / 2), yR5 + 4.3, { align: "center" });
 
-    const waktuText = formatWaktuTpl02(globalConfig.waktuMaksimal, globalConfig.jamExpired, globalConfig.zonaWaktu, globalConfig.tampilkanJamExpired);
+    const waktuMaksimalToUse = item?.waktuMaksimal || globalConfig.waktuMaksimal;
+    const jamExpiredToUse = item?.jamExpired || globalConfig.jamExpired;
+    const tampilkanJamExpiredToUse = item?.tampilkanJamExpired !== undefined
+        ? item.tampilkanJamExpired
+        : globalConfig.tampilkanJamExpired;
+    const waktuText = formatWaktuTpl02(waktuMaksimalToUse, jamExpiredToUse, globalConfig.zonaWaktu, tampilkanJamExpiredToUse);
     const wDE = wD + wE; // 35.05 mm
+    const isTambahan = item?.tipeLabel === "tambahan";
     const isMergedWaktu = shouldMergeWaktuBatas(waktuText);
 
-    if (isMergedWaktu) {
+    if (isTambahan) {
+        // KHUSUS PORSI TAMBAHAN: Di-merge & Kosongkan tanpa teks apapun
+        doc.setFillColor(...colBatasHeader);
+        doc.rect(x + wA + wBC, yR5, wDE, hR5, "FD");
+    } else if (isMergedWaktu) {
         // MERGE: Kotak D & E digabung menjadi satu banner rapi
         doc.setFillColor(...colBatasHeader);
         doc.rect(x + wA + wBC, yR5, wDE, hR5, "FD");
@@ -975,8 +986,15 @@ export function drawTemplate02Card(doc, x, y, item = {}, globalConfig = {}) {
         doc.rect(x + wA + wBC + wD, yR5, wE, hR5, "FD");
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(5.6);
-        doc.text(waktuText, x + wA + wBC + wD + (wE / 2), yR5 + 4.1, { align: "center" });
+        const lenWaktu = String(waktuText).length;
+        let waktuFontSize = 7.5;
+        if (lenWaktu > 12) {
+            waktuFontSize = 6.0;
+        } else if (lenWaktu > 9) {
+            waktuFontSize = 6.9;
+        }
+        doc.setFontSize(waktuFontSize);
+        doc.text(waktuText, x + wA + wBC + wD + (wE / 2), yR5 + 4.25, { align: "center" });
     }
 
     // ================= 5. ROW 6-11: KONTAK PENGADUAN & GIZI =================

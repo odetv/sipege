@@ -89,6 +89,7 @@ const presetJamDivisi = {
     "Cuci Ompreng (Koordinator)": { type: "normal", mulai: "12:00", selesai: "20:00" },
     "Cuci Ompreng": { type: "normal", mulai: "12:00", selesai: "20:00" },
     "Cuci Ompreng (a.k.a Admin)": { type: "normal", mulai: "12:00", selesai: "20:00" },
+    "Admin": { type: "normal", mulai: "07:00", selesai: "16:00" },
     "Kebersihan": {
         type: "kustom",
         shifts: [
@@ -137,10 +138,32 @@ const listOpsiJabatan = [
     "Pengemudi (Koordinator 2)",
     "Cuci Ompreng",
     "Cuci Ompreng (Koordinator)",
-    "Cuci Ompreng (a.k.a Admin)",
+    "Admin",
     "Kebersihan",
     "Keamanan",
 ];
+
+// Helper Parser Multi-Jabatan
+function parseJabatanList(str) {
+    if (!str) return [];
+    const normalized = str
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
+}
+
+// Helper Filter Multi-Jabatan
+function matchJabatan(petugasJabatan, filterVal) {
+    if (!filterVal || filterVal === "all") return true;
+    const list = parseJabatanList(petugasJabatan);
+    return (
+        list.some((j) => j.toLowerCase() === filterVal.toLowerCase()) ||
+        (petugasJabatan || "").toLowerCase().includes(filterVal.toLowerCase())
+    );
+}
 
 // Preset Bank Options Dropdown
 const listOpsiBank = [
@@ -170,6 +193,7 @@ function getJabatanBadgeClass(jabatan) {
     if (j.includes("pemorsian")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-sky-50 text-sky-700 border-sky-200";
     if (j.includes("cuci")) return "bg-cyan-50 text-cyan-700 border-cyan-200";
+    if (j.includes("admin")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     if (j.includes("kebersihan")) return "bg-purple-50 text-purple-700 border-purple-200";
     if (j.includes("keamanan")) return "bg-rose-50 text-rose-700 border-rose-200";
     return "bg-slate-50 text-slate-700 border-slate-200";
@@ -229,9 +253,9 @@ const filteredPetugas = computed(() => {
             }
         }
 
-        // Filter Jabatan
+        // Filter Jabatan (Mendukung Multi-Jabatan)
         if (selectedJabatanFilter.value !== "all") {
-            if (p.jabatan !== selectedJabatanFilter.value) {
+            if (!matchJabatan(p.jabatan, selectedJabatanFilter.value)) {
                 return false;
             }
         }
@@ -273,6 +297,7 @@ const displayBpjsTk = ref("16.800");
 
 // State validasi lokal real-time
 const clientErrors = ref({});
+const selectedJabatans = ref([]);
 
 const form = useForm({
     nama: "",
@@ -426,23 +451,53 @@ function parseJamKerjaToInputs(str) {
     }
 }
 
-// Handler saat Jabatan dropdown dipilih
-function onJabatanChange() {
-    if (!form.jabatan) return;
-    delete clientErrors.value.jabatan;
-
-    const preset = presetJamDivisi[form.jabatan];
-    if (preset) {
-        if (preset.type === "kustom") {
-            tipeJamKerja.value = "kustom";
-            customShifts.value = JSON.parse(JSON.stringify(preset.shifts));
-        } else {
-            tipeJamKerja.value = "normal";
-            jamMulai.value = preset.mulai;
-            jamSelesai.value = preset.selesai;
-        }
-        syncJamKerja();
+// ─── Multi-Jabatan Handlers ──────────────────────────────────────────────────
+function syncSelectedJabatans() {
+    form.jabatan = selectedJabatans.value.join(", ");
+    if (selectedJabatans.value.length > 0) {
+        delete clientErrors.value.jabatan;
+        delete form.errors.jabatan;
     }
+
+    // Auto preset jam kerja jika ada jabatan yang punya preset
+    for (const jab of selectedJabatans.value) {
+        const preset = presetJamDivisi[jab];
+        if (preset) {
+            if (preset.type === "kustom") {
+                tipeJamKerja.value = "kustom";
+                customShifts.value = JSON.parse(JSON.stringify(preset.shifts));
+            } else {
+                tipeJamKerja.value = "normal";
+                jamMulai.value = preset.mulai;
+                jamSelesai.value = preset.selesai;
+            }
+            syncJamKerja();
+            break;
+        }
+    }
+}
+
+function toggleJabatan(jab) {
+    if (!jab) return;
+    if (selectedJabatans.value.includes(jab)) {
+        selectedJabatans.value = selectedJabatans.value.filter((j) => j !== jab);
+    } else {
+        selectedJabatans.value.push(jab);
+    }
+    syncSelectedJabatans();
+}
+
+function addJabatan(jab) {
+    if (!jab) return;
+    if (!selectedJabatans.value.includes(jab)) {
+        selectedJabatans.value.push(jab);
+    }
+    syncSelectedJabatans();
+}
+
+function removeJabatan(jab) {
+    selectedJabatans.value = selectedJabatans.value.filter((j) => j !== jab);
+    syncSelectedJabatans();
 }
 
 // Handler Nomor HP (wajib diawali 62 dan hanya angka)
@@ -537,8 +592,8 @@ function validateForm() {
         errors.email = "Email aktif wajib diisi dengan format valid (contoh: nama@domain.com).";
     }
 
-    if (!form.jabatan) {
-        errors.jabatan = "Jabatan / Divisi wajib dipilih dari dropdown.";
+    if (!form.jabatan || selectedJabatans.value.length === 0) {
+        errors.jabatan = "Jabatan / Divisi wajib dipilih (minimal 1 jabatan).";
     }
 
     if (!form.jenis_bank || form.jenis_bank.trim().length === 0) {
@@ -594,6 +649,7 @@ function openCreateModal() {
     clientErrors.value = {};
     form.reset();
     form.clearErrors();
+    selectedJabatans.value = [];
 
     form.jenis_kelamin = "L";
     form.status = "Aktif";
@@ -640,7 +696,10 @@ function openEditModal(p) {
     form.alamat = p.alamat || "";
     form.no_telp = p.no_telp || "";
     form.email = p.email || "";
-    form.jabatan = p.jabatan || "";
+
+    selectedJabatans.value = parseJabatanList(p.jabatan);
+    form.jabatan = selectedJabatans.value.join(", ") || p.jabatan || "";
+
     form.jenis_bank = p.jenis_bank || "BNI";
     form.nomor_rekening = p.nomor_rekening || "";
     form.jam_kerja = p.jam_kerja || "";
@@ -667,6 +726,7 @@ function closeFormModal() {
     form.reset();
     form.clearErrors();
     clientErrors.value = {};
+    selectedJabatans.value = [];
 }
 
 function submitForm() {
@@ -901,7 +961,7 @@ watch(
                     </div>
                 </div>
 
-                <!-- Card 5: Estimasi Periodik (14 Hari) -->
+                <!-- Card 5: Estimasi Periodik (10 Hari) -->
                 <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
                     <div class="p-2 sm:p-3 rounded-lg bg-teal-50 text-teal-600 shrink-0">
                         <Calendar class="h-4 w-4 sm:h-5 sm:w-5" />
@@ -914,7 +974,7 @@ watch(
                             {{ formatRupiah(summary.total_pengeluaran_periodik) }}
                         </p>
                         <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                            Standar 14 hari
+                            Standar 10 hari
                         </p>
                     </div>
                 </div>
@@ -1085,14 +1145,16 @@ watch(
                                 <!-- Jabatan & Jam Kerja -->
                                 <td class="px-4 py-3.5">
                                     <div class="space-y-1.5">
-                                        <div>
+                                        <div class="flex flex-wrap gap-1">
                                             <span
+                                                v-for="jab in parseJabatanList(p.jabatan)"
+                                                :key="jab"
                                                 :class="[
-                                                    'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border',
-                                                    getJabatanBadgeClass(p.jabatan)
+                                                    'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border font-medium',
+                                                    getJabatanBadgeClass(jab)
                                                 ]"
                                             >
-                                                {{ p.jabatan }}
+                                                {{ jab }}
                                             </span>
                                         </div>
                                         <div class="flex items-center gap-1.5 text-[11px] text-slate-600">
@@ -1469,29 +1531,80 @@ watch(
                                 <span>3. Jabatan & Jam Kerja</span>
                             </h3>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <!-- Jabatan / Divisi Dropdown (Tidak Boleh Diketik Manual) -->
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-700 mb-1">
-                                        Jabatan / Divisi <span class="text-rose-500">*</span>
-                                    </label>
-                                    <select
-                                        v-model="form.jabatan"
-                                        required
-                                        @change="onJabatanChange"
-                                        :class="[
-                                            'w-full px-3 py-2 rounded-lg border text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary',
-                                            clientErrors.jabatan || form.errors.jabatan ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'
-                                        ]"
-                                    >
-                                        <option value="" disabled>-- Pilih Jabatan / Divisi --</option>
-                                        <option
-                                            v-for="opt in listOpsiJabatan"
-                                            :key="opt"
-                                            :value="opt"
+                                <!-- Jabatan / Divisi (Mendukung Multi-Jabatan) -->
+                                <div class="sm:col-span-2">
+                                    <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                                        <label class="block text-xs font-semibold text-slate-700">
+                                            Jabatan / Divisi <span class="text-rose-500">*</span>
+                                            <span class="text-[11px] font-normal text-slate-500 ml-1">(Bisa pilih lebih dari 1 jabatan)</span>
+                                        </label>
+                                        <span v-if="selectedJabatans.length > 0" class="text-[11px] font-semibold text-emerald-700">
+                                            {{ selectedJabatans.length }} jabatan terpilih
+                                        </span>
+                                    </div>
+
+                                    <!-- Dropdown Selector Tambah Jabatan -->
+                                    <div class="relative">
+                                        <select
+                                            @change="e => { addJabatan(e.target.value); e.target.value = ''; }"
+                                            :class="[
+                                                'w-full px-3 py-2 rounded-lg border text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary bg-white',
+                                                clientErrors.jabatan || form.errors.jabatan ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'
+                                            ]"
                                         >
-                                            {{ opt }}
-                                        </option>
-                                    </select>
+                                            <option value="">-- Tambah / Pilih Jabatan dari Daftar --</option>
+                                            <option
+                                                v-for="opt in listOpsiJabatan"
+                                                :key="opt"
+                                                :value="opt"
+                                                :disabled="selectedJabatans.includes(opt)"
+                                            >
+                                                {{ selectedJabatans.includes(opt) ? '✓ ' + opt + ' (Sudah dipilih)' : '+ ' + opt }}
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Badges Jabatan Terpilih -->
+                                    <div v-if="selectedJabatans.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+                                        <span
+                                            v-for="j in selectedJabatans"
+                                            :key="j"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                        >
+                                            <span>{{ j }}</span>
+                                            <button
+                                                type="button"
+                                                @click="removeJabatan(j)"
+                                                class="h-3.5 w-3.5 rounded-full hover:bg-emerald-200 text-emerald-700 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                                                title="Hapus jabatan ini"
+                                            >
+                                                <X class="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    </div>
+
+                                    <!-- Opsi Cepat Klik Chip Jabatan -->
+                                    <div class="mt-2 pt-2 border-t border-slate-100">
+                                        <p class="text-[10px] font-medium text-slate-500 mb-1.5">Klik cepat untuk memilih / membatalkan jabatan:</p>
+                                        <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1.5 bg-slate-50 rounded-lg border border-slate-200">
+                                            <button
+                                                v-for="opt in listOpsiJabatan"
+                                                :key="opt"
+                                                type="button"
+                                                @click="toggleJabatan(opt)"
+                                                :class="[
+                                                    'px-2 py-0.5 rounded text-[10.5px] transition-all cursor-pointer border flex items-center gap-1',
+                                                    selectedJabatans.includes(opt)
+                                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700 font-medium'
+                                                ]"
+                                            >
+                                                <span v-if="selectedJabatans.includes(opt)">✓</span>
+                                                <span>{{ opt }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <p v-if="clientErrors.jabatan || form.errors.jabatan" class="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
                                         <AlertCircle class="h-3 w-3 shrink-0" />
                                         <span>{{ clientErrors.jabatan || form.errors.jabatan }}</span>
@@ -1921,10 +2034,12 @@ watch(
                                 </p>
                                 <div class="flex items-center gap-2 mt-2 flex-wrap">
                                     <span
+                                        v-for="jab in parseJabatanList(detailPetugas.jabatan)"
+                                        :key="jab"
                                         class="px-2.5 py-0.5 rounded-full text-[11px] font-bold"
                                         style="background-color: #047857; color: #ecfdf5; border: 1px solid #10b981;"
                                     >
-                                        {{ detailPetugas.jabatan }}
+                                        {{ jab }}
                                     </span>
                                     <span
                                         class="px-2.5 py-0.5 rounded-full text-[11px] font-bold text-slate-900"
@@ -2046,21 +2161,15 @@ watch(
                                 <span class="font-bold text-slate-800">{{ formatRupiah(detailPetugas.iuran_bpjs_tk) }} / bulan</span>
                             </div>
                             <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                                <span class="font-semibold text-teal-800">Estimasi Periodik (x10 Hari):</span>
+                                <span class="font-bold text-teal-700 text-xs font-mono">
+                                    {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 10) }}
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                                 <span class="font-semibold text-emerald-800">Estimasi Bulanan Standar BGN (x20 Hari):</span>
                                 <span class="font-black text-emerald-700 text-xs font-mono">
                                     {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 20) }}
-                                </span>
-                            </div>
-                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                                <span class="font-semibold text-slate-700">Estimasi Periodik (x14 Hari):</span>
-                                <span class="font-bold text-teal-700 text-xs">
-                                    {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 14) }}
-                                </span>
-                            </div>
-                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                                <span class="font-bold text-slate-800">Estimasi Total Bulanan (x28 Hari):</span>
-                                <span class="font-black text-slate-900 text-sm">
-                                    {{ formatRupiah(((detailPetugas.gaji_harian_bgn || 0) + (detailPetugas.bonus_harian_mitra || 0)) * 28) }}
                                 </span>
                             </div>
                         </div>

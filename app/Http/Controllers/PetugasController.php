@@ -51,11 +51,11 @@ class PetugasController extends Controller
             $summary['total_bonus_harian_mitra'] = (int) $petugas->sum('bonus_harian_mitra');
             $summary['total_bpjs_tk'] = (int) $petugas->sum('iuran_bpjs_tk');
             $summary['total_pengeluaran_harian'] = $summary['total_gaji_harian_bgn'] + $summary['total_bonus_harian_mitra'];
-            $summary['total_pengeluaran_periodik'] = $summary['total_pengeluaran_harian'] * 14; // 14 hari kerja operasional (periodik)
-            $summary['total_pengeluaran_bulanan_20'] = $summary['total_pengeluaran_harian'] * 20; // 20 hari kerja operasional standar BGN (excel)
-            $summary['total_pengeluaran_bulanan'] = $summary['total_pengeluaran_harian'] * 28; // 28 hari kerja operasional (bulanan)
+            $summary['total_pengeluaran_periodik'] = $summary['total_pengeluaran_harian'] * 10; // 10 hari kerja operasional (periodik)
+            $summary['total_pengeluaran_bulanan_20'] = $summary['total_pengeluaran_harian'] * 20; // 20 hari kerja operasional standar BGN (bulanan)
+            $summary['total_pengeluaran_bulanan'] = $summary['total_pengeluaran_bulanan_20'];
 
-            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
         }
 
         return Inertia::render('Petugas/Index', [
@@ -178,10 +178,10 @@ class PetugasController extends Controller
             $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
             $summary['total_nonaktif'] = $petugas->where('status', 'Nonaktif')->count();
             $summary['total_gaji_harian'] = $totalHarian;
-            $summary['total_pengeluaran_periodik'] = $totalHarian * 14; // 14 hari kerja operasional (periodik)
-            $summary['total_pengeluaran_bulanan'] = $totalHarian * 28; // 28 hari kerja operasional (bulanan)
+            $summary['total_pengeluaran_periodik'] = $totalHarian * 10; // 10 hari kerja operasional (periodik)
+            $summary['total_pengeluaran_bulanan'] = $totalHarian * 20; // 20 hari kerja operasional (bulanan)
 
-            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
             // Format dropdown periode lengkap dengan rentang tanggalnya
             $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
@@ -324,10 +324,10 @@ class PetugasController extends Controller
             $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
             $summary['total_nonaktif'] = $petugas->where('status', 'Nonaktif')->count();
             $summary['total_bonus_harian'] = $totalBonusHarian;
-            $summary['total_pengeluaran_bonus_periodik'] = $totalBonusHarian * 14;
-            $summary['total_pengeluaran_bonus_bulanan'] = $totalBonusHarian * 28;
+            $summary['total_pengeluaran_bonus_periodik'] = $totalBonusHarian * 10;
+            $summary['total_pengeluaran_bonus_bulanan'] = $totalBonusHarian * 20;
 
-            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
             $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
@@ -397,7 +397,7 @@ class PetugasController extends Controller
             $summary['total_iuran_bulanan'] = (int) $petugas->where('status', 'Aktif')->sum('iuran_bpjs_tk');
             $summary['total_iuran_periodik'] = (int) round($summary['total_iuran_bulanan'] / 2);
 
-            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
         }
 
         return Inertia::render('Petugas/RekapBpjsTk', [
@@ -774,7 +774,7 @@ class PetugasController extends Controller
                 ->orderBy('id', 'asc')
                 ->get();
 
-            $daftarJabatan = $petugas->pluck('jabatan')->unique()->values()->all();
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
             $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
@@ -1190,5 +1190,22 @@ class PetugasController extends Controller
         return response()->download($tempFile, $filename, [
             'Content-Type' => 'application/vnd.ms-excel',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Mengekstrak daftar seluruh jabatan unik individual dari koleksi petugas (mendukung multi jabatan).
+     */
+    private function extractDaftarJabatan($petugasCollection): array
+    {
+        $all = $petugasCollection->flatMap(function ($p) {
+            if (!$p->jabatan) return [];
+            $str = preg_replace('/\(a\.k\.a\.?\s*([^)]+)\)/i', ', $1', $p->jabatan);
+            $str = preg_replace('/\ba\.k\.a\.?\s+/i', ', ', $str);
+            $parts = preg_split('~[,&/]~', $str);
+            return array_filter(array_map(fn($s) => trim($s, " \t\n\r\0\x0B()"), $parts));
+        })->unique()->values()->all();
+
+        sort($all);
+        return $all;
     }
 }

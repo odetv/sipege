@@ -128,25 +128,22 @@ const props = defineProps({
 const DEFAULT_COLORS = {
     areaPerekat: "#ffffff",
     headerSppg: "#ffffff",
-    menuLabel: "#9DC3E6",
-    menuValue: "#BDD7EE",
-    tglLabel: "#9DC3E6",
-    tglValue: "#BDD7EE",
-    batasKonsumsi: "#9DC3E6",
-    batasKonsumsiVal: "#BDD7EE",
-    kontak: "#E2EFDA",
-    giziHeader: "#FFE699",
-    giziBody: "#FFF2CC",
-    footer: "#FFC000",
+    menuLabel: "#ffffff",
+    menuValue: "#ffffff",
+    tglLabel: "#ffffff",
+    tglValue: "#ffffff",
+    batasKonsumsi: "#ffffff",
+    batasKonsumsiVal: "#ffffff",
+    kontak: "#ffffff",
+    giziHeader: "#ffffff",
+    giziBody: "#ffffff",
+    footer: "#ffffff",
 };
 
 const getBgColor = (key) => {
-    if (!props.customColors) return DEFAULT_COLORS[key] || "#ffffff";
+    if (!props.customColors) return "#ffffff";
     const val = props.customColors[key];
-    if (val === undefined || val === null) {
-        return DEFAULT_COLORS[key] || "#ffffff";
-    }
-    if (val === "" || val === "transparent" || val === "none") {
+    if (val === undefined || val === null || val === "" || val === "transparent" || val === "none") {
         return "#ffffff";
     }
     return val;
@@ -437,9 +434,16 @@ const menuTypeFontSizeClass = computed(() => {
                 {{ formattedTanggalProduksi }}
             </div>
 
+            <!-- Khusus Porsi Tambahan: Di-merge & Kosong tanpa teks apapun -->
+            <div
+                v-if="props.tipeLabel === 'tambahan'"
+                class="w-[40%] px-1 py-0.5 flex flex-col justify-center items-center shrink-0 transition-colors"
+                :style="{ backgroundColor: getBgColor('batasKonsumsi') }"
+            ></div>
+
             <!-- Jika di-merge (Teks batas aman berupa teks narasi / panjang) -->
             <div
-                v-if="isMergedWaktuBatas"
+                v-else-if="isMergedWaktuBatas"
                 class="w-[40%] px-1 py-0.5 flex flex-col justify-center items-center leading-tight text-center shrink-0 overflow-hidden transition-colors"
                 :style="{ backgroundColor: getBgColor('batasKonsumsi') }"
             >
@@ -453,17 +457,18 @@ const menuTypeFontSizeClass = computed(() => {
 
             <!-- Jika TIDAK di-merge (Format jam singkat, misal 10:00 WITA) -->
             <template v-else>
-                <!-- Col D: WAKTU BATAS AMAN KONSUMSI (~24%) -->
+                <!-- Col D: WAKTU BATAS AMAN KONSUMSI (~20%) -->
                 <div
-                    class="w-[24%] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[7px] font-black text-slate-900 shrink-0 transition-colors"
+                    class="w-[20%] border-r border-slate-900 px-1 py-0.5 flex flex-col justify-center leading-none text-[6.5px] font-black text-slate-900 shrink-0 transition-colors"
                     :style="{ backgroundColor: getBgColor('batasKonsumsi') }"
                 >
                     <span>WAKTU BATAS</span>
                     <span>AMAN KONSUMSI</span>
                 </div>
-                <!-- Col E: Jam Batas Aman (~16%) -->
+                <!-- Col E: Jam Batas Aman (~20%) -->
                 <div
-                    class="w-[16%] px-0.5 py-0.5 flex items-center justify-center text-[8px] font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap transition-colors"
+                    class="w-[20%] px-0.5 py-0.5 flex items-center justify-center font-black text-slate-900 shrink-0 text-center tracking-tight overflow-hidden whitespace-nowrap transition-colors"
+                    :class="formattedWaktuBatas && formattedWaktuBatas.length > 10 ? 'text-[9.5px]' : 'text-[10.5px]'"
                     :style="{ backgroundColor: getBgColor('batasKonsumsiVal') }"
                 >
                     {{ formattedWaktuBatas }}
@@ -498,13 +503,13 @@ const menuTypeFontSizeClass = computed(() => {
                     class="h-[20%] border-b border-slate-900 flex text-[7.5px] font-black text-slate-900 items-center shrink-0 transition-colors"
                     :style="{ backgroundColor: getBgColor('giziHeader') }"
                 >
-                    <div class="w-[33.5%] border-r border-slate-900 text-center leading-none py-0.5">
+                    <div class="w-1/3 border-r border-slate-900 text-center leading-none py-0.5">
                         KANDUNGAN GIZI
                     </div>
-                    <div class="w-[39.5%] border-r border-slate-900 text-center leading-none py-0.5">
+                    <div class="w-1/3 border-r border-slate-900 text-center leading-none py-0.5">
                         PORSI KECIL
                     </div>
-                    <div class="w-[27%] text-center leading-none py-0.5">
+                    <div class="w-1/3 text-center leading-none py-0.5">
                         PORSI BESAR
                     </div>
                 </div>
@@ -516,61 +521,61 @@ const menuTypeFontSizeClass = computed(() => {
                 >
                     <!-- Row 7: Energi -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
-                        <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
                             Energi <span class="text-[5px]">(Kkal)</span>
                         </div>
-                        <div class="w-[39.5%] border-r border-slate-900/40 text-center font-normal leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-center font-normal leading-none">
                             {{ giziDisplay.energi_pk }}
                         </div>
-                        <div class="w-[27%] text-center font-normal leading-none">
+                        <div class="w-1/3 text-center font-normal leading-none">
                             {{ giziDisplay.energi_pb }}
                         </div>
                     </div>
                     <!-- Row 8: Karbohidrat -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
-                        <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
                             Karbohidrat <span class="text-[5px]">(g)</span>
                         </div>
-                        <div class="w-[39.5%] border-r border-slate-900/40 text-center font-normal leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-center font-normal leading-none">
                             {{ giziDisplay.karbo_pk }}
                         </div>
-                        <div class="w-[27%] text-center font-normal leading-none">
+                        <div class="w-1/3 text-center font-normal leading-none">
                             {{ giziDisplay.karbo_pb }}
                         </div>
                     </div>
                     <!-- Row 9: Protein -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
-                        <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
                             Protein <span class="text-[5px]">(g)</span>
                         </div>
-                        <div class="w-[39.5%] border-r border-slate-900/40 text-center font-normal leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-center font-normal leading-none">
                             {{ giziDisplay.prot_pk }}
                         </div>
-                        <div class="w-[27%] text-center font-normal leading-none">
+                        <div class="w-1/3 text-center font-normal leading-none">
                             {{ giziDisplay.prot_pb }}
                         </div>
                     </div>
                     <!-- Row 10: Lemak -->
                     <div class="flex items-center flex-1 border-b border-slate-900/40">
-                        <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
                             Lemak <span class="text-[5px]">(g)</span>
                         </div>
-                        <div class="w-[39.5%] border-r border-slate-900/40 text-center font-normal leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-center font-normal leading-none">
                             {{ giziDisplay.lmk_pk }}
                         </div>
-                        <div class="w-[27%] text-center font-normal leading-none">
+                        <div class="w-1/3 text-center font-normal leading-none">
                             {{ giziDisplay.lmk_pb }}
                         </div>
                     </div>
                     <!-- Row 11: Serat -->
                     <div class="flex items-center flex-1">
-                        <div class="w-[33.5%] border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-right pr-1 font-medium leading-none">
                             Serat <span class="text-[5px]">(g)</span>
                         </div>
-                        <div class="w-[39.5%] border-r border-slate-900/40 text-center font-normal leading-none">
+                        <div class="w-1/3 border-r border-slate-900/40 text-center font-normal leading-none">
                             {{ giziDisplay.serat_pk }}
                         </div>
-                        <div class="w-[27%] text-center font-normal leading-none">
+                        <div class="w-1/3 text-center font-normal leading-none">
                             {{ giziDisplay.serat_pb }}
                         </div>
                     </div>

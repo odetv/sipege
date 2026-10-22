@@ -8,6 +8,7 @@ import {
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
+    getDefaultBatasMakan,
 } from "@/Services/penerimaManfaatConfig";
 import {
     getProvinces,
@@ -266,6 +267,7 @@ watch(
             return {
                 sub_kategori: sub,
                 jenis_porsi: getJenisPorsiBySubKategori(sub, newKategori),
+                waktu_batas_makan: existing?.waktu_batas_makan || getDefaultBatasMakan(form.nama_kelompok, sub),
                 jumlah_laki_laki: existing ? Number(existing.jumlah_laki_laki) || 0 : 0,
                 jumlah_perempuan: existing ? Number(existing.jumlah_perempuan) || 0 : 0,
             };
@@ -304,6 +306,9 @@ function onSubKategoriChange(item) {
             item.sub_kategori,
             form.kategori,
         );
+        if (!item.waktu_batas_makan) {
+            item.waktu_batas_makan = getDefaultBatasMakan(form.nama_kelompok, item.sub_kategori);
+        }
         form.rincian = sortRincianByKategori(form.rincian, form.kategori);
         clearFieldError("rincian");
     }
@@ -327,6 +332,7 @@ function addCustomSubkategori() {
     form.rincian.push({
         sub_kategori: firstUnused,
         jenis_porsi: getJenisPorsiBySubKategori(firstUnused, form.kategori),
+        waktu_batas_makan: getDefaultBatasMakan(form.nama_kelompok, firstUnused),
         jumlah_laki_laki: 0,
         jumlah_perempuan: 0,
     });
@@ -344,6 +350,7 @@ function resetRincianToDefault() {
     const newRincian = subList.map((sub) => ({
         sub_kategori: sub,
         jenis_porsi: getJenisPorsiBySubKategori(sub, form.kategori),
+        waktu_batas_makan: getDefaultBatasMakan(form.nama_kelompok, sub),
         jumlah_laki_laki: 0,
         jumlah_perempuan: 0,
     }));

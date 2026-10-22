@@ -51,6 +51,7 @@ import {
     ShoppingBag,
     FlaskConical,
 } from "lucide-vue-next";
+import { getRincianBatasMakanList } from "@/Services/penerimaManfaatConfig";
 
 const props = defineProps({
     show: {
@@ -2214,6 +2215,7 @@ function getSubMenuLabelForBahan(it) {
                                         <th class="p-3 text-center">
                                             Total Porsi
                                         </th>
+                                        <th class="p-3 min-w-[190px]">Waktu Batas Makan</th>
                                         <th class="p-3">Keterangan Alergi</th>
                                     </tr>
                                 </thead>
@@ -2312,6 +2314,42 @@ function getSubMenuLabelForBahan(it) {
                                                     ) || 0)
                                                 ).toLocaleString("id-ID")
                                             }}
+                                        </td>
+                                        <!-- Waktu Batas Makan (Rincian per Kategori) -->
+                                        <td class="p-3 align-middle">
+                                            <div
+                                                v-if="getRincianBatasMakanList(kel).length > 0"
+                                                class="space-y-1 py-0.5"
+                                            >
+                                                <div
+                                                    v-for="(r, rIdx) in getRincianBatasMakanList(kel)"
+                                                    :key="rIdx"
+                                                    class="flex items-center justify-between gap-2 text-[11px]"
+                                                    :class="
+                                                        kel.status_menerima === false || r.is_menerima === false
+                                                            ? 'text-slate-400 line-through opacity-70'
+                                                            : 'text-slate-700'
+                                                    "
+                                                >
+                                                    <span class="font-medium truncate max-w-[130px]">
+                                                        {{ r.sub_kategori }}:
+                                                    </span>
+                                                    <span
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded font-mono font-black text-[10px] border shadow-2xs shrink-0"
+                                                        :class="
+                                                            kel.status_menerima === false || r.is_menerima === false
+                                                                ? 'bg-slate-100 text-slate-400 border-slate-200'
+                                                                : r.waktu_batas_makan === '14:00'
+                                                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                                        "
+                                                    >
+                                                        <Clock class="h-2.5 w-2.5 mr-1 inline shrink-0" />
+                                                        {{ r.waktu_batas_makan || '10:00' }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-[11px] text-slate-400 italic">-</span>
                                         </td>
                                         <td class="p-3">
                                             <template

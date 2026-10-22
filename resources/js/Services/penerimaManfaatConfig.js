@@ -559,3 +559,37 @@ export function sortRincianByKategori(rincianList, kategori) {
         return indexA - indexB;
     });
 }
+
+export function getDefaultBatasMakan(namaKelompok, subKategori) {
+    const isMin3 = (namaKelompok || "").toLowerCase().includes("min 3");
+    const sub = (subKategori || "").toLowerCase();
+    if (isMin3 && (sub.includes("kelas 4") || sub.includes("kelas 5") || sub.includes("kelas 6"))) {
+        return "14:00";
+    }
+    return "10:00";
+}
+
+export function getRincianBatasMakanList(kelompok) {
+    if (!kelompok) return [];
+    if (Array.isArray(kelompok.rincian) && kelompok.rincian.length > 0) {
+        return sortRincianByKategori(kelompok.rincian, kelompok.kategori).map((r) => ({
+            sub_kategori: r.sub_kategori,
+            waktu_batas_makan:
+                r.waktu_batas_makan ||
+                getDefaultBatasMakan(kelompok.nama_kelompok, r.sub_kategori),
+            is_menerima: r.is_menerima !== false,
+            jenis_porsi: r.jenis_porsi || getJenisPorsiBySubKategori(r.sub_kategori, kelompok.kategori),
+            total: (Number(r.jumlah_laki_laki) || 0) + (Number(r.jumlah_perempuan) || 0) || Number(r.total) || 0,
+        }));
+    }
+    const subs = getSubKategoriByKategori(kelompok.kategori) || [];
+    return subs.map((sub) => ({
+        sub_kategori: sub,
+        waktu_batas_makan: getDefaultBatasMakan(kelompok.nama_kelompok, sub),
+        is_menerima: kelompok.status_menerima !== false && kelompok.is_menerima !== false,
+        jenis_porsi: getJenisPorsiBySubKategori(sub, kelompok.kategori),
+        total: 0,
+    }));
+}
+
+

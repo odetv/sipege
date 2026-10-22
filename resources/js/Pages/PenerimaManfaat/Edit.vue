@@ -8,6 +8,7 @@ import {
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
+    getDefaultBatasMakan,
 } from "@/Services/penerimaManfaatConfig";
 import {
     getProvinces,
@@ -136,6 +137,12 @@ const form = useForm({
                       getJenisPorsiBySubKategori(
                           r.sub_kategori,
                           initialKategori,
+                      ),
+                  waktu_batas_makan:
+                      r.waktu_batas_makan ||
+                      getDefaultBatasMakan(
+                          props.kelompok.nama_kelompok,
+                          r.sub_kategori,
                       ),
                   jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
                   jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
@@ -333,6 +340,9 @@ watch(
                 jenis_porsi:
                     existing?.jenis_porsi ||
                     getJenisPorsiBySubKategori(sub, newKategori),
+                waktu_batas_makan:
+                    existing?.waktu_batas_makan ||
+                    getDefaultBatasMakan(form.nama_kelompok, sub),
                 jumlah_laki_laki: existing
                     ? Number(existing.jumlah_laki_laki) || 0
                     : 0,
@@ -377,6 +387,9 @@ function onSubKategoriChange(item) {
             item.sub_kategori,
             form.kategori,
         );
+        if (!item.waktu_batas_makan) {
+            item.waktu_batas_makan = getDefaultBatasMakan(form.nama_kelompok, item.sub_kategori);
+        }
         form.rincian = sortRincianByKategori(form.rincian, form.kategori);
         clearFieldError("rincian");
     }
@@ -400,6 +413,7 @@ function addCustomSubkategori() {
     form.rincian.push({
         sub_kategori: firstUnused,
         jenis_porsi: getJenisPorsiBySubKategori(firstUnused, form.kategori),
+        waktu_batas_makan: getDefaultBatasMakan(form.nama_kelompok, firstUnused),
         jumlah_laki_laki: 0,
         jumlah_perempuan: 0,
     });
@@ -421,6 +435,9 @@ function resetRincianToDefault() {
             jenis_porsi:
                 existing?.jenis_porsi ||
                 getJenisPorsiBySubKategori(sub, form.kategori),
+            waktu_batas_makan:
+                existing?.waktu_batas_makan ||
+                getDefaultBatasMakan(form.nama_kelompok, sub),
             jumlah_laki_laki: existing ? existing.jumlah_laki_laki : 0,
             jumlah_perempuan: existing ? existing.jumlah_perempuan : 0,
         };

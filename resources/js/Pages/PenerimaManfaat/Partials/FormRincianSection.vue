@@ -169,8 +169,11 @@ defineProps({
                             <th class="px-5 py-4 min-w-[200px]">
                                 Sub Kategori Penerima
                             </th>
-                            <th class="px-4 py-4 w-36 text-center">
+                            <th class="px-4 py-4 w-32 text-center">
                                 Jenis Porsi
+                            </th>
+                            <th class="px-4 py-4 w-36 text-center">
+                                Batas Makan <span class="text-rose-500">*</span>
                             </th>
                             <th class="px-5 py-4 text-center w-36">
                                 Laki-Laki (L)
@@ -244,6 +247,17 @@ defineProps({
                                 >
                                     Porsi Besar
                                 </span>
+                            </td>
+
+                            <!-- Input Waktu Batas Makan -->
+                            <td class="px-4 py-4 text-center">
+                                <input
+                                    v-model="item.waktu_batas_makan"
+                                    type="time"
+                                    required
+                                    class="w-full h-10 text-center px-2 text-xs font-mono font-bold rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer shadow-2xs"
+                                    title="Format jam batas makan (contoh: 10:00)"
+                                />
                             </td>
 
                             <!-- Input Laki-Laki -->

@@ -719,9 +719,13 @@ const filteredRows = computed(() => {
             }
         }
 
-        // Filter Jabatan
-        if (filterJabatan.value !== "all" && p.jabatan !== filterJabatan.value) {
-            return false;
+        // Filter Jabatan (Mendukung Multi-Jabatan)
+        if (filterJabatan.value !== "all") {
+            const jabStr = (p.jabatan || "").toLowerCase();
+            const fVal = filterJabatan.value.toLowerCase();
+            if (!jabStr.includes(fVal)) {
+                return false;
+            }
         }
 
         // Filter Status Rekening & Validitas Penggajian
@@ -1741,8 +1745,12 @@ function copyRowRekening(id, text) {
                                                 {{ r.petugas.nama }}
                                             </p>
                                             <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                                <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                                    {{ r.petugas.jabatan }}
+                                                <span
+                                                    v-for="jab in (r.petugas.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                                    :key="jab"
+                                                    class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                                                >
+                                                    {{ jab }}
                                                 </span>
                                                 <span class="text-[10px] text-slate-400 font-mono">
                                                     {{ r.petugas.nik }}

@@ -86,6 +86,8 @@ import {
     getSubKategoriByKategori,
     getJenisPorsiBySubKategori,
     sortRincianByKategori,
+    getDefaultBatasMakan,
+    getRincianBatasMakanList,
 } from "@/Services/penerimaManfaatConfig";
 import {
     RUJUKAN_AKG_MBG,
@@ -1337,6 +1339,9 @@ function normalizeKelompokForWo(k) {
                 getJenisPorsiBySubKategori(r.sub_kategori, k.kategori),
             is_menerima:
                 r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
+            waktu_batas_makan:
+                r.waktu_batas_makan ||
+                getDefaultBatasMakan(k.nama_kelompok, r.sub_kategori),
             jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
             jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
             total:
@@ -1353,6 +1358,7 @@ function normalizeKelompokForWo(k) {
                 sub_kategori: sub,
                 jenis_porsi: jp,
                 is_menerima: true,
+                waktu_batas_makan: getDefaultBatasMakan(k.nama_kelompok, sub),
                 jumlah_laki_laki: 0,
                 jumlah_perempuan: 0,
                 total: 0,
@@ -1436,6 +1442,7 @@ function handleOpenModalEditPm(kelompok) {
     editFormRincian.value = JSON.parse(JSON.stringify(kelompok.rincian || [])).map((r) => ({
         ...r,
         is_menerima: r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
+        waktu_batas_makan: r.waktu_batas_makan || getDefaultBatasMakan(kelompok.nama_kelompok, r.sub_kategori),
     }));
     editFormKeteranganAlergi.value = JSON.parse(
         JSON.stringify(kelompok.keterangan_alergi || []),
@@ -1513,6 +1520,7 @@ function handleSimpanEditDetailPm() {
             jumlah_laki_laki: l,
             jumlah_perempuan: p,
             total: isMenerima ? (l + p) : 0,
+            waktu_batas_makan: r.waktu_batas_makan || getDefaultBatasMakan(editingKelompok.value?.nama_kelompok, r.sub_kategori),
         };
     });
 
@@ -3331,11 +3339,11 @@ const DEFAULT_JADWAL_OPERASIONAL = {
     },
 };
 
-// Jumlah Sesi Operasional per Kategori (Fleksibel, bisa ditambah sesuai kebutuhan)
+// Jumlah Sesi Operasional per Kategori (Default 1 Sesi untuk semua kategori)
 const sesiCount = ref({
-    pengolahan: 2,
-    pemorsian: 2,
-    distribusi: 2,
+    pengolahan: 1,
+    pemorsian: 1,
+    distribusi: 1,
     pengambilan_ompreng: 1,
     pencucian_ompreng: 1,
 });
@@ -3377,9 +3385,9 @@ function hapusSesi(category, sesiNum) {
 function loadSesiCountFromSource(source) {
     if (!source || typeof source !== "object") {
         return {
-            pengolahan: 2,
-            pemorsian: 2,
-            distribusi: 2,
+            pengolahan: 1,
+            pemorsian: 1,
+            distribusi: 1,
             pengambilan_ompreng: 1,
             pencucian_ompreng: 1,
         };
@@ -3431,11 +3439,8 @@ function loadSesiCountFromSource(source) {
 const EMPTY_JADWAL_OPERASIONAL = {
     persiapan: { mulai: "", selesai: "" },
     pengolahan_sesi_1: { mulai: "", selesai: "" },
-    pengolahan_sesi_2: { mulai: "", selesai: "" },
     pemorsian_sesi_1: { mulai: "", selesai: "" },
-    pemorsian_sesi_2: { mulai: "", selesai: "" },
     distribusi_sesi_1: { mulai: "", selesai: "" },
-    distribusi_sesi_2: { mulai: "", selesai: "" },
     pengambilan_ompreng: { mulai: "", selesai: "" },
     pencucian_ompreng: { mulai: "", selesai: "" },
 };
@@ -3644,10 +3649,12 @@ function resetJadwalOperasionalToDefault() {
     };
 
     clearError("jadwal_operasional");
-    Object.keys(activeJadwalList.value).forEach((k) => {
-        clearError("jadwal_" + k);
-        clearError("jadwal_" + k + "_mulai");
-        clearError("jadwal_" + k + "_selesai");
+    nextTick(() => {
+        Object.keys(activeJadwalList.value).forEach((k) => {
+            clearError("jadwal_" + k);
+            clearError("jadwal_" + k + "_mulai");
+            clearError("jadwal_" + k + "_selesai");
+        });
     });
 }
 
@@ -7088,9 +7095,9 @@ watch(
                 jadwalOperasional.value = { ...rawJ, ...loaded };
             } else {
                 sesiCount.value = {
-                    pengolahan: 2,
-                    pemorsian: 2,
-                    distribusi: 2,
+                    pengolahan: 1,
+                    pemorsian: 1,
+                    distribusi: 1,
                     pengambilan_ompreng: 1,
                     pencucian_ompreng: 1,
                 };
@@ -7193,7 +7200,12 @@ watch(
                                 rincian:
                                     Array.isArray(savedK.rincian) &&
                                     savedK.rincian.length > 0
-                                        ? savedK.rincian
+                                        ? savedK.rincian.map((r) => ({
+                                              ...r,
+                                              waktu_batas_makan:
+                                                  r.waktu_batas_makan ||
+                                                  getDefaultBatasMakan(masterK.nama_kelompok, r.sub_kategori),
+                                          }))
                                         : norm.rincian,
                                 keterangan_alergi:
                                     Array.isArray(savedK.detail_alergi) &&
@@ -9393,6 +9405,9 @@ watch(
                                             <th class="py-3.5 px-3 text-center">
                                                 Total PM
                                             </th>
+                                            <th class="py-3.5 px-3 min-w-[200px]">
+                                                Waktu Batas Makan
+                                            </th>
                                             <th class="py-3.5 px-3">
                                                 Status Alergi
                                             </th>
@@ -9523,6 +9538,43 @@ watch(
                                                 "
                                             >
                                                 {{ k.total_penerima }}
+                                            </td>
+
+                                            <!-- Waktu Batas Makan (Rincian per Kategori) -->
+                                            <td class="p-3 align-middle">
+                                                <div
+                                                    v-if="getRincianBatasMakanList(k).length > 0"
+                                                    class="space-y-1 py-0.5"
+                                                >
+                                                    <div
+                                                        v-for="(r, rIdx) in getRincianBatasMakanList(k)"
+                                                        :key="rIdx"
+                                                        class="flex items-center justify-between gap-2 text-[11px]"
+                                                        :class="
+                                                            k.status_menerima === false || r.is_menerima === false
+                                                                ? 'text-slate-400 line-through opacity-70'
+                                                                : 'text-slate-700'
+                                                        "
+                                                    >
+                                                        <span class="font-medium truncate max-w-[140px]">
+                                                            {{ r.sub_kategori }}:
+                                                        </span>
+                                                        <span
+                                                            class="inline-flex items-center px-1.5 py-0.5 rounded font-mono font-black text-[10px] border shadow-2xs shrink-0"
+                                                            :class="
+                                                                k.status_menerima === false || r.is_menerima === false
+                                                                    ? 'bg-slate-100 text-slate-400 border-slate-200'
+                                                                    : r.waktu_batas_makan === '14:00'
+                                                                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                                      : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                                            "
+                                                        >
+                                                            <Clock class="h-2.5 w-2.5 mr-1 inline shrink-0" />
+                                                            {{ r.waktu_batas_makan || '10:00' }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-[11px] text-slate-400 italic">-</span>
                                             </td>
 
                                             <!-- Alergi (Detail Breakdown per Jenis) -->
@@ -10287,6 +10339,9 @@ watch(
                                         </th>
                                         <th class="p-3 text-center w-20">Status</th>
                                         <th class="p-3">Peruntukan Porsi</th>
+                                        <th class="p-3 text-center min-w-[110px]">
+                                            Batas Makan
+                                        </th>
                                         <th
                                             class="p-3 text-center min-w-[100px]"
                                         >
@@ -10347,6 +10402,17 @@ watch(
                                             >
                                                 {{ r.jenis_porsi }}
                                             </Badge>
+                                        </td>
+                                        <td class="p-2 text-center whitespace-nowrap">
+                                            <input
+                                                type="time"
+                                                :disabled="r.is_menerima === false"
+                                                v-model="r.waktu_batas_makan"
+                                                :class="[
+                                                    'w-24 text-center text-xs font-semibold rounded-lg border-slate-300 p-1.5 focus:ring-primary focus:border-primary',
+                                                    r.is_menerima === false ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-dashed' : 'bg-white text-slate-900'
+                                                ]"
+                                            />
                                         </td>
                                         <td class="p-2 text-center">
                                             <input

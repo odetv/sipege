@@ -10,6 +10,7 @@ import {
     MapPin,
     ExternalLink,
     HeartPulse,
+    Clock,
 } from "lucide-vue-next";
 import { sortRincianByKategori } from "@/Services/penerimaManfaatConfig";
 import { formatWilayahName, formatKabupatenName } from "@/Services/wilayah";
@@ -374,6 +375,9 @@ function formatDateTimeWita(dateString) {
                                 <th class="py-2.5 px-4 text-center w-28">
                                     Jenis Porsi
                                 </th>
+                                <th class="py-2.5 px-4 text-center w-28">
+                                    Batas Makan
+                                </th>
                                 <th class="py-2.5 px-4 text-center w-24">
                                     Laki-Laki
                                 </th>
@@ -421,6 +425,12 @@ function formatDateTimeWita(dateString) {
                                         class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200"
                                     >
                                         Porsi Besar
+                                    </span>
+                                </td>
+                                <td class="py-2.5 px-4 text-center">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                        <Clock class="h-3 w-3 text-slate-500" />
+                                        <span>{{ rincian.waktu_batas_makan || '10:00' }}</span>
                                     </span>
                                 </td>
                                 <td

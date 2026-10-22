@@ -160,11 +160,17 @@ class RincianPenerimaManfaatSeeder extends Seeder
 
         foreach ($rincianRaw as $item) {
             [$kpmId, $subKategori, $jenisPorsi, $l, $p] = $item;
+            $waktuBatasMakan = '10:00';
+            if ($kpmId == 5 && in_array($subKategori, ['Kelas 4', 'Kelas 5', 'Kelas 6'])) {
+                $waktuBatasMakan = '14:00';
+            }
+
             $batch[] = [
                 'id' => $idCounter++,
                 'kelompok_penerima_manfaat_id' => $kpmId,
                 'sub_kategori' => $subKategori,
                 'jenis_porsi' => $jenisPorsi,
+                'waktu_batas_makan' => $waktuBatasMakan,
                 'jumlah_laki_laki' => $l,
                 'jumlah_perempuan' => $p,
                 'total' => $l + $p,
