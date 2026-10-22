@@ -103,7 +103,93 @@ const props = defineProps({
         type: String,
         default: "",
     },
+    kontakBaris1: {
+        type: String,
+        default: "",
+    },
+    kontakBaris2: {
+        type: String,
+        default: "",
+    },
+    kontakBaris3: {
+        type: String,
+        default: "",
+    },
+    kontakBaris4: {
+        type: String,
+        default: "",
+    },
+    customColors: {
+        type: Object,
+        default: () => ({}),
+    },
 });
+
+const getColor = (key, defaultColor = "#ffffff") => {
+    if (!props.customColors) return defaultColor;
+    const val = props.customColors[key];
+    if (val === undefined || val === null || val === "" || val === "transparent" || val === "none") {
+        return defaultColor;
+    }
+    return val;
+};
+
+const isColored = computed(() => {
+    if (!props.customColors) return false;
+    return Object.values(props.customColors).some(
+        (val) => val && val.toLowerCase() !== "#ffffff" && val !== "transparent" && val !== "none"
+    );
+});
+
+const areaPerekatBg = computed(() => {
+    const c = getColor("areaPerekat", "#ffffff");
+    return c;
+});
+
+const garisEmasBg = computed(() => {
+    const c = getColor("garisEmas", "#ffffff");
+    return c === "#ffffff" ? "#000000" : c;
+});
+
+const menuBadgeBg = computed(() => {
+    return getColor("menuBadge", "#ffffff");
+});
+
+const menuBodyBg = computed(() => {
+    return getColor("menuBody", "#ffffff");
+});
+
+const tglBoxBg = computed(() => {
+    return getColor("tglBox", "#ffffff");
+});
+
+const waktuBoxBg = computed(() => {
+    return getColor("waktuBox", "#ffffff");
+});
+
+const laranganBoxBg = computed(() => {
+    return getColor("laranganBox", "#ffffff");
+});
+
+const kontakBoxBg = computed(() => {
+    return getColor("kontakBox", "#ffffff");
+});
+
+const giziBoxBg = computed(() => {
+    return getColor("giziBox", "#ffffff");
+});
+
+const giziCellBg = computed(() => giziBoxBg.value);
+const giziCellBorder = computed(() => giziBoxBg.value === '#ffffff' ? '1px solid #000000' : '1px solid #c7dcf8');
+const giziCellColor = computed(() => giziBoxBg.value === '#ffffff' ? '#000000' : '#164282');
+
+const footerPorsiBg = computed(() => {
+    return getColor("footerPorsi", "#ffffff");
+});
+
+const footerPorsiCellBg = computed(() => footerPorsiBg.value !== '#ffffff' ? footerPorsiBg.value : '#ffffff');
+const footerPorsiCellColor = computed(() => footerPorsiBg.value !== '#ffffff' ? '#ffffff' : '#000000');
+const footerPorsiCellBorder = computed(() => footerPorsiBg.value !== '#ffffff' ? 'none' : '1px solid #000000');
 
 const topIsolasiHeightPx = computed(() => {
     const cm = parseFloat(props.tinggiIsolasiCm);
@@ -131,41 +217,46 @@ const dyn = computed(() => {
 
     return {
         scale: s,
-        cardPadding: `${Math.round(6 * s)}px 12px ${Math.round(7 * s)}px 12px`,
-        logoHeight: Math.round(44 * Math.min(1.25, s)) + "px",
-        headerMarginBottom: Math.round(4 * s) + "px",
-        instansiSubFontSize: (8 * Math.min(1.2, s)).toFixed(1) + "px",
-        sppgTitleFontSize: (12.5 * Math.min(1.25, s)).toFixed(1) + "px",
+        cardPadding: `${Math.round(5 * s)}px 12px ${Math.round(5 * s)}px 12px`,
+        logoHeight: Math.round(42 * Math.min(1.25, s)) + "px",
+        headerMarginBottom: Math.round(3 * s) + "px",
+        instansiSubFontSize: (7.8 * Math.min(1.2, s)).toFixed(1) + "px",
+        sppgTitleFontSize: (12 * Math.min(1.25, s)).toFixed(1) + "px",
         goldLineHeight: Math.round(2 * Math.min(1.4, s)) + "px",
-        goldLineMarginBottom: Math.round(5 * s) + "px",
-        bannerMinHeight: Math.round(32 * s) + "px",
-        bannerMarginBottom: Math.round(6 * s) + "px",
-        menuBadgeFontSize: (10.5 * Math.min(1.25, s)).toFixed(1) + "px",
-        menuBadgePadding: `0 ${Math.round(12 * Math.min(1.25, s))}px`,
+        goldLineMarginBottom: Math.round(4 * s) + "px",
+        bannerMinHeight: Math.round(30 * s) + "px",
+        bannerMarginBottom: Math.round(4 * s) + "px",
+        menuBadgeFontSize: (10 * Math.min(1.25, s)).toFixed(1) + "px",
+        menuBadgePadding: `0 ${Math.round(10 * Math.min(1.25, s))}px`,
         bodyGap: Math.round(8 * s) + "px",
-        leftColGap: Math.round(5 * s) + "px",
-        tglLabelFontSize: (9.2 * s).toFixed(1) + "px",
-        tglLabelMarginBottom: Math.round(4 * s) + "px",
-        tglBoxHeight: Math.round(28 * s) + "px",
-        tglBoxFontSize: (isShowingTime ? 11 * s : 14 * s).toFixed(1) + "px",
-        waktuBoxHeight: Math.round(58 * s) + "px",
-        waktuHeaderFontSize: (9.5 * s).toFixed(1) + "px",
-        waktuSubFontSize: (isShowingExpiredTime ? 15 * s : 16 * s).toFixed(1) + "px",
-        laranganBoxHeight: Math.round(52 * s) + "px",
-        laranganHeaderFontSize: (9.8 * s).toFixed(1) + "px",
-        laranganSubFontSize: (13 * s).toFixed(1) + "px",
+        leftColGap: Math.round(4 * s) + "px",
+        tglLabelFontSize: (8.8 * s).toFixed(1) + "px",
+        tglLabelMarginBottom: Math.round(3 * s) + "px",
+        tglBoxHeight: Math.round(25 * s) + "px",
+        tglBoxFontSize: (isShowingTime ? 10.5 * s : 13.5 * s).toFixed(1) + "px",
+        waktuBoxHeight: Math.round(44 * s) + "px",
+        waktuHeaderFontSize: (8.8 * s).toFixed(1) + "px",
+        waktuSubFontSize: (isShowingExpiredTime ? 13.5 * s : 14.5 * s).toFixed(1) + "px",
+        laranganBoxHeight: Math.round(40 * s) + "px",
+        laranganHeaderFontSize: (9 * s).toFixed(1) + "px",
+        laranganSubFontSize: (11.8 * s).toFixed(1) + "px",
         rightColWidth: Math.round(176 * Math.min(1.2, s)) + "px",
         rightColPaddingLeft: Math.round(8 * s) + "px",
-        giziTitleFontSize: (10 * s).toFixed(1) + "px",
-        giziTitleMarginBottom: Math.round(4 * s) + "px",
-        tableSpacingY: Math.round(3.5 * s) + "px",
+        giziTitleFontSize: (9.5 * s).toFixed(1) + "px",
+        giziTitleMarginBottom: Math.round(3 * s) + "px",
+        tableSpacingY: Math.round(2 * s) + "px",
         tablePorsiColWidth: Math.round(36 * Math.min(1.2, s)) + "px",
-        tableRowHeight: Math.round(20 * s) + "px",
-        tableHeaderRowHeight: Math.round(23 * s) + "px",
-        tableLabelFontSize: (9 * s).toFixed(1) + "px",
-        tableUnitFontSize: (7 * s).toFixed(1) + "px",
-        tableValueFontSize: (9.5 * s).toFixed(1) + "px",
-        tableHeaderFontSize: (7.5 * s).toFixed(1) + "px",
+        tableRowHeight: Math.round(17.5 * s) + "px",
+        tableHeaderRowHeight: Math.round(19 * s) + "px",
+        tableLabelFontSize: (8.5 * s).toFixed(1) + "px",
+        tableUnitFontSize: (6.5 * s).toFixed(1) + "px",
+        tableValueFontSize: (9 * s).toFixed(1) + "px",
+        tableHeaderFontSize: (7 * s).toFixed(1) + "px",
+        kontakBoxHeight: Math.round(27 * s) + "px",
+        kontakMarginTop: Math.round(4 * s) + "px",
+        kontakBadgeFontSize: (7.6 * s).toFixed(1) + "px",
+        kontakBadgePadding: `0 ${Math.round(6 * s)}px`,
+        kontakTextFontSize: (8.2 * s).toFixed(1) + "px",
     };
 });
 
@@ -179,6 +270,35 @@ const displaySppg = computed(() => {
         return val.startsWith("SPPG") ? val : `SPPG ${val}`;
     }
     return "SPPG BULELENG SUKASADA TEGALLINGGAH";
+});
+
+const socialMediaHandle = computed(() => {
+    const raw = displaySppg.value.toLowerCase();
+    if (raw.includes("tegallinggah")) {
+        return {
+            ig: "Instagram: @sppg.tegallinggah",
+            tiktok: "Tiktok: @sppg.tegallinggah",
+            fb: "Facebook: SPPG Tegallinggah",
+        };
+    }
+    const words = raw.replace(/^sppg\s+/, "").trim().split(/\s+/);
+    const suffix = words.length > 0 ? words[words.length - 1] : "bgn";
+    const slug = suffix.replace(/[^a-z0-9]/g, "");
+    return {
+        ig: `Instagram: @sppg.${slug}`,
+        tiktok: `Tiktok: @sppg.${slug}`,
+        fb: `Facebook: ${displaySppg.value}`,
+    };
+});
+
+const contactDisplayLines = computed(() => {
+    const sm = socialMediaHandle.value;
+    return [
+        props.kontakBaris1?.trim() || "Email: halo@bgn.go.id",
+        props.kontakBaris2?.trim() || sm.ig,
+        props.kontakBaris3?.trim() || sm.tiktok,
+        props.kontakBaris4?.trim() || sm.fb,
+    ];
 });
 
 const formattedMenuText = computed(() => {
@@ -284,23 +404,31 @@ const isAlergi = computed(() => props.tipeLabel === "alergi");
 const isTambahan = computed(() => props.tipeLabel === "tambahan");
 
 const bannerBadgeText = computed(() => {
+    const stripEmojis = (str) => {
+        if (!str) return "";
+        return String(str)
+            .replace(/[\u{1F000}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}]/gu, "")
+            .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+    };
+
     if (props.tagAlergi && props.tagAlergi.trim()) {
-        return props.tagAlergi
-            .trim()
+        return stripEmojis(props.tagAlergi)
             .toUpperCase()
             .replace(/KHUSUS\s+ALERGI/g, "ALERGI");
     }
     if (isAlergi.value) {
         if (props.jenisAlergi && props.jenisAlergi.trim()) {
-            return `⚠️ ALERGI: ${props.jenisAlergi.trim().toUpperCase()}`;
+            return `ALERGI: ${props.jenisAlergi.trim().toUpperCase()}`;
         }
-        return "⚠️ MENU ALERGI";
+        return "MENU ALERGI";
     }
     if (isTambahan.value) {
-        if (props.subTipeTambahan === "organoleptik") return "🔬 UJI ORGANOLEPTIK";
-        if (props.subTipeTambahan === "sampel") return "🧪 SAMPEL MAKANAN";
-        if (props.subTipeTambahan === "buffer") return "📦 BUFFER PRODUKSI";
-        return "➕ PORSI TAMBAHAN";
+        if (props.subTipeTambahan === "organoleptik") return "UJI ORGANOLEPTIK";
+        if (props.subTipeTambahan === "sampel") return "SAMPEL MAKANAN";
+        if (props.subTipeTambahan === "buffer") return "BUFFER PRODUKSI";
+        return "PORSI TAMBAHAN";
     }
     return "MENU";
 });
@@ -361,10 +489,10 @@ const resolvedGizi = computed(() => {
                 height: topIsolasiHeightPx + 'px',
                 minHeight: '10px',
                 maxHeight: '190px',
-                border: isAlergi ? '1.5px dashed #f97316' : '1.5px dashed #94a3b8',
+                border: areaPerekatBg === '#ffffff' ? '1px dashed #000000' : (isAlergi ? '1px dashed #f97316' : '1px dashed #94a3b8'),
                 borderBottom: 'none',
                 borderRadius: '8px 8px 0 0',
-                backgroundColor: isAlergi ? '#fff7ed' : '#f8fafc',
+                backgroundColor: areaPerekatBg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -377,7 +505,7 @@ const resolvedGizi = computed(() => {
                 :style="{
                     fontSize: '8.5px',
                     fontWeight: '800',
-                    color: isAlergi ? '#c2410c' : '#64748b',
+                    color: areaPerekatBg === '#ffffff' ? '#000000' : (isAlergi ? '#c2410c' : '#64748b'),
                     letterSpacing: '1px',
                     textTransform: 'uppercase',
                     lineHeight: '1',
@@ -392,7 +520,7 @@ const resolvedGizi = computed(() => {
         <!-- ================= KARTU UTAMA RATA BAWAH DENGAN BORDER BIRU RESMI BGN / ORANYE ALERGI ================= -->
         <div
             :style="{
-                border: isAlergi ? '2.5px solid #ea580c' : '2.5px solid #164282',
+                border: isColored ? (isAlergi ? '1.6px solid #ea580c' : '1.6px solid #164282') : '1.6px solid #000000',
                 borderRadius: '0 0 12px 12px',
                 padding: dyn.cardPadding,
                 backgroundColor: '#ffffff',
@@ -441,7 +569,7 @@ const resolvedGizi = computed(() => {
                         :style="{
                             fontSize: dyn.instansiSubFontSize,
                             fontWeight: '800',
-                            color: '#64748b',
+                            color: isColored ? '#64748b' : '#000000',
                             letterSpacing: '0.5px',
                             textTransform: 'uppercase',
                             lineHeight: '1.1',
@@ -454,7 +582,7 @@ const resolvedGizi = computed(() => {
                         :style="{
                             fontSize: dyn.sppgTitleFontSize,
                             fontWeight: '900',
-                            color: isAlergi ? '#9a3412' : '#164282',
+                            color: isColored ? (isAlergi ? '#9a3412' : '#164282') : '#000000',
                             letterSpacing: '-0.2px',
                             textTransform: 'uppercase',
                             lineHeight: '1.1',
@@ -469,7 +597,7 @@ const resolvedGizi = computed(() => {
             <div
                 :style="{
                     height: dyn.goldLineHeight,
-                    backgroundColor: isAlergi ? '#d97706' : '#c29046',
+                    backgroundColor: garisEmasBg,
                     borderRadius: '2px',
                     marginBottom: dyn.goldLineMarginBottom,
                 }"
@@ -480,9 +608,10 @@ const resolvedGizi = computed(() => {
                 :style="{
                     display: 'flex',
                     alignItems: 'stretch',
-                    backgroundColor: isAlergi ? '#ea580c' : (isTambahan || props.tagAlergi ? '#0284c7' : '#4a85d9'),
+                    backgroundColor: menuBodyBg !== '#ffffff' ? menuBodyBg : '#ffffff',
+                    border: menuBodyBg === '#ffffff' ? '1.2px solid #000000' : '1px solid #bfdbfe',
                     borderRadius: '5px',
-                    color: '#ffffff',
+                    color: menuBodyBg !== '#ffffff' ? (isColored ? '#1e3a8a' : '#000000') : '#000000',
                     marginBottom: dyn.bannerMarginBottom,
                     minHeight: dyn.bannerMinHeight,
                     overflow: 'hidden',
@@ -491,7 +620,9 @@ const resolvedGizi = computed(() => {
             >
                 <div
                     :style="{
-                        backgroundColor: isAlergi ? '#c2410c' : (isTambahan || props.tagAlergi ? '#0369a1' : '#3b72c2'),
+                        backgroundColor: menuBadgeBg !== '#ffffff' ? menuBadgeBg : '#ffffff',
+                        color: menuBadgeBg !== '#ffffff' ? '#ffffff' : '#000000',
+                        borderRight: menuBadgeBg === '#ffffff' ? '1.2px solid #000000' : 'none',
                         fontSize: dyn.menuBadgeFontSize,
                         fontWeight: '900',
                         padding: dyn.menuBadgePadding,
@@ -519,6 +650,7 @@ const resolvedGizi = computed(() => {
                         fontSize: menuFontSizeStyle.fontSize,
                         lineHeight: menuFontSizeStyle.lineHeight,
                         fontWeight: '800',
+                        color: menuBodyBg !== '#ffffff' ? (isColored ? '#1e3a8a' : '#000000') : '#000000',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'flex-start',
@@ -566,7 +698,7 @@ const resolvedGizi = computed(() => {
                             :style="{
                                 fontSize: dyn.tglLabelFontSize,
                                 fontWeight: '800',
-                                color: '#1e293b',
+                                color: '#000000',
                                 lineHeight: '1',
                                 marginBottom: dyn.tglLabelMarginBottom,
                                 paddingLeft: '1px',
@@ -584,12 +716,12 @@ const resolvedGizi = computed(() => {
                         </div>
                         <div
                             :style="{
-                                backgroundColor: '#f1f6fd',
-                                border: '1.2px solid #c7dcf8',
+                                backgroundColor: tglBoxBg,
+                                border: tglBoxBg === '#ffffff' ? '1.2px solid #000000' : '1.2px solid #c7dcf8',
                                 borderRadius: '5px',
                                 fontSize: dyn.tglBoxFontSize,
                                 fontWeight: '900',
-                                color: '#164282',
+                                color: tglBoxBg === '#ffffff' ? '#000000' : '#164282',
                                 textAlign: 'center',
                                 letterSpacing: '0.5px',
                                 height: dyn.tglBoxHeight,
@@ -613,8 +745,8 @@ const resolvedGizi = computed(() => {
                     <!-- 2. Box Oranye WAKTU MAKSIMAL KONSUMSI -->
                     <div
                         :style="{
-                            backgroundColor: '#fff2e8',
-                            border: '1px solid #ffd9c0',
+                            backgroundColor: waktuBoxBg,
+                            border: waktuBoxBg === '#ffffff' ? '1.2px solid #000000' : '1.2px solid #ffd9c0',
                             borderRadius: '5px',
                             padding: '0 6px',
                             textAlign: 'center',
@@ -631,7 +763,7 @@ const resolvedGizi = computed(() => {
                                 :style="{
                                     fontSize: dyn.waktuHeaderFontSize,
                                     fontWeight: '900',
-                                    color: '#c2410c',
+                                    color: waktuBoxBg === '#ffffff' ? '#000000' : '#c2410c',
                                     letterSpacing: '0.2px',
                                     textTransform: 'uppercase',
                                     lineHeight: '1',
@@ -648,7 +780,7 @@ const resolvedGizi = computed(() => {
                                 :style="{
                                     fontSize: dyn.waktuSubFontSize,
                                     fontWeight: '900',
-                                    color: '#9a2c0c',
+                                    color: waktuBoxBg === '#ffffff' ? '#000000' : '#9a2c0c',
                                     lineHeight: '1',
                                     margin: '0',
                                     padding: '0',
@@ -664,9 +796,9 @@ const resolvedGizi = computed(() => {
                     <!-- 3. Box Merah LARANGAN KONSUMSI DI TEMPAT -->
                     <div
                         :style="{
-                            backgroundColor: '#fff2f2',
-                            border: '1.2px solid #fca5a5',
-                            borderLeft: '4.5px solid #dc2626',
+                            backgroundColor: laranganBoxBg,
+                            border: laranganBoxBg === '#ffffff' ? '1.2px solid #000000' : '1.2px solid #fca5a5',
+                            borderLeft: laranganBoxBg === '#ffffff' ? '4.5px solid #000000' : '4.5px solid #dc2626',
                             borderRadius: '5px',
                             padding: '0 8px',
                             textAlign: 'left',
@@ -682,7 +814,7 @@ const resolvedGizi = computed(() => {
                             :style="{
                                 fontSize: dyn.laranganHeaderFontSize,
                                 fontWeight: '900',
-                                color: '#991b1b',
+                                color: laranganBoxBg === '#ffffff' ? '#000000' : '#991b1b',
                                 letterSpacing: '-0.1px',
                                 textTransform: 'uppercase',
                                 lineHeight: '1',
@@ -703,7 +835,7 @@ const resolvedGizi = computed(() => {
                             :style="{
                                 fontSize: dyn.laranganSubFontSize,
                                 fontWeight: '900',
-                                color: '#991b1b',
+                                color: laranganBoxBg === '#ffffff' ? '#000000' : '#991b1b',
                                 letterSpacing: '0.1px',
                                 textTransform: 'uppercase',
                                 lineHeight: '1',
@@ -726,7 +858,7 @@ const resolvedGizi = computed(() => {
                         flex: `0 0 ${dyn.rightColWidth}`,
                         display: 'flex',
                         flexDirection: 'column',
-                        borderLeft: '1px dashed #cbd5e1',
+                        borderLeft: isColored ? '1px dashed #cbd5e1' : '1px dashed #000000',
                         paddingLeft: dyn.rightColPaddingLeft,
                         boxSizing: 'border-box',
                     }"
@@ -743,7 +875,7 @@ const resolvedGizi = computed(() => {
                             :style="{
                                 fontSize: dyn.giziTitleFontSize,
                                 fontWeight: '900',
-                                color: '#1e293b',
+                                color: '#000000',
                                 lineHeight: '1',
                                 whiteSpace: 'nowrap',
                                 transform: 'translateY(-3.5px)',
@@ -781,7 +913,7 @@ const resolvedGizi = computed(() => {
                                         padding: '0',
                                         fontSize: dyn.tableLabelFontSize,
                                         fontWeight: '700',
-                                        color: '#334155',
+                                        color: '#000000',
                                         whiteSpace: 'nowrap',
                                     }"
                                 >
@@ -800,7 +932,7 @@ const resolvedGizi = computed(() => {
                                         <span
                                             :style="{
                                                 fontSize: dyn.tableUnitFontSize,
-                                                color: '#64748b',
+                                                color: isColored ? '#64748b' : '#000000',
                                                 fontWeight: 'normal',
                                                 marginLeft: '2px',
                                             }"
@@ -814,12 +946,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -851,12 +983,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -892,7 +1024,7 @@ const resolvedGizi = computed(() => {
                                         padding: '0',
                                         fontSize: dyn.tableLabelFontSize,
                                         fontWeight: '700',
-                                        color: '#334155',
+                                        color: '#000000',
                                         whiteSpace: 'nowrap',
                                     }"
                                 >
@@ -911,7 +1043,7 @@ const resolvedGizi = computed(() => {
                                         <span
                                             :style="{
                                                 fontSize: dyn.tableUnitFontSize,
-                                                color: '#64748b',
+                                                color: isColored ? '#64748b' : '#000000',
                                                 fontWeight: 'normal',
                                                 marginLeft: '2px',
                                             }"
@@ -925,12 +1057,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -962,12 +1094,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1003,7 +1135,7 @@ const resolvedGizi = computed(() => {
                                         padding: '0',
                                         fontSize: dyn.tableLabelFontSize,
                                         fontWeight: '700',
-                                        color: '#334155',
+                                        color: '#000000',
                                         whiteSpace: 'nowrap',
                                     }"
                                 >
@@ -1022,7 +1154,7 @@ const resolvedGizi = computed(() => {
                                         <span
                                             :style="{
                                                 fontSize: dyn.tableUnitFontSize,
-                                                color: '#64748b',
+                                                color: isColored ? '#64748b' : '#000000',
                                                 fontWeight: 'normal',
                                                 marginLeft: '2px',
                                             }"
@@ -1036,12 +1168,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1073,12 +1205,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1114,7 +1246,7 @@ const resolvedGizi = computed(() => {
                                         padding: '0',
                                         fontSize: dyn.tableLabelFontSize,
                                         fontWeight: '700',
-                                        color: '#334155',
+                                        color: '#000000',
                                         whiteSpace: 'nowrap',
                                     }"
                                 >
@@ -1133,7 +1265,7 @@ const resolvedGizi = computed(() => {
                                         <span
                                             :style="{
                                                 fontSize: dyn.tableUnitFontSize,
-                                                color: '#64748b',
+                                                color: isColored ? '#64748b' : '#000000',
                                                 fontWeight: 'normal',
                                                 marginLeft: '2px',
                                             }"
@@ -1147,12 +1279,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1184,12 +1316,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1225,7 +1357,7 @@ const resolvedGizi = computed(() => {
                                         padding: '0',
                                         fontSize: dyn.tableLabelFontSize,
                                         fontWeight: '700',
-                                        color: '#334155',
+                                        color: '#000000',
                                         whiteSpace: 'nowrap',
                                     }"
                                 >
@@ -1244,7 +1376,7 @@ const resolvedGizi = computed(() => {
                                         <span
                                             :style="{
                                                 fontSize: dyn.tableUnitFontSize,
-                                                color: '#64748b',
+                                                color: isColored ? '#64748b' : '#000000',
                                                 fontWeight: 'normal',
                                                 marginLeft: '2px',
                                             }"
@@ -1258,12 +1390,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1295,12 +1427,12 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableRowHeight,
-                                        backgroundColor: '#f1f6fd',
-                                        border: '1px solid #c7dcf8',
+                                        backgroundColor: giziCellBg,
+                                        border: giziCellBorder,
                                         borderRadius: '3.5px',
                                         fontSize: dyn.tableValueFontSize,
                                         fontWeight: '900',
-                                        color: '#164282',
+                                        color: giziCellColor,
                                     }"
                                 >
                                     <div
@@ -1336,9 +1468,10 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableHeaderRowHeight,
-                                        backgroundColor: '#5a94e2',
+                                        backgroundColor: footerPorsiCellBg,
                                         borderRadius: '3.5px',
-                                        color: '#ffffff',
+                                        color: footerPorsiCellColor,
+                                        border: footerPorsiCellBorder,
                                         fontSize: dyn.tableHeaderFontSize,
                                         fontWeight: '900',
                                         lineHeight: '1',
@@ -1383,9 +1516,10 @@ const resolvedGizi = computed(() => {
                                         textAlign: 'center',
                                         padding: '0',
                                         height: dyn.tableHeaderRowHeight,
-                                        backgroundColor: '#5a94e2',
+                                        backgroundColor: footerPorsiCellBg,
                                         borderRadius: '3.5px',
-                                        color: '#ffffff',
+                                        color: footerPorsiCellColor,
+                                        border: footerPorsiCellBorder,
                                         fontSize: dyn.tableHeaderFontSize,
                                         fontWeight: '900',
                                         lineHeight: '1',
@@ -1426,6 +1560,110 @@ const resolvedGizi = computed(() => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- ================= 4. KONTAK PENGADUAN MEMANJANG (KIRI KANAN FULL) ================= -->
+            <div
+                :style="{
+                    width: '100%',
+                    backgroundColor: kontakBoxBg,
+                    border: kontakBoxBg === '#ffffff' ? (isColored ? '1px solid #cbd5e1' : '1px solid #000000') : '1px solid #c7dcf8',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    height: dyn.kontakBoxHeight,
+                    marginTop: dyn.kontakMarginTop,
+                    overflow: 'hidden',
+                    boxSizing: 'border-box',
+                    flexShrink: 0,
+                }"
+            >
+                <!-- Badge Kiri: KONTAK PENGADUAN -->
+                <div
+                    :style="{
+                        backgroundColor: isColored ? (kontakBoxBg !== '#ffffff' ? '#164282' : '#3b72c2') : '#ffffff',
+                        color: isColored ? '#ffffff' : '#000000',
+                        borderRight: isColored && kontakBoxBg !== '#ffffff' ? 'none' : (isColored ? '1px solid #3b72c2' : '1px solid #000000'),
+                        fontSize: dyn.kontakBadgeFontSize,
+                        fontWeight: '900',
+                        padding: dyn.kontakBadgePadding,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        letterSpacing: '0.4px',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        lineHeight: '1',
+                    }"
+                >
+                    <span style="display: block; line-height: 1; transform: translateY(-0.5px);">
+                        KONTAK PENGADUAN
+                    </span>
+                </div>
+
+                <!-- Isi Kontak: 2 Kolom x 2 Baris (Email & TikTok di Kiri, Instagram & Facebook di Kanan) -->
+                <div
+                    :style="{
+                        display: 'flex',
+                        alignItems: 'stretch',
+                        flex: '1',
+                        overflow: 'hidden',
+                        fontSize: dyn.kontakTextFontSize,
+                        fontWeight: '700',
+                        color: isColored ? '#164282' : '#000000',
+                        lineHeight: '1.25',
+                    }"
+                >
+                    <!-- Kolom 1 (Kiri): Email & TikTok -->
+                    <div
+                        style="
+                            flex: 1;
+                            min-width: 0;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: space-around;
+                            padding: 2px 6px;
+                            overflow: hidden;
+                        "
+                    >
+                        <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;">
+                            {{ contactDisplayLines[0] }}
+                        </div>
+                        <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;">
+                            {{ contactDisplayLines[2] }}
+                        </div>
+                    </div>
+
+                    <!-- Divider Tengah Vertikal -->
+                    <div
+                        :style="{
+                            width: '1px',
+                            backgroundColor: isColored ? '#cbd5e1' : '#000000',
+                            margin: '3px 0',
+                            flexShrink: 0,
+                        }"
+                    ></div>
+
+                    <!-- Kolom 2 (Kanan): Instagram & Facebook -->
+                    <div
+                        style="
+                            flex: 1;
+                            min-width: 0;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: space-around;
+                            padding: 2px 6px;
+                            overflow: hidden;
+                        "
+                    >
+                        <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;">
+                            {{ contactDisplayLines[1] }}
+                        </div>
+                        <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;">
+                            {{ contactDisplayLines[3] }}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

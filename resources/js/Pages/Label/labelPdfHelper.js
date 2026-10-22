@@ -175,16 +175,557 @@ async function preRenderUniqueTemplates({
     };
 }
 
+// ============================================================================
+// TEMPLATE 01 (Desain Grafis Modern BGN - Pure Vector & Base Text PDF)
+// ============================================================================
+
+export function formatTglTpl01(tgl) {
+    if (!tgl) return "22/10/2026";
+    const str = String(tgl).trim();
+    if (str.includes("/")) return str;
+    const parts = str.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return str;
+}
+
+// Helper hex to RGB
+export function hexToRgb(hex, defaultRgb = [255, 255, 255]) {
+    if (!hex || hex === "transparent" || hex === "none" || hex === "white") return defaultRgb;
+    const clean = String(hex).replace("#", "").trim();
+    if (clean.length === 3) {
+        const r = parseInt(clean[0] + clean[0], 16);
+        const g = parseInt(clean[1] + clean[1], 16);
+        const b = parseInt(clean[2] + clean[2], 16);
+        return isNaN(r) || isNaN(g) || isNaN(b) ? defaultRgb : [r, g, b];
+    }
+    if (clean.length === 6) {
+        const num = parseInt(clean, 16);
+        if (isNaN(num)) return defaultRgb;
+        return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+    }
+    return defaultRgb;
+}
+
+export function isWhiteRgb(rgb) {
+    return Array.isArray(rgb) && rgb[0] >= 250 && rgb[1] >= 250 && rgb[2] >= 250;
+}
+
 /**
- * Download Single Mode PDF (Exact 9cm x 6cm Fixed Landscape per Page)
- * Supports thousands of labels with ultra-fast aliased image insertion & ETA.
+ * Draw single Template 01 Card using Pure Text & Vector jsPDF elements (Base Text)
+ * Pixel-perfect match with LabelCardItem.vue (Standard 90mm x 60mm Card)
+ */
+export function drawTemplate01Card(doc, x, y, item = {}, globalConfig = {}) {
+    const cardW = 90.0;
+    const cardH = 60.0;
+
+    const isAlergi = item.tipeLabel === "alergi";
+    const isTambahan = item.tipeLabel === "tambahan";
+
+    const customColors = globalConfig.template01Colors || globalConfig.customColors || {};
+    const isColored = Object.values(customColors).some(
+        (val) => val && String(val).toLowerCase() !== "#ffffff" && val !== "transparent" && val !== "none"
+    );
+
+    // 1. AREA PEREKAT LABEL (TOP: 13.5 mm)
+    const hPerekat = 13.5;
+    const yMain = y + hPerekat;
+    const hMain = cardH - hPerekat;
+
+    const colAreaPerekat = hexToRgb(customColors.areaPerekat, [255, 255, 255]);
+    const isAreaPerekatWhite = isWhiteRgb(colAreaPerekat);
+
+    doc.setFillColor(...colAreaPerekat);
+    doc.setDrawColor(
+        isAreaPerekatWhite
+            ? 0
+            : (isAlergi ? 249 : 148),
+        isAreaPerekatWhite
+            ? 0
+            : (isAlergi ? 115 : 163),
+        isAreaPerekatWhite
+            ? 0
+            : (isAlergi ? 22 : 184)
+    );
+    doc.setLineDashPattern([1.5, 1.2], 0);
+    doc.setLineWidth(0.20);
+    doc.roundedRect(x + 0.3, y + 0.3, cardW - 0.6, hPerekat, 1.5, 1.5, "FD");
+    doc.setLineDashPattern([], 0);
+
+    doc.setTextColor(
+        isAreaPerekatWhite ? 0 : (isAlergi ? 194 : 100),
+        isAreaPerekatWhite ? 0 : (isAlergi ? 65 : 116),
+        isAreaPerekatWhite ? 0 : (isAlergi ? 12 : 139)
+    );
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.0);
+    const teksPerekat = isAlergi
+        ? "- - - - - AREA PEREKAT LABEL • KEMASAN ALERGI - - - - -"
+        : "- - - - - - - - - AREA PEREKAT LABEL - - - - - - - - -";
+    doc.text(teksPerekat, x + (cardW / 2), y + (hPerekat / 2) + 0.6, { align: "center" });
+
+    // 2. KARTU UTAMA RATA BAWAH (BORDER HITAM DEFAULT / BIRU RESMI BGN / ORANYE ALERGI)
+    const colBorder = isColored ? (isAlergi ? [234, 88, 12] : [22, 66, 130]) : [0, 0, 0];
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(...colBorder);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x + 0.3, yMain, cardW - 0.6, hMain - 0.4, 2.0, 2.0, "FD");
+
+    // 3. HEADER: LOGO RESMI BGN & TEKS INSTANSI
+    const yH = yMain + 1.2;
+    const hLogo = 6.8;
+    const wLogo = hLogo * (5464 / 3072); // ~12.1 mm (aspek rasio proporsional, tidak gepeng)
+    doc.addImage(bgnLogoBase64, "PNG", x + 2.0, yH, wLogo, hLogo, "BGN_LOGO_TPL1", "FAST");
+
+    doc.setTextColor(...(isColored ? [100, 116, 139] : [0, 0, 0]));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.4);
+    doc.text("SATUAN PELAYANAN PEMENUHAN GIZI", x + cardW - 2.5, yH + 2.4, { align: "right" });
+
+    let sppgText = (globalConfig.namaSppg || item.kelompok?.nama_sppg || "SPPG BULELENG SUKASADA TEGALLINGGAH").trim().toUpperCase();
+    if (!sppgText.startsWith("SPPG")) sppgText = "SPPG " + sppgText;
+    let sppgSize = 6.4;
+    if (sppgText.length > 40) sppgSize = 4.6;
+    else if (sppgText.length > 28) sppgSize = 5.4;
+    doc.setFontSize(sppgSize);
+    doc.setTextColor(...(isColored ? (isAlergi ? [154, 52, 18] : [22, 66, 130]) : [0, 0, 0]));
+    doc.text(sppgText, x + cardW - 2.5, yH + 5.2, { align: "right" });
+
+    // 4. GARIS PEMBATAS
+    const yGold = yH + 7.0;
+    const colGarisEmas = hexToRgb(customColors.garisEmas, [255, 255, 255]);
+    if (isWhiteRgb(colGarisEmas)) {
+        doc.setFillColor(0, 0, 0); // Garis hitam tegas di mode tanpa warna
+    } else {
+        doc.setFillColor(...colGarisEmas);
+    }
+    doc.rect(x + 2.0, yGold, cardW - 4.0, 0.4, "F");
+
+    // 5. BANNER MENU (PILL BADGE & TEKS MENU MAKANAN)
+    const yMenu = yGold + 1.0;
+    const hMenu = 4.8;
+    let badgeText = "MENU";
+    let defaultColBadge = [59, 114, 194];
+    let defaultColMenuBg = [239, 246, 255];
+    let colMenuBorder = [191, 219, 254];
+    let colMenuText = [30, 58, 138];
+
+    // Helper untuk membersihkan emoji unicode & simbol mojibake (hanya teks murni)
+    const sanitizeTextOnly = (str) => {
+        if (!str) return "";
+        return String(str)
+            .replace(/[\u{1F000}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}]/gu, "")
+            .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+    };
+
+    if (isAlergi || (item.tagAlergi && /alergi/i.test(item.tagAlergi))) {
+        let jenis = (item.jenisAlergi || "").trim().toUpperCase();
+        if (!jenis && item.tagAlergi) {
+            jenis = sanitizeTextOnly(item.tagAlergi)
+                .replace(/^(KHUSUS\s+)?ALERGI:?\s*/i, "")
+                .trim()
+                .toUpperCase();
+        }
+        badgeText = jenis ? `ALERGI: ${jenis}` : "MENU ALERGI";
+        defaultColBadge = [194, 65, 12];
+        defaultColMenuBg = [255, 247, 237];
+        colMenuBorder = [254, 215, 170];
+        colMenuText = [154, 52, 18];
+    } else if (isTambahan || item.subTipeTambahan) {
+        const sub = item.subTipeTambahan || "";
+        const tag = item.tagAlergi || "";
+        if (sub === "organoleptik" || /organoleptik/i.test(tag)) {
+            badgeText = "UJI ORGANOLEPTIK";
+        } else if (sub === "sampel" || /sampel/i.test(tag)) {
+            badgeText = "SAMPEL MAKANAN";
+        } else if (sub === "buffer" || /buffer/i.test(tag)) {
+            badgeText = "BUFFER PRODUKSI";
+        } else {
+            badgeText = "PORSI TAMBAHAN";
+        }
+        defaultColBadge = [194, 65, 12];
+        defaultColMenuBg = [255, 247, 237];
+        colMenuBorder = [254, 215, 170];
+        colMenuText = [154, 52, 18];
+    } else if (item.tagAlergi && String(item.tagAlergi).trim()) {
+        badgeText = sanitizeTextOnly(item.tagAlergi).toUpperCase();
+        defaultColBadge = [194, 65, 12];
+        defaultColMenuBg = [255, 247, 237];
+        colMenuBorder = [254, 215, 170];
+        colMenuText = [154, 52, 18];
+    }
+
+    const colBadge = hexToRgb(customColors.menuBadge, [255, 255, 255]);
+    const isBadgeWhite = isWhiteRgb(colBadge);
+
+    const colMenuBg = hexToRgb(customColors.menuBody, [255, 255, 255]);
+    const isMenuBgWhite = isWhiteRgb(colMenuBg);
+
+    // Auto-fit Badge Width & Font Size (Dipastikan Muat Semua Tanpa Terpotong)
+    doc.setFont("helvetica", "bold");
+    let wBadge = 14.0;
+    let badgeSize = 5.0;
+
+    if (badgeText !== "MENU") {
+        wBadge = 28.0;
+        badgeSize = 4.3;
+        doc.setFontSize(badgeSize);
+        let tw = doc.getTextWidth(badgeText);
+
+        while (tw > (wBadge - 2.8) && badgeSize > 3.0) {
+            badgeSize -= 0.15;
+            doc.setFontSize(badgeSize);
+            tw = doc.getTextWidth(badgeText);
+        }
+
+        if (tw > (wBadge - 2.8)) {
+            wBadge = Math.min(33.0, tw + 2.8);
+        } else if (tw + 4.5 < wBadge && wBadge > 22.0) {
+            wBadge = Math.max(22.0, tw + 3.8);
+        }
+    }
+
+    // Badge Kiri
+    doc.setFillColor(...colBadge);
+    if (isBadgeWhite) {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(x + 2.0, yMenu, wBadge, hMenu, 0.8, 0.8, "FD");
+        doc.setTextColor(0, 0, 0);
+    } else {
+        doc.roundedRect(x + 2.0, yMenu, wBadge, hMenu, 0.8, 0.8, "F");
+        doc.setTextColor(255, 255, 255);
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(badgeSize);
+    doc.text(badgeText, x + 2.0 + (wBadge / 2), yMenu + (hMenu / 2) + 0.6, { align: "center" });
+
+    // Menu Kanan
+    const wMenuBody = (cardW - 4.0) - wBadge;
+    doc.setFillColor(...colMenuBg);
+    doc.setDrawColor(...(isMenuBgWhite ? [0, 0, 0] : colMenuBorder));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x + 2.0 + wBadge, yMenu, wMenuBody, hMenu, 0.8, 0.8, "FD");
+
+    let menuItems = item.menuItems;
+    if (!menuItems || !Array.isArray(menuItems) || menuItems.length === 0) {
+        menuItems = globalConfig.menuItems || [];
+    }
+    const menuStr = Array.isArray(menuItems) ? menuItems.map(m => String(m).trim()).filter(Boolean).join(" - ") : String(menuItems || "");
+    doc.setTextColor(...(isMenuBgWhite ? [0, 0, 0] : colMenuText));
+    doc.setFont("helvetica", "bold");
+    let menuFontSize = 4.6;
+    if (menuStr.length > 115) menuFontSize = 3.6;
+    else if (menuStr.length > 80) menuFontSize = 4.0;
+    doc.setFontSize(menuFontSize);
+    const menuLines = doc.splitTextToSize(menuStr, wMenuBody - 3.0);
+    if (menuLines.length === 1) {
+        doc.text(menuLines[0], x + 2.0 + wBadge + 1.5, yMenu + (hMenu / 2) + 0.6);
+    } else {
+        doc.text(menuLines.slice(0, 2), x + 2.0 + wBadge + 1.5, yMenu + 1.9);
+    }
+
+    // 6. BODY CONTENT (2 KOLOM: KIRI = 54.5 mm, KANAN = 30.0 mm)
+    const yBody = yMenu + hMenu + 1.0;
+    const wLeft = 54.5;
+    const wRight = cardW - 4.0 - wLeft - 1.5;
+    const xRight = x + 2.0 + wLeft + 1.5;
+
+    // === KOLOM KIRI ===
+    // 6a. Tanggal Produksi
+    const isShowJamProd = Boolean(
+        globalConfig.tampilkanJamProduksi &&
+        globalConfig.jamProduksi &&
+        String(globalConfig.jamProduksi).trim()
+    );
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.4);
+    doc.setTextColor(0, 0, 0);
+    doc.text(isShowJamProd ? "Tanggal & Jam Produksi" : "Tanggal Produksi", x + 2.0, yBody + 1.4);
+
+    const yBoxTgl = yBody + 2.0;
+    const hBoxTgl = 4.5;
+    const colTglBox = hexToRgb(customColors.tglBox, [255, 255, 255]);
+    const isTglBoxWhite = isWhiteRgb(colTglBox);
+    doc.setFillColor(...colTglBox);
+    doc.setDrawColor(...(isTglBoxWhite ? [0, 0, 0] : [199, 220, 248]));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x + 2.0, yBoxTgl, wLeft, hBoxTgl, 0.8, 0.8, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(isShowJamProd ? 6.0 : 7.2);
+    doc.setTextColor(...(isTglBoxWhite ? [0, 0, 0] : [22, 66, 130]));
+    let tglStr = formatTglTpl01(globalConfig.tanggalProduksi);
+    if (isShowJamProd) tglStr += " " + String(globalConfig.jamProduksi).trim();
+    doc.text(tglStr, x + 2.0 + (wLeft / 2), yBoxTgl + (hBoxTgl / 2) + 0.8, { align: "center" });
+
+    // 6b. Batas Maksimal Konsumsi (Kotak Oranye Diperlebar & Kompak)
+    const yBoxWaktu = yBoxTgl + hBoxTgl + 0.8;
+    const hBoxWaktu = 7.4;
+    const colWaktuBox = hexToRgb(customColors.waktuBox, [255, 255, 255]);
+    const isWaktuBoxWhite = isWhiteRgb(colWaktuBox);
+    doc.setFillColor(...colWaktuBox);
+    doc.setDrawColor(...(isWaktuBoxWhite ? [0, 0, 0] : [255, 217, 192]));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x + 2.0, yBoxWaktu, wLeft, hBoxWaktu, 0.8, 0.8, "FD");
+
+    if (!isTambahan) {
+        const jamExp = item.jamExpired || globalConfig.jamExpired;
+        const tampilExp = item.tampilkanJamExpired !== undefined
+            ? item.tampilkanJamExpired
+            : globalConfig.tampilkanJamExpired;
+        const zona = globalConfig.zonaWaktu ? " " + globalConfig.zonaWaktu : "";
+
+        const headerWaktu = (tampilExp && jamExp && String(jamExp).trim())
+            ? "BATAS MAKSIMAL KONSUMSI"
+            : "WAKTU MAKSIMAL KONSUMSI";
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(4.3);
+        doc.setTextColor(...(isWaktuBoxWhite ? [0, 0, 0] : [194, 65, 12]));
+        doc.text(headerWaktu, x + 2.0 + (wLeft / 2), yBoxWaktu + 2.5, { align: "center" });
+
+        let waktuStr = "";
+        if (tampilExp && jamExp && String(jamExp).trim()) {
+            waktuStr = "SEBELUM JAM " + String(jamExp).trim() + zona;
+        } else {
+            waktuStr = item.waktuMaksimal || globalConfig.waktuMaksimal || "2 JAM SETELAH DITERIMA!";
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...(isWaktuBoxWhite ? [0, 0, 0] : [154, 44, 12]));
+        let waktuFontSize = 6.8;
+        if (waktuStr.length > 25) waktuFontSize = 5.4;
+        else if (waktuStr.length > 20) waktuFontSize = 6.0;
+        doc.setFontSize(waktuFontSize);
+        doc.text(waktuStr, x + 2.0 + (wLeft / 2), yBoxWaktu + 5.7, { align: "center" });
+    }
+
+    // 6c. Larangan Konsumsi di Tempat (Kotak Merah Kompak)
+    const yBoxLarangan = yBoxWaktu + hBoxWaktu + 0.8;
+    const hBoxLarangan = 6.8;
+    const colLaranganBox = hexToRgb(customColors.laranganBox, [255, 255, 255]);
+    const isLaranganBoxWhite = isWhiteRgb(colLaranganBox);
+    doc.setFillColor(...colLaranganBox);
+    doc.setDrawColor(...(isLaranganBoxWhite ? [0, 0, 0] : [252, 165, 165]));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x + 2.0, yBoxLarangan, wLeft, hBoxLarangan, 0.8, 0.8, "FD");
+
+    // Aksen Garis Merah/Hitam Tebal di Sisi Kiri Kotak
+    doc.setFillColor(...(isLaranganBoxWhite ? [0, 0, 0] : [220, 38, 38]));
+    doc.roundedRect(x + 2.0, yBoxLarangan, 1.0, hBoxLarangan, 0.5, 0.5, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.0);
+    doc.setTextColor(...(isLaranganBoxWhite ? [0, 0, 0] : [153, 27, 27]));
+    const laranganHead = globalConfig.teksLaranganHeader || "MAKANAN INI HANYA UNTUK DIKONSUMSI DI TEMPAT.";
+    doc.text(laranganHead, x + 3.8, yBoxLarangan + 2.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.4);
+    doc.setTextColor(...(isLaranganBoxWhite ? [0, 0, 0] : [153, 27, 27]));
+    const laranganSub = globalConfig.teksLaranganSub || "DILARANG MEMBAWA PULANG!";
+    doc.text(laranganSub, x + 3.8, yBoxLarangan + 5.4);
+
+    // === KOLOM KANAN: TABEL KANDUNGAN GIZI ===
+    const wGiziLabel = 14.0;
+    const wPk = 7.5;
+    const wPb = 7.5;
+    const xPk = xRight + wGiziLabel + 0.5;
+    const xPb = xPk + wPk + 0.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.4);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Kandungan Gizi", xRight, yBody + 1.4);
+
+    const gd = item.giziData || globalConfig.giziData || {};
+    const formatGizi = (v, def = "-") => {
+        if (v === undefined || v === null || String(v).trim() === "") return def;
+        return String(v).trim().replace(".", ",");
+    };
+
+    const giziRows = [
+        { label: "Energi (Kkal)", pk: formatGizi(gd.energi_pk || gd.energy_pk, "464,71"), pb: formatGizi(gd.energi_pb || gd.energy_pb, "877,01") },
+        { label: "Karbohidrat (g)", pk: formatGizi(gd.karbo_pk || gd.karbohidrat_pk, "67,61"), pb: formatGizi(gd.karbo_pb || gd.karbohidrat_pb, "131,21") },
+        { label: "Protein (g)", pk: formatGizi(gd.prot_pk || gd.protein_pk, "15,41"), pb: formatGizi(gd.prot_pb || gd.protein_pb, "28,61") },
+        { label: "Lemak (g)", pk: formatGizi(gd.lmk_pk || gd.lemak_pk, "14,41"), pb: formatGizi(gd.lmk_pb || gd.lemak_pb, "25,71") },
+        { label: "Serat (g)", pk: formatGizi(gd.serat_pk, "1,61"), pb: formatGizi(gd.serat_pb, "2,71") },
+    ];
+
+    const yTableStart = yBody + 1.8;
+    const hGiziRow = 2.9;
+    const gapGiziRow = 0.40;
+
+    const colGiziBox = hexToRgb(customColors.giziBox, [255, 255, 255]);
+    const isGiziBoxWhite = isWhiteRgb(colGiziBox);
+
+    // 5 Baris Data Kandungan Gizi
+    giziRows.forEach((gr, i) => {
+        const rowY = yTableStart + (i * (hGiziRow + gapGiziRow));
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(3.8);
+        doc.setTextColor(0, 0, 0);
+        doc.text(gr.label, xRight, rowY + 2.05);
+
+        doc.setFillColor(...colGiziBox);
+        doc.setDrawColor(...(isGiziBoxWhite ? [0, 0, 0] : [199, 220, 248]));
+        doc.setLineWidth(0.18);
+        doc.roundedRect(xPk, rowY, wPk, hGiziRow, 0.5, 0.5, "FD");
+        doc.roundedRect(xPb, rowY, wPb, hGiziRow, 0.5, 0.5, "FD");
+
+        doc.setTextColor(...(isGiziBoxWhite ? [0, 0, 0] : [22, 66, 130]));
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(4.4);
+        doc.text(String(gr.pk), xPk + (wPk / 2), rowY + 2.05, { align: "center" });
+        doc.text(String(gr.pb), xPb + (wPb / 2), rowY + 2.05, { align: "center" });
+    });
+
+    // Baris ke-6: Footer Porsi Kecil & Porsi Besar di Bawah Serat
+    const yFooter = yTableStart + 5 * (hGiziRow + gapGiziRow);
+    const hFooter = 3.3;
+
+    const colFooterPorsi = hexToRgb(customColors.footerPorsi, [255, 255, 255]);
+    const isFooterPorsiWhite = isWhiteRgb(colFooterPorsi);
+
+    doc.setFillColor(...colFooterPorsi);
+    if (isFooterPorsiWhite) {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.18);
+        doc.roundedRect(xPk, yFooter, wPk, hFooter, 0.6, 0.6, "FD");
+        doc.roundedRect(xPb, yFooter, wPb, hFooter, 0.6, 0.6, "FD");
+        doc.setTextColor(0, 0, 0);
+    } else {
+        doc.roundedRect(xPk, yFooter, wPk, hFooter, 0.6, 0.6, "F");
+        doc.roundedRect(xPb, yFooter, wPb, hFooter, 0.6, 0.6, "F");
+        doc.setTextColor(255, 255, 255);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(3.2);
+    doc.text("Porsi", xPk + (wPk / 2), yFooter + 1.3, { align: "center" });
+    doc.text("Kecil", xPk + (wPk / 2), yFooter + 2.6, { align: "center" });
+
+    doc.text("Porsi", xPb + (wPb / 2), yFooter + 1.3, { align: "center" });
+    doc.text("Besar", xPb + (wPb / 2), yFooter + 2.6, { align: "center" });
+
+    // Garis putus-putus pembatas kolom kiri dan kanan
+    doc.setDrawColor(...(isColored ? [203, 213, 225] : [0, 0, 0]));
+    doc.setLineDashPattern([1.0, 1.0], 0);
+    doc.line(xRight - 0.8, yBody + 0.5, xRight - 0.8, yFooter + hFooter);
+    doc.setLineDashPattern([], 0);
+
+    // ================= 7. BARIS BAWAH: KONTAK PENGADUAN MEMANJANG FULL-WIDTH =================
+    const yKontak = Math.max(yBoxLarangan + hBoxLarangan, yFooter + hFooter) + 0.8;
+    const hKontak = 5.8;
+    const wKontak = cardW - 4.0;
+    const wBadgeKontak = 17.5;
+
+    const colKontakBox = hexToRgb(customColors.kontakBox || customColors.kontak, [255, 255, 255]);
+    const isKontakBoxWhite = isWhiteRgb(colKontakBox);
+
+    // Box Kontainer Memanjang
+    doc.setFillColor(...colKontakBox);
+    doc.setDrawColor(...(isKontakBoxWhite ? (isColored ? [203, 213, 225] : [0, 0, 0]) : [199, 220, 248]));
+    doc.setLineWidth(0.20);
+    doc.roundedRect(x + 2.0, yKontak, wKontak, hKontak, 0.6, 0.6, "FD");
+
+    // Badge Kiri: KONTAK PENGADUAN
+    if (isColored) {
+        doc.setFillColor(...(isKontakBoxWhite ? [59, 114, 194] : [22, 66, 130]));
+        doc.roundedRect(x + 2.0, yKontak, wBadgeKontak, hKontak, 0.6, 0.6, "F");
+        doc.setTextColor(255, 255, 255);
+    } else {
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.20);
+        doc.roundedRect(x + 2.0, yKontak, wBadgeKontak, hKontak, 0.6, 0.6, "FD");
+        doc.setTextColor(0, 0, 0);
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(3.6);
+    doc.text("KONTAK PENGADUAN", x + 2.0 + (wBadgeKontak / 2), yKontak + (hKontak / 2) + 0.5, { align: "center" });
+
+    // 4 Item Kontak: 2 Kolom x 2 Baris di Sebelah Kanan Badge
+    const sm = getSocialMediaTpl02(sppgText);
+    const contactLines = [
+        globalConfig.kontakBaris1?.trim() || item.kontakBaris1?.trim() || "Email: halo@bgn.go.id",
+        globalConfig.kontakBaris2?.trim() || item.kontakBaris2?.trim() || sm.ig,
+        globalConfig.kontakBaris3?.trim() || item.kontakBaris3?.trim() || sm.tiktok,
+        globalConfig.kontakBaris4?.trim() || item.kontakBaris4?.trim() || sm.fb,
+    ];
+
+    const wContactArea = wKontak - wBadgeKontak;
+    const wCol = wContactArea / 2;
+    const xContactStart = x + 2.0 + wBadgeKontak;
+    const divX = xContactStart + wCol;
+
+    // Garis pemisah tengah antar kolom kiri dan kanan
+    doc.setDrawColor(...(isColored ? [203, 213, 225] : [0, 0, 0]));
+    doc.setLineWidth(0.18);
+    doc.line(divX, yKontak + 0.7, divX, yKontak + hKontak - 0.7);
+
+    // Helper text-fit jsPDF agar ukuran huruf mantap & tidak pernah menabrak pembatas / keluar kartu
+    const maxColWidth = wCol - 2.8; // batas aman teks dalam kolom (lebar ~31.4 mm)
+    const getFitContactText = (str, initialSize = 4.0, minSize = 2.8) => {
+        let size = initialSize;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(size);
+        let tw = doc.getTextWidth(str);
+        while (tw > maxColWidth && size > minSize) {
+            size -= 0.15;
+            doc.setFontSize(size);
+            tw = doc.getTextWidth(str);
+        }
+        if (tw > maxColWidth) {
+            let truncated = str;
+            while (truncated.length > 3 && doc.getTextWidth(truncated + "...") > maxColWidth) {
+                truncated = truncated.slice(0, -1);
+            }
+            return { text: truncated + "...", size };
+        }
+        return { text: str, size };
+    };
+
+    doc.setTextColor(...(isColored ? [22, 66, 130] : [0, 0, 0]));
+    const col1CenterX = xContactStart + (wCol / 2);
+    const col2CenterX = divX + (wCol / 2);
+    const yRow1 = yKontak + 2.1;
+    const yRow2 = yKontak + 4.6;
+
+    // Kolom 1 (Kiri): Email (Baris 1) & TikTok (Baris 2)
+    const fitEmail = getFitContactText(contactLines[0]);
+    doc.setFontSize(fitEmail.size);
+    doc.text(fitEmail.text, col1CenterX, yRow1, { align: "center" });
+
+    const fitTiktok = getFitContactText(contactLines[2]);
+    doc.setFontSize(fitTiktok.size);
+    doc.text(fitTiktok.text, col1CenterX, yRow2, { align: "center" });
+
+    // Kolom 2 (Kanan): Instagram (Baris 1) & Facebook (Baris 2)
+    const fitIg = getFitContactText(contactLines[1]);
+    doc.setFontSize(fitIg.size);
+    doc.text(fitIg.text, col2CenterX, yRow1, { align: "center" });
+
+    const fitFb = getFitContactText(contactLines[3]);
+    doc.setFontSize(fitFb.size);
+    doc.text(fitFb.text, col2CenterX, yRow2, { align: "center" });
+}
+
+/**
+ * Download Template 01 - Pure Text Vector PDF (Single Label: 90mm x 60mm per Page)
  */
 export async function downloadPdfSingleMode({
     printableItems = [],
     printableKelompokList = [],
     customCount = null,
+    globalConfig = {},
     getRenderElement,
-    filename = "Label_BGN_9x6cm_Tunggal.pdf",
+    filename = "Label_BGN_Template01_Tunggal.pdf",
     isCancelled = () => false,
     onProgress = () => {},
 }) {
@@ -198,8 +739,8 @@ export async function downloadPdfSingleMode({
             ? parseInt(customCount, 10)
             : list.length;
 
-    const pageW = 90;
-    const pageH = 60;
+    const pageW = 90.0;
+    const pageH = 60.0;
 
     const doc = new jsPDF({
         orientation: "landscape",
@@ -210,24 +751,6 @@ export async function downloadPdfSingleMode({
 
     const startTime = Date.now();
 
-    const { getTemplate } = await preRenderUniqueTemplates({
-        printableItems,
-        printableKelompokList,
-        getRenderElement,
-        startTime,
-        isCancelled,
-        onProgress,
-    });
-
-    if (isCancelled && isCancelled()) {
-        const err = new Error("Proses dibatalkan.");
-        err.name = "AbortError";
-        throw err;
-    }
-
-    const phase2Start = Date.now();
-    const updateInterval = Math.max(1, Math.min(25, Math.floor(total / 50)));
-
     for (let i = 0; i < total; i++) {
         if (isCancelled && isCancelled()) {
             const err = new Error("Proses dibatalkan.");
@@ -236,32 +759,20 @@ export async function downloadPdfSingleMode({
         }
 
         const item = list[i % list.length];
-        const template = getTemplate(item, i);
-
         if (i > 0) {
             doc.addPage([pageW, pageH], "landscape");
         }
 
-        // Add aliased image to PDF
-        doc.addImage(
-            template.imgData,
-            "JPEG",
-            0,
-            0,
-            pageW,
-            pageH,
-            template.alias,
-            "FAST",
-        );
+        drawTemplate01Card(doc, 0, 0, item, globalConfig);
 
-        if (i % updateInterval === 0 || i === total - 1) {
-            const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
-            const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+        if (i % 25 === 0 || i === total - 1) {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = (i + 1) / Math.max(0.05, elapsed);
             const remaining = total - (i + 1);
             const etaSec = Math.ceil(remaining / Math.max(1, speed));
             const percentage = Math.min(
                 95,
-                75 + Math.round(((i + 1) / total) * 20),
+                Math.round(((i + 1) / total) * 95),
             );
 
             onProgress({
@@ -273,10 +784,9 @@ export async function downloadPdfSingleMode({
                 percentage,
                 etaText: formatDetailedEta(etaSec),
                 speedText: `${Math.round(speed)} label/dtk`,
-                message: `Menyusun dokumen PDF label (${i + 1} dari ${total})...`,
+                message: `Menyusun teks vektor label ${i + 1} dari ${total}...`,
             });
 
-            // Yield to browser thread for smooth UI update
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
     }
@@ -286,18 +796,6 @@ export async function downloadPdfSingleMode({
         err.name = "AbortError";
         throw err;
     }
-
-    onProgress({
-        phase: "saving",
-        current: total,
-        total,
-        totalPages: total,
-        currentPage: total,
-        percentage: 98,
-        etaText: "Menyimpan file...",
-        speedText: "",
-        message: "Menyimpan dokumen PDF 9x6cm...",
-    });
 
     doc.save(filename);
 
@@ -310,16 +808,17 @@ export async function downloadPdfSingleMode({
         percentage: 100,
         etaText: "Selesai!",
         speedText: "",
-        message: `File PDF 9x6cm (${total} Label) berhasil didownload!`,
+        message: `File PDF Template 01 Tunggal (${total} Label) berhasil didownload!`,
     });
 }
 
 /**
- * Direct Print Single Mode (Opens Print Dialog with Exact 90mm x 60mm Full Page)
+ * Direct Print Template 01 - Pure Text Vector PDF
  */
 export async function printPdfSingleMode({
     printableItems = [],
     printableKelompokList = [],
+    globalConfig = {},
     getRenderElement,
     isCancelled = () => false,
     onProgress = () => {},
@@ -330,8 +829,8 @@ export async function printPdfSingleMode({
     }
 
     const total = list.length;
-    const pageW = 90;
-    const pageH = 60;
+    const pageW = 90.0;
+    const pageH = 60.0;
 
     const doc = new jsPDF({
         orientation: "landscape",
@@ -342,23 +841,6 @@ export async function printPdfSingleMode({
 
     const startTime = Date.now();
 
-    const { getTemplate } = await preRenderUniqueTemplates({
-        printableItems,
-        printableKelompokList,
-        getRenderElement,
-        startTime,
-        isCancelled,
-        onProgress,
-    });
-
-    if (isCancelled && isCancelled()) {
-        const err = new Error("Proses dibatalkan.");
-        err.name = "AbortError";
-        throw err;
-    }
-
-    const phase2Start = Date.now();
-
     for (let i = 0; i < total; i++) {
         if (isCancelled && isCancelled()) {
             const err = new Error("Proses dibatalkan.");
@@ -367,30 +849,19 @@ export async function printPdfSingleMode({
         }
 
         const item = list[i % list.length];
-        const template = getTemplate(item, i);
-
         if (i > 0) {
             doc.addPage([pageW, pageH], "landscape");
         }
 
-        doc.addImage(
-            template.imgData,
-            "JPEG",
-            0,
-            0,
-            pageW,
-            pageH,
-            template.alias,
-            "FAST",
-        );
+        drawTemplate01Card(doc, 0, 0, item, globalConfig);
 
-        const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
-        const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speed = (i + 1) / Math.max(0.05, elapsed);
         const remaining = total - (i + 1);
         const etaSec = Math.ceil(remaining / Math.max(1, speed));
         const percentage = Math.min(
             95,
-            75 + Math.round(((i + 1) / total) * 20),
+            Math.round(((i + 1) / total) * 95),
         );
 
         onProgress({
@@ -402,7 +873,7 @@ export async function printPdfSingleMode({
             percentage,
             etaText: formatDetailedEta(etaSec),
             speedText: `${Math.round(speed)} label/dtk`,
-            message: `Menyiapkan label ${i + 1} dari ${total} untuk dicetak...`,
+            message: `Menyiapkan label teks vektor ${i + 1} dari ${total} untuk dicetak...`,
         });
 
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -423,7 +894,7 @@ export async function printPdfSingleMode({
         percentage: 100,
         etaText: "Siap cetak!",
         speedText: "",
-        message: "Membuka dialog cetak 9x6cm...",
+        message: "Membuka dialog cetak Template 01...",
     });
 
     doc.autoPrint();
@@ -509,12 +980,13 @@ export function calculateA4TotalPages(list, totalCount = null, labelsPerPage = 9
 
 /**
  * Download A4 Sheet Mode PDF (9cm x 6cm Labels on A4 Landscape: 9 Labels / Page: 3 cols x 3 rows)
- * Ultra-fast generation for 1000s of labels using aliased image embedding + real-time ETA.
+ * Ultra-fast generation for 1000s of labels using pure vector text & real-time ETA.
  */
 export async function downloadPdfA4GridMode({
     printableItems = [],
     printableKelompokList = [],
     customCount = null,
+    globalConfig = {},
     getRenderElement,
     filename = "Label_BGN_Lembar_A4_9PerHalaman.pdf",
     isCancelled = () => false,
@@ -537,42 +1009,16 @@ export async function downloadPdfA4GridMode({
         compress: true,
     });
 
-    // 90mm x 60mm labels on A4 Landscape (297mm x 210mm)
-    // 3 Columns x 3 Rows = 9 labels per A4 Landscape page
-    const labelW = 90;
-    const labelH = 60;
+    const labelW = 90.0;
+    const labelH = 60.0;
     const gapX = 3.5;
-    const startX = 10; // (297 - (90*3 + 3.5*2)) / 2 = 10mm
+    const startX = 10.0;
     const gapY = 3.5;
-    const startY = 11.5; // (210 - (60*3 + 3.5*2)) / 2 = 11.5mm
+    const startY = 11.5;
     const labelsPerPage = 9;
 
-    // Hitung total halaman dengan pemisahan lembar untuk setiap jenis label & kelompok
-    // (Agar tiap jenis label/kelompok terisolasi pada lembar stiker tersendiri, tidak bercampur/disambung)
     const totalPages = calculateA4TotalPages(list, total, labelsPerPage);
-
     const startTime = Date.now();
-
-    const { getTemplate } = await preRenderUniqueTemplates({
-        printableItems,
-        printableKelompokList,
-        getRenderElement,
-        startTime,
-        isCancelled,
-        onProgress,
-    });
-
-    if (isCancelled && isCancelled()) {
-        const err = new Error("Proses dibatalkan.");
-        err.name = "AbortError";
-        throw err;
-    }
-
-    const phase2Start = Date.now();
-    const updateInterval = Math.max(
-        1,
-        Math.min(18, Math.floor(total / 40)),
-    ); // Update every 1-2 pages
 
     let currentSlot = 0;
     let currentPage = 1;
@@ -590,8 +1036,6 @@ export async function downloadPdfA4GridMode({
             prevItem &&
             getLabelGroupKey(prevItem) !== getLabelGroupKey(item);
 
-        // Pisahkan ke lembar A4 baru jika berganti jenis label atau kelompok penerima
-        // atau jika 1 lembar (9 slot) sudah penuh
         if (isTransition && currentSlot !== 0) {
             doc.addPage("a4", "landscape");
             currentSlot = 0;
@@ -602,35 +1046,24 @@ export async function downloadPdfA4GridMode({
             currentPage++;
         }
 
-        const template = getTemplate(item, i);
-
         const col = currentSlot % 3;
         const row = Math.floor(currentSlot / 3);
 
         const x = startX + col * (labelW + gapX);
         const y = startY + row * (labelH + gapY);
 
-        doc.addImage(
-            template.imgData,
-            "JPEG",
-            x,
-            y,
-            labelW,
-            labelH,
-            template.alias,
-            "FAST",
-        );
+        drawTemplate01Card(doc, x, y, item, globalConfig);
 
         currentSlot++;
 
-        if (i % updateInterval === 0 || i === total - 1) {
-            const elapsedPhase2 = (Date.now() - phase2Start) / 1000;
-            const speed = (i + 1) / Math.max(0.05, elapsedPhase2);
+        if (i % 9 === 0 || i === total - 1) {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = (i + 1) / Math.max(0.05, elapsed);
             const remaining = total - (i + 1);
             const etaSec = Math.ceil(remaining / Math.max(1, speed));
             const percentage = Math.min(
                 95,
-                75 + Math.round(((i + 1) / total) * 20),
+                Math.round(((i + 1) / total) * 95),
             );
 
             const phaseNote =
@@ -652,7 +1085,6 @@ export async function downloadPdfA4GridMode({
                 message: `Menyusun lembar A4 label ${i + 1} dari ${total} (Hal. ${currentPage}/${totalPages}${phaseNote})...`,
             });
 
-            // Yield to event loop to keep browser animations silky smooth
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
     }

@@ -258,9 +258,23 @@ async function handleDownload(item, type) {
         const templateCode = item.template_id === "template-02" ? "T2" : "T1";
         const filename = `Label_${templateCode}_${jenisCetak}_${sumberPrefix}-${yyyyMmDd}_${idSppg}.pdf`;
 
+        const globalConfig = {
+            namaSppg: props.unitSppg?.nama || "SPPG",
+            tanggalProduksi: rawTgl,
+            jamProduksi: item.jam_produksi,
+            tampilkanJamProduksi: Boolean(item.tampilkan_jam_produksi),
+            jamExpired: item.batas_konsumsi,
+            tampilkanJamExpired: Boolean(item.tampilkan_jam_expired),
+            menuItems: item.petunjuk_menu ? item.petunjuk_menu.split("\n").filter(Boolean) : (item.nama_menu ? item.nama_menu.split(", ") : []),
+            giziData: item.gizi_data || {},
+            zonaWaktu: "WITA",
+            waktuMaksimal: "2 JAM SETELAH DITERIMA!",
+        };
+
         if (type === "single") {
             await downloadPdfSingleMode({
                 printableKelompokList: kelompokList,
+                globalConfig,
                 getRenderElement: getSandboxSavedCardElement,
                 filename,
                 isCancelled: () => isDownloadCancelled.value,
@@ -271,6 +285,7 @@ async function handleDownload(item, type) {
         } else if (type === "a4_grid") {
             await downloadPdfA4GridMode({
                 printableKelompokList: kelompokList,
+                globalConfig,
                 getRenderElement: getSandboxSavedCardElement,
                 filename,
                 isCancelled: () => isDownloadCancelled.value,
