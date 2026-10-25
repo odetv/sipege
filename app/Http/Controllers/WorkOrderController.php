@@ -139,7 +139,8 @@ class WorkOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'id' => ['nullable', 'integer'],
+            'id' => ['nullable'],
+            'uuid' => ['nullable', 'string'],
             'nomor_wo' => ['required', 'string'],
             'tanggal_distribusi' => ['required', 'date'],
             'nama_menu' => ['required', 'string', 'max:255'],
@@ -172,16 +173,37 @@ class WorkOrderController extends Controller
             'kelompoks' => ['nullable', 'array'],
         ]);
 
+        $targetId = $validated['id'] ?? ($request->route('id') ?? $request->input('uuid'));
+
         // Cek duplikasi tanggal distribusi dalam unit yang sama (1 WO per tanggal)
         $existingWo = WorkOrder::where('unit_sppg_id', $unitSppg->id)
             ->where('tanggal_distribusi', $validated['tanggal_distribusi'])
             ->first();
 
-        if ($existingWo && (!empty($validated['id']) ? $existingWo->id !== (int) $validated['id'] : $existingWo->nomor_wo !== $validated['nomor_wo'])) {
-            return back()->with('error', 'Tanggal distribusi ' . $validated['tanggal_distribusi'] . ' sudah digunakan oleh Work Order ' . $existingWo->nomor_wo . ' (' . $existingWo->nama_menu . ').');
+        if ($existingWo) {
+            $isSameWo = false;
+            if (!empty($validated['id']) && is_numeric($validated['id']) && (int) $existingWo->id === (int) $validated['id']) {
+                $isSameWo = true;
+            } elseif (!empty($validated['uuid']) && (string) $existingWo->uuid === (string) $validated['uuid']) {
+                $isSameWo = true;
+            } elseif ($targetId) {
+                if (is_numeric($targetId) && (int) $existingWo->id === (int) $targetId) {
+                    $isSameWo = true;
+                } elseif (\Illuminate\Support\Str::isUuid((string) $targetId) && (string) $existingWo->uuid === (string) $targetId) {
+                    $isSameWo = true;
+                } elseif ($existingWo->nomor_wo === (string) $targetId) {
+                    $isSameWo = true;
+                }
+            } elseif ($existingWo->nomor_wo === $validated['nomor_wo']) {
+                $isSameWo = true;
+            }
+
+            if (!$isSameWo) {
+                return back()->with('error', 'Tanggal distribusi ' . $validated['tanggal_distribusi'] . ' sudah digunakan oleh Work Order ' . $existingWo->nomor_wo . ' (' . $existingWo->nama_menu . ').');
+            }
         }
 
-        DB::transaction(function () use ($unitSppg, $validated, &$workOrder) {
+        DB::transaction(function () use ($unitSppg, $validated, $targetId, &$workOrder) {
             $subMenus = $validated['sub_menus'] ?? [];
             if (empty($subMenus)) {
                 $subMenus = array_filter([
@@ -196,47 +218,97 @@ class WorkOrderController extends Controller
             $status = $validated['status'] ?? 'Draft';
             $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
 
-            $workOrder = WorkOrder::updateOrCreate(
-                [
+            $woData = [
+                'nomor_wo' => $validated['nomor_wo'],
+                'tanggal_distribusi' => $validated['tanggal_distribusi'],
+                'nama_menu' => $validated['nama_menu'],
+                'siklus_ke' => $validated['siklus_ke'] ?? 1,
+                'status' => $status,
+                'metode_wo' => $validated['metode_wo'],
+                'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
+                'current_step' => 1,
+                'sub_menus' => $subMenus,
+                'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? null,
+                'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? null,
+                'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? null,
+                'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? null,
+                'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? null,
+                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
+                'jadwal_operasional' => $jadwalOperasional,
+                'total_pm' => $validated['total_pm'],
+                'total_pk' => $validated['total_pk'],
+                'total_pb' => $validated['total_pb'],
+                'total_alergi' => $validated['total_alergi'] ?? 0,
+                'total_kelompok' => $validated['total_kelompok'] ?? 0,
+                'akg_pk' => $validated['akg_pk'] ?? null,
+                'akg_pb' => $validated['akg_pb'] ?? null,
+                'akg_alergi' => $validated['akg_alergi'] ?? null,
+                'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
+                'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
+                'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
+                'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
+                'catatan' => $validated['catatan'] ?? ($jadwalOperasional ? ['jadwal_operasional' => $jadwalOperasional] : null),
+            ];
+
+            $workOrder = null;
+            if (!empty($validated['id']) && is_numeric($validated['id'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('id', (int) $validated['id'])
+                    ->first();
+            }
+
+            if (!$workOrder && !empty($validated['uuid']) && \Illuminate\Support\Str::isUuid((string) $validated['uuid'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('uuid', (string) $validated['uuid'])
+                    ->first();
+            }
+
+            if (!$workOrder && $targetId) {
+                $targetIdStr = (string) $targetId;
+                if (is_numeric($targetIdStr)) {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('id', (int) $targetIdStr)
+                        ->first();
+                } elseif (\Illuminate\Support\Str::isUuid($targetIdStr)) {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('uuid', $targetIdStr)
+                        ->first();
+                } else {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('nomor_wo', $targetIdStr)
+                        ->first();
+                }
+            }
+
+            if (!$workOrder && !empty($validated['nomor_wo'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('nomor_wo', $validated['nomor_wo'])
+                    ->first();
+            }
+
+            if ($workOrder) {
+                $workOrder->update($woData);
+            } else {
+                $workOrder = WorkOrder::create(array_merge($woData, [
                     'unit_sppg_id' => $unitSppg->id,
-                    'nomor_wo' => $validated['nomor_wo'],
-                ],
-                [
-                    'tanggal_distribusi' => $validated['tanggal_distribusi'],
-                    'nama_menu' => $validated['nama_menu'],
-                    'siklus_ke' => $validated['siklus_ke'] ?? 1,
-                    'status' => $status,
-                    'metode_wo' => $validated['metode_wo'],
-                    'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
-                    'current_step' => 1,
-                    'sub_menus' => $subMenus,
-                    'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? null,
-                    'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? null,
-                    'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? null,
-                    'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? null,
-                    'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? null,
-                    'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
-                    'jadwal_operasional' => $jadwalOperasional,
-                    'total_pm' => $validated['total_pm'],
-                    'total_pk' => $validated['total_pk'],
-                    'total_pb' => $validated['total_pb'],
-                    'total_alergi' => $validated['total_alergi'] ?? 0,
-                    'total_kelompok' => $validated['total_kelompok'] ?? 0,
-                    'akg_pk' => $validated['akg_pk'] ?? null,
-                    'akg_pb' => $validated['akg_pb'] ?? null,
-                    'akg_alergi' => $validated['akg_alergi'] ?? null,
-                    'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
-                    'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
-                    'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
-                    'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
-                    'catatan' => $validated['catatan'] ?? ($jadwalOperasional ? ['jadwal_operasional' => $jadwalOperasional] : null),
-                ]
-            );
+                ]));
+            }
 
             // Pastikan UUID selalu ada
             if (empty($workOrder->uuid)) {
                 $workOrder->uuid = (string) \Illuminate\Support\Str::uuid();
                 $workOrder->saveQuietly();
+            }
+
+            // Sync PurchaseOrder jika sudah ada PO terhubung
+            if ($workOrder->purchaseOrder) {
+                $tglStr = str_replace('-', '', $validated['tanggal_distribusi']);
+                $nomorPo = 'PO-' . $tglStr . '-' . str_pad($workOrder->id, 3, '0', STR_PAD_LEFT);
+                $workOrder->purchaseOrder->update([
+                    'tanggal' => $validated['tanggal_distribusi'],
+                    'nomor_po' => $nomorPo,
+                    'catatan' => 'Dibuat dari ' . $workOrder->nomor_wo . ' - ' . $workOrder->nama_menu,
+                ]);
             }
 
             // Simpan snapshot kelompok penerima manfaat
@@ -292,6 +364,10 @@ class WorkOrderController extends Controller
         $msg = $validated['metode_wo'] === 'manual'
             ? 'Work Order Manual (' . $workOrder->nomor_wo . ') berhasil disimpan.'
             : 'Perencanaan Produksi WO (' . $workOrder->nomor_wo . ') berhasil disimpan.';
+
+        if ($validated['metode_wo'] === 'manual') {
+            return redirect()->route('work-order.daftar')->with('success', $msg);
+        }
 
         return redirect()->route('gizi.daftar-menu')->with('success', $msg);
     }
@@ -435,10 +511,13 @@ class WorkOrderController extends Controller
 
         $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
             ->where(function ($query) use ($id) {
-                if (is_numeric($id)) {
-                    $query->where('id', $id);
+                $idStr = (string) $id;
+                if (is_numeric($idStr)) {
+                    $query->where('id', (int) $idStr);
+                } elseif (\Illuminate\Support\Str::isUuid($idStr)) {
+                    $query->where('uuid', $idStr);
                 } else {
-                    $query->where('uuid', $id);
+                    $query->where('nomor_wo', $idStr);
                 }
             })
             ->firstOrFail();

@@ -6796,6 +6796,8 @@ function handlePrintPo() {
 
 function getPayload(statusStr, stepNumber = 3) {
     return {
+        id: props.activeWorkOrder?.id || null,
+        uuid: props.activeWorkOrder?.uuid || null,
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
         nama_menu: namaMenuAktif.value || "Menu MBG",

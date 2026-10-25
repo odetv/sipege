@@ -92,9 +92,11 @@ class GiziController extends Controller
                     $rawTargetStr = (string) $rawTarget;
                     $query->where(function ($q) use ($rawTargetStr) {
                         if (is_numeric($rawTargetStr)) {
-                            $q->where('id', (int) $rawTargetStr)->orWhere('uuid', $rawTargetStr)->orWhere('nomor_wo', $rawTargetStr);
+                            $q->where('id', (int) $rawTargetStr);
+                        } elseif (\Illuminate\Support\Str::isUuid($rawTargetStr)) {
+                            $q->where('uuid', $rawTargetStr);
                         } else {
-                            $q->where('uuid', $rawTargetStr)->orWhere('nomor_wo', $rawTargetStr);
+                            $q->where('nomor_wo', $rawTargetStr);
                         }
                     });
                 } elseif ($request->has('tanggal')) {
@@ -150,6 +152,8 @@ class GiziController extends Controller
         }
 
         $validated = $request->validate([
+            'id' => ['nullable'],
+            'uuid' => ['nullable', 'string'],
             'nomor_wo' => ['required', 'string'],
             'tanggal_distribusi' => ['required', 'date'],
             'nama_menu' => ['required', 'string', 'max:255'],
@@ -186,16 +190,37 @@ class GiziController extends Controller
             'porsi_tambahan' => ['nullable', 'array'],
         ]);
 
+        $targetId = $validated['id'] ?? ($request->route('id') ?? $request->input('uuid'));
+
         // Validasi 1 Work Order per 1 Tanggal Distribusi dalam unit SPPG
         $existingWoOnDate = WorkOrder::where('unit_sppg_id', $unitSppg->id)
             ->where('tanggal_distribusi', $validated['tanggal_distribusi'])
             ->first();
 
-        if ($existingWoOnDate && $existingWoOnDate->nomor_wo !== $validated['nomor_wo']) {
-            return back()->with('error', 'Hanya diperbolehkan 1 Work Order per tanggal distribusi. Tanggal ' . $validated['tanggal_distribusi'] . ' sudah terdaftar untuk menu "' . $existingWoOnDate->nama_menu . '" (' . $existingWoOnDate->nomor_wo . ').');
+        if ($existingWoOnDate) {
+            $isSameWo = false;
+            if (!empty($validated['id']) && is_numeric($validated['id']) && (int) $existingWoOnDate->id === (int) $validated['id']) {
+                $isSameWo = true;
+            } elseif (!empty($validated['uuid']) && (string) $existingWoOnDate->uuid === (string) $validated['uuid']) {
+                $isSameWo = true;
+            } elseif ($targetId) {
+                if (is_numeric($targetId) && (int) $existingWoOnDate->id === (int) $targetId) {
+                    $isSameWo = true;
+                } elseif (\Illuminate\Support\Str::isUuid((string) $targetId) && (string) $existingWoOnDate->uuid === (string) $targetId) {
+                    $isSameWo = true;
+                } elseif ($existingWoOnDate->nomor_wo === (string) $targetId) {
+                    $isSameWo = true;
+                }
+            } elseif ($existingWoOnDate->nomor_wo === $validated['nomor_wo']) {
+                $isSameWo = true;
+            }
+
+            if (!$isSameWo) {
+                return back()->with('error', 'Hanya diperbolehkan 1 Work Order per tanggal distribusi. Tanggal ' . $validated['tanggal_distribusi'] . ' sudah terdaftar untuk menu "' . $existingWoOnDate->nama_menu . '" (' . $existingWoOnDate->nomor_wo . ').');
+            }
         }
 
-        DB::transaction(function () use ($unitSppg, $validated) {
+        DB::transaction(function () use ($unitSppg, $validated, $targetId) {
             $subMenus = $validated['sub_menus'] ?? [];
             if (empty($subMenus)) {
                 $subMenus = array_values(array_filter([
@@ -207,41 +232,79 @@ class GiziController extends Controller
                 ]));
             }
 
-            // Find existing or new WorkOrder by nomor_wo or unit & tanggal
-            $workOrder = WorkOrder::updateOrCreate(
-                [
+            $woData = [
+                'nomor_wo' => $validated['nomor_wo'],
+                'tanggal_distribusi' => $validated['tanggal_distribusi'],
+                'nama_menu' => $validated['nama_menu'],
+                'siklus_ke' => $validated['siklus_ke'] ?? 1,
+                'status' => $validated['status'],
+                'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
+                'current_step' => $validated['current_step'] ?? 1,
+                'sub_menus' => $subMenus,
+                'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? null,
+                'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? null,
+                'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? null,
+                'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? null,
+                'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? null,
+                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
+                'total_pm' => $validated['total_pm'],
+                'total_pk' => $validated['total_pk'],
+                'total_pb' => $validated['total_pb'],
+                'total_alergi' => $validated['total_alergi'] ?? 0,
+                'total_kelompok' => $validated['total_kelompok'] ?? 0,
+                'akg_pk' => $validated['akg_pk'] ?? null,
+                'akg_pb' => $validated['akg_pb'] ?? null,
+                'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
+                'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
+                'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
+                'catatan' => $validated['catatan'] ?? null,
+                'jadwal_operasional' => $validated['jadwal_operasional'] ?? null,
+                'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
+            ];
+
+            $workOrder = null;
+            if (!empty($validated['id']) && is_numeric($validated['id'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('id', (int) $validated['id'])
+                    ->first();
+            }
+
+            if (!$workOrder && !empty($validated['uuid']) && \Illuminate\Support\Str::isUuid((string) $validated['uuid'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('uuid', (string) $validated['uuid'])
+                    ->first();
+            }
+
+            if (!$workOrder && $targetId) {
+                $targetIdStr = (string) $targetId;
+                if (is_numeric($targetIdStr)) {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('id', (int) $targetIdStr)
+                        ->first();
+                } elseif (\Illuminate\Support\Str::isUuid($targetIdStr)) {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('uuid', $targetIdStr)
+                        ->first();
+                } else {
+                    $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                        ->where('nomor_wo', $targetIdStr)
+                        ->first();
+                }
+            }
+
+            if (!$workOrder && !empty($validated['nomor_wo'])) {
+                $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                    ->where('nomor_wo', $validated['nomor_wo'])
+                    ->first();
+            }
+
+            if ($workOrder) {
+                $workOrder->update($woData);
+            } else {
+                $workOrder = WorkOrder::create(array_merge($woData, [
                     'unit_sppg_id' => $unitSppg->id,
-                    'nomor_wo' => $validated['nomor_wo'],
-                ],
-                [
-                    'tanggal_distribusi' => $validated['tanggal_distribusi'],
-                    'nama_menu' => $validated['nama_menu'],
-                    'siklus_ke' => $validated['siklus_ke'] ?? 1,
-                    'status' => $validated['status'],
-                    'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
-                    'current_step' => $validated['current_step'] ?? 1,
-                    'sub_menus' => $subMenus,
-                    'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
-                    'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
-                    'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
-                    'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
-                    'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
-                    'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
-                    'total_pm' => $validated['total_pm'],
-                    'total_pk' => $validated['total_pk'],
-                    'total_pb' => $validated['total_pb'],
-                    'total_alergi' => $validated['total_alergi'] ?? 0,
-                    'total_kelompok' => $validated['total_kelompok'] ?? 0,
-                    'akg_pk' => $validated['akg_pk'] ?? null,
-                    'akg_pb' => $validated['akg_pb'] ?? null,
-                    'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
-                    'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
-                    'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
-                    'catatan' => $validated['catatan'] ?? null,
-                    'jadwal_operasional' => $validated['jadwal_operasional'] ?? null,
-                    'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
-                ]
-            );
+                ]));
+            }
 
             // Sync Items
             $workOrder->items()->delete();
@@ -394,6 +457,9 @@ class GiziController extends Controller
      */
     public function updateWorkOrder(Request $request, $id): RedirectResponse
     {
+        if (!$request->has('id')) {
+            $request->merge(['id' => $id]);
+        }
         return $this->storeWorkOrder($request);
     }
 
@@ -410,12 +476,13 @@ class GiziController extends Controller
         }
 
         $query = WorkOrder::where('unit_sppg_id', $unitSppg->id);
-        if (is_numeric($id)) {
-            $query->where('id', (int) $id);
+        $idStr = (string) $id;
+        if (is_numeric($idStr)) {
+            $query->where('id', (int) $idStr);
+        } elseif (\Illuminate\Support\Str::isUuid($idStr)) {
+            $query->where('uuid', $idStr);
         } else {
-            $query->where(function ($q) use ($id) {
-                $q->where('uuid', $id)->orWhere('nomor_wo', $id);
-            });
+            $query->where('nomor_wo', $idStr);
         }
         $source = $query->with(['items', 'kelompoks'])->firstOrFail();
 
@@ -494,12 +561,13 @@ class GiziController extends Controller
     public function destroyWorkOrder($id): RedirectResponse
     {
         $query = WorkOrder::query();
-        if (is_numeric($id)) {
-            $query->where('id', (int) $id);
+        $idStr = (string) $id;
+        if (is_numeric($idStr)) {
+            $query->where('id', (int) $idStr);
+        } elseif (\Illuminate\Support\Str::isUuid($idStr)) {
+            $query->where('uuid', $idStr);
         } else {
-            $query->where(function ($q) use ($id) {
-                $q->where('uuid', $id)->orWhere('nomor_wo', $id);
-            });
+            $query->where('nomor_wo', $idStr);
         }
         $workOrder = $query->firstOrFail();
 
@@ -566,12 +634,11 @@ class GiziController extends Controller
                 $activeWorkOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
                     ->where(function ($q) use ($woQueryStr) {
                         if (is_numeric($woQueryStr)) {
-                            $q->where('id', (int) $woQueryStr)
-                                ->orWhere('uuid', $woQueryStr)
-                                ->orWhere('nomor_wo', $woQueryStr);
+                            $q->where('id', (int) $woQueryStr);
+                        } elseif (\Illuminate\Support\Str::isUuid($woQueryStr)) {
+                            $q->where('uuid', $woQueryStr);
                         } else {
-                            $q->where('uuid', $woQueryStr)
-                                ->orWhere('nomor_wo', $woQueryStr);
+                            $q->where('nomor_wo', $woQueryStr);
                         }
                     })
                     ->with(['items', 'kelompoks', 'purchaseOrder'])

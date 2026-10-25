@@ -98,6 +98,7 @@ const currentTab = ref(props.activeTab || "perencanaan");
 // ─── STATE PERENCANAAN PRODUKSI (STEP 1) ────────────────────────────────────
 const isEditMode = ref(false);
 const editingWoId = ref(null);
+const editingWoUuid = ref(null);
 const isMetodeWoSelected = ref(false); // Wajib diklik terlebih dahulu oleh user agar dinyatakan terisi
 const metodeWo = ref("sistem"); // 'sistem' | 'manual'
 
@@ -173,6 +174,7 @@ function triggerSubmitError(msg, shouldScroll = false) {
 const existingWoDatesMap = computed(() => {
     const map = {};
     const currentWoId = editingWoId.value;
+    const currentWoUuid = editingWoUuid.value;
 
     (props.workOrdersList || []).forEach((w) => {
         if (!w || !w.tanggal_distribusi) return;
@@ -181,7 +183,11 @@ const existingWoDatesMap = computed(() => {
                 ? w.tanggal_distribusi.substring(0, 10)
                 : new Date(w.tanggal_distribusi).toISOString().substring(0, 10);
 
-        if (currentWoId && w.id === currentWoId) return;
+        if (
+            (currentWoId && w.id === currentWoId) ||
+            (currentWoUuid && w.uuid === currentWoUuid)
+        )
+            return;
 
         map[tgl] = {
             id: w.id,
@@ -2134,6 +2140,7 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
 
     const payload = {
         id: isEditMode.value ? editingWoId.value : null,
+        uuid: isEditMode.value ? editingWoUuid.value : null,
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
         siklus_ke: 1,
@@ -2321,6 +2328,7 @@ function handleSavePerencanaanManualComplete() {
 
     const payload = {
         id: isEditMode.value ? editingWoId.value : null,
+        uuid: isEditMode.value ? editingWoUuid.value : null,
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
         siklus_ke: 1,
@@ -2399,6 +2407,7 @@ function initForm(targetWo = null) {
     if (targetWo) {
         isEditMode.value = true;
         editingWoId.value = targetWo.id;
+        editingWoUuid.value = targetWo.uuid || null;
         metodeWo.value = targetWo.metode_wo || "sistem";
         isMetodeWoSelected.value = true; // Mode edit: mode sudah ada dan terkunci
         tanggalRencana.value = targetWo.tanggal_distribusi;
@@ -2676,6 +2685,7 @@ function initForm(targetWo = null) {
     } else {
         isEditMode.value = false;
         editingWoId.value = null;
+        editingWoUuid.value = null;
         metodeWo.value = "sistem";
         isMetodeWoSelected.value = false; // Mode baru: wajib diklik oleh user
         activeManualTab.value = "perencanaan";
