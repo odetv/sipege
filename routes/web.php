@@ -77,6 +77,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/rancang-menu', [GiziController::class, 'rancangMenu'])->name('rancang-menu');
         Route::get('/buat-menu', [GiziController::class, 'rancangMenu'])->name('buat-menu');
         Route::get('/kalender-menu', [GiziController::class, 'kalenderMenu'])->name('kalender-menu');
+        Route::get('/resep', [GiziController::class, 'resep'])->name('resep');
+
+        // Resep API Actions
+        Route::get('/api/resep', [GiziController::class, 'getResepList'])->name('api.resep.index');
+        Route::post('/api/resep', [GiziController::class, 'storeResep'])->name('api.resep.store');
+        Route::put('/api/resep/{id}', [GiziController::class, 'updateResep'])->name('api.resep.update');
+        Route::delete('/api/resep/{id}', [GiziController::class, 'destroyResep'])->name('api.resep.destroy');
 
         // Work Order Actions
         Route::post('/work-order', [GiziController::class, 'storeWorkOrder'])->name('work-order.store');

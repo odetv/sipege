@@ -422,7 +422,7 @@ function handleSave(statusOverride = null) {
         akg_pk: akgPk.value,
         akg_alergi: akgAlergi.value,
         catatan: catatan.value,
-        status: props.workOrder.status || "Draft",
+        status: (props.workOrder.status && props.workOrder.status !== "Draft") ? props.workOrder.status : "Siap Produksi",
     };
 
     router.put(route("work-order.update-manual", props.workOrder.id), payload, {

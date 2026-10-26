@@ -215,7 +215,7 @@ class WorkOrderController extends Controller
                 ]);
             }
 
-            $status = $validated['status'] ?? 'Draft';
+            $status = $validated['status'] ?? ($validated['metode_wo'] === 'manual' ? 'Siap Produksi' : 'Draft');
             $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
 
             $woData = [
@@ -418,7 +418,9 @@ class WorkOrderController extends Controller
             'akg_alergi' => $validated['akg_alergi'] ?? $workOrder->akg_alergi,
             'porsi_tambahan' => $validated['porsi_tambahan'] ?? $workOrder->porsi_tambahan,
             'catatan' => $validated['catatan'] ?? $workOrder->catatan,
-            'status' => $validated['status'] ?? $workOrder->status,
+            'status' => ($validated['status'] && $validated['status'] !== 'Draft') 
+                ? $validated['status'] 
+                : ($workOrder->metode_wo === 'manual' ? 'Siap Produksi' : ($validated['status'] ?? $workOrder->status)),
         ]);
 
         return back()->with('success', 'Data Manual Work Order berhasil diperbarui.');

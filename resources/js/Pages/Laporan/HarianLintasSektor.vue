@@ -1538,7 +1538,8 @@ const filteredCalendarWorkOrders = computed(() => {
     if (filterIsAllTime.value) return allList;
 
     if (filterMode.value === "hari_ini") {
-        return allList.filter((cWo) => cWo.tanggal === props.todayDate);
+        const effectiveToday = filterStartDate.value || props.todayDate;
+        return allList.filter((cWo) => cWo.tanggal === effectiveToday);
     }
 
     const start = filterStartDate.value;
@@ -1569,8 +1570,9 @@ function onDateFilterChange(filter) {
     const filterEnd = filter.end || filter.endDate || "";
 
     if (filter.mode === "hari_ini" && !filter.isAllTime) {
-        if (props.selectedDate !== props.todayDate) {
-            handleSelectDate(props.todayDate);
+        const targetDate = filterStart || props.todayDate;
+        if (props.selectedDate !== targetDate) {
+            handleSelectDate(targetDate);
         }
         return;
     }

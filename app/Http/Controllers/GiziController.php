@@ -9,6 +9,7 @@ use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Models\WorkOrderKelompok;
 use App\Models\Periode;
+use App\Models\Resep;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,9 @@ class GiziController extends Controller
         }
         if ($tab === 'kalender-menu') {
             return $this->kalenderMenu($request);
+        }
+        if ($tab === 'resep') {
+            return $this->resep($request);
         }
         if ($tab) {
             return $this->renderGiziView($request, $tab);
@@ -137,6 +141,164 @@ class GiziController extends Controller
     public function kalenderMenu(Request $request): Response
     {
         return $this->renderGiziView($request, 'kalender-menu');
+    }
+
+    /**
+     * Sub-menu 6: Koleksi Resep Menu & Sub Menu MBG.
+     */
+    public function resep(Request $request): Response
+    {
+        return $this->renderGiziView($request, 'resep');
+    }
+
+    /**
+     * API: Ambil daftar koleksi resep (sub_menu maupun paket_menu).
+     */
+    public function getResepList(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        if (!$unitSppg) {
+            return response()->json(['success' => false, 'data' => []]);
+        }
+
+        $query = Resep::where('unit_sppg_id', $unitSppg->id);
+
+        if ($request->filled('tipe') && $request->query('tipe') !== 'all') {
+            $query->where('tipe', $request->query('tipe'));
+        }
+
+        if ($request->filled('kategori') && $request->query('kategori') !== 'all') {
+            $query->where('kategori', $request->query('kategori'));
+        }
+
+        if ($request->filled('search')) {
+            $s = trim($request->query('search'));
+            $query->where(function ($q) use ($s) {
+                $q->where('nama_resep', 'ilike', "%{$s}%")
+                  ->orWhere('asal_menu', 'ilike', "%{$s}%")
+                  ->orWhere('kategori', 'ilike', "%{$s}%");
+            });
+        }
+
+        $reseps = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $reseps,
+        ]);
+    }
+
+    /**
+     * API: Simpan resep baru (baik per sub-menu maupun 1 keseluruhan paket menu).
+     */
+    public function storeResep(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        if (!$unitSppg) {
+            return response()->json(['success' => false, 'message' => 'Unit SPPG tidak ditemukan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'nama_resep' => 'required|string|max:255',
+            'tipe' => 'required|string|in:sub_menu,paket_menu',
+            'kategori' => 'nullable|string|max:100',
+            'asal_menu' => 'nullable|string|max:255',
+            'deskripsi' => 'nullable|string',
+            'data_resep' => 'required|array',
+        ]);
+
+        $resep = Resep::create([
+            'unit_sppg_id' => $unitSppg->id,
+            'user_id' => $user->id,
+            'nama_resep' => $validated['nama_resep'],
+            'tipe' => $validated['tipe'],
+            'kategori' => $validated['kategori'] ?? ($validated['tipe'] === 'paket_menu' ? 'Paket Lengkap' : 'Lainnya'),
+            'asal_menu' => $validated['asal_menu'] ?? null,
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'data_resep' => $validated['data_resep'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resep berhasil disimpan ke Koleksi Resep.',
+            'data' => $resep,
+        ]);
+    }
+
+    /**
+     * API: Perbarui data resep yang tersimpan.
+     */
+    public function updateResep(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        if (!$unitSppg) {
+            return response()->json(['success' => false, 'message' => 'Unit SPPG tidak ditemukan.'], 403);
+        }
+
+        $resep = Resep::where('unit_sppg_id', $unitSppg->id)
+            ->where(function ($q) use ($id) {
+                if (is_numeric($id)) {
+                    $q->where('id', (int) $id);
+                } else {
+                    $q->where('uuid', (string) $id);
+                }
+            })->first();
+
+        if (!$resep) {
+            return response()->json(['success' => false, 'message' => 'Resep tidak ditemukan.'], 404);
+        }
+
+        $validated = $request->validate([
+            'nama_resep' => 'sometimes|required|string|max:255',
+            'tipe' => 'sometimes|required|string|in:sub_menu,paket_menu',
+            'kategori' => 'nullable|string|max:100',
+            'asal_menu' => 'nullable|string|max:255',
+            'deskripsi' => 'nullable|string',
+            'data_resep' => 'sometimes|required|array',
+        ]);
+
+        $resep->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resep berhasil diperbarui.',
+            'data' => $resep,
+        ]);
+    }
+
+    /**
+     * API: Hapus resep yang tersimpan.
+     */
+    public function destroyResep(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        if (!$unitSppg) {
+            return response()->json(['success' => false, 'message' => 'Unit SPPG tidak ditemukan.'], 403);
+        }
+
+        $resep = Resep::where('unit_sppg_id', $unitSppg->id)
+            ->where(function ($q) use ($id) {
+                if (is_numeric($id)) {
+                    $q->where('id', (int) $id);
+                } else {
+                    $q->where('uuid', (string) $id);
+                }
+            })->first();
+
+        if (!$resep) {
+            return response()->json(['success' => false, 'message' => 'Resep tidak ditemukan.'], 404);
+        }
+
+        $resep->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resep berhasil dihapus.',
+        ]);
     }
 
     /**
@@ -604,8 +766,13 @@ class GiziController extends Controller
         $kategoriCount = [];
         $workOrders = [];
         $activeWorkOrder = null;
+        $resepsList = [];
 
         if ($unitSppg) {
+            $resepsList = Resep::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
             $kelompokList = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
 
             $totalPenerima = $kelompokList->sum('total_penerima');
@@ -726,6 +893,7 @@ class GiziController extends Controller
             'workOrdersList' => $workOrders,
             'activeWorkOrder' => $activeWorkOrder,
             'periodes' => $periodes,
+            'resepsList' => $resepsList,
             'stats' => [
                 'total_kelompok' => count($kelompokList),
                 'total_sekolah' => $kelompokList->where('kategori', '!=', 'Posyandu')->count(),

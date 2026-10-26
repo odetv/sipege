@@ -436,6 +436,33 @@ const subMenuKomponen = ref({
     sub_menu_5: "",
 });
 
+const KATEGORI_SUB_MENU_OPTIONS = [
+    "Karbohidrat",
+    "Protein Hewani",
+    "Protein Nabati",
+    "Serat",
+    "Buah",
+    "Susu",
+    "Lainnya",
+];
+
+const DEFAULT_KATEGORI_SEQUENCE = [
+    "Karbohidrat",
+    "Protein Hewani",
+    "Protein Nabati",
+    "Serat",
+    "Buah",
+    "Susu",
+];
+
+const subMenuKategori = ref({
+    sub_menu_1: "Karbohidrat",
+    sub_menu_2: "Protein Hewani",
+    sub_menu_3: "Protein Nabati",
+    sub_menu_4: "Serat",
+    sub_menu_5: "Buah",
+});
+
 // Opsi Menu Pengganti Alergi per masing-masing Sub Menu (Opsional & Dinamis)
 const subMenuAlergi = ref({
     sub_menu_1: [],
@@ -445,15 +472,29 @@ const subMenuAlergi = ref({
     sub_menu_5: [],
 });
 
-function getSubMenuDefaultPlaceholder(index) {
-    const placeholders = [
-        "Karbohidrat",
-        "Protein Hewani",
-        "Protein Nabati",
-        "Sayur",
-        "Buah",
-    ];
-    return placeholders[index] || `Tambahan Sub Menu ${index + 1}`;
+function getSubMenuDefaultPlaceholder(index, kategori) {
+    const kat =
+        kategori ||
+        subMenuKategori.value[`sub_menu_${index + 1}`] ||
+        DEFAULT_KATEGORI_SEQUENCE[index];
+    switch (kat) {
+        case "Karbohidrat":
+            return "Contoh: Nasi Putih / Nasi Kuning / Kentang";
+        case "Protein Hewani":
+            return "Contoh: Ayam Goreng / Daging Sapi / Ikan";
+        case "Protein Nabati":
+            return "Contoh: Tempe Goreng / Tahu Bacem";
+        case "Serat":
+        case "Sayur":
+            return "Contoh: Sayur Sop / Sayur Bening Bayam / Capcay";
+        case "Buah":
+            return "Contoh: Buah Pisang / Jeruk / Semangka";
+        case "Susu (Bila ada)":
+        case "Susu":
+            return "Contoh: Susu UHT / Susu Pasteurisasi";
+        default:
+            return `Nama Sub Menu ${index + 1}`;
+    }
 }
 
 function addSubMenu() {
@@ -461,6 +502,8 @@ function addSubMenu() {
     const newKey = `sub_menu_${nextIdx}`;
     subMenuKeys.value.push(newKey);
     subMenuKomponen.value[newKey] = "";
+    subMenuKategori.value[newKey] =
+        DEFAULT_KATEGORI_SEQUENCE[nextIdx - 1] || "Lainnya";
     if (!subMenuAlergi.value[newKey]) {
         subMenuAlergi.value[newKey] = [];
     }
@@ -470,21 +513,30 @@ function removeSubMenu(index) {
     if (subMenuKeys.value.length <= 5) return;
 
     const values = subMenuKeys.value.map((k) => subMenuKomponen.value[k] || "");
+    const categories = subMenuKeys.value.map(
+        (k, idx) =>
+            subMenuKategori.value[k] ||
+            DEFAULT_KATEGORI_SEQUENCE[idx] ||
+            "Lainnya",
+    );
     const allergies = subMenuKeys.value.map(
         (k) => subMenuAlergi.value[k] || [],
     );
 
     values.splice(index, 1);
+    categories.splice(index, 1);
     allergies.splice(index, 1);
 
     const newKeys = [];
     const newKomponen = {};
+    const newKategori = {};
     const newAlergi = {};
 
     values.forEach((v, idx) => {
         const k = `sub_menu_${idx + 1}`;
         newKeys.push(k);
         newKomponen[k] = v;
+        newKategori[k] = categories[idx] || "Lainnya";
         newAlergi[k] = allergies[idx] || [];
     });
 
@@ -496,6 +548,7 @@ function removeSubMenu(index) {
 
     subMenuKeys.value = newKeys;
     subMenuKomponen.value = newKomponen;
+    subMenuKategori.value = newKategori;
     subMenuAlergi.value = newAlergi;
 }
 
@@ -1448,6 +1501,69 @@ function handleResetWoKelompokList() {
     woKelompokList.value = props.kelompokList.map(normalizeKelompokForWo);
 }
 
+// Preset Penerimaan Cepat: Semua / Hanya Sekolah / Hanya Posyandu
+const countSekolahKelompok = computed(() => {
+    return (woKelompokList.value || []).filter(
+        (k) => (k.kategori || "").toLowerCase() !== "posyandu",
+    ).length;
+});
+
+const countPosyanduKelompok = computed(() => {
+    return (woKelompokList.value || []).filter(
+        (k) => (k.kategori || "").toLowerCase() === "posyandu",
+    ).length;
+});
+
+const activeReceivingPreset = computed(() => {
+    if (!woKelompokList.value || woKelompokList.value.length === 0) return "all";
+
+    const sekolah = woKelompokList.value.filter(
+        (k) => (k.kategori || "").toLowerCase() !== "posyandu",
+    );
+    const posyandu = woKelompokList.value.filter(
+        (k) => (k.kategori || "").toLowerCase() === "posyandu",
+    );
+
+    const isAllSekolahMenerima =
+        sekolah.length > 0 && sekolah.every((k) => k.status_menerima !== false);
+    const isNoSekolahMenerima =
+        sekolah.length > 0 && sekolah.every((k) => k.status_menerima === false);
+
+    const isAllPosyanduMenerima =
+        posyandu.length > 0 && posyandu.every((k) => k.status_menerima !== false);
+    const isNoPosyanduMenerima =
+        posyandu.length > 0 && posyandu.every((k) => k.status_menerima === false);
+
+    if (posyandu.length === 0 && isAllSekolahMenerima) return "all";
+    if (sekolah.length === 0 && isAllPosyanduMenerima) return "all";
+
+    if (isAllSekolahMenerima && isAllPosyanduMenerima) return "all";
+    if (isAllSekolahMenerima && isNoPosyanduMenerima) return "sekolah";
+    if (isNoSekolahMenerima && isAllPosyanduMenerima) return "posyandu";
+
+    return "custom";
+});
+
+function handleSetReceivingPreset(mode) {
+    if (!woKelompokList.value) return;
+
+    if (mode === "all") {
+        woKelompokList.value.forEach((k) => {
+            k.status_menerima = true;
+        });
+    } else if (mode === "sekolah") {
+        woKelompokList.value.forEach((k) => {
+            const isPos = (k.kategori || "").toLowerCase() === "posyandu";
+            k.status_menerima = !isPos;
+        });
+    } else if (mode === "posyandu") {
+        woKelompokList.value.forEach((k) => {
+            const isPos = (k.kategori || "").toLowerCase() === "posyandu";
+            k.status_menerima = isPos;
+        });
+    }
+}
+
 function handleToggleStatusMenerima(k, status) {
     if (status !== undefined) {
         k.status_menerima = status;
@@ -2168,14 +2284,11 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
         akg_alergi: akgAlergi.value,
-        catatan: catatanResep.value
-            ? {
-                  catatan_resep: catatanResep.value,
-                  jadwal_operasional: payloadJadwalOperasional.value,
-              }
-            : {
-                  jadwal_operasional: payloadJadwalOperasional.value,
-              },
+        catatan: {
+            ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
+            jadwal_operasional: payloadJadwalOperasional.value,
+            sub_menu_kategori: subMenuKategori.value,
+        },
         porsi_tambahan: porsiTambahanPayload.value,
         kelompoks: woKelompokList.value.map((k) => ({
             kelompok_id: k.id,
@@ -2354,14 +2467,11 @@ function handleSavePerencanaanManualComplete() {
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
         akg_alergi: akgAlergi.value,
-        catatan: catatanResep.value
-            ? {
-                  catatan_resep: catatanResep.value,
-                  jadwal_operasional: payloadJadwalOperasional.value,
-              }
-            : {
-                  jadwal_operasional: payloadJadwalOperasional.value,
-              },
+        catatan: {
+            ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
+            jadwal_operasional: payloadJadwalOperasional.value,
+            sub_menu_kategori: subMenuKategori.value,
+        },
         porsi_tambahan: porsiTambahanPayload.value,
         kelompoks: woKelompokList.value.map((k) => ({
             kelompok_id: k.id,
@@ -2443,6 +2553,24 @@ function initForm(targetWo = null) {
         });
         subMenuKeys.value = newKeys;
         subMenuKomponen.value = newKomponen;
+
+        let savedKategori = null;
+        if (targetWo.catatan && typeof targetWo.catatan === "object") {
+            savedKategori = targetWo.catatan.sub_menu_kategori;
+        } else if (typeof targetWo.catatan === "string") {
+            try {
+                const parsed = JSON.parse(targetWo.catatan);
+                savedKategori = parsed?.sub_menu_kategori;
+            } catch (e) {}
+        }
+        const newKategori = {};
+        newKeys.forEach((k, idx) => {
+            newKategori[k] =
+                (savedKategori && savedKategori[k]) ||
+                DEFAULT_KATEGORI_SEQUENCE[idx] ||
+                "Lainnya";
+        });
+        subMenuKategori.value = newKategori;
 
         const rawAlergi =
             targetWo.sub_menu_alergi &&
@@ -2704,6 +2832,13 @@ function initForm(targetWo = null) {
             sub_menu_3: "",
             sub_menu_4: "",
             sub_menu_5: "",
+        };
+        subMenuKategori.value = {
+            sub_menu_1: "Karbohidrat",
+            sub_menu_2: "Protein Hewani",
+            sub_menu_3: "Protein Nabati",
+            sub_menu_4: "Serat",
+            sub_menu_5: "Buah",
         };
         subMenuAlergi.value = {
             sub_menu_1: [],
@@ -3949,6 +4084,22 @@ onUnmounted(() => {
                                             </button>
                                         </div>
 
+                                        <!-- Dropdown Kategori Sub Menu -->
+                                        <div>
+                                            <select
+                                                v-model="subMenuKategori[subKey]"
+                                                class="w-full text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50/80 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary text-slate-700 transition cursor-pointer"
+                                            >
+                                                <option
+                                                    v-for="kat in KATEGORI_SUB_MENU_OPTIONS"
+                                                    :key="kat"
+                                                    :value="kat"
+                                                >
+                                                    {{ kat }}
+                                                </option>
+                                            </select>
+                                        </div>
+
                                         <input
                                             type="text"
                                             v-model="subMenuKomponen[subKey]"
@@ -3959,6 +4110,7 @@ onUnmounted(() => {
                                             :placeholder="
                                                 getSubMenuDefaultPlaceholder(
                                                     sIdx,
+                                                    subMenuKategori[subKey],
                                                 )
                                             "
                                             :class="[
@@ -4972,14 +5124,84 @@ onUnmounted(() => {
                                         perhitungan Work Order ini.
                                     </p>
                                 </div>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <!-- Quick Preset Buttons (Semua / Hanya Sekolah / Hanya Posyandu) -->
+                                    <div class="inline-flex p-1 bg-slate-100/90 rounded-xl border border-slate-200/90 text-xs shadow-2xs">
+                                        <!-- 1. Semua Menerima -->
+                                        <button
+                                            type="button"
+                                            @click="handleSetReceivingPreset('all')"
+                                            :class="[
+                                                activeReceivingPreset === 'all'
+                                                    ? 'bg-white text-emerald-700 font-bold shadow-xs border border-emerald-200/80 ring-1 ring-emerald-500/20'
+                                                    : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                                'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                            ]"
+                                            title="Aktifkan seluruh kelompok penerima manfaat (Sekolah & Posyandu)"
+                                        >
+                                            <Users class="h-3.5 w-3.5" :class="activeReceivingPreset === 'all' ? 'text-emerald-600' : 'text-slate-400'" />
+                                            <span>Semua Menerima</span>
+                                            <span
+                                                class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                                :class="activeReceivingPreset === 'all' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200/70 text-slate-600'"
+                                            >
+                                                {{ woKelompokList.length }}
+                                            </span>
+                                        </button>
+
+                                        <!-- 2. Hanya Sekolah -->
+                                        <button
+                                            type="button"
+                                            @click="handleSetReceivingPreset('sekolah')"
+                                            :class="[
+                                                activeReceivingPreset === 'sekolah'
+                                                    ? 'bg-white text-blue-700 font-bold shadow-xs border border-blue-200/80 ring-1 ring-blue-500/20'
+                                                    : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                                'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                            ]"
+                                            title="Hanya kelompok kategori Sekolah (TK, RA, PAUD, SD, MI, SMP, MTs, SMA, SMK, MA) yang menerima"
+                                        >
+                                            <School class="h-3.5 w-3.5" :class="activeReceivingPreset === 'sekolah' ? 'text-blue-600' : 'text-slate-400'" />
+                                            <span>Hanya Sekolah</span>
+                                            <span
+                                                class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                                :class="activeReceivingPreset === 'sekolah' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200/70 text-slate-600'"
+                                            >
+                                                {{ countSekolahKelompok }}
+                                            </span>
+                                        </button>
+
+                                        <!-- 3. Hanya Posyandu -->
+                                        <button
+                                            type="button"
+                                            @click="handleSetReceivingPreset('posyandu')"
+                                            :class="[
+                                                activeReceivingPreset === 'posyandu'
+                                                    ? 'bg-white text-pink-700 font-bold shadow-xs border border-pink-200/80 ring-1 ring-pink-500/20'
+                                                    : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                                'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                            ]"
+                                            title="Hanya kelompok kategori Posyandu (Balita, Bumil, Busui) yang menerima"
+                                        >
+                                            <HeartPulse class="h-3.5 w-3.5" :class="activeReceivingPreset === 'posyandu' ? 'text-pink-600' : 'text-slate-400'" />
+                                            <span>Hanya Posyandu</span>
+                                            <span
+                                                class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                                :class="activeReceivingPreset === 'posyandu' ? 'bg-pink-100 text-pink-800' : 'bg-slate-200/70 text-slate-600'"
+                                            >
+                                                {{ countPosyanduKelompok }}
+                                            </span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Tombol Reset / Kembalikan -->
                                     <Button
                                         type="button"
                                         @click="handleResetWoKelompokList"
-                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 h-8 flex items-center gap-1 cursor-pointer shadow-none border border-slate-200"
+                                        className="bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold px-3 h-8.5 flex items-center gap-1.5 cursor-pointer shadow-2xs border border-slate-200 rounded-xl"
                                         title="Kembalikan semua kelompok default dari database"
                                     >
-                                        <RotateCcw class="h-3.5 w-3.5" />
+                                        <RotateCcw class="h-3.5 w-3.5 text-slate-500" />
                                         <span>Kembalikan</span>
                                     </Button>
                                 </div>

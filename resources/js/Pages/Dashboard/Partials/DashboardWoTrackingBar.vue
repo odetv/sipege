@@ -144,7 +144,10 @@ const dateStatus = computed(() => {
     }
 });
 
-// Calculate current step (1 to 5) and progress percentage
+// Detect whether active Work Order is manual or automatic
+const isManualWo = computed(() => (activeWorkOrder.value?.metode_wo || "").toLowerCase() === "manual");
+
+// Calculate current step and progress percentage
 const trackingState = computed(() => {
     const wo = activeWorkOrder.value;
     if (!wo) {
@@ -157,6 +160,21 @@ const trackingState = computed(() => {
         };
     }
 
+    const isManual = (wo.metode_wo || "").toLowerCase() === "manual";
+
+    // Khusus WO Manual: Mandiri tanpa keterlibatan bagian Keuangan / PO.
+    // Begitu Work Order Manual sudah terbentuk di sistem, seluruh tahapannya langsung selesai (100% Siap Produksi).
+    if (isManual) {
+        return {
+            currentStep: 3,
+            percent: 100,
+            statusLabel: "Siap Produksi & Penyaluran",
+            statusColor: "emerald",
+            isRejected: false,
+        };
+    }
+
+    // Alur WO Otomatis / Sistem (5 Tahap dengan PO & Keuangan)
     const s = (wo.status || "").toLowerCase();
     const isRejected = s.includes("ditolak");
     const stepNum = Number(wo.current_step) || (wo.items_count > 0 ? 2 : 1);
@@ -191,7 +209,7 @@ const trackingState = computed(() => {
         };
     }
 
-    // Status: Draft (Step 1, 2, or 3)
+    // Status: Draft pada WO Otomatis
     if (stepNum === 1) {
         return {
             currentStep: 1,
@@ -224,8 +242,50 @@ const trackingState = computed(() => {
 const steps = computed(() => {
     const { currentStep, isRejected } = trackingState.value;
     const wo = activeWorkOrder.value;
+    const isManual = (wo?.metode_wo || "").toLowerCase() === "manual";
     const stepNum = Number(wo?.current_step) || (wo?.items_count > 0 ? 2 : 1);
 
+    if (isManual) {
+        // Pipeline Tahapan Khusus WO Manual (3 Tahapan Mandiri - Tanpa Keuangan & PO)
+        const descGizi = wo?.has_akg 
+            ? "Standar AKG & Komponen Terpenuhi" 
+            : (wo?.sub_menus?.length ? `${wo.sub_menus.length} Komponen Menu Lengkap` : "Komponen Menu Terisi");
+
+        return [
+            {
+                id: 1,
+                title: "Perencanaan Sasaran",
+                subtitle: "Kuantitas Sasaran PK & PB",
+                desc: wo ? `${Number(wo.total_porsi || 0).toLocaleString("id-ID")} PM (${wo.porsi_pk || 0} PK / ${wo.porsi_pb || 0} PB)` : "Data sasaran terencana",
+                icon: Users,
+                isCompleted: true,
+                isActive: false,
+                isWarning: false,
+            },
+            {
+                id: 2,
+                title: "Komponen & Standar Gizi",
+                subtitle: "Komponen Menu & Standar AKG",
+                desc: descGizi,
+                icon: Utensils,
+                isCompleted: true,
+                isActive: false,
+                isWarning: false,
+            },
+            {
+                id: 3,
+                title: "Siap Produksi & Penyaluran",
+                subtitle: "Jadwal Masak & Cetak Label",
+                desc: "Siap Masak & Cetak Label",
+                icon: Truck,
+                isCompleted: true,
+                isActive: true,
+                isWarning: false,
+            },
+        ];
+    }
+
+    // Pipeline Tahapan Khusus WO Otomatis / Sistem
     return [
         {
             id: 1,
@@ -335,7 +395,7 @@ function formatTanggalIndo(tgl) {
                     </div>
                 </div>
 
-                <!-- WO Selector & Shortcut Link ke Daftar Menu Gizi -->
+                <!-- WO Selector & Shortcut Link ke Daftar Menu Gizi / WO Manual -->
                 <div class="flex items-center gap-2 w-full md:w-auto flex-wrap sm:flex-nowrap min-w-0">
                     <div v-if="workOrders.length > 1" class="relative flex-1 sm:flex-none min-w-0 w-full sm:w-auto">
                         <select
@@ -349,7 +409,7 @@ function formatTanggalIndo(tgl) {
                                     :key="w.id"
                                     :value="w.id"
                                 >
-                                    ⭐ Hari Ini • {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                    ⭐ Hari Ini • {{ w.id }} • {{ w.metode_wo === 'manual' ? '[Manual] ' : '[Otomatis] ' }}{{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
                                 </option>
                             </optgroup>
 
@@ -359,7 +419,7 @@ function formatTanggalIndo(tgl) {
                                     :key="w.id"
                                     :value="w.id"
                                 >
-                                    📅 {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                    📅 {{ w.id }} • {{ w.metode_wo === 'manual' ? '[Manual] ' : '[Otomatis] ' }}{{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
                                 </option>
                             </optgroup>
 
@@ -369,7 +429,7 @@ function formatTanggalIndo(tgl) {
                                     :key="w.id"
                                     :value="w.id"
                                 >
-                                    🕒 {{ w.id }} • {{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
+                                    🕒 {{ w.id }} • {{ w.metode_wo === 'manual' ? '[Manual] ' : '[Otomatis] ' }}{{ w.nama }} ({{ formatTanggalIndo(w.tanggal) }})
                                 </option>
                             </optgroup>
                         </select>
@@ -387,7 +447,18 @@ function formatTanggalIndo(tgl) {
                         <span>Menu Hari Ini</span>
                     </button>
 
+                    <!-- Tombol Navigasi Cepat Sesuai Jenis WO -->
                     <Link
+                        v-if="isManualWo"
+                        :href="route('work-order.daftar')"
+                        class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer shrink-0"
+                        title="Buka Halaman Daftar Work Order Manual"
+                    >
+                        <span>Daftar WO</span>
+                        <ChevronRight class="h-3.5 w-3.5 text-amber-600" />
+                    </Link>
+                    <Link
+                        v-else
                         :href="route('gizi.daftar-menu')"
                         class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer shrink-0"
                         title="Buka Halaman Tabel Daftar Menu"
@@ -410,6 +481,19 @@ function formatTanggalIndo(tgl) {
                             <span class="font-bold text-slate-900 text-sm">
                                 {{ activeWorkOrder.nama }}
                             </span>
+                            <!-- Badge Jenis WO -->
+                            <span
+                                v-if="isManualWo"
+                                class="px-2 py-0.5 text-[10px] font-extrabold rounded-md border bg-amber-100 text-amber-900 border-amber-300 flex items-center gap-1 shadow-2xs"
+                            >
+                                ✍️ WO MANUAL
+                            </span>
+                            <span
+                                v-else
+                                class="px-2 py-0.5 text-[10px] font-extrabold rounded-md border bg-blue-100 text-blue-900 border-blue-300 flex items-center gap-1 shadow-2xs"
+                            >
+                                ⚡ WO OTOMATIS
+                            </span>
                             <span
                                 v-if="dateStatus"
                                 :class="['px-2 py-0.5 text-[10px] font-bold rounded-md border', dateStatus.badgeClass]"
@@ -427,6 +511,13 @@ function formatTanggalIndo(tgl) {
                                 <Users class="h-3.5 w-3.5 text-slate-400" />
                                 Sasaran: <strong>{{ Number(activeWorkOrder.total_porsi || 0).toLocaleString('id-ID') }} Porsi</strong> ({{ activeWorkOrder.porsi_pk || 0 }} PK / {{ activeWorkOrder.porsi_pb || 0 }} PB)
                             </span>
+                            <template v-if="activeWorkOrder.sub_menus && activeWorkOrder.sub_menus.length > 0">
+                                <span>•</span>
+                                <span class="flex items-center gap-1 text-slate-600">
+                                    <Utensils class="h-3.5 w-3.5 text-slate-400" />
+                                    Komponen: <strong>{{ activeWorkOrder.sub_menus.join(', ') }}</strong>
+                                </span>
+                            </template>
                             <span v-if="activeWorkOrder.po">•</span>
                             <span v-if="activeWorkOrder.po" class="font-mono font-bold text-emerald-700">
                                 Ref PO: {{ activeWorkOrder.po.id }}
@@ -499,7 +590,7 @@ function formatTanggalIndo(tgl) {
                                         : step.isCompleted
                                           ? (trackingState.percent === 100
                                               ? 'border-emerald-600 bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-emerald-200'
-                                              : (step.id === 5 
+                                              : (step.id === steps.length 
                                                   ? 'border-emerald-600 bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-emerald-200' 
                                                   : 'border-primary bg-primary text-white ring-4 ring-primary/20'))
                                           : step.isActive
@@ -579,7 +670,7 @@ function formatTanggalIndo(tgl) {
                             <!-- Horizontal Colored Active Progress Line -->
                             <div
                                 class="h-full rounded-full transition-all duration-700 ease-out"
-                                :style="{ width: trackingState.percent === 100 ? '100%' : `${((trackingState.currentStep - 1) / 4) * 100}%` }"
+                                :style="{ width: trackingState.percent === 100 ? '100%' : `${((trackingState.currentStep - 1) / Math.max(1, steps.length - 1)) * 100}%` }"
                                 :class="[
                                     trackingState.percent === 100 ? 'bg-emerald-500' :
                                     trackingState.statusColor === 'emerald' ? 'bg-emerald-500' :
@@ -603,7 +694,7 @@ function formatTanggalIndo(tgl) {
                                         : step.isCompleted
                                           ? (trackingState.percent === 100
                                               ? 'border-emerald-600 bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-emerald-200'
-                                              : (step.id === 5 
+                                              : (step.id === steps.length 
                                                   ? 'border-emerald-600 bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-emerald-200' 
                                                   : 'border-primary bg-primary text-white ring-4 ring-primary/20'))
                                           : step.isActive
@@ -619,7 +710,7 @@ function formatTanggalIndo(tgl) {
                     </div>
 
                     <!-- 2. Step Text Descriptions Grid (Uniform Boxes, Left-Aligned) -->
-                    <div class="grid grid-cols-5 gap-3 pt-1">
+                    <div :class="[steps.length === 3 ? 'grid grid-cols-3 gap-4 pt-1' : 'grid grid-cols-5 gap-3 pt-1']">
                         <div
                             v-for="(step, sIdx) in steps"
                             :key="'text-' + step.id"
@@ -671,45 +762,78 @@ function formatTanggalIndo(tgl) {
                 <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                     <div class="flex items-start gap-2 text-slate-600 font-medium">
                         <Sparkles class="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                        <span v-if="trackingState.currentStep === 5">
-                            Work Order telah terverifikasi penuh dan Purchase Order resmi siap untuk pengadaan & distribusi dapur.
-                        </span>
-                        <span v-else-if="trackingState.currentStep === 4">
-                            Work Order sedang dalam proses penelaahan anggaran dan harga aktual oleh Bagian Keuangan.
-                        </span>
-                        <span v-else-if="trackingState.isRejected">
-                            Silakan lakukan revisi pada daftar menu agar dapat diajukan kembali untuk persetujuan.
-                        </span>
-                        <span v-else>
-                            Lengkapi rincian formulasi gizi dan ajukan ke Bagian Keuangan untuk penerbitan PO.
-                        </span>
+                        
+                        <!-- Helper Text Khusus WO Manual -->
+                        <template v-if="isManualWo">
+                            <span>
+                                Work Order Manual telah terbentuk lengkap dan siap untuk proses produksi dapur serta pencetakan label penyaluran (tidak memerlukan verifikasi keuangan).
+                            </span>
+                        </template>
+
+                        <!-- Helper Text Khusus WO Otomatis / Sistem -->
+                        <template v-else>
+                            <span v-if="trackingState.currentStep === 5">
+                                Work Order telah terverifikasi penuh dan Purchase Order resmi siap untuk pengadaan & distribusi dapur.
+                            </span>
+                            <span v-else-if="trackingState.currentStep === 4">
+                                Work Order sedang dalam proses penelaahan anggaran dan harga aktual oleh Bagian Keuangan.
+                            </span>
+                            <span v-else-if="trackingState.isRejected">
+                                Silakan lakukan revisi pada daftar menu agar dapat diajukan kembali untuk persetujuan.
+                            </span>
+                            <span v-else>
+                                Lengkapi rincian formulasi gizi dan ajukan ke Bagian Keuangan untuk penerbitan PO.
+                            </span>
+                        </template>
                     </div>
 
                     <div class="flex items-center gap-2 shrink-0 self-start sm:self-auto pt-0.5 sm:pt-0">
-                        <Link
-                            v-if="trackingState.currentStep >= 5"
-                            :href="route('keuangan.daftar-po')"
-                            class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        >
-                            <Receipt class="h-3.5 w-3.5" />
-                            <span>Lihat PO Resmi</span>
-                        </Link>
-                        <Link
-                            v-else-if="trackingState.currentStep === 4"
-                            :href="route('keuangan.verifikasi-po')"
-                            class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        >
-                            <ShieldCheck class="h-3.5 w-3.5" />
-                            <span>Buka Verifikasi PO</span>
-                        </Link>
-                        <Link
-                            v-else
-                            :href="route('gizi.daftar-menu')"
-                            class="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        >
-                            <Edit3 class="h-3.5 w-3.5" />
-                            <span>Buka Menu & Lanjutkan</span>
-                        </Link>
+                        <!-- Tombol CTA Khusus WO Manual -->
+                        <template v-if="isManualWo">
+                            <Link
+                                :href="route('label.index')"
+                                class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <Truck class="h-3.5 w-3.5" />
+                                <span>Cetak Label & Penyaluran</span>
+                            </Link>
+                            <Link
+                                :href="route('work-order.edit-manual', { id: activeWorkOrder.uuid || activeWorkOrder.db_id })"
+                                class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                                title="Edit Komponen atau Nilai Gizi Work Order Manual"
+                            >
+                                <Edit3 class="h-3.5 w-3.5 text-slate-500" />
+                                <span>Edit Data WO</span>
+                            </Link>
+                        </template>
+
+                        <!-- Tombol CTA Khusus WO Otomatis / Sistem -->
+                        <template v-else>
+                            <Link
+                                v-if="trackingState.currentStep >= 5"
+                                :href="route('keuangan.daftar-po')"
+                                class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <Receipt class="h-3.5 w-3.5" />
+                                <span>Lihat PO Resmi</span>
+                            </Link>
+                            <Link
+                                v-else-if="trackingState.currentStep === 4"
+                                :href="route('keuangan.verifikasi-po')"
+                                class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <ShieldCheck class="h-3.5 w-3.5" />
+                                <span>Buka Verifikasi PO</span>
+                            </Link>
+                            <Link
+                                v-else
+                                :href="route('gizi.daftar-menu')"
+                                class="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                            >
+                                <Edit3 class="h-3.5 w-3.5" />
+                                <span>Buka Menu & Lanjutkan</span>
+                            </Link>
+                        </template>
                     </div>
                 </div>
             </div>

@@ -944,6 +944,22 @@ function logout() {
                             <CalendarDays class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Kalender Menu</span>
                         </Link>
+
+                        <!-- Sub-menu 6: Resep -->
+                        <Link
+                            :href="route('gizi.resep')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.resep') ||
+                                (route().current('gizi.index') &&
+                                    page.props.activeTab === 'resep')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <BookOpen class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Resep</span>
+                        </Link>
                     </div>
                 </div>
 

@@ -38,11 +38,28 @@ class DashboardController extends Controller
                     $pb = $wo->total_pb ?: $totalUnitPb;
                     $tot = (int)$pk + (int)$pb;
 
+                    $hasAkg = false;
+                    if (!empty($wo->akg_pk) && is_array($wo->akg_pk)) {
+                        $numericValues = array_filter($wo->akg_pk, fn($v) => is_numeric($v) && (float)$v > 0);
+                        $hasAkg = count($numericValues) > 0;
+                    }
+
+                    $subMenus = $wo->sub_menus ?: array_values(array_filter([
+                        $wo->sub_menu_1,
+                        $wo->sub_menu_2,
+                        $wo->sub_menu_3,
+                        $wo->sub_menu_4,
+                        $wo->sub_menu_5,
+                    ]));
+
                     return [
                         'id' => $wo->nomor_wo,
                         'db_id' => $wo->id,
                         'uuid' => $wo->uuid,
                         'nama' => $wo->nama_menu,
+                        'metode_wo' => $wo->metode_wo ?: 'sistem',
+                        'has_akg' => $hasAkg,
+                        'sub_menus' => $subMenus,
                         'tanggal' => $wo->tanggal_distribusi ? (is_string($wo->tanggal_distribusi) ? substr($wo->tanggal_distribusi, 0, 10) : $wo->tanggal_distribusi->format('Y-m-d')) : null,
                         'status' => $wo->status,
                         'current_step' => (int)($wo->current_step ?: 1),

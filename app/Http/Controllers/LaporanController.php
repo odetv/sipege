@@ -36,8 +36,9 @@ class LaporanController extends Controller
         }
         $allWorkOrders = $woQuery->orderBy('tanggal_distribusi', 'desc')->get(['id', 'uuid', 'nomor_wo', 'tanggal_distribusi', 'nama_menu', 'status', 'total_pm', 'total_pk', 'total_pb']);
 
-        // Tentukan tanggal yang dipilih (default: hari ini, atau parameter query ?tanggal=...)
-        $todayStr = Carbon::today()->format('Y-m-d');
+        // Tentukan tanggal yang dipilih (default: hari ini di timezone SPPG, atau parameter query ?tanggal=...)
+        $tz = config('app.timezone', 'Asia/Makassar') ?: 'Asia/Makassar';
+        $todayStr = Carbon::now($tz)->format('Y-m-d');
         $selectedDate = $request->query('tanggal') ?: $todayStr;
 
         // Ambil data detail Work Order untuk tanggal yang dipilih
@@ -60,11 +61,14 @@ class LaporanController extends Controller
 
         // Map seluruh WO untuk indikator kalender
         $calendarWorkOrders = $allWorkOrders->map(function ($item) {
+            $tgl = $item->tanggal_distribusi;
+            $tglStr = is_string($tgl) ? substr($tgl, 0, 10) : ($tgl ? $tgl->format('Y-m-d') : null);
+
             return [
                 'id' => $item->id,
                 'uuid' => $item->uuid,
                 'nomor_wo' => $item->nomor_wo,
-                'tanggal' => Carbon::parse($item->tanggal_distribusi)->format('Y-m-d'),
+                'tanggal' => $tglStr,
                 'nama_menu' => $item->nama_menu,
                 'status' => $item->status,
                 'total_pm' => $item->total_pm,

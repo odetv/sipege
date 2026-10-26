@@ -76,6 +76,10 @@ import {
     FlaskConical,
     PlusCircle,
     ChefHat,
+    BookOpen,
+    BookmarkPlus,
+    BookmarkCheck,
+    FolderOpen,
 } from "lucide-vue-next";
 import {
     ALERGI_OPTIONS,
@@ -158,6 +162,10 @@ const props = defineProps({
     selectedFta: {
         type: String,
         default: "indo.fta",
+    },
+    resepsList: {
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -958,6 +966,32 @@ const subMenuKeys = ref([
     "sub_menu_5",
 ]);
 
+const KATEGORI_SUB_MENU_OPTIONS = [
+    "Karbohidrat",
+    "Protein Hewani",
+    "Protein Nabati",
+    "Serat",
+    "Buah",
+    "Susu",
+];
+
+const DEFAULT_KATEGORI_SEQUENCE = [
+    "Karbohidrat",
+    "Protein Hewani",
+    "Protein Nabati",
+    "Serat",
+    "Buah",
+    "Susu",
+];
+
+const subMenuKategori = ref({
+    sub_menu_1: "Karbohidrat",
+    sub_menu_2: "Protein Hewani",
+    sub_menu_3: "Protein Nabati",
+    sub_menu_4: "Serat",
+    sub_menu_5: "Buah",
+});
+
 const subMenuKomponen = ref({
     sub_menu_1: "",
     sub_menu_2: "",
@@ -966,15 +1000,48 @@ const subMenuKomponen = ref({
     sub_menu_5: "",
 });
 
-function getSubMenuDefaultPlaceholder(idx) {
-    const placeholders = [
-        "Karbohidrat",
-        "Protein Hewani",
-        "Protein Nabati",
-        "Sayuran",
-        "Buah",
-    ];
-    return placeholders[idx] || `Tambahan Sub Menu ${idx + 1}`;
+function getKategoriBadgeClass(kat) {
+    switch (kat) {
+        case "Karbohidrat":
+            return "bg-amber-100/90 text-amber-900 border-amber-300";
+        case "Protein Hewani":
+            return "bg-rose-100/90 text-rose-800 border-rose-300";
+        case "Protein Nabati":
+            return "bg-orange-100/90 text-orange-800 border-orange-300";
+        case "Serat":
+            return "bg-emerald-100/90 text-emerald-800 border-emerald-300";
+        case "Buah":
+            return "bg-purple-100/90 text-purple-800 border-purple-300";
+        case "Susu (Bila ada)":
+        case "Susu":
+            return "bg-sky-100/90 text-sky-800 border-sky-300";
+        default:
+            return "bg-slate-100 text-slate-800 border-slate-300";
+    }
+}
+
+function getSubMenuDefaultPlaceholder(idx, kategori) {
+    const kat =
+        kategori ||
+        subMenuKategori.value[`sub_menu_${idx + 1}`] ||
+        DEFAULT_KATEGORI_SEQUENCE[idx];
+    switch (kat) {
+        case "Karbohidrat":
+            return "Contoh: Nasi Putih / Nasi Kuning / Kentang";
+        case "Protein Hewani":
+            return "Contoh: Ayam Goreng / Ikan Bakar / Telur Balado";
+        case "Protein Nabati":
+            return "Contoh: Tempe Orek / Tahu Bacem";
+        case "Serat":
+            return "Contoh: Sayur Bening Bayam / Capcay Sayur";
+        case "Buah":
+            return "Contoh: Pisang Barangan / Jeruk Manis";
+        case "Susu (Bila ada)":
+        case "Susu":
+            return "Contoh: Susu UHT 200ml / Susu Kedelai";
+        default:
+            return `Nama Masakan Sub Menu ${idx + 1}`;
+    }
 }
 
 function addSubMenu() {
@@ -983,6 +1050,10 @@ function addSubMenu() {
     subMenuKeys.value.push(newKey);
     if (subMenuKomponen.value[newKey] === undefined) {
         subMenuKomponen.value[newKey] = "";
+    }
+    if (subMenuKategori.value[newKey] === undefined) {
+        subMenuKategori.value[newKey] =
+            DEFAULT_KATEGORI_SEQUENCE[nextIdx - 1] || "Susu";
     }
     if (!subMenuAlergi.value[newKey]) {
         subMenuAlergi.value[newKey] = [];
@@ -994,20 +1065,27 @@ function removeSubMenu(sIdx) {
     const removedKey = subMenuKeys.value[sIdx];
     subMenuKeys.value.splice(sIdx, 1);
     delete subMenuKomponen.value[removedKey];
+    delete subMenuKategori.value[removedKey];
     delete subMenuAlergi.value[removedKey];
 
     // Re-index remaining keys
     const reindexedKeys = [];
     const reindexedKomponen = {};
+    const reindexedKategori = {};
     const reindexedAlergi = {};
     subMenuKeys.value.forEach((oldKey, idx) => {
         const newKey = `sub_menu_${idx + 1}`;
         reindexedKeys.push(newKey);
         reindexedKomponen[newKey] = subMenuKomponen.value[oldKey] || "";
+        reindexedKategori[newKey] =
+            subMenuKategori.value[oldKey] ||
+            DEFAULT_KATEGORI_SEQUENCE[idx] ||
+            "Karbohidrat";
         reindexedAlergi[newKey] = subMenuAlergi.value[oldKey] || [];
     });
     subMenuKeys.value = reindexedKeys;
     subMenuKomponen.value = reindexedKomponen;
+    subMenuKategori.value = reindexedKategori;
     subMenuAlergi.value = reindexedAlergi;
 }
 
@@ -1422,6 +1500,69 @@ const woKelompokList = ref(props.kelompokList.map(normalizeKelompokForWo));
 
 function handleResetWoKelompokList() {
     woKelompokList.value = props.kelompokList.map(normalizeKelompokForWo);
+}
+
+// Preset Penerimaan Cepat: Semua / Hanya Sekolah / Hanya Posyandu
+const countSekolahKelompok = computed(() => {
+    return (woKelompokList.value || []).filter(
+        (k) => (k.kategori || "").toLowerCase() !== "posyandu",
+    ).length;
+});
+
+const countPosyanduKelompok = computed(() => {
+    return (woKelompokList.value || []).filter(
+        (k) => (k.kategori || "").toLowerCase() === "posyandu",
+    ).length;
+});
+
+const activeReceivingPreset = computed(() => {
+    if (!woKelompokList.value || woKelompokList.value.length === 0) return "all";
+
+    const sekolah = woKelompokList.value.filter(
+        (k) => (k.kategori || "").toLowerCase() !== "posyandu",
+    );
+    const posyandu = woKelompokList.value.filter(
+        (k) => (k.kategori || "").toLowerCase() === "posyandu",
+    );
+
+    const isAllSekolahMenerima =
+        sekolah.length > 0 && sekolah.every((k) => k.status_menerima !== false);
+    const isNoSekolahMenerima =
+        sekolah.length > 0 && sekolah.every((k) => k.status_menerima === false);
+
+    const isAllPosyanduMenerima =
+        posyandu.length > 0 && posyandu.every((k) => k.status_menerima !== false);
+    const isNoPosyanduMenerima =
+        posyandu.length > 0 && posyandu.every((k) => k.status_menerima === false);
+
+    if (posyandu.length === 0 && isAllSekolahMenerima) return "all";
+    if (sekolah.length === 0 && isAllPosyanduMenerima) return "all";
+
+    if (isAllSekolahMenerima && isAllPosyanduMenerima) return "all";
+    if (isAllSekolahMenerima && isNoPosyanduMenerima) return "sekolah";
+    if (isNoSekolahMenerima && isAllPosyanduMenerima) return "posyandu";
+
+    return "custom";
+});
+
+function handleSetReceivingPreset(mode) {
+    if (!woKelompokList.value) return;
+
+    if (mode === "all") {
+        woKelompokList.value.forEach((k) => {
+            k.status_menerima = true;
+        });
+    } else if (mode === "sekolah") {
+        woKelompokList.value.forEach((k) => {
+            const isPos = (k.kategori || "").toLowerCase() === "posyandu";
+            k.status_menerima = !isPos;
+        });
+    } else if (mode === "posyandu") {
+        woKelompokList.value.forEach((k) => {
+            const isPos = (k.kategori || "").toLowerCase() === "posyandu";
+            k.status_menerima = isPos;
+        });
+    }
 }
 
 function handleToggleStatusMenerima(k) {
@@ -2245,6 +2386,55 @@ function calculateNutritionFromNetGram(
     };
 }
 
+function getBahanBaseNutrition(it) {
+    if (!it || it.jenis === "operasional") {
+        return {
+            isOperasional: true,
+            energi: "-",
+            protein: "-",
+            lemak: "-",
+            karbohidrat: "-",
+            serat: "-",
+        };
+    }
+    const tkpi = it.tkpi || {};
+    const e =
+        it.energi !== undefined && it.energi !== null
+            ? it.energi
+            : tkpi.energi ?? 0;
+    const p =
+        it.protein !== undefined && it.protein !== null
+            ? it.protein
+            : tkpi.protein ?? 0;
+    const l =
+        it.lemak !== undefined && it.lemak !== null
+            ? it.lemak
+            : tkpi.lemak ?? 0;
+    const k =
+        it.karbohidrat !== undefined && it.karbohidrat !== null
+            ? it.karbohidrat
+            : tkpi.karbohidrat ?? 0;
+    const s =
+        it.serat !== undefined && it.serat !== null
+            ? it.serat
+            : tkpi.serat ?? 0;
+
+    const fmt = (val) => {
+        const num = Number(val);
+        if (isNaN(num)) return "0";
+        return num % 1 === 0 ? num.toString() : num.toFixed(1);
+    };
+
+    return {
+        isOperasional: false,
+        energi: fmt(e),
+        protein: fmt(p),
+        lemak: fmt(l),
+        karbohidrat: fmt(k),
+        serat: fmt(s),
+    };
+}
+
 function calculateItemFoodCostPerPortion(
     netGram,
     bddPercent,
@@ -2364,8 +2554,12 @@ const step2SubMenuBlocks = computed(() => {
     });
 
     keys.forEach((sm, idx) => {
+        const kat =
+            subMenuKategori.value[sm.key] ||
+            DEFAULT_KATEGORI_SEQUENCE[idx] ||
+            "Karbohidrat";
         const menuName =
-            (subMenuKomponen.value[sm.key] || "").trim() || sm.defaultName;
+            (subMenuKomponen.value[sm.key] || "").trim() || kat;
         // 1. Blok Utama (Normal)
         blocks.push({
             id: `${sm.key}_normal`,
@@ -2373,6 +2567,7 @@ const step2SubMenuBlocks = computed(() => {
             subIndex: idx + 1,
             subLabel: sm.label,
             namaMenu: menuName,
+            kategori: kat,
             isAlergi: false,
             jenisAlergi: "",
             alergiIndex: null,
@@ -2395,6 +2590,7 @@ const step2SubMenuBlocks = computed(() => {
                     subIndex: idx + 1,
                     subLabel: `${sm.label} • Pengganti Alergi`,
                     namaMenu: penggantiName,
+                    kategori: kat,
                     isAlergi: true,
                     jenisAlergi: al.jenis_alergi || "",
                     alergiIndex: alIdx,
@@ -2451,19 +2647,65 @@ function toggleComboboxForBlock(blockId) {
     }
 }
 
+const selectedCategoryFilterPerBlock = ref({});
+
+function getCategoryFilterForBlock(blockId) {
+    return selectedCategoryFilterPerBlock.value[blockId] || "all";
+}
+
+function setCategoryFilterForBlock(blockId, cat) {
+    selectedCategoryFilterPerBlock.value[blockId] = cat;
+}
+
+function handleChangeBahanSubMenu(bahan, newBlockId) {
+    if (!bahan) return;
+    const targetBlock = step2SubMenuBlocks.value.find((b) => b.id === newBlockId);
+    if (!targetBlock) return;
+    bahan.sub_menu_block_id = targetBlock.id;
+    bahan.sub_menu_key = targetBlock.subKey;
+    bahan.nama_sub_menu = targetBlock.namaMenu;
+    if (targetBlock.isAlergi) {
+        bahan.tipe_porsi = "alergi";
+        bahan.jenis_alergi = targetBlock.jenisAlergi || "";
+    } else {
+        bahan.tipe_porsi = "normal";
+        bahan.jenis_alergi = "";
+    }
+}
+
 function getFilteredTkpiListForBlock(blockId) {
     const list = tkpiItems.value || [];
     const q = (searchTkpiQueryPerBlock.value[blockId] || "")
         .toLowerCase()
         .trim();
-    if (!q) {
-        return list;
-    }
-    const searchTerms = q.split(/\s+/).filter(Boolean);
+    const catFilter = selectedCategoryFilterPerBlock.value[blockId] || "all";
+
     return list.filter((item) => {
-        const itemStr =
-            `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
-        return searchTerms.every((term) => itemStr.includes(term));
+        if (catFilter !== "all") {
+            const itemKat = ((item.kategori || "") + " " + (item.kategori_raw || "")).toLowerCase();
+            const filterLower = catFilter.toLowerCase();
+            const matchesCat =
+                itemKat.includes(filterLower) ||
+                (filterLower === "karbohidrat" &&
+                    (itemKat.includes("serealia") || itemKat.includes("umbi") || itemKat.includes("beras") || itemKat.includes("mie") || itemKat.includes("roti") || itemKat.includes("tepung"))) ||
+                (filterLower === "protein hewani" &&
+                    (itemKat.includes("daging") || itemKat.includes("unggas") || itemKat.includes("ikan") || itemKat.includes("seafood") || itemKat.includes("telur") || itemKat.includes("ayam") || itemKat.includes("sapi"))) ||
+                (filterLower === "protein nabati" &&
+                    (itemKat.includes("kacang") || itemKat.includes("kedelai") || itemKat.includes("tahu") || itemKat.includes("tempe") || itemKat.includes("olahan"))) ||
+                (filterLower === "serat" &&
+                    (itemKat.includes("sayur") || itemKat.includes("serat") || itemKat.includes("daun"))) ||
+                (filterLower === "buah" && itemKat.includes("buah")) ||
+                (filterLower.includes("susu") && itemKat.includes("susu"));
+            if (!matchesCat) return false;
+        }
+
+        if (!q) return true;
+        const searchTerms = q.split(/\s+/).filter(Boolean);
+        return searchTerms.every((term) => {
+            const itemStr =
+                `${item.nama || ""} ${item.kategori || ""} ${item.kategori_raw || ""} ${item.id || ""} ${item.code || ""}`.toLowerCase();
+            return itemStr.includes(term);
+        });
     });
 }
 
@@ -2704,6 +2946,583 @@ function saveManualBahan() {
     }
 }
 
+// ==========================================
+// STATE & HANDLER KOLEKSI RESEP MENU & SUB MENU
+// ==========================================
+const showSaveResepSubMenuModal = ref(false);
+const saveResepSubMenuBlock = ref(null);
+const saveResepSubMenuForm = ref({
+    nama_resep: "",
+    kategori: "Lauk Hewani",
+    deskripsi: "",
+});
+
+const showPilihResepSubMenuModal = ref(false);
+const pilihResepSubMenuBlock = ref(null);
+const searchPilihResepQuery = ref("");
+const selectedResepToApply = ref(null);
+
+const showSaveResepPaketModal = ref(false);
+const saveResepPaketForm = ref({
+    nama_resep: "",
+    deskripsi: "",
+});
+
+const showPilihResepPaketModal = ref(false);
+const searchPilihPaketQuery = ref("");
+const selectedPaketToApply = ref(null);
+
+const isSavingResep = ref(false);
+const resepToast = ref(null);
+
+function showResepNotification(msg, type = "success") {
+    resepToast.value = { msg, type };
+    setTimeout(() => {
+        resepToast.value = null;
+    }, 4500);
+}
+
+function getSubMenuDefaultCategory(key) {
+    if (key && subMenuKategori.value[key]) {
+        return subMenuKategori.value[key];
+    }
+    const map = {
+        sub_menu_1: "Karbohidrat",
+        sub_menu_2: "Protein Hewani",
+        sub_menu_3: "Protein Nabati",
+        sub_menu_4: "Serat",
+        sub_menu_5: "Buah",
+        sub_menu_6: "Susu",
+    };
+    return map[key] || "Karbohidrat";
+}
+
+function openSaveResepSubMenuModal(block) {
+    if (!block) return;
+    saveResepSubMenuBlock.value = block;
+    const items = selectedBahanList.value.filter(
+        (b) => b.sub_menu_block_id === block.id,
+    );
+    if (items.length === 0) {
+        showResepNotification(
+            `Sub menu "${block.subLabel}: ${block.namaMenu}" belum memiliki bahan makanan sama sekali. Silakan tambahkan bahan terlebih dahulu sebelum menyimpannya ke koleksi resep.`,
+            "warning",
+        );
+        return;
+    }
+
+    const incomplete = items.find(
+        (b) => (Number(b.gram_pk) || 0) <= 0 && (Number(b.gram_pb) || 0) <= 0,
+    );
+    if (incomplete) {
+        showResepNotification(
+            `Bahan "${incomplete.nama}" pada sub menu ini takaran gramasinya masih 0 gram. Harap lengkapi gramasi porsi PK atau PB terlebih dahulu.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi wajib Nama di PO terisi lengkap
+    const missingNamaPo = items.find((b) => !b.nama_po || !b.nama_po.trim());
+    if (missingNamaPo) {
+        showResepNotification(
+            `Bahan "${missingNamaPo.nama}" belum memiliki "Nama di PO". Kolom Nama di PO wajib diisi agar informasi resep lengkap sebelum disimpan ke koleksi.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi wajib Harga terisi lengkap (> 0)
+    const missingHarga = items.find((b) => {
+        const val = Number(b.harga_master ?? b.harga_aktual ?? 0);
+        return isNaN(val) || val <= 0;
+    });
+    if (missingHarga) {
+        showResepNotification(
+            `Bahan "${missingHarga.nama}" belum memiliki "Harga / Satuan" (> 0). Kolom Harga wajib diisi agar informasi resep lengkap sebelum disimpan ke koleksi.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Catatan otomatis disinkronkan dari isian kolom keterangan per baris bahan
+    const catatanBahanList = items
+        .map((b) => {
+            const ket = (b.keterangan && b.keterangan !== "-") ? b.keterangan.trim() : "";
+            return ket ? `${b.nama}: ${ket}` : null;
+        })
+        .filter(Boolean);
+
+    saveResepSubMenuForm.value = {
+        nama_resep:
+            block.namaMenu && !block.namaMenu.startsWith("Sub Menu")
+                ? block.namaMenu
+                : `${block.subLabel}`,
+        kategori:
+            block.kategori || getSubMenuDefaultCategory(block.subKey),
+        deskripsi: catatanBahanList.length > 0 ? catatanBahanList.join("\n") : "-",
+    };
+    showSaveResepSubMenuModal.value = true;
+}
+
+async function submitSaveResepSubMenu() {
+    if (!saveResepSubMenuForm.value.nama_resep.trim()) {
+        showResepNotification("Nama resep tidak boleh kosong.", "error");
+        return;
+    }
+    const block = saveResepSubMenuBlock.value;
+    if (!block) return;
+
+    const items = selectedBahanList.value.filter(
+        (b) => b.sub_menu_block_id === block.id,
+    );
+
+    // Hitung ringkasan nutrisi per porsi di blok ini
+    let nutrisiPK = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+    let nutrisiPB = { energi: 0, protein: 0, lemak: 0, karbohidrat: 0, serat: 0 };
+
+    items.forEach((b) => {
+        const base = getBahanBaseNutrition(b);
+        if (!base.isOperasional) {
+            const pkRatio = (Number(b.gram_pk) || 0) / 100;
+            const pbRatio = (Number(b.gram_pb) || 0) / 100;
+
+            nutrisiPK.energi += base.energi * pkRatio;
+            nutrisiPK.protein += base.protein * pkRatio;
+            nutrisiPK.lemak += base.lemak * pkRatio;
+            nutrisiPK.karbohidrat += base.karbohidrat * pkRatio;
+            nutrisiPK.serat += base.serat * pkRatio;
+
+            nutrisiPB.energi += base.energi * pbRatio;
+            nutrisiPB.protein += base.protein * pbRatio;
+            nutrisiPB.lemak += base.lemak * pbRatio;
+            nutrisiPB.karbohidrat += base.karbohidrat * pbRatio;
+            nutrisiPB.serat += base.serat * pbRatio;
+        }
+    });
+
+    isSavingResep.value = true;
+    try {
+        const payload = {
+            nama_resep: saveResepSubMenuForm.value.nama_resep.trim(),
+            tipe: "sub_menu",
+            kategori: saveResepSubMenuForm.value.kategori || "Lainnya",
+            asal_menu: namaMenuAktif.value || "Rancang Menu",
+            deskripsi: saveResepSubMenuForm.value.deskripsi || null,
+            data_resep: {
+                sub_menu_key: block.subKey,
+                nama_sub_menu: block.namaMenu,
+                items: items.map((b) => ({
+                    id: b.id,
+                    code: b.code || "",
+                    tkpi_id: b.tkpi_id || b.id || "",
+                    sub_menu_block_id: b.sub_menu_block_id || block.id,
+                    sub_menu_key: b.sub_menu_key || block.subKey,
+                    nama_sub_menu: b.nama_sub_menu || block.namaMenu,
+                    nama: b.nama,
+                    nama_po: (b.nama_po || b.nama || "").trim(),
+                    kategori: b.kategori || "Lainnya",
+                    satuan: b.satuan || "Kg",
+                    gram_pk: Number(b.gram_pk) || 0,
+                    gram_pb: Number(b.gram_pb) || 0,
+                    bdd: Number(b.bdd) || 100,
+                    buffer: Number(b.buffer) || 0,
+                    harga_master: Number(b.harga_master) || Number(b.harga_aktual) || 0,
+                    harga_aktual: Number(b.harga_aktual) || Number(b.harga_master) || 0,
+                    alergen: b.alergen || "",
+                    tipe_porsi: b.tipe_porsi || "normal",
+                    jenis_alergi: b.jenis_alergi || "",
+                    keterangan: b.keterangan || "-",
+                    is_custom: b.is_custom || false,
+                    nutrisi_custom: b.nutrisi_custom || null,
+                    tipe_perhitungan: b.tipe_perhitungan || "berat_bersih",
+                    tkpi: b.tkpi || null,
+                })),
+                total_nutrisi_pk: {
+                    energi: Math.round(nutrisiPK.energi * 10) / 10,
+                    protein: Math.round(nutrisiPK.protein * 10) / 10,
+                    lemak: Math.round(nutrisiPK.lemak * 10) / 10,
+                    karbohidrat: Math.round(nutrisiPK.karbohidrat * 10) / 10,
+                    serat: Math.round(nutrisiPK.serat * 10) / 10,
+                },
+                total_nutrisi_pb: {
+                    energi: Math.round(nutrisiPB.energi * 10) / 10,
+                    protein: Math.round(nutrisiPB.protein * 10) / 10,
+                    lemak: Math.round(nutrisiPB.lemak * 10) / 10,
+                    karbohidrat: Math.round(nutrisiPB.karbohidrat * 10) / 10,
+                    serat: Math.round(nutrisiPB.serat * 10) / 10,
+                },
+            },
+        };
+
+        const res = await fetch("/gizi/api/resep", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN":
+                    document
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (json.success) {
+            showResepNotification(
+                `Resep "${payload.nama_resep}" berhasil disimpan ke koleksi!`,
+            );
+            showSaveResepSubMenuModal.value = false;
+            saveResepSubMenuBlock.value = null;
+            if (json.data && Array.isArray(props.resepsList)) {
+                props.resepsList.unshift(json.data);
+            }
+        } else {
+            showResepNotification(json.message || "Gagal menyimpan resep.", "error");
+        }
+    } catch (err) {
+        showResepNotification("Terjadi kesalahan saat menyimpan resep.", "error");
+    } finally {
+        isSavingResep.value = false;
+    }
+}
+
+function openPilihResepSubMenuModal(block) {
+    pilihResepSubMenuBlock.value = block;
+    searchPilihResepQuery.value = "";
+    selectedResepToApply.value = null;
+    showPilihResepSubMenuModal.value = true;
+}
+
+const availableSubMenuReseps = computed(() => {
+    const list = props.resepsList || [];
+    let filtered = list.filter((r) => r.tipe === "sub_menu");
+    if (searchPilihResepQuery.value && searchPilihResepQuery.value.trim()) {
+        const q = searchPilihResepQuery.value.toLowerCase().trim();
+        filtered = filtered.filter((r) => {
+            const n = (r.nama_resep || "").toLowerCase();
+            const k = (r.kategori || "").toLowerCase();
+            const a = (r.asal_menu || "").toLowerCase();
+            const items = (r.data_resep?.items || [])
+                .map((it) => (it.nama || "").toLowerCase())
+                .join(" ");
+            return n.includes(q) || k.includes(q) || a.includes(q) || items.includes(q);
+        });
+    }
+    return filtered;
+});
+
+function applyResepToSubMenu(resep, replaceExisting = true) {
+    const block = pilihResepSubMenuBlock.value;
+    if (!block || !resep || !resep.data_resep) return;
+
+    const items = resep.data_resep.items || [];
+    if (items.length === 0) {
+        showResepNotification("Resep ini tidak memiliki daftar bahan.", "error");
+        return;
+    }
+
+    if (replaceExisting) {
+        selectedBahanList.value = selectedBahanList.value.filter(
+            (b) => b.sub_menu_block_id !== block.id,
+        );
+    }
+
+    if (
+        resep.nama_resep &&
+        (!subMenuKomponen.value[block.subKey] ||
+            subMenuKomponen.value[block.subKey].startsWith("Sub Menu"))
+    ) {
+        subMenuKomponen.value[block.subKey] = resep.nama_resep;
+    }
+
+    items.forEach((it) => {
+        selectedBahanList.value.push({
+            id: it.id || it.code || `resep_${Date.now()}_${Math.random()}`,
+            code: it.code || "",
+            tkpi_id: it.tkpi_id || it.id || "",
+            sub_menu_block_id: block.id,
+            sub_menu_key: block.subKey,
+            nama_sub_menu:
+                block.namaMenu ||
+                subMenuKomponen.value[block.subKey] ||
+                resep.nama_resep,
+            jenis: "bahan_baku",
+            kategori: it.kategori || "Lainnya",
+            satuan: it.satuan || "Kg",
+            nama: it.nama,
+            nama_po: it.nama_po || "",
+            tipe_porsi: block.isAlergi ? "alergi" : it.tipe_porsi || "normal",
+            jenis_alergi: block.isAlergi
+                ? block.jenisAlergi || ""
+                : it.jenis_alergi || "",
+            gram_pk: Number(it.gram_pk) || 0,
+            gram_pb: Number(it.gram_pb) || 0,
+            bdd: Number(it.bdd) || 100,
+            buffer: Number(it.buffer) || 0,
+            harga_master: it.harga_master || null,
+            harga_aktual: it.harga_aktual || null,
+            alergen: it.alergen || "",
+            keterangan: it.keterangan || "-",
+            tkpi: it.tkpi || null,
+        });
+    });
+
+    showResepNotification(
+        `Resep "${resep.nama_resep}" (${items.length} bahan) berhasil dimuat ke ${block.subLabel}!`,
+    );
+    showPilihResepSubMenuModal.value = false;
+    pilihResepSubMenuBlock.value = null;
+    selectedResepToApply.value = null;
+}
+
+function openSaveResepPaketModal() {
+    if (selectedBahanList.value.length === 0) {
+        showResepNotification(
+            "Belum ada bahan makanan yang dipilih di seluruh menu. Silakan tambahkan bahan terlebih dahulu.",
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi apakah ada sub menu yang belum diisi bahan sama sekali
+    const emptyBlocks = (step2SubMenuBlocks.value || []).filter((block) => {
+        const count = selectedBahanList.value.filter(
+            (b) => b.sub_menu_block_id === block.id,
+        ).length;
+        return count === 0;
+    });
+
+    if (emptyBlocks.length > 0) {
+        const emptyLabels = emptyBlocks
+            .map((b) => `"${b.subLabel}: ${b.namaMenu}"`)
+            .join(", ");
+        showResepNotification(
+            `Masih ada sub menu yang belum diisi bahan sama sekali: ${emptyLabels}. Silakan lengkapi bahan pada setiap sub menu sebelum menyimpan seluruh menu sebagai Paket Resep.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi apakah ada bahan dengan gramasi 0
+    const incompleteBahan = selectedBahanList.value.find(
+        (b) => (Number(b.gram_pk) || 0) <= 0 && (Number(b.gram_pb) || 0) <= 0,
+    );
+    if (incompleteBahan) {
+        showResepNotification(
+            `Bahan "${incompleteBahan.nama}" pada sub menu ${incompleteBahan.nama_sub_menu || "ini"} takarannya masih 0 gram. Lengkapi takaran gramasi porsi PK/PB terlebih dahulu.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi wajib Nama di PO terisi lengkap
+    const missingNamaPo = selectedBahanList.value.find((b) => !b.nama_po || !b.nama_po.trim());
+    if (missingNamaPo) {
+        showResepNotification(
+            `Bahan "${missingNamaPo.nama}" belum memiliki "Nama di PO". Kolom Nama di PO wajib diisi agar informasi paket resep lengkap sebelum disimpan.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Validasi wajib Harga terisi lengkap (> 0)
+    const missingHarga = selectedBahanList.value.find((b) => {
+        const val = Number(b.harga_master ?? b.harga_aktual ?? 0);
+        return isNaN(val) || val <= 0;
+    });
+    if (missingHarga) {
+        showResepNotification(
+            `Bahan "${missingHarga.nama}" belum memiliki "Harga / Satuan" (> 0). Kolom Harga wajib diisi agar informasi paket resep lengkap sebelum disimpan.`,
+            "warning",
+        );
+        return;
+    }
+
+    // Catatan otomatis disinkronkan dari isian kolom keterangan seluruh baris bahan
+    const allCatatan = selectedBahanList.value
+        .map((b) => {
+            const ket = (b.keterangan && b.keterangan !== "-") ? b.keterangan.trim() : "";
+            return ket ? `${b.nama}: ${ket}` : null;
+        })
+        .filter(Boolean);
+
+    saveResepPaketForm.value = {
+        nama_resep: namaMenuAktif.value || "Paket Menu MBG Lengkap",
+        deskripsi: allCatatan.length > 0 ? allCatatan.join("\n") : "-",
+    };
+    showSaveResepPaketModal.value = true;
+}
+
+async function submitSaveResepPaket() {
+    if (!saveResepPaketForm.value.nama_resep.trim()) {
+        showResepNotification("Nama paket resep tidak boleh kosong.", "error");
+        return;
+    }
+
+    isSavingResep.value = true;
+    try {
+        const payload = {
+            nama_resep: saveResepPaketForm.value.nama_resep.trim(),
+            tipe: "paket_menu",
+            kategori: "Paket Lengkap",
+            asal_menu: namaMenuAktif.value || "Rancang Menu",
+            deskripsi: saveResepPaketForm.value.deskripsi || null,
+            data_resep: {
+                nama_menu: namaMenuAktif.value || "",
+                sub_menus: { ...subMenuKomponen.value },
+                sub_menu_alergi: { ...subMenuAlergi.value },
+                items: selectedBahanList.value.map((b) => ({
+                    id: b.id,
+                    code: b.code || "",
+                    tkpi_id: b.tkpi_id || b.id || "",
+                    sub_menu_block_id: b.sub_menu_block_id,
+                    sub_menu_key: b.sub_menu_key,
+                    nama_sub_menu: b.nama_sub_menu,
+                    nama: b.nama,
+                    nama_po: (b.nama_po || b.nama || "").trim(),
+                    kategori: b.kategori || "Lainnya",
+                    satuan: b.satuan || "Kg",
+                    gram_pk: Number(b.gram_pk) || 0,
+                    gram_pb: Number(b.gram_pb) || 0,
+                    bdd: Number(b.bdd) || 100,
+                    buffer: Number(b.buffer) || 0,
+                    harga_master: Number(b.harga_master) || Number(b.harga_aktual) || 0,
+                    harga_aktual: Number(b.harga_aktual) || Number(b.harga_master) || 0,
+                    alergen: b.alergen || "",
+                    tipe_porsi: b.tipe_porsi || "normal",
+                    jenis_alergi: b.jenis_alergi || "",
+                    keterangan: b.keterangan || "-",
+                    is_custom: b.is_custom || false,
+                    nutrisi_custom: b.nutrisi_custom || null,
+                    tipe_perhitungan: b.tipe_perhitungan || "berat_bersih",
+                    tkpi: b.tkpi || null,
+                })),
+                total_nutrisi_pk: {
+                    energi: Math.round((totalNutrisiPK.value?.energi || 0) * 10) / 10,
+                    protein: Math.round((totalNutrisiPK.value?.protein || 0) * 10) / 10,
+                    lemak: Math.round((totalNutrisiPK.value?.lemak || 0) * 10) / 10,
+                    karbohidrat:
+                        Math.round((totalNutrisiPK.value?.karbohidrat || 0) * 10) / 10,
+                    serat: Math.round((totalNutrisiPK.value?.serat || 0) * 10) / 10,
+                },
+                total_nutrisi_pb: {
+                    energi: Math.round((totalNutrisiPB.value?.energi || 0) * 10) / 10,
+                    protein: Math.round((totalNutrisiPB.value?.protein || 0) * 10) / 10,
+                    lemak: Math.round((totalNutrisiPB.value?.lemak || 0) * 10) / 10,
+                    karbohidrat:
+                        Math.round((totalNutrisiPB.value?.karbohidrat || 0) * 10) / 10,
+                    serat: Math.round((totalNutrisiPB.value?.serat || 0) * 10) / 10,
+                },
+            },
+        };
+
+        const res = await fetch("/gizi/api/resep", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN":
+                    document
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (json.success) {
+            showResepNotification(
+                `Paket Resep "${payload.nama_resep}" berhasil disimpan ke koleksi!`,
+            );
+            showSaveResepPaketModal.value = false;
+            if (json.data && Array.isArray(props.resepsList)) {
+                props.resepsList.unshift(json.data);
+            }
+        } else {
+            showResepNotification(json.message || "Gagal menyimpan paket resep.", "error");
+        }
+    } catch (err) {
+        showResepNotification("Terjadi kesalahan saat menyimpan paket resep.", "error");
+    } finally {
+        isSavingResep.value = false;
+    }
+}
+
+function openPilihResepPaketModal() {
+    searchPilihPaketQuery.value = "";
+    selectedPaketToApply.value = null;
+    showPilihResepPaketModal.value = true;
+}
+
+const availablePaketReseps = computed(() => {
+    const list = props.resepsList || [];
+    let filtered = list.filter((r) => r.tipe === "paket_menu");
+    if (searchPilihPaketQuery.value && searchPilihPaketQuery.value.trim()) {
+        const q = searchPilihPaketQuery.value.toLowerCase().trim();
+        filtered = filtered.filter((r) => {
+            const n = (r.nama_resep || "").toLowerCase();
+            const a = (r.asal_menu || "").toLowerCase();
+            const items = (r.data_resep?.items || [])
+                .map((it) => (it.nama || "").toLowerCase())
+                .join(" ");
+            return n.includes(q) || a.includes(q) || items.includes(q);
+        });
+    }
+    return filtered;
+});
+
+function applyPaketResepToForm(paket) {
+    if (!paket || !paket.data_resep) return;
+
+    const data = paket.data_resep;
+
+    if (paket.nama_resep) {
+        namaMenuAktif.value = paket.nama_resep;
+    }
+
+    if (data.sub_menus) {
+        subMenuKomponen.value = { ...data.sub_menus };
+    }
+
+    if (data.sub_menu_alergi) {
+        subMenuAlergi.value = { ...data.sub_menu_alergi };
+    }
+
+    const items = data.items || [];
+    selectedBahanList.value = items.map((it) => ({
+        id: it.id || it.code || `resep_${Date.now()}_${Math.random()}`,
+        code: it.code || "",
+        tkpi_id: it.tkpi_id || it.id || "",
+        sub_menu_block_id:
+            it.sub_menu_block_id || `${it.sub_menu_key || "sub_menu_1"}_normal`,
+        sub_menu_key: it.sub_menu_key || "sub_menu_1",
+        nama_sub_menu:
+            it.nama_sub_menu || subMenuKomponen.value[it.sub_menu_key] || "",
+        jenis: "bahan_baku",
+        kategori: it.kategori || "Lainnya",
+        satuan: it.satuan || "Kg",
+        nama: it.nama,
+        nama_po: it.nama_po || "",
+        tipe_porsi: it.tipe_porsi || "normal",
+        jenis_alergi: it.jenis_alergi || "",
+        gram_pk: Number(it.gram_pk) || 0,
+        gram_pb: Number(it.gram_pb) || 0,
+        bdd: Number(it.bdd) || 100,
+        buffer: Number(it.buffer) || 0,
+        harga_master: it.harga_master || null,
+        harga_aktual: it.harga_aktual || null,
+        alergen: it.alergen || "",
+        keterangan: it.keterangan || "-",
+        tkpi: it.tkpi || null,
+    }));
+
+    showResepNotification(
+        `Paket Resep "${paket.nama_resep}" (${items.length} bahan) berhasil dimuat ke seluruh rancangan menu!`,
+    );
+    showPilihResepPaketModal.value = false;
+    selectedPaketToApply.value = null;
+}
+
 // Navigasi & Highlight Baris Bahan Pangan dari Tabel Rekapitulasi
 function scrollToSubMenuBahan(item) {
     if (!item) return;
@@ -2931,6 +3750,7 @@ function getSubMenuLabelForBahan(it) {
             return {
                 label: found.subLabel,
                 namaMenu: found.namaMenu,
+                kategori: found.kategori || "",
                 isAlergi: found.isAlergi,
                 jenisAlergi: found.jenisAlergi,
                 badgeClass: found.isAlergi
@@ -2949,10 +3769,15 @@ function getSubMenuLabelForBahan(it) {
     const label = keyMap[it.sub_menu_key] || "Sub Menu 1";
     const namaMenu =
         it.nama_sub_menu || subMenuKomponen.value[it.sub_menu_key] || "";
+    const kat =
+        it.sub_menu_kategori ||
+        (it.sub_menu_key ? subMenuKategori.value[it.sub_menu_key] : "") ||
+        "";
     const isAlergi = it.tipe_porsi === "alergi";
     return {
         label: isAlergi ? `${label} • Alergi` : label,
         namaMenu: namaMenu || "-",
+        kategori: kat,
         isAlergi,
         jenisAlergi: it.jenis_alergi || "",
         badgeClass: isAlergi
@@ -3229,9 +4054,14 @@ onMounted(() => {
             return;
         }
 
+        const visit = event.detail?.visit ?? {};
+        // Abaikan reload parsial internal tanpa pergantian halaman
+        if (visit.only && Array.isArray(visit.only) && visit.only.length > 0) {
+            return;
+        }
+
         if (isFormDirty.value) {
             event.preventDefault();
-            const visit = event.detail?.visit ?? {};
             pendingNavigation.value = {
                 url: visit.url,
                 method: visit.method,
@@ -3247,6 +4077,36 @@ onMounted(() => {
     nextTick(() => {
         if (!initialFormSnapshot.value) {
             initialFormSnapshot.value = takeFormSnapshot();
+        }
+
+        // Cek apakah ada resep yang ingin diaplikasikan dari tab Koleksi Resep
+        if (typeof window !== "undefined") {
+            const stored = sessionStorage.getItem("sipege_apply_resep");
+            if (stored) {
+                sessionStorage.removeItem("sipege_apply_resep");
+                try {
+                    const resep = JSON.parse(stored);
+                    if (resep.tipe === "paket_menu") {
+                        applyPaketResepToForm(resep);
+                        buatMenuSubTab.value = "bahan_pangan";
+                    } else if (resep.tipe === "sub_menu") {
+                        const targetBlock =
+                            step2SubMenuBlocks.value.find(
+                                (b) =>
+                                    b.subKey ===
+                                        resep.data_resep?.sub_menu_key &&
+                                    !b.isAlergi,
+                            ) || step2SubMenuBlocks.value[0];
+                        if (targetBlock) {
+                            pilihResepSubMenuBlock.value = targetBlock;
+                            applyResepToSubMenu(resep, true);
+                            buatMenuSubTab.value = "bahan_pangan";
+                        }
+                    }
+                } catch (e) {
+                    console.error("Gagal memuat resep dari storage", e);
+                }
+            }
         }
     });
 });
@@ -8628,11 +9488,28 @@ watch(
                                             <Trash2 class="h-3 w-3" />
                                         </button>
                                     </div>
+
+                                    <!-- Dropdown Kategori Sub Menu -->
+                                    <div>
+                                        <select
+                                            v-model="subMenuKategori[subKey]"
+                                            class="w-full text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50/80 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary text-slate-700 transition cursor-pointer"
+                                        >
+                                            <option
+                                                v-for="kat in KATEGORI_SUB_MENU_OPTIONS"
+                                                :key="kat"
+                                                :value="kat"
+                                            >
+                                                {{ kat }}
+                                            </option>
+                                        </select>
+                                    </div>
+
                                     <input
                                         type="text"
                                         v-model="subMenuKomponen[subKey]"
                                         @input="clearError(subKey)"
-                                        :placeholder="getSubMenuDefaultPlaceholder(sIdx)"
+                                        :placeholder="getSubMenuDefaultPlaceholder(sIdx, subMenuKategori[subKey])"
                                         :class="[
                                             'w-full text-xs font-semibold rounded-lg border p-2',
                                             validationErrors[subKey]
@@ -9361,14 +10238,84 @@ watch(
                                     Work Order ini.
                                 </p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <!-- Quick Preset Buttons (Semua / Hanya Sekolah / Hanya Posyandu) -->
+                                <div class="inline-flex p-1 bg-slate-100/90 rounded-xl border border-slate-200/90 text-xs shadow-2xs">
+                                    <!-- 1. Semua Menerima -->
+                                    <button
+                                        type="button"
+                                        @click="handleSetReceivingPreset('all')"
+                                        :class="[
+                                            activeReceivingPreset === 'all'
+                                                ? 'bg-white text-emerald-700 font-bold shadow-xs border border-emerald-200/80 ring-1 ring-emerald-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                            'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                        ]"
+                                        title="Aktifkan seluruh kelompok penerima manfaat (Sekolah & Posyandu)"
+                                    >
+                                        <Users class="h-3.5 w-3.5" :class="activeReceivingPreset === 'all' ? 'text-emerald-600' : 'text-slate-400'" />
+                                        <span>Semua Menerima</span>
+                                        <span
+                                            class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                            :class="activeReceivingPreset === 'all' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200/70 text-slate-600'"
+                                        >
+                                            {{ woKelompokList.length }}
+                                        </span>
+                                    </button>
+
+                                    <!-- 2. Hanya Sekolah -->
+                                    <button
+                                        type="button"
+                                        @click="handleSetReceivingPreset('sekolah')"
+                                        :class="[
+                                            activeReceivingPreset === 'sekolah'
+                                                ? 'bg-white text-blue-700 font-bold shadow-xs border border-blue-200/80 ring-1 ring-blue-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                            'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                        ]"
+                                        title="Hanya kelompok kategori Sekolah (TK, RA, PAUD, SD, MI, SMP, MTs, SMA, SMK, MA) yang menerima"
+                                    >
+                                        <School class="h-3.5 w-3.5" :class="activeReceivingPreset === 'sekolah' ? 'text-blue-600' : 'text-slate-400'" />
+                                        <span>Hanya Sekolah</span>
+                                        <span
+                                            class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                            :class="activeReceivingPreset === 'sekolah' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200/70 text-slate-600'"
+                                        >
+                                            {{ countSekolahKelompok }}
+                                        </span>
+                                    </button>
+
+                                    <!-- 3. Hanya Posyandu -->
+                                    <button
+                                        type="button"
+                                        @click="handleSetReceivingPreset('posyandu')"
+                                        :class="[
+                                            activeReceivingPreset === 'posyandu'
+                                                ? 'bg-white text-pink-700 font-bold shadow-xs border border-pink-200/80 ring-1 ring-pink-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 font-medium hover:bg-white/60',
+                                            'px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-xs'
+                                        ]"
+                                        title="Hanya kelompok kategori Posyandu (Balita, Bumil, Busui) yang menerima"
+                                    >
+                                        <HeartPulse class="h-3.5 w-3.5" :class="activeReceivingPreset === 'posyandu' ? 'text-pink-600' : 'text-slate-400'" />
+                                        <span>Hanya Posyandu</span>
+                                        <span
+                                            class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold"
+                                            :class="activeReceivingPreset === 'posyandu' ? 'bg-pink-100 text-pink-800' : 'bg-slate-200/70 text-slate-600'"
+                                        >
+                                            {{ countPosyanduKelompok }}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                <!-- Tombol Reset / Kembalikan -->
                                 <Button
                                     type="button"
                                     @click="handleResetWoKelompokList"
-                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 h-8 flex items-center gap-1 cursor-pointer shadow-none border border-slate-200"
+                                    className="bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold px-3 h-8.5 flex items-center gap-1.5 cursor-pointer shadow-2xs border border-slate-200 rounded-xl"
                                     title="Kembalikan semua kelompok default dari database"
                                 >
-                                    <RotateCcw class="h-3.5 w-3.5" />
+                                    <RotateCcw class="h-3.5 w-3.5 text-slate-500" />
                                     <span>Kembalikan</span>
                                 </Button>
                             </div>
@@ -10967,6 +11914,60 @@ watch(
                     </div>
 
                     <!-- ========================================================================= -->
+                    <!-- TOOLBAR INTEGRASI KOLEKSI RESEP MENU & SUB MENU -->
+                    <!-- ========================================================================= -->
+                    <div
+                        class="p-3.5 bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 border border-emerald-200/80 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-xs"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm"
+                            >
+                                <BookOpen class="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h4
+                                    class="text-xs font-black text-slate-800 tracking-wide uppercase flex items-center gap-2"
+                                >
+                                    <span>Koleksi Resep Menu & Standarisasi SPPG</span>
+                                    <span
+                                        class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold"
+                                        >Terintegrasi</span
+                                    >
+                                </h4>
+                                <p class="text-[11px] text-slate-600">
+                                    Gunakan template paket resep siap saji untuk otomatisasi komposisi bahan, atau simpan seluruh rancangan menu ini ke database resep SPPG.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 flex-wrap shrink-0">
+                            <!-- Tombol Terapkan Paket Resep -->
+                            <button
+                                type="button"
+                                @click="openPilihResepPaketModal"
+                                class="px-3 py-1.5 rounded-xl bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300 text-xs font-black flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                                title="Terapkan komposisi bahan dari salah satu Paket Resep yang tersimpan"
+                            >
+                                <BookOpen class="h-4 w-4 text-emerald-600" />
+                                <span>Terapkan Paket Resep</span>
+                            </button>
+
+                            <!-- Tombol Simpan Seluruh Menu sebagai Paket Resep -->
+                            <button
+                                v-if="selectedBahanList.length > 0"
+                                type="button"
+                                @click="openSaveResepPaketModal"
+                                class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                                title="Simpan seluruh sub menu dan komposisi bahan saat ini sebagai Paket Resep baru"
+                            >
+                                <BookmarkPlus class="h-4 w-4" />
+                                <span>Simpan Seluruh Menu ke Resep</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================================= -->
                     <!-- BLOK-BLOK SUB MENU & VARIAN PENGGANTI ALERGI (LANGKAH 2) -->
                     <!-- ========================================================================= -->
                     <div class="space-y-6">
@@ -11020,6 +12021,14 @@ watch(
                                                 "
                                             >
                                                 "{{ block.namaMenu }}"
+                                            </span>
+                                            <!-- Kategori Sub Menu di Header Blok (Teks Biasa / Badge, tidak bisa diubah karena telah ditentukan di awal) -->
+                                            <span
+                                                class="px-2.5 py-0.5 rounded-md text-[10.5px] font-black border shadow-2xs inline-flex items-center"
+                                                :class="getKategoriBadgeClass(block.kategori)"
+                                                title="Kategori Sub Menu telah ditentukan pada perencanaan awal"
+                                            >
+                                                {{ block.kategori }}
                                             </span>
                                             <span
                                                 v-if="block.isAlergi"
@@ -11102,6 +12111,33 @@ watch(
                                             class="h-3.5 w-3.5 text-indigo-600"
                                         />
                                         <span>Cek Rekap</span>
+                                    </button>
+
+                                    <!-- Tombol Pilih dari Koleksi Resep -->
+                                    <button
+                                        type="button"
+                                        @click="openPilihResepSubMenuModal(block)"
+                                        class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-200 text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                        title="Pilih dan terapkan komposisi bahan dari Koleksi Resep Masakan"
+                                    >
+                                        <BookOpen
+                                            class="h-3.5 w-3.5 text-emerald-600"
+                                        />
+                                        <span>Pilih Resep</span>
+                                    </button>
+
+                                    <!-- Tombol Simpan Komposisi sebagai Resep Baru -->
+                                    <button
+                                        v-if="getBlockSummary(block.id).count > 0"
+                                        type="button"
+                                        @click="openSaveResepSubMenuModal(block)"
+                                        class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-900 border border-amber-200 text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                        title="Simpan daftar bahan di sub menu ini ke Koleksi Resep agar dapat dipakai lagi"
+                                    >
+                                        <BookmarkPlus
+                                            class="h-3.5 w-3.5 text-amber-600"
+                                        />
+                                        <span>Simpan Resep</span>
                                     </button>
                                     <span
                                         class="px-2.5 py-1 rounded-lg bg-white/90 border border-slate-200 text-slate-700 font-bold text-[11px] shadow-2xs"
@@ -11209,6 +12245,37 @@ watch(
                                                     autofocus
                                                 />
                                             </div>
+
+                                            <!-- Filter Kategori Cepat Sesuai Sub Menu -->
+                                            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                                                <button
+                                                    type="button"
+                                                    @click="setCategoryFilterForBlock(block.id, 'all')"
+                                                    class="px-2 py-0.5 rounded text-[10px] font-black transition-all cursor-pointer whitespace-nowrap shrink-0 border"
+                                                    :class="getCategoryFilterForBlock(block.id) === 'all' ? 'bg-primary text-white border-primary shadow-2xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                                                >
+                                                    Semua
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    @click="setCategoryFilterForBlock(block.id, block.kategori)"
+                                                    class="px-2 py-0.5 rounded text-[10px] font-black transition-all cursor-pointer whitespace-nowrap shrink-0 border"
+                                                    :class="getCategoryFilterForBlock(block.id) === block.kategori ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'"
+                                                >
+                                                    ✨ Sub Menu: {{ block.kategori }}
+                                                </button>
+                                                <button
+                                                    v-for="kat in KATEGORI_SUB_MENU_OPTIONS"
+                                                    :key="kat"
+                                                    type="button"
+                                                    @click="setCategoryFilterForBlock(block.id, kat)"
+                                                    class="px-2 py-0.5 rounded text-[10px] font-black transition-all cursor-pointer whitespace-nowrap shrink-0 border"
+                                                    :class="getCategoryFilterForBlock(block.id) === kat ? 'bg-primary text-white border-primary shadow-2xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                                                >
+                                                    {{ kat }}
+                                                </button>
+                                            </div>
+
                                             <div
                                                 class="flex items-center justify-between gap-2 text-[10px] text-slate-500 font-medium px-1 flex-wrap"
                                             >
@@ -11343,7 +12410,7 @@ watch(
                             <!-- Tabel Bahan Baku Mentah Khusus Blok Ini -->
                             <div class="overflow-x-auto">
                                 <table
-                                    class="w-full min-w-[1100px] text-left text-xs border-collapse"
+                                    class="w-full min-w-[1550px] text-left text-xs border-collapse"
                                 >
                                     <thead>
                                         <tr
@@ -11400,6 +12467,12 @@ watch(
                                                 class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                             >
                                                 Berat Kotor (g)
+                                            </th>
+                                            <th
+                                                colspan="5"
+                                                class="p-2 text-center bg-emerald-50/70 text-emerald-950 border-r border-slate-200/80 font-black"
+                                            >
+                                                Kandungan Gizi (per 100g)
                                             </th>
                                             <th
                                                 rowspan="2"
@@ -11475,6 +12548,31 @@ watch(
                                             >
                                                 PB
                                             </th>
+                                            <th
+                                                class="p-1.5 text-center bg-amber-50/50 text-amber-900 border-r border-slate-200/60 min-w-[80px]"
+                                            >
+                                                Energi
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                            >
+                                                Protein
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-rose-50/50 text-rose-900 border-r border-slate-200/60 min-w-[75px]"
+                                            >
+                                                Lemak
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[80px]"
+                                            >
+                                                Karbo
+                                            </th>
+                                            <th
+                                                class="p-1.5 text-center bg-teal-50/50 text-teal-900 border-r border-slate-200/80 min-w-[75px]"
+                                            >
+                                                Serat
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody
@@ -11487,7 +12585,7 @@ watch(
                                             "
                                         >
                                             <td
-                                                colspan="16"
+                                                colspan="21"
                                                 class="p-6 text-center text-slate-400 font-medium bg-slate-50/30"
                                             >
                                                 <div
@@ -12008,6 +13106,71 @@ watch(
                                                     (Net ÷ {{ it.bdd || 100 }}%)
                                                 </div>
                                             </td>
+                                            <!-- Kandungan Gizi: Energi -->
+                                            <td
+                                                class="p-2 text-right align-top pt-3.5 font-medium bg-amber-50/15 border-r border-slate-100"
+                                            >
+                                                <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                    <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).energi }}</span>
+                                                    <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">kkal</span>
+                                                    <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-amber-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                        PK:{{ it.nutrisiPK?.energi ?? 0 }} • PB:{{ it.nutrisiPB?.energi ?? 0 }}
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
+                                            <!-- Kandungan Gizi: Protein -->
+                                            <td
+                                                class="p-2 text-right align-top pt-3.5 font-medium bg-blue-50/15 border-r border-slate-100"
+                                            >
+                                                <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                    <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).protein }}</span>
+                                                    <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                    <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-blue-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                        PK:{{ it.nutrisiPK?.protein ?? 0 }} • PB:{{ it.nutrisiPB?.protein ?? 0 }}
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
+                                            <!-- Kandungan Gizi: Lemak -->
+                                            <td
+                                                class="p-2 text-right align-top pt-3.5 font-medium bg-rose-50/15 border-r border-slate-100"
+                                            >
+                                                <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                    <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).lemak }}</span>
+                                                    <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                    <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-rose-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                        PK:{{ it.nutrisiPK?.lemak ?? 0 }} • PB:{{ it.nutrisiPB?.lemak ?? 0 }}
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
+                                            <!-- Kandungan Gizi: Karbohidrat -->
+                                            <td
+                                                class="p-2 text-right align-top pt-3.5 font-medium bg-emerald-50/15 border-r border-slate-100"
+                                            >
+                                                <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                    <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).karbohidrat }}</span>
+                                                    <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                    <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-emerald-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                        PK:{{ it.nutrisiPK?.karbohidrat ?? 0 }} • PB:{{ it.nutrisiPB?.karbohidrat ?? 0 }}
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
+                                            <!-- Kandungan Gizi: Serat -->
+                                            <td
+                                                class="p-2 text-right align-top pt-3.5 font-medium bg-teal-50/15 border-r border-slate-100"
+                                            >
+                                                <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                    <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).serat }}</span>
+                                                    <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                    <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-teal-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                        PK:{{ it.nutrisiPK?.serat ?? 0 }} • PB:{{ it.nutrisiPB?.serat ?? 0 }}
+                                                    </div>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                            </td>
                                             <!-- 8. BDD (%) -->
                                             <td
                                                 class="p-3 text-center align-top pt-4 text-slate-700 font-medium border-r border-slate-100"
@@ -12217,7 +13380,7 @@ watch(
                                     >
                                         <tr>
                                             <td
-                                                colspan="12"
+                                                colspan="17"
                                                 class="p-2.5 text-right uppercase text-[10.5px] text-slate-600 font-extrabold border-r border-slate-200/80"
                                             >
                                                 Total Kebutuhan
@@ -12328,7 +13491,7 @@ watch(
                         <!-- Tabel Rekapitulasi Read-Only -->
                         <div class="overflow-x-auto">
                             <table
-                                class="w-full min-w-[1200px] text-left text-xs border-collapse"
+                                class="w-full min-w-[1650px] text-left text-xs border-collapse"
                             >
                                 <thead>
                                     <tr
@@ -12387,6 +13550,12 @@ watch(
                                             class="p-2 text-center bg-white text-slate-800 border-r border-slate-200/80 font-black"
                                         >
                                             Berat Kotor (g)
+                                        </th>
+                                        <th
+                                            colspan="5"
+                                            class="p-2 text-center bg-emerald-50/70 text-emerald-950 border-r border-slate-200/80 font-black"
+                                        >
+                                            Kandungan Gizi (per 100g)
                                         </th>
                                         <th
                                             rowspan="2"
@@ -12448,6 +13617,31 @@ watch(
                                         >
                                             PB
                                         </th>
+                                        <th
+                                            class="p-1.5 text-center bg-amber-50/50 text-amber-900 border-r border-slate-200/60 min-w-[80px]"
+                                        >
+                                            Energi
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-blue-50/50 text-blue-900 border-r border-slate-200/60 min-w-[75px]"
+                                        >
+                                            Protein
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-rose-50/50 text-rose-900 border-r border-slate-200/60 min-w-[75px]"
+                                        >
+                                            Lemak
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-emerald-50/50 text-emerald-900 border-r border-slate-200/60 min-w-[80px]"
+                                        >
+                                            Karbo
+                                        </th>
+                                        <th
+                                            class="p-1.5 text-center bg-teal-50/50 text-teal-900 border-r border-slate-200/80 min-w-[75px]"
+                                        >
+                                            Serat
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody
@@ -12455,7 +13649,7 @@ watch(
                                 >
                                     <tr v-if="bahanCalculations.length === 0">
                                         <td
-                                            colspan="16"
+                                            colspan="21"
                                             class="p-8 text-center text-slate-400 font-medium bg-slate-50/30"
                                         >
                                             <div
@@ -12494,20 +13688,29 @@ watch(
                                             class="p-3 align-middle border-r border-slate-100"
                                         >
                                             <div class="space-y-1">
-                                                <span
-                                                    class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black border shadow-2xs"
-                                                    :class="
-                                                        getSubMenuLabelForBahan(
-                                                            it,
-                                                        ).badgeClass
-                                                    "
-                                                >
-                                                    {{
-                                                        getSubMenuLabelForBahan(
-                                                            it,
-                                                        ).label
-                                                    }}
-                                                </span>
+                                                <div class="flex items-center gap-1 flex-wrap">
+                                                    <span
+                                                        class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black border shadow-2xs"
+                                                        :class="
+                                                            getSubMenuLabelForBahan(
+                                                                it,
+                                                            ).badgeClass
+                                                        "
+                                                    >
+                                                        {{
+                                                            getSubMenuLabelForBahan(
+                                                                it,
+                                                            ).label
+                                                        }}
+                                                    </span>
+                                                    <span
+                                                        v-if="getSubMenuLabelForBahan(it).kategori"
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold border"
+                                                        :class="getKategoriBadgeClass(getSubMenuLabelForBahan(it).kategori)"
+                                                    >
+                                                        {{ getSubMenuLabelForBahan(it).kategori }}
+                                                    </span>
+                                                </div>
                                                 <div
                                                     class="font-extrabold text-slate-900 text-xs truncate max-w-[200px]"
                                                     :title="
@@ -12691,6 +13894,71 @@ watch(
                                                 (Net ÷ {{ it.bdd || 100 }}%)
                                             </div>
                                         </td>
+                                        <!-- Kandungan Gizi: Energi -->
+                                        <td
+                                            class="p-2 text-right align-middle font-medium bg-amber-50/15 border-r border-slate-100"
+                                        >
+                                            <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).energi }}</span>
+                                                <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">kkal</span>
+                                                <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-amber-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                    PK:{{ it.nutrisiPK?.energi ?? 0 }} • PB:{{ it.nutrisiPB?.energi ?? 0 }}
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                        </td>
+                                        <!-- Kandungan Gizi: Protein -->
+                                        <td
+                                            class="p-2 text-right align-middle font-medium bg-blue-50/15 border-r border-slate-100"
+                                        >
+                                            <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).protein }}</span>
+                                                <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-blue-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                    PK:{{ it.nutrisiPK?.protein ?? 0 }} • PB:{{ it.nutrisiPB?.protein ?? 0 }}
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                        </td>
+                                        <!-- Kandungan Gizi: Lemak -->
+                                        <td
+                                            class="p-2 text-right align-middle font-medium bg-rose-50/15 border-r border-slate-100"
+                                        >
+                                            <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).lemak }}</span>
+                                                <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-rose-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                    PK:{{ it.nutrisiPK?.lemak ?? 0 }} • PB:{{ it.nutrisiPB?.lemak ?? 0 }}
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                        </td>
+                                        <!-- Kandungan Gizi: Karbohidrat -->
+                                        <td
+                                            class="p-2 text-right align-middle font-medium bg-emerald-50/15 border-r border-slate-100"
+                                        >
+                                            <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).karbohidrat }}</span>
+                                                <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-emerald-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                    PK:{{ it.nutrisiPK?.karbohidrat ?? 0 }} • PB:{{ it.nutrisiPB?.karbohidrat ?? 0 }}
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                        </td>
+                                        <!-- Kandungan Gizi: Serat -->
+                                        <td
+                                            class="p-2 text-right align-middle font-medium bg-teal-50/15 border-r border-slate-100"
+                                        >
+                                            <div v-if="!getBahanBaseNutrition(it).isOperasional">
+                                                <span class="text-xs font-bold text-slate-800">{{ getBahanBaseNutrition(it).serat }}</span>
+                                                <span class="text-[9.5px] text-slate-400 font-normal ml-0.5">g</span>
+                                                <div v-if="(Number(it.gram_pk) > 0 || Number(it.gram_pb) > 0)" class="text-[9px] text-teal-800/80 font-medium mt-0.5 whitespace-nowrap">
+                                                    PK:{{ it.nutrisiPK?.serat ?? 0 }} • PB:{{ it.nutrisiPB?.serat ?? 0 }}
+                                                </div>
+                                            </div>
+                                            <span v-else class="text-slate-400 italic text-[11px]">-</span>
+                                        </td>
                                         <!-- BDD (%) -->
                                         <td
                                             class="p-3 text-center align-middle text-slate-700 font-medium border-r border-slate-100"
@@ -12742,7 +14010,7 @@ watch(
                                 >
                                     <tr>
                                         <td
-                                            colspan="13"
+                                            colspan="18"
                                             class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold"
                                         >
                                             Total Rekapitulasi Kebutuhan Bahan
@@ -22932,6 +24200,583 @@ watch(
                             >Ya, Kembali (Tinggalkan)</span
                         >
                         <span v-else>Ya, Tinggalkan Halaman</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================================================= -->
+        <!-- FLOATING TOAST NOTIFIKASI RESEP                                           -->
+        <!-- ========================================================================= -->
+        <Transition
+            enter-active-class="transform transition ease-out duration-300"
+            enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+            enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="resepToast"
+                class="fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-2xl shadow-xl border flex items-start gap-3 backdrop-blur-md"
+                :class="[
+                    resepToast.type === 'error'
+                        ? 'bg-rose-50/95 border-rose-200 text-rose-900'
+                        : resepToast.type === 'warning'
+                          ? 'bg-amber-50/95 border-amber-200 text-amber-900'
+                          : 'bg-emerald-50/95 border-emerald-200 text-emerald-900',
+                ]"
+            >
+                <div
+                    class="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+                    :class="[
+                        resepToast.type === 'error'
+                            ? 'bg-rose-100 text-rose-600'
+                            : resepToast.type === 'warning'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-600',
+                    ]"
+                >
+                    <AlertCircle v-if="resepToast.type === 'error'" class="h-5 w-5" />
+                    <AlertTriangle v-else-if="resepToast.type === 'warning'" class="h-5 w-5" />
+                    <CheckCircle2 v-else class="h-5 w-5" />
+                </div>
+                <div class="flex-1 text-xs">
+                    <p class="font-bold">
+                        {{
+                            resepToast.type === 'error'
+                                ? 'Peringatan Gagal'
+                                : resepToast.type === 'warning'
+                                  ? 'Perhatian'
+                                  : 'Berhasil'
+                        }}
+                    </p>
+                    <p class="mt-0.5 leading-relaxed">{{ resepToast.msg }}</p>
+                </div>
+                <button
+                    type="button"
+                    @click="resepToast = null"
+                    class="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                >
+                    <X class="h-4 w-4" />
+                </button>
+            </div>
+        </Transition>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL SIMPAN RESEP SUB MENU                                               -->
+        <!-- ========================================================================= -->
+        <Modal
+            :show="showSaveResepSubMenuModal"
+            @close="showSaveResepSubMenuModal = false"
+            max-width="lg"
+        >
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Header -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
+                            <BookOpen class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 leading-snug">
+                                Simpan Resep Sub Menu
+                            </h3>
+                            <p class="text-xs font-semibold text-slate-500">
+                                {{ saveResepSubMenuBlock?.subLabel }} — {{ saveResepSubMenuBlock?.namaMenu }}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showSaveResepSubMenuModal = false"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="space-y-3.5">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                            Nama Resep Masakan <span class="text-rose-500">*</span>
+                        </label>
+                        <input
+                            v-model="saveResepSubMenuForm.nama_resep"
+                            type="text"
+                            placeholder="Contoh: Ayam Goreng Lengkuas Gurih"
+                            class="w-full text-xs font-bold px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition"
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                            Kategori Masakan (Sesuai Sub Menu)
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="px-3 py-1.5 rounded-xl text-xs font-black border shadow-2xs inline-flex items-center"
+                                :class="getKategoriBadgeClass(saveResepSubMenuForm.kategori)"
+                            >
+                                {{ saveResepSubMenuForm.kategori }}
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-medium">Telah ditentukan pada perencanaan Sub Menu</span>
+                        </div>
+                    </div>
+
+                    <!-- Catatan / Keterangan per Masing-masing Bahan (Otomatis Tersinkron) -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-black text-slate-700 uppercase tracking-wider">
+                                Catatan / Keterangan per Bahan Baku
+                            </label>
+                            <span class="text-[10.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                🔄 Otomatis Sinkron
+                            </span>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1.5 divide-y divide-slate-100">
+                            <div
+                                v-for="item in selectedBahanList.filter((b) => b.sub_menu_block_id === saveResepSubMenuBlock?.id)"
+                                :key="'catatan-' + item.id"
+                                class="flex items-start justify-between gap-3 pt-1.5 first:pt-0 text-[11px]"
+                            >
+                                <div class="font-bold text-slate-800 leading-tight">
+                                    {{ item.nama }}
+                                    <span v-if="item.nama_po" class="block text-[10px] text-slate-500 font-normal">PO: {{ item.nama_po }}</span>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <span
+                                        class="px-2 py-0.5 rounded text-[10.5px] font-semibold"
+                                        :class="item.keterangan && item.keterangan !== '-' ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'text-slate-400 italic'"
+                                    >
+                                        {{ item.keterangan || '-' }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1">
+                            Catatan diambil otomatis dari isian kolom keterangan di setiap baris bahan dan tersimpan utuh di resep.
+                        </p>
+                    </div>
+
+                    <!-- Ringkasan Bahan Terpilih -->
+                    <div class="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3.5 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-black text-amber-900">
+                            <span>Daftar Komposisi Bahan & Harga</span>
+                            <span class="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold">
+                                {{ selectedBahanList.filter((b) => b.sub_menu_block_id === saveResepSubMenuBlock?.id).length }} Bahan
+                            </span>
+                        </div>
+                        <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                            <div
+                                v-for="item in selectedBahanList.filter((b) => b.sub_menu_block_id === saveResepSubMenuBlock?.id)"
+                                :key="item.id"
+                                class="flex items-center justify-between text-[11px] bg-white p-2.5 rounded-xl border border-amber-100 shadow-2xs"
+                            >
+                                <div class="min-w-0 pr-2">
+                                    <div class="font-bold text-slate-800 truncate">{{ item.nama }}</div>
+                                    <div class="text-[10px] text-slate-500 font-medium">
+                                        Nama PO: <span class="font-semibold text-slate-700">{{ item.nama_po || '-' }}</span>
+                                    </div>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <div class="font-black text-slate-800 text-[11px]">
+                                        {{ formatRupiah(item.harga_master || item.harga_aktual || 0) }} / {{ item.satuan || 'Kg' }}
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 font-semibold">
+                                        PK: {{ item.gram_pk || 0 }}g | PB: {{ item.gram_pb || 0 }}g
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Aksi -->
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="showSaveResepSubMenuModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="submitSaveResepSubMenu"
+                        :disabled="isSavingResep || !saveResepSubMenuForm.nama_resep.trim()"
+                        class="px-5 py-2 text-xs font-black text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                        <BookmarkPlus class="h-4 w-4" />
+                        <span>{{ isSavingResep ? 'Menyimpan...' : 'Simpan ke Koleksi Resep' }}</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL SIMPAN SELURUH MENU SEBAGAI PAKET RESEP                             -->
+        <!-- ========================================================================= -->
+        <Modal
+            :show="showSaveResepPaketModal"
+            @close="showSaveResepPaketModal = false"
+            max-width="lg"
+        >
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Header -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200 shadow-2xs">
+                            <ChefHat class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 leading-snug">
+                                Simpan Seluruh Menu sebagai Paket Resep
+                            </h3>
+                            <p class="text-xs font-semibold text-slate-500">
+                                Template Paket Menu MBG Lengkap
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showSaveResepPaketModal = false"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="space-y-3.5">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                            Nama Paket Resep <span class="text-rose-500">*</span>
+                        </label>
+                        <input
+                            v-model="saveResepPaketForm.nama_resep"
+                            type="text"
+                            placeholder="Contoh: Paket Nasi Kuning Ayam Suwir Komplit"
+                            class="w-full text-xs font-bold px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition"
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                            Deskripsi / Catatan Tambahan (Opsional)
+                        </label>
+                        <textarea
+                            v-model="saveResepPaketForm.deskripsi"
+                            rows="2"
+                            placeholder="Karakteristik menu, rekomendasi penyajian, atau sasaran umur..."
+                            class="w-full text-xs font-medium px-3.5 py-2 rounded-xl border border-slate-300 focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition resize-none"
+                        ></textarea>
+                    </div>
+
+                    <!-- Ringkasan Komposisi Sub Menu Paket -->
+                    <div class="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-black text-emerald-900">
+                            <span>Komposisi Sub Menu ({{ selectedBahanList.length }} Bahan)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-bold">
+                                {{ step2SubMenuBlocks.length }} Sub Menu
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div
+                                v-for="b in step2SubMenuBlocks"
+                                :key="b.id"
+                                class="bg-white p-2 rounded-xl border border-emerald-100 text-[11px] shadow-2xs"
+                            >
+                                <div class="font-extrabold text-slate-800 truncate">{{ b.subLabel }}: {{ b.namaMenu }}</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 font-medium">
+                                    {{ selectedBahanList.filter((x) => x.sub_menu_block_id === b.id).length }} bahan baku
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Aksi -->
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="showSaveResepPaketModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="submitSaveResepPaket"
+                        :disabled="isSavingResep || !saveResepPaketForm.nama_resep.trim()"
+                        class="px-5 py-2 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                        <BookmarkPlus class="h-4 w-4" />
+                        <span>{{ isSavingResep ? 'Menyimpan...' : 'Simpan Paket Resep' }}</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL PILIH RESEP SUB MENU                                                -->
+        <!-- ========================================================================= -->
+        <Modal
+            :show="showPilihResepSubMenuModal"
+            @close="showPilihResepSubMenuModal = false"
+            max-width="xl"
+        >
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Header -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 border border-purple-200 shadow-2xs">
+                            <BookOpen class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 leading-snug">
+                                Pilih Resep Sub Menu
+                            </h3>
+                            <p class="text-xs font-semibold text-slate-500">
+                                Muat komposisi bahan ke: <strong>{{ pilihResepSubMenuBlock?.subLabel }} ({{ pilihResepSubMenuBlock?.namaMenu }})</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showPilihResepSubMenuModal = false"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <!-- Pencarian -->
+                <div v-if="(props.resepsList || []).filter((r) => r.tipe === 'sub_menu').length > 0" class="relative">
+                    <Search class="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                        v-model="searchPilihResepQuery"
+                        type="text"
+                        placeholder="Cari nama resep atau bahan..."
+                        class="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition"
+                    />
+                </div>
+
+                <!-- Kondisi: Belum Ada Resep Tersimpan Sama Sekali -->
+                <div
+                    v-if="(props.resepsList || []).filter((r) => r.tipe === 'sub_menu').length === 0"
+                    class="py-10 px-6 text-center space-y-3 bg-purple-50/40 rounded-2xl border border-dashed border-purple-200"
+                >
+                    <div class="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto shadow-2xs">
+                        <BookOpen class="h-7 w-7" />
+                    </div>
+                    <div class="space-y-1 max-w-sm mx-auto">
+                        <h4 class="text-sm font-black text-slate-800">Belum Ada Resep Sub Menu Tersimpan</h4>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            Database resep sub menu SPPG masih kosong. Anda dapat menyusun bahan secara manual pada form saat ini, lalu simpan menggunakan tombol <strong>"Simpan Resep"</strong> pada kartu sub menu untuk digunakan kembali di masa mendatang.
+                        </p>
+                    </div>
+                    <div class="pt-2">
+                        <button
+                            type="button"
+                            @click="showPilihResepSubMenuModal = false"
+                            class="px-4 py-2 rounded-xl bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-bold transition cursor-pointer shadow-2xs"
+                        >
+                            Tutup Modal & Rancang Manual
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kondisi: Hasil Pencarian Kosong -->
+                <div
+                    v-else-if="availableSubMenuReseps.length === 0"
+                    class="py-8 px-4 text-center space-y-2 bg-slate-50 rounded-2xl border border-slate-200"
+                >
+                    <Search class="h-6 w-6 text-slate-400 mx-auto" />
+                    <p class="text-xs font-bold text-slate-700">Tidak ada resep yang sesuai</p>
+                    <p class="text-[11px] text-slate-500">Coba gunakan kata kunci pencarian yang lain.</p>
+                </div>
+
+                <!-- Daftar Resep Sub Menu -->
+                <div v-else class="max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                    <div
+                        v-for="resep in availableSubMenuReseps"
+                        :key="resep.id || resep.uuid"
+                        class="p-3.5 rounded-2xl border border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs group"
+                    >
+                        <div class="space-y-1 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs font-black text-slate-800 group-hover:text-purple-900 transition">
+                                    {{ resep.nama_resep }}
+                                </span>
+                                <span
+                                    v-if="resep.kategori"
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200"
+                                >
+                                    {{ resep.kategori }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">
+                                {{ (resep.data_resep?.items || []).length }} bahan: {{ (resep.data_resep?.items || []).map((it) => it.nama).slice(0, 3).join(', ') }}{{ (resep.data_resep?.items || []).length > 3 ? '...' : '' }}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            @click="applyResepToSubMenu(resep)"
+                            class="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shrink-0 transition shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                            <span>Terapkan</span>
+                            <ArrowRight class="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-end pt-3 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="showPilihResepSubMenuModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL PILIH PAKET RESEP LENGKAP                                           -->
+        <!-- ========================================================================= -->
+        <Modal
+            :show="showPilihResepPaketModal"
+            @close="showPilihResepPaketModal = false"
+            max-width="xl"
+        >
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Header -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200 shadow-2xs">
+                            <BookOpen class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 leading-snug">
+                                Terapkan Paket Resep Lengkap
+                            </h3>
+                            <p class="text-xs font-semibold text-slate-500">
+                                Muat template seluruh sub menu & komposisi bahan sekaligus
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showPilihResepPaketModal = false"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <!-- Pencarian -->
+                <div v-if="(props.resepsList || []).filter((r) => r.tipe === 'paket_menu').length > 0" class="relative">
+                    <Search class="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                        v-model="searchPilihPaketQuery"
+                        type="text"
+                        placeholder="Cari nama paket resep..."
+                        class="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"
+                    />
+                </div>
+
+                <!-- Kondisi: Belum Ada Paket Resep Tersimpan Sama Sekali -->
+                <div
+                    v-if="(props.resepsList || []).filter((r) => r.tipe === 'paket_menu').length === 0"
+                    class="py-10 px-6 text-center space-y-3 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-200"
+                >
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-2xs">
+                        <BookOpen class="h-7 w-7" />
+                    </div>
+                    <div class="space-y-1 max-w-sm mx-auto">
+                        <h4 class="text-sm font-black text-slate-800">Belum Ada Paket Resep Tersimpan</h4>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            Belum ada paket resep lengkap yang tersimpan di database SPPG. Anda dapat menyelesaikan rancangan menu saat ini, lalu klik tombol <strong>"Simpan Seluruh Menu ke Resep"</strong> di toolbar Langkah 2 untuk menyimpannya sebagai template paket siap pakai.
+                        </p>
+                    </div>
+                    <div class="pt-2">
+                        <button
+                            type="button"
+                            @click="showPilihResepPaketModal = false"
+                            class="px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition cursor-pointer shadow-2xs"
+                        >
+                            Tutup Modal & Rancang Mandiri
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kondisi: Hasil Pencarian Kosong -->
+                <div
+                    v-else-if="availablePaketReseps.length === 0"
+                    class="py-8 px-4 text-center space-y-2 bg-slate-50 rounded-2xl border border-slate-200"
+                >
+                    <Search class="h-6 w-6 text-slate-400 mx-auto" />
+                    <p class="text-xs font-bold text-slate-700">Tidak ada paket resep yang sesuai</p>
+                    <p class="text-[11px] text-slate-500">Coba gunakan kata kunci pencarian yang lain.</p>
+                </div>
+
+                <!-- Daftar Paket Resep -->
+                <div v-else class="max-h-80 overflow-y-auto space-y-3 pr-1">
+                    <div
+                        v-for="paket in availablePaketReseps"
+                        :key="paket.id || paket.uuid"
+                        class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/20 transition-all space-y-3 shadow-2xs group"
+                    >
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 group-hover:text-emerald-900 transition">
+                                    {{ paket.nama_resep }}
+                                </h4>
+                                <p v-if="paket.deskripsi" class="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                                    {{ paket.deskripsi }}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="applyPaketResepToForm(paket)"
+                                class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shrink-0 transition shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                                <span>Terapkan Paket Ini</span>
+                                <ArrowRight class="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+
+                        <!-- Sub Menu Chips -->
+                        <div class="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100 text-[10px] text-slate-600">
+                            <span class="font-bold text-slate-400 uppercase text-[9px]">Komponen:</span>
+                            <span
+                                v-for="(name, key) in (paket.data_resep?.sub_menus || {})"
+                                :key="key"
+                                class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200/80"
+                            >
+                                {{ name }}
+                            </span>
+                            <span class="ml-auto font-black text-emerald-700">
+                                {{ (paket.data_resep?.items || []).length }} Bahan Terdaftar
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-end pt-3 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="showPilihResepPaketModal = false"
+                        class="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                        Tutup
                     </button>
                 </div>
             </div>

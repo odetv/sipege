@@ -82,45 +82,47 @@ const maxWidthClass = computed(() => {
 </script>
 
 <template>
-    <dialog
-        class="z-50 m-0 min-h-full min-w-full overflow-y-auto bg-transparent backdrop:bg-transparent p-0 border-none"
-        ref="dialog"
-    >
-        <div
-            class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 flex min-h-full items-center justify-center"
-            scroll-region
+    <Teleport to="body">
+        <dialog
+            class="z-[99999] m-0 min-h-full min-w-full overflow-y-auto bg-transparent backdrop:bg-transparent p-0 border-none"
+            ref="dialog"
         >
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
+            <div
+                class="fixed inset-0 z-[99999] overflow-y-auto p-4 sm:p-6 flex min-h-full items-center justify-center"
+                scroll-region
             >
-                <div
-                    v-show="show"
-                    class="fixed inset-0 transform transition-all bg-slate-900/50 backdrop-blur-xs"
-                    @click="close"
-                />
-            </Transition>
-
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                enter-to-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-                <div
-                    v-show="show"
-                    class="relative transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all w-full max-w-[95vw] border border-slate-200/80 my-auto"
-                    :class="maxWidthClass"
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0"
+                    enter-to-class="opacity-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0"
                 >
-                    <slot v-if="showSlot" />
-                </div>
-            </Transition>
-        </div>
-    </dialog>
+                    <div
+                        v-show="show"
+                        class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
+                        @click="close"
+                    />
+                </Transition>
+
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    enter-to-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                >
+                    <div
+                        v-show="show"
+                        class="relative transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all w-full max-w-[95vw] border border-slate-200/80 my-auto"
+                        :class="maxWidthClass"
+                    >
+                        <slot v-if="showSlot" />
+                    </div>
+                </Transition>
+            </div>
+        </dialog>
+    </Teleport>
 </template>

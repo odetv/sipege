@@ -9,6 +9,7 @@ import GiziAnalisaPmTab from "@/Pages/Gizi/Partials/GiziAnalisaPmTab.vue";
 import GiziDaftarMenuTab from "@/Pages/Gizi/Partials/GiziDaftarMenuTab.vue";
 import GiziRancangMenuTab from "@/Pages/Gizi/Partials/GiziRancangMenuTab.vue";
 import GiziKalenderMenuTab from "@/Pages/Gizi/Partials/GiziKalenderMenuTab.vue";
+import GiziResepTab from "@/Pages/Gizi/Partials/GiziResepTab.vue";
 
 const props = defineProps({
     user: {
@@ -18,6 +19,10 @@ const props = defineProps({
     unitSppg: {
         type: Object,
         default: null,
+    },
+    resepsList: {
+        type: Array,
+        default: () => [],
     },
     kelompokList: {
         type: Array,
@@ -193,6 +198,7 @@ function selectSubMenu(tabId) {
                 :work-orders-list="workOrdersList"
                 :active-work-order="activeWorkOrder"
                 :periodes="periodes"
+                :reseps-list="resepsList"
                 @update-source="handleTkpiSourceChange"
                 @update-fta="handleFtaFileChange"
             />
@@ -202,6 +208,14 @@ function selectSubMenu(tabId) {
                 v-if="activeSubMenu === 'kalender-menu'"
                 :work-orders-list="workOrdersList"
                 :periodes="periodes"
+                @open-rancang-menu="selectSubMenu('rancang-menu')"
+            />
+
+            <!-- 6. SUB MENU 6: KOLEKSI RESEP MENU & SUB MENU -->
+            <GiziResepTab
+                v-if="activeSubMenu === 'resep'"
+                :reseps-list="resepsList"
+                :tkpi-list="activeTkpiList"
                 @open-rancang-menu="selectSubMenu('rancang-menu')"
             />
         </div>
