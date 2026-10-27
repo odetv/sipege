@@ -20,14 +20,14 @@ Modul untuk merencanakan dan mengeksekusi siklus produksi MBG harian/siklus:
      5. Siap Produksi (PO Resmi Terbit & Jadwal Masak Dapur)
 
 2. **WO Manual**:
-   - Disediakan untuk operasional cepat atau penyediaan makanan siap santap/katering mitra tanpa kalkulasi gramatur bahan baku mentah.
-   - Komponen menu (lauk utama, nabati, sayur, buah, snack) dan estimasi nilai gizi AKG (Energi, Protein, Lemak, Karbohidrat, Serat) diinput secara langsung oleh Petugas Gizi.
-   - **Tahapan Progres**:
-     1. Perencanaan Sasaran & Menu (Kuantitas PM, PK, PB, & Komponen)
-     2. Formulasi Gizi Manual (Standar Nilai AKG & Alergen)
-     3. Pengajuan Work Order (Pengajuan Berkas WO ke Keuangan/Kepala SPPG)
-     4. Verifikasi Keuangan (Telaah Status & Validasi Pagu Anggaran)
-     5. Siap Produksi (WO Terverifikasi, Jadwal Masak, & Cetak Label)
+   - Disediakan untuk operasional cepat atau penyediaan makanan siap santap/katering mitra/swakelola mandiri tanpa kalkulasi gramatur bahan baku mentah.
+   - Komponen menu (lauk utama, nabati, sayur, buah, snack) dan nilai gizi AKG diinput secara langsung oleh Petugas Gizi.
+   - **Mandiri & Terpisah dari Keuangan**: Tidak memerlukan pembuatan PO bahan mentah maupun verifikasi keuangan.
+   - **Tahapan Progres (3 Tahapan Mandiri - 100% Selesai saat Terbentuk)**:
+     1. Perencanaan Sasaran (Kuantitas Sasaran PK & PB)
+     2. Komponen & Standar Gizi (Komponen Menu & Standar AKG)
+     3. Siap Produksi & Penyaluran (Jadwal Masak & Cetak Label)
+   - **Prinsip Snapshot Data**: Seluruh data sasaran porsi, rincian, dan menu berstatus *point-in-time snapshot* yang kebal terhadap perubahan/penghapusan master data di tempat lain.
 
 ### B. Modul Gizi & Menu
 - **Database Pangan**: Berisi data komposisi pangan Indonesia (TKPI 2020) dengan informasi makronutrien dan mikronutrien lengkap per 100g BDD.

@@ -43,3 +43,15 @@ Dokumen ini mendefinisikan aturan bisnis, status mutasi, dan visual pipeline unt
 1. Satu unit SPPG hanya boleh memiliki 1 Work Order per tanggal distribusi.
 2. Ketika user mengubah tanggal distribusi pada formulir edit WO, sistem memverifikasi apakah tanggal tersebut digunakan oleh WO lain.
 3. Jika tanggal belum digunakan, sistem melakukan pembaruan di tempat (*update record*) terhadap baris WO yang sedang diedit tanpa menghapus atau membuat baris baru.
+
+---
+
+## 4. Prinsip Imutabilitas Data & Snapshot Historis (Point-in-Time Snapshot)
+1. **Isolasi Mutlak dari Master Penerima Manfaat**:
+   - Seluruh data sasaran penerima manfaat (`work_order_kelompoks`), jumlah porsi (`total_pm`, `total_pk`, `total_pb`, `total_alergi`), rincian kelas/sub-kategori (`rincian`), dan daftar alergi (`detail_alergi`) disimpan sebagai **snapshot permanen** pada saat Work Order terbentuk/disimpan.
+   - Perubahan, penambahan, penghapusan, atau penonaktifan data pada Master Penerima Manfaat (`kelompok_penerima_manfaat`) **TIDAK BOLEH** mengubah, merombak, atau menghapus data Work Order, Rancang Menu, Cetak Label, maupun Laporan Harian yang telah tersimpan sebelumnya.
+2. **Aturan Loading Data WO Tersimpan**:
+   - Ketika menampilkan WO yang sudah ada di antarmuka (Rancang Menu, Perencanaan WO, Cetak Label, Laporan Harian), sistem wajib me-load sasaran kelompok langsung dari tabel snapshot `work_order_kelompoks`.
+   - Tabel master `kelompok_penerima_manfaat` hanya digunakan sebagai template inisialisasi untuk pembuatan WO Baru, bukan untuk merekonstruksi atau menimpa WO yang sudah tersimpan.
+3. **Imutabilitas Resep & Formulasi Pangan**:
+   - Rincian bahan pangan (`work_order_items`) membekukan gramatur, BDD, harga acuan, total gross kg, dan kandungan nutrisi per porsi sehingga fluktuasi master database pangan maupun survei harga pasar tidak mengubah arsip WO historis.

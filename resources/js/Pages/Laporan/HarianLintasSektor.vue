@@ -351,15 +351,15 @@ const sekolahList = computed(() => {
     return kelompokMenerima.value
         .filter((k) => {
             const kat = (
-                k.kelompok?.kategori ||
                 k.kategori ||
+                k.kelompok?.kategori ||
                 ""
             ).toLowerCase();
             return kat !== "posyandu";
         })
         .map((k) => {
             const kel = k.kelompok || {};
-            const nama = kel.nama_kelompok || k.nama_kelompok || "Sekolah";
+            const nama = k.nama_kelompok || kel.nama_kelompok || "Sekolah";
             const rincian = getValidRincian(k);
 
             let siswa = 0;
@@ -424,15 +424,15 @@ const posyanduList = computed(() => {
     return kelompokMenerima.value
         .filter((k) => {
             const kat = (
-                k.kelompok?.kategori ||
                 k.kategori ||
+                k.kelompok?.kategori ||
                 ""
             ).toLowerCase();
             return kat === "posyandu";
         })
         .map((k) => {
             const kel = k.kelompok || {};
-            const nama = kel.nama_kelompok || k.nama_kelompok || "Posyandu";
+            const nama = k.nama_kelompok || kel.nama_kelompok || "Posyandu";
             const rincian = getValidRincian(k);
 
             let bumil = 0;
@@ -590,11 +590,11 @@ const selisihPenerimaManfaatList = computed(() => {
 
     allKelompoks.forEach((k) => {
         const kel = k.kelompok || {};
-        const kat = (kel.kategori || k.kategori || "").toLowerCase();
+        const kat = (k.kategori || kel.kategori || "").toLowerCase();
         const isPosyandu = kat === "posyandu";
         const nama =
-            kel.nama_kelompok ||
             k.nama_kelompok ||
+            kel.nama_kelompok ||
             (isPosyandu ? "Posyandu" : "Sekolah");
 
         // Jika sama sekali dari seluruh Sekolah atau seluruh Posyandu tidak ada,

@@ -498,55 +498,51 @@ const activeKelompokList = computed(() => {
         }));
     }
 
-    return (props.kelompokList || []).map((masterK) => {
-        const savedK = wo.kelompoks.find(
-            (sk) =>
-                sk.kelompok_id === masterK.id ||
-                sk.id === masterK.id ||
-                sk.nama_kelompok === masterK.nama_kelompok,
-        );
-        if (savedK) {
-            const masterRincian = Array.isArray(masterK.rincian) ? masterK.rincian : [];
-            const savedRincian = Array.isArray(savedK.rincian) ? savedK.rincian : [];
-            const mergedRincian = (savedRincian.length > 0 ? savedRincian : masterRincian).map((sr) => {
-                const mr = masterRincian.find((m) => m.sub_kategori === sr.sub_kategori);
-                return {
-                    ...sr,
-                    waktu_batas_makan:
-                        sr.waktu_batas_makan ||
-                        mr?.waktu_batas_makan ||
-                        getDefaultBatasMakan(masterK.nama_kelompok, sr.sub_kategori),
-                    is_menerima: sr.is_menerima !== undefined ? sr.is_menerima : mr?.is_menerima !== false,
-                    total: sr.total !== undefined ? sr.total : mr?.total || 0,
-                };
-            });
-
+    return wo.kelompoks.map((savedK) => {
+        const masterK =
+            (props.kelompokList || []).find(
+                (mk) =>
+                    (savedK.kelompok_id && mk.id === savedK.kelompok_id) ||
+                    (savedK.id && mk.id === savedK.id) ||
+                    mk.nama_kelompok === savedK.nama_kelompok,
+            ) || {};
+        const masterRincian = Array.isArray(masterK.rincian) ? masterK.rincian : [];
+        const savedRincian = Array.isArray(savedK.rincian) ? savedK.rincian : [];
+        const mergedRincian = (savedRincian.length > 0 ? savedRincian : masterRincian).map((sr) => {
+            const mr = masterRincian.find((m) => m.sub_kategori === sr.sub_kategori);
             return {
-                ...masterK,
-                nama_kelompok: savedK.nama_kelompok || masterK.nama_kelompok,
-                kategori: savedK.kategori || masterK.kategori,
-                is_menerima: savedK.is_menerima !== false,
-                total_porsi_kecil:
-                    savedK.total_porsi_kecil !== undefined
-                        ? savedK.total_porsi_kecil
-                        : masterK.total_porsi_kecil,
-                total_porsi_besar:
-                    savedK.total_porsi_besar !== undefined
-                        ? savedK.total_porsi_besar
-                        : masterK.total_porsi_besar,
-                total_penerima:
-                    savedK.total_penerima !== undefined
-                        ? savedK.total_penerima
-                        : masterK.total_penerima,
-                detail_alergi:
-                    savedK.detail_alergi || masterK.keterangan_alergi || [],
-                rincian: mergedRincian,
+                ...sr,
+                waktu_batas_makan:
+                    sr.waktu_batas_makan ||
+                    mr?.waktu_batas_makan ||
+                    getDefaultBatasMakan(savedK.nama_kelompok || masterK.nama_kelompok, sr.sub_kategori),
+                is_menerima: sr.is_menerima !== undefined ? sr.is_menerima : mr?.is_menerima !== false,
+                total: sr.total !== undefined ? sr.total : mr?.total || 0,
             };
-        }
+        });
+
         return {
             ...masterK,
-            is_menerima: true,
-            rincian: masterK.rincian || [],
+            id: savedK.kelompok_id || savedK.id || masterK.id,
+            kelompok_id: savedK.kelompok_id || masterK.id,
+            nama_kelompok: savedK.nama_kelompok || masterK.nama_kelompok,
+            kategori: savedK.kategori || masterK.kategori,
+            is_menerima: savedK.is_menerima !== false,
+            total_porsi_kecil:
+                savedK.total_porsi_kecil !== undefined
+                    ? Number(savedK.total_porsi_kecil)
+                    : (savedK.porsi_kecil !== undefined ? Number(savedK.porsi_kecil) : Number(masterK.total_porsi_kecil || 0)),
+            total_porsi_besar:
+                savedK.total_porsi_besar !== undefined
+                    ? Number(savedK.total_porsi_besar)
+                    : (savedK.porsi_besar !== undefined ? Number(savedK.porsi_besar) : Number(masterK.total_porsi_besar || 0)),
+            total_penerima:
+                savedK.total_penerima !== undefined
+                    ? Number(savedK.total_penerima)
+                    : Number(masterK.total_penerima || 0),
+            detail_alergi:
+                savedK.detail_alergi || savedK.keterangan_alergi || masterK.keterangan_alergi || [],
+            rincian: mergedRincian,
         };
     });
 });

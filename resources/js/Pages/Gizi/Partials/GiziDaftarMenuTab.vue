@@ -17,6 +17,8 @@ import {
     exportWorkOrderWord,
     exportWorkOrderPdf,
     printWorkOrder,
+    exportDaftarMenuTableExcel,
+    exportDaftarMenuTablePdf,
 } from "@/Services/exportDocHelper";
 import {
     FileSpreadsheet,
@@ -134,6 +136,27 @@ const duplicateForm = ref({
 });
 const isDuplicating = ref(false);
 const duplicateError = ref("");
+
+// State dropdown unduh rekap toolbar
+const showRekapDropdown = ref(false);
+
+function handleExportRekapExcel() {
+    showRekapDropdown.value = false;
+    let periodLabel = "Semua Periode";
+    if (filterStartDate.value && filterEndDate.value) {
+        periodLabel = `${filterStartDate.value} s/d ${filterEndDate.value}`;
+    }
+    exportDaftarMenuTableExcel(filteredDaftarMenu.value, { periodLabel });
+}
+
+function handleExportRekapPdf() {
+    showRekapDropdown.value = false;
+    let periodLabel = "Semua Periode";
+    if (filterStartDate.value && filterEndDate.value) {
+        periodLabel = `${filterStartDate.value} s/d ${filterEndDate.value}`;
+    }
+    exportDaftarMenuTablePdf(filteredDaftarMenu.value, { periodLabel });
+}
 
 // State dropdown aksi (Lihat, Edit, Duplikat, Hapus) per baris
 const openActionMenuId = ref(null);
@@ -496,7 +519,16 @@ const daftarMenuList = computed(() => {
                     [],
                 po_no: wo.purchase_order
                     ? wo.purchase_order.nomor_po
-                    : "PO-" + wo.nomor_wo.replace("WO-MBG-", ""),
+                    : (wo.nomor_wo ? "PO-" + wo.nomor_wo.replace("WO-MBG-", "") : "-"),
+                porsi_tambahan: wo.porsi_tambahan || (wo.raw && wo.raw.porsi_tambahan) || null,
+                jadwal_operasional: wo.jadwal_operasional || (wo.raw && wo.raw.jadwal_operasional) || null,
+                catatan: wo.catatan || (wo.raw && wo.raw.catatan) || null,
+                catatan_resep: wo.catatan_resep || (wo.raw && wo.raw.catatan_resep) || "",
+                database_pangan: wo.database_pangan || (wo.raw && wo.raw.database_pangan) || "",
+                unit_sppg: wo.unit_sppg || (wo.raw && wo.raw.unit_sppg) || null,
+                akg_pk: wo.akg_pk || null,
+                akg_pb: wo.akg_pb || null,
+                akg_alergi: wo.akg_alergi || null,
                 items: wo.items || [],
                 kelompoks: wo.kelompoks || [],
                 raw: wo,
@@ -1057,8 +1089,61 @@ function executeDuplicateWo() {
                 </div>
             </div>
 
-            <!-- Tombol Rancang Menu -->
+            <!-- Tombol Aksi Toolbar: Unduh Rekap & Rancang Menu -->
             <div class="flex items-center gap-2 shrink-0">
+                <!-- Dropdown Unduh Rekap -->
+                <div class="relative inline-block text-left">
+                    <button
+                        type="button"
+                        @click.stop="showRekapDropdown = !showRekapDropdown"
+                        class="w-full sm:w-auto bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs px-3.5 py-2.5 rounded-xl shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Unduh rekapitulasi seluruh daftar menu yang sesuai filter"
+                    >
+                        <Download class="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Unduh Rekap</span>
+                        <ChevronDown class="h-3 w-3 text-slate-400" />
+                    </button>
+
+                    <div
+                        v-if="showRekapDropdown"
+                        class="origin-top-right absolute right-0 mt-1.5 w-52 rounded-xl shadow-xl bg-white ring-1 ring-black/5 divide-y divide-slate-100 z-50 text-xs py-1"
+                    >
+                        <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                            <span>Format Rekap</span>
+                            <span class="text-[9.5px] font-mono text-emerald-600 font-semibold">{{ filteredDaftarMenu.length }} Menu</span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="handleExportRekapExcel"
+                            class="w-full text-left px-3 py-2 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                            <FileSpreadsheet class="h-4 w-4 text-emerald-600 shrink-0" />
+                            <div>
+                                <div class="font-bold">Excel (.xlsx)</div>
+                                <div class="text-[10px] text-slate-500">Tabel data rekapitulasi lengkap</div>
+                            </div>
+                        </button>
+                        <button
+                            type="button"
+                            @click="handleExportRekapPdf"
+                            class="w-full text-left px-3 py-2 text-slate-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                            <FileText class="h-4 w-4 text-rose-600 shrink-0" />
+                            <div>
+                                <div class="font-bold">PDF (.pdf)</div>
+                                <div class="text-[10px] text-slate-500">Dokumen rekap & lembar pengesahan</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Overlay backdrop jika dropdown terbuka -->
+                    <div
+                        v-if="showRekapDropdown"
+                        class="fixed inset-0 z-40"
+                        @click="showRekapDropdown = false"
+                    ></div>
+                </div>
+
                 <Button
                     type="button"
                     @click="handleNewRancangMenu"

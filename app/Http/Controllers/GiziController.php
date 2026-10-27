@@ -504,7 +504,7 @@ class GiziController extends Controller
                 $workOrder->kelompoks()->delete();
                 foreach ($validated['kelompoks'] as $kel) {
                     $workOrder->kelompoks()->create([
-                        'kelompok_id' => $kel['id'] ?? null,
+                        'kelompok_id' => $kel['kelompok_id'] ?? $kel['id'] ?? null,
                         'nama_kelompok' => $kel['nama_kelompok'] ?? 'Kelompok',
                         'kategori' => $kel['kategori'] ?? 'Sekolah',
                         'is_menerima' => $kel['is_menerima'] ?? true,

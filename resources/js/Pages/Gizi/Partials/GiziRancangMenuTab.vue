@@ -8031,54 +8031,62 @@ watch(
                 });
             }
 
-            // 2. Populate woKelompokList with saved KPM participation and class breakdown
+            // 2. Populate woKelompokList directly from saved WO kelompoks snapshot (immune to master KPM mutations)
             if (wo.kelompoks && wo.kelompoks.length > 0) {
-                woKelompokList.value = (props.kelompokList || []).map(
-                    (masterK) => {
-                        const savedK = wo.kelompoks.find(
-                            (sk) =>
-                                sk.kelompok_id === masterK.id ||
-                                sk.nama_kelompok === masterK.nama_kelompok,
-                        );
-                        const norm = normalizeKelompokForWo(masterK);
-                        if (savedK) {
-                            return {
-                                ...norm,
-                                status_menerima: savedK.is_menerima !== false,
-                                total_porsi_kecil:
-                                    savedK.porsi_kecil !== undefined
-                                        ? Number(savedK.porsi_kecil)
-                                        : norm.total_porsi_kecil,
-                                total_porsi_besar:
-                                    savedK.porsi_besar !== undefined
-                                        ? Number(savedK.porsi_besar)
-                                        : norm.total_porsi_besar,
-                                total_penerima:
-                                    savedK.total_penerima !== undefined
-                                        ? Number(savedK.total_penerima)
-                                        : norm.total_penerima,
-                                status_alergi:
-                                    savedK.status_alergi || norm.status_alergi,
-                                rincian:
-                                    Array.isArray(savedK.rincian) &&
-                                    savedK.rincian.length > 0
-                                        ? savedK.rincian.map((r) => ({
-                                              ...r,
-                                              waktu_batas_makan:
-                                                  r.waktu_batas_makan ||
-                                                  getDefaultBatasMakan(masterK.nama_kelompok, r.sub_kategori),
-                                          }))
-                                        : norm.rincian,
-                                keterangan_alergi:
-                                    Array.isArray(savedK.detail_alergi) &&
-                                    savedK.detail_alergi.length > 0
-                                        ? savedK.detail_alergi
-                                        : norm.keterangan_alergi,
-                            };
-                        }
-                        return norm;
-                    },
-                );
+                woKelompokList.value = wo.kelompoks.map((savedK) => {
+                    const masterK =
+                        (props.kelompokList || []).find(
+                            (mk) =>
+                                (savedK.kelompok_id && mk.id === savedK.kelompok_id) ||
+                                (savedK.id && mk.id === savedK.id) ||
+                                mk.nama_kelompok === savedK.nama_kelompok,
+                        ) || {};
+                    const normSaved = {
+                        ...masterK,
+                        ...savedK,
+                        id: savedK.kelompok_id || savedK.id || masterK.id,
+                        kelompok_id: savedK.kelompok_id || masterK.id,
+                        nama_kelompok: savedK.nama_kelompok || masterK.nama_kelompok,
+                        kategori: savedK.kategori || masterK.kategori,
+                        rincian:
+                            Array.isArray(savedK.rincian) && savedK.rincian.length > 0
+                                ? savedK.rincian
+                                : masterK.rincian,
+                        keterangan_alergi:
+                            Array.isArray(savedK.detail_alergi) && savedK.detail_alergi.length > 0
+                                ? savedK.detail_alergi
+                                : Array.isArray(savedK.keterangan_alergi)
+                                  ? savedK.keterangan_alergi
+                                  : masterK.keterangan_alergi,
+                        total_porsi_kecil:
+                            savedK.porsi_kecil !== undefined
+                                ? Number(savedK.porsi_kecil)
+                                : savedK.total_porsi_kecil !== undefined
+                                  ? Number(savedK.total_porsi_kecil)
+                                  : masterK.total_porsi_kecil,
+                        total_porsi_besar:
+                            savedK.porsi_besar !== undefined
+                                ? Number(savedK.porsi_besar)
+                                : savedK.total_porsi_besar !== undefined
+                                  ? Number(savedK.total_porsi_besar)
+                                  : masterK.total_porsi_besar,
+                        total_penerima:
+                            savedK.total_penerima !== undefined
+                                ? Number(savedK.total_penerima)
+                                : masterK.total_penerima,
+                        status_menerima: savedK.is_menerima !== false,
+                        is_menerima: savedK.is_menerima !== false,
+                    };
+                    const norm = normalizeKelompokForWo(normSaved);
+                    norm.status_menerima = savedK.is_menerima !== false;
+                    norm.has_alergi =
+                        Array.isArray(norm.keterangan_alergi) &&
+                        norm.keterangan_alergi.length > 0;
+                    norm.status_alergi =
+                        savedK.status_alergi ||
+                        (norm.has_alergi ? "Ada Alergi" : "Tidak Ada Alergi");
+                    return norm;
+                });
             }
 
             // 3. Populate catatanTim from saved work order notes

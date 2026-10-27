@@ -2622,40 +2622,52 @@ function initForm(targetWo = null) {
             Array.isArray(targetWo.kelompoks) &&
             targetWo.kelompoks.length > 0
         ) {
-            woKelompokList.value = props.kelompokList.map((master) => {
-                const found = targetWo.kelompoks.find(
-                    (k) =>
-                        k.kelompok_id === master.id ||
-                        k.nama_kelompok === master.nama_kelompok,
-                );
-                const norm = normalizeKelompokForWo(master);
-                if (found) {
-                    norm.status_menerima = found.is_menerima !== false;
-                    if (found.porsi_kecil !== undefined)
-                        norm.total_porsi_kecil = Number(found.porsi_kecil);
-                    if (found.porsi_besar !== undefined)
-                        norm.total_porsi_besar = Number(found.porsi_besar);
-                    if (found.total_penerima !== undefined)
-                        norm.total_penerima = Number(found.total_penerima);
-                    if (
-                        Array.isArray(found.rincian) &&
-                        found.rincian.length > 0
-                    ) {
-                        norm.rincian = found.rincian.map((r) => ({
-                            ...r,
-                            waktu_batas_makan:
-                                r.waktu_batas_makan ||
-                                getDefaultBatasMakan(master.nama_kelompok, r.sub_kategori),
-                        }));
-                    }
-                    if (
-                        Array.isArray(found.detail_alergi) &&
-                        found.detail_alergi.length > 0
-                    )
-                        norm.keterangan_alergi = found.detail_alergi;
-                } else {
-                    norm.status_menerima = false;
-                }
+            woKelompokList.value = targetWo.kelompoks.map((savedK) => {
+                const master =
+                    props.kelompokList.find(
+                        (k) =>
+                            (savedK.kelompok_id && k.id === savedK.kelompok_id) ||
+                            (savedK.id && k.id === savedK.id) ||
+                            k.nama_kelompok === savedK.nama_kelompok,
+                    ) || {};
+                const normSaved = {
+                    ...master,
+                    ...savedK,
+                    id: savedK.kelompok_id || savedK.id || master.id,
+                    kelompok_id: savedK.kelompok_id || master.id,
+                    nama_kelompok: savedK.nama_kelompok || master.nama_kelompok,
+                    kategori: savedK.kategori || master.kategori,
+                    rincian:
+                        Array.isArray(savedK.rincian) && savedK.rincian.length > 0
+                            ? savedK.rincian
+                            : master.rincian,
+                    keterangan_alergi:
+                        Array.isArray(savedK.detail_alergi) && savedK.detail_alergi.length > 0
+                            ? savedK.detail_alergi
+                            : Array.isArray(savedK.keterangan_alergi)
+                              ? savedK.keterangan_alergi
+                              : master.keterangan_alergi,
+                    total_porsi_kecil:
+                        savedK.porsi_kecil !== undefined
+                            ? Number(savedK.porsi_kecil)
+                            : savedK.total_porsi_kecil !== undefined
+                              ? Number(savedK.total_porsi_kecil)
+                              : master.total_porsi_kecil,
+                    total_porsi_besar:
+                        savedK.porsi_besar !== undefined
+                            ? Number(savedK.porsi_besar)
+                            : savedK.total_porsi_besar !== undefined
+                              ? Number(savedK.total_porsi_besar)
+                              : master.total_porsi_besar,
+                    total_penerima:
+                        savedK.total_penerima !== undefined
+                            ? Number(savedK.total_penerima)
+                            : master.total_penerima,
+                    status_menerima: savedK.is_menerima !== false,
+                    is_menerima: savedK.is_menerima !== false,
+                };
+                const norm = normalizeKelompokForWo(normSaved);
+                norm.status_menerima = savedK.is_menerima !== false;
                 return norm;
             });
         } else {

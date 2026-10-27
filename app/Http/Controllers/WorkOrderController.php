@@ -314,19 +314,22 @@ class WorkOrderController extends Controller
             // Simpan snapshot kelompok penerima manfaat
             $kelompoksInput = $validated['kelompoks'] ?? [];
             if (empty($kelompoksInput)) {
-                $masterKelompoks = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
-                foreach ($masterKelompoks as $mk) {
-                    $kelompoksInput[] = [
-                        'kelompok_id' => $mk->id,
-                        'nama_kelompok' => $mk->nama_kelompok,
-                        'kategori' => $mk->kategori,
-                        'is_menerima' => true,
-                        'total_penerima' => $mk->total_penerima,
-                        'total_porsi_kecil' => $mk->total_porsi_kecil,
-                        'total_porsi_besar' => $mk->total_porsi_besar,
-                        'rincian' => $mk->rincian,
-                        'detail_alergi' => $mk->keterangan_alergi,
-                    ];
+                // Jika WO sudah memiliki snapshot kelompoks tersimpan di database, pertahankan snapshot tersebut
+                if (!$workOrder->kelompoks()->exists()) {
+                    $masterKelompoks = KelompokPenerimaManfaat::getCachedListForUnit($unitSppg->id);
+                    foreach ($masterKelompoks as $mk) {
+                        $kelompoksInput[] = [
+                            'kelompok_id' => $mk->id,
+                            'nama_kelompok' => $mk->nama_kelompok,
+                            'kategori' => $mk->kategori,
+                            'is_menerima' => true,
+                            'total_penerima' => $mk->total_penerima,
+                            'total_porsi_kecil' => $mk->total_porsi_kecil,
+                            'total_porsi_besar' => $mk->total_porsi_besar,
+                            'rincian' => $mk->rincian,
+                            'detail_alergi' => $mk->keterangan_alergi,
+                        ];
+                    }
                 }
             }
 

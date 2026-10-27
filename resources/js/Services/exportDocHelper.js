@@ -54,6 +54,23 @@ export function formatTanggalIndoFull(tgl) {
     }
 }
 
+export function formatDateTimeIndo(dt) {
+    if (!dt) return '-';
+    try {
+        const d = new Date(dt);
+        if (isNaN(d.getTime())) return dt;
+        return d.toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return dt;
+    }
+}
+
 // -------------------------------------------------------------
 // CENTRAL DATA BUILDER UNTUK DOKUMEN WORK ORDER & PERENCANAAN MENU
 // -------------------------------------------------------------
@@ -62,10 +79,14 @@ export function buildWorkOrderFullExportData(wo) {
     const noWO = wo.id || raw.nomor_wo || raw.id || '-';
     const namaMenu = wo.nama || raw.nama_menu || raw.nama || '-';
     const statusMenu = wo.status_wo || raw.status || 'Draft';
+    const metodeWo = wo.metode_wo || raw.metode_wo || 'sistem';
+    const isManual = metodeWo === 'manual';
+    const metodeWoLabel = isManual ? 'Work Order Manual (Input Mandiri & Non-PO)' : 'Work Order Sistem (TKPI 2020)';
+    const siklus = wo.siklus || (raw.siklus_ke ? `Hari ke-${raw.siklus_ke}` : 'Hari ke-1');
     
     let rawDb = raw.database_pangan || wo.database_pangan || '';
-    let dbPangan = 'Kemenkes (tkpi2020.csv)';
-    if (rawDb) {
+    let dbPangan = isManual ? 'Input Mandiri (Non-TKPI)' : 'Kemenkes (tkpi2020.csv)';
+    if (!isManual && rawDb) {
         const s = String(rawDb).toLowerCase().trim();
         if (s === 'tkpi2020' || s === 'xlsx' || s.includes('tkpi') || s.includes('modifikasi')) {
             dbPangan = 'Modifikasi (tkpi2020.xlsx)';
@@ -82,13 +103,35 @@ export function buildWorkOrderFullExportData(wo) {
     const kopConfig = getActiveKopConfig();
     const sppgName = kopConfig?.nama_instansi || 'SPPG BULELENG SUKASADA TEGALLINGGAH';
 
+    const createdAt = formatDateTimeIndo(wo.created_at || raw.created_at);
+    const updatedAt = formatDateTimeIndo(wo.updated_at || raw.updated_at);
+    const diajukanPada = (wo.diajukan_pada || raw.diajukan_pada) ? formatDateTimeIndo(wo.diajukan_pada || raw.diajukan_pada) : '-';
+    const disetujuiPada = (wo.disetujui_pada || raw.disetujui_pada) ? formatDateTimeIndo(wo.disetujui_pada || raw.disetujui_pada) : '-';
+    const ditolakPada = (wo.ditolak_pada || raw.ditolak_pada) ? formatDateTimeIndo(wo.ditolak_pada || raw.ditolak_pada) : '-';
+    const poNo = wo.po_no || raw.po_no || (raw.purchase_order ? raw.purchase_order.nomor_po : (isManual ? '-' : ('PO-' + String(noWO).replace('WO-MBG-', ''))));
+    const catatanKeuangan = wo.catatan_keuangan || raw.catatan_keuangan || '-';
+
+    const rawCatatan = wo.catatan || (raw && raw.catatan) || null;
+    let parsedCatatan = rawCatatan;
+    if (typeof rawCatatan === 'string') {
+        try { parsedCatatan = JSON.parse(rawCatatan); } catch (e) { parsedCatatan = null; }
+    }
+    const catatanPersiapan = (parsedCatatan && Array.isArray(parsedCatatan.persiapan)) ? parsedCatatan.persiapan : [];
+    const catatanPengolahan = (parsedCatatan && Array.isArray(parsedCatatan.pengolahan)) ? parsedCatatan.pengolahan : [];
+    const catatanPemorsian  = (parsedCatatan && Array.isArray(parsedCatatan.pemorsian))  ? parsedCatatan.pemorsian  : [];
+    const globalPersiapan  = parsedCatatan?.catatan_global?.persiapan  || parsedCatatan?.global?.persiapan || '';
+    const globalPengolahan = parsedCatatan?.catatan_global?.pengolahan || parsedCatatan?.global?.pengolahan || '';
+    const globalPemorsian  = parsedCatatan?.catatan_global?.pemorsian  || parsedCatatan?.global?.pemorsian || '';
+    const catatanResep = parsedCatatan?.catatan_resep || (typeof rawCatatan === 'string' ? rawCatatan : '-');
+
     // 1. Sub Menus & Rincian
     const subMenuMap = {};
     const subMenusList = [];
-    const maxSub = Array.isArray(wo.sub_menus) ? Math.max(5, wo.sub_menus.length) : 5;
+    const maxSub = Array.isArray(wo.sub_menus) ? Math.max(5, wo.sub_menus.length) : (Array.isArray(raw.sub_menus) ? Math.max(5, raw.sub_menus.length) : 5);
+    const sourceSubMenus = (Array.isArray(wo.sub_menus) && wo.sub_menus.length > 0) ? wo.sub_menus : (Array.isArray(raw.sub_menus) ? raw.sub_menus : []);
     for (let i = 1; i <= maxSub; i++) {
         const key = `sub_menu_${i}`;
-        const val = (wo.sub_menus && wo.sub_menus[i - 1]) || raw[key] || rawSubMenu[key] || '';
+        const val = sourceSubMenus[i - 1] || (wo.sub_menus && wo.sub_menus[i - 1]) || raw[key] || '';
         if (val) {
             subMenuMap[key] = val;
             subMenusList.push({ key, label: `Sub Menu ${i}`, nama: val });
@@ -112,6 +155,7 @@ export function buildWorkOrderFullExportData(wo) {
 
     // 2. Deteksi Alergi Terdampak Berdasarkan Menu Saat Ini (Bahan Alergi / Substitusi)
     const menuAllergenTypes = new Set();
+    const subMenusAlergiList = [];
     items.forEach(it => {
         if (it.tipe_porsi === 'alergi' && it.jenis_alergi) {
             menuAllergenTypes.add(it.jenis_alergi.trim());
@@ -120,20 +164,35 @@ export function buildWorkOrderFullExportData(wo) {
     if (raw.sub_menu_alergi) {
         if (Array.isArray(raw.sub_menu_alergi)) {
             raw.sub_menu_alergi.forEach(a => {
-                const j = typeof a === 'string' ? a : (a?.jenis_alergi || '');
-                if (j) menuAllergenTypes.add(j.trim());
+                const j = typeof a === 'string' ? a : (a?.jenis_alergi || a?.nama || '');
+                if (j) {
+                    menuAllergenTypes.add(j.trim());
+                    subMenusAlergiList.push(j.trim());
+                }
             });
         } else if (typeof raw.sub_menu_alergi === 'object') {
             Object.values(raw.sub_menu_alergi).forEach(val => {
                 if (Array.isArray(val)) {
                     val.forEach(a => {
-                        const j = typeof a === 'string' ? a : (a?.jenis_alergi || '');
-                        if (j) menuAllergenTypes.add(j.trim());
+                        const j = typeof a === 'string' ? a : (a?.jenis_alergi || a?.nama || '');
+                        if (j) {
+                            menuAllergenTypes.add(j.trim());
+                            subMenusAlergiList.push(j.trim());
+                        }
                     });
                 }
             });
         }
+    } else if (wo.sub_menu_alergi && Array.isArray(wo.sub_menu_alergi)) {
+        wo.sub_menu_alergi.forEach(a => {
+            const j = typeof a === 'string' ? a : (a?.jenis_alergi || a?.nama || '');
+            if (j) {
+                menuAllergenTypes.add(j.trim());
+                subMenusAlergiList.push(j.trim());
+            }
+        });
     }
+    const subMenusAlergiStr = subMenusAlergiList.length > 0 ? subMenusAlergiList.join(', ') : '-';
 
     // Helper filter alergi yang HANYA terdampak menu ini
     function filterKpmImpactedAllergens(kpmDetailAlergi) {
@@ -517,6 +576,34 @@ export function buildWorkOrderFullExportData(wo) {
         });
     });
 
+    const flatGiziRows = [];
+    giziList.forEach((g, idx) => {
+        flatGiziRows.push({
+            no: idx + 1,
+            peruntukan: g.peruntukan,
+            jenis_pm: 'PK',
+            energi: g.pk?.energi ?? 0,
+            protein: g.pk?.protein ?? 0,
+            lemak: g.pk?.lemak ?? 0,
+            karbo: g.pk?.karbo ?? 0,
+            serat: g.pk?.serat ?? 0,
+            status: g.status || 'Memenuhi',
+            rowSpan: 2,
+        });
+        flatGiziRows.push({
+            no: idx + 1,
+            peruntukan: g.peruntukan,
+            jenis_pm: 'PB',
+            energi: g.pb?.energi ?? 0,
+            protein: g.pb?.protein ?? 0,
+            lemak: g.pb?.lemak ?? 0,
+            karbo: g.pb?.karbo ?? 0,
+            serat: g.pb?.serat ?? 0,
+            status: g.status || 'Memenuhi',
+            rowSpan: 0,
+        });
+    });
+
     // 9. Porsi Tambahan Produksi (Organoleptik, Sampel, Buffer)
     let ptRaw = wo.porsi_tambahan || raw.porsi_tambahan || {};
     if (typeof ptRaw === 'string') {
@@ -640,6 +727,27 @@ export function buildWorkOrderFullExportData(wo) {
         noWO,
         namaMenu,
         statusMenu,
+        metodeWo,
+        isManual,
+        metodeWoLabel,
+        siklus,
+        subMenusAlergiList,
+        subMenusAlergiStr,
+        createdAt,
+        updatedAt,
+        diajukanPada,
+        disetujuiPada,
+        ditolakPada,
+        poNo,
+        catatanKeuangan,
+        catatanResep,
+        catatanPersiapan,
+        catatanPengolahan,
+        catatanPemorsian,
+        globalPersiapan,
+        globalPengolahan,
+        globalPemorsian,
+        flatGiziRows,
         dbPangan,
         tglDist,
         rincianSubMenuStr,
@@ -905,7 +1013,7 @@ export async function exportWorkOrderExcel(wo) {
 
     // Row Info 2: Status Menu & Nama Menu
     const rInfo2 = sheet1.addRow([
-        'Status Menu', '', `:  ${data.statusMenu}`, '',
+        'Status Work Order', '', `:  ${data.statusMenu}`, '',
         'Nama Menu Produksi', '', `:  ${data.namaMenu}`, ''
     ]);
     sheet1.mergeCells(`A${rInfo2.number}:B${rInfo2.number}`);
@@ -918,31 +1026,88 @@ export async function exportWorkOrderExcel(wo) {
     rInfo2.getCell(7).font = { bold: true };
     rInfo2.height = 20;
 
-    // Row Info 3: Database Pangan & Total Sasaran PM
+    // Row Info 3: Metode WO & Siklus Menu
     const rInfo3 = sheet1.addRow([
-        'Database Pangan', '', `:  ${data.dbPangan}`, '',
-        'Total Sasaran PM', '', `:  ${data.totalPM.toLocaleString('id-ID')} PM (PK: ${data.totalPK.toLocaleString('id-ID')}, PB: ${data.totalPB.toLocaleString('id-ID')})`, ''
+        'Metode Work Order', '', `:  ${data.metodeWoLabel}`, '',
+        'Siklus Menu', '', `:  ${data.siklus}`, ''
     ]);
     sheet1.mergeCells(`A${rInfo3.number}:B${rInfo3.number}`);
     sheet1.mergeCells(`C${rInfo3.number}:D${rInfo3.number}`);
     sheet1.mergeCells(`E${rInfo3.number}:F${rInfo3.number}`);
     sheet1.mergeCells(`G${rInfo3.number}:H${rInfo3.number}`);
     rInfo3.getCell(1).font = { bold: true };
+    rInfo3.getCell(3).font = { bold: true, color: { argb: data.isManual ? 'FF059669' : 'FF2563EB' } };
     rInfo3.getCell(5).font = { bold: true };
     rInfo3.getCell(7).font = { bold: true };
     rInfo3.height = 20;
 
-    // Row Info 4: Rincian Sub Menu (Multiline Alt+Enter)
+    // Row Info 4: Database Pangan & Total Sasaran PM
+    const rInfo4 = sheet1.addRow([
+        'Database Pangan', '', `:  ${data.dbPangan}`, '',
+        'Total Sasaran PM', '', `:  ${data.totalPM.toLocaleString('id-ID')} PM (PK: ${data.totalPK.toLocaleString('id-ID')}, PB: ${data.totalPB.toLocaleString('id-ID')})`, ''
+    ]);
+    sheet1.mergeCells(`A${rInfo4.number}:B${rInfo4.number}`);
+    sheet1.mergeCells(`C${rInfo4.number}:D${rInfo4.number}`);
+    sheet1.mergeCells(`E${rInfo4.number}:F${rInfo4.number}`);
+    sheet1.mergeCells(`G${rInfo4.number}:H${rInfo4.number}`);
+    rInfo4.getCell(1).font = { bold: true };
+    rInfo4.getCell(5).font = { bold: true };
+    rInfo4.getCell(7).font = { bold: true };
+    rInfo4.height = 20;
+
+    // Row Info 5: Rincian Sub Menu (Multiline Alt+Enter)
     const subMenuLines = data.subMenusList && data.subMenusList.length > 0
         ? data.subMenusList.map((sm, idx) => (idx === 0 ? `:  ${idx + 1}. ${sm.nama}` : `   ${idx + 1}. ${sm.nama}`)).join('\n')
         : ':  -';
-    const rInfo4 = sheet1.addRow(['Rincian Sub Menu', '', subMenuLines, '', '', '', '', '']);
-    sheet1.mergeCells(`A${rInfo4.number}:B${rInfo4.number}`);
-    sheet1.mergeCells(`C${rInfo4.number}:H${rInfo4.number}`);
-    rInfo4.getCell(1).font = { bold: true };
-    rInfo4.getCell(1).alignment = { vertical: 'top' };
-    rInfo4.getCell(3).alignment = { wrapText: true, vertical: 'top' };
-    rInfo4.height = Math.max(26, (data.subMenusList?.length || 1) * 19);
+    const rInfo5 = sheet1.addRow(['Rincian Sub Menu', '', subMenuLines, '', '', '', '', '']);
+    sheet1.mergeCells(`A${rInfo5.number}:B${rInfo5.number}`);
+    sheet1.mergeCells(`C${rInfo5.number}:H${rInfo5.number}`);
+    rInfo5.getCell(1).font = { bold: true };
+    rInfo5.getCell(1).alignment = { vertical: 'top' };
+    rInfo5.getCell(3).alignment = { wrapText: true, vertical: 'top' };
+    rInfo5.height = Math.max(26, (data.subMenusList?.length || 1) * 19);
+
+    // Row Info 6: Sub Menu Pengganti Alergi & Ringkasan Alergi
+    const rInfo6 = sheet1.addRow([
+        'Menu Pengganti Alergi', '', `:  ${data.subMenusAlergiStr}`, '',
+        'Ringkasan Alergi Sasaran', '', `:  ${data.activeAllergens.length > 0 ? data.activeAllergens.map(a => `${a.jenis}: ${a.total} PM`).join(', ') : 'Nihil'}`, ''
+    ]);
+    sheet1.mergeCells(`A${rInfo6.number}:B${rInfo6.number}`);
+    sheet1.mergeCells(`C${rInfo6.number}:D${rInfo6.number}`);
+    sheet1.mergeCells(`E${rInfo6.number}:F${rInfo6.number}`);
+    sheet1.mergeCells(`G${rInfo6.number}:H${rInfo6.number}`);
+    rInfo6.getCell(1).font = { bold: true };
+    rInfo6.getCell(3).font = { color: { argb: data.subMenusAlergiStr !== '-' ? 'FFDC2626' : 'FF64748B' } };
+    rInfo6.getCell(5).font = { bold: true };
+    rInfo6.getCell(7).font = { color: { argb: data.activeAllergens.length > 0 ? 'FFDC2626' : 'FF64748B' } };
+    rInfo6.height = 20;
+
+    // Row Info 7: Riwayat Waktu & Approval
+    const statusApprovalText = data.disetujuiPada !== '-' ? `Disetujui: ${data.disetujuiPada}` : (data.diajukanPada !== '-' ? `Diajukan: ${data.diajukanPada}` : (data.isManual ? 'Siap Produksi & Penyaluran' : 'Draft'));
+    const rInfo7 = sheet1.addRow([
+        'Riwayat Pembuatan', '', `:  Dibuat ${data.createdAt} • Diperbarui ${data.updatedAt}`, '',
+        'Status Approval / PO', '', `:  ${data.poNo !== '-' ? 'No. PO: ' + data.poNo + ' • ' : ''}${statusApprovalText}`, ''
+    ]);
+    sheet1.mergeCells(`A${rInfo7.number}:B${rInfo7.number}`);
+    sheet1.mergeCells(`C${rInfo7.number}:D${rInfo7.number}`);
+    sheet1.mergeCells(`E${rInfo7.number}:F${rInfo7.number}`);
+    sheet1.mergeCells(`G${rInfo7.number}:H${rInfo7.number}`);
+    rInfo7.getCell(1).font = { bold: true };
+    rInfo7.getCell(3).font = { size: 9.5 };
+    rInfo7.getCell(5).font = { bold: true };
+    rInfo7.getCell(7).font = { size: 9.5, bold: true, color: { argb: 'FF047857' } };
+    rInfo7.height = 20;
+
+    // Row Info 8 (if catatanResep exists): Petunjuk Resep
+    if (data.catatanResep && data.catatanResep !== '-') {
+        const rInfo8 = sheet1.addRow(['Catatan Resep / Masak', '', `:  ${data.catatanResep}`, '', '', '', '', '']);
+        sheet1.mergeCells(`A${rInfo8.number}:B${rInfo8.number}`);
+        sheet1.mergeCells(`C${rInfo8.number}:H${rInfo8.number}`);
+        rInfo8.getCell(1).font = { bold: true };
+        rInfo8.getCell(1).alignment = { vertical: 'top' };
+        rInfo8.getCell(3).alignment = { wrapText: true, vertical: 'top' };
+        rInfo8.height = 24;
+    }
 
     sheet1.addRow([]); // Gap Baris Kosong
 
@@ -1425,11 +1590,83 @@ export async function exportWorkOrderExcel(wo) {
 
     sheet2.addRow([]); // Gap Baris Kosong
 
-    // A. Pemilihan Bahan Pangan
-    const rBahanHead = sheet2.addRow(['A. Pemilihan Bahan Pangan']);
-    sheet2.mergeCells(`A${rBahanHead.number}:Q${rBahanHead.number}`);
-    rBahanHead.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF0F172A' } };
-    rBahanHead.height = 22;
+    if (data.isManual) {
+        // A. Rincian Komponen Hidangan & Ketentuan Work Order Manual
+        const rManualHead = sheet2.addRow(['A. Rincian Komponen Hidangan & Ketentuan Work Order Manual']);
+        sheet2.mergeCells(`A${rManualHead.number}:Q${rManualHead.number}`);
+        rManualHead.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+        rManualHead.height = 22;
+
+        const rManualInfo = sheet2.addRow([
+            'Informasi Work Order Manual (Non-PO TKPI): Work order ini berstatus Manual (Input Mandiri). Bahan baku disiapkan dan dikelola langsung oleh unit SPPG tanpa melalui modul belanja Purchase Order (PO) sistem. Standar gizi dievaluasi berdasarkan Standar Angka Kecukupan Gizi (AKG) Badan Gizi Nasional.'
+        ]);
+        sheet2.mergeCells(`A${rManualInfo.number}:Q${rManualInfo.number}`);
+        rManualInfo.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF92400E' } };
+        rManualInfo.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        rManualInfo.getCell(1).alignment = { wrapText: true, vertical: 'middle' };
+        rManualInfo.height = 28;
+
+        const rManualCols = sheet2.addRow([
+            'No',
+            'Komponen Sub Menu', '', '', '',
+            'Kategori Hidangan', '', '',
+            'Status Distribusi', '', '', '', '', '', '', '', ''
+        ]);
+        sheet2.mergeCells(`B${rManualCols.number}:E${rManualCols.number}`);
+        sheet2.mergeCells(`F${rManualCols.number}:H${rManualCols.number}`);
+        sheet2.mergeCells(`I${rManualCols.number}:Q${rManualCols.number}`);
+        rManualCols.font = { bold: true };
+        rManualCols.height = 24;
+        rManualCols.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+            cell.border = borderThin;
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        data.subMenusList.forEach((sm, idx) => {
+            const r = sheet2.addRow([
+                idx + 1,
+                sm.nama, '', '', '',
+                sm.label || `Komponen ${idx + 1}`, '', '',
+                'Tersaji untuk Seluruh Sasaran Penerima Manfaat', '', '', '', '', '', '', '', ''
+            ]);
+            sheet2.mergeCells(`B${r.number}:E${r.number}`);
+            sheet2.mergeCells(`F${r.number}:H${r.number}`);
+            sheet2.mergeCells(`I${r.number}:Q${r.number}`);
+            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            r.getCell(2).font = { bold: true };
+            r.getCell(2).alignment = { vertical: 'middle' };
+            r.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+            r.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
+            r.getCell(9).font = { color: { argb: 'FF047857' } };
+            r.eachCell(cell => { cell.border = borderThin; });
+            r.height = 22;
+        });
+
+        const rManualPagu = sheet2.addRow([
+            'Total Batas Pagu Anggaran MBG:', '', '', '', '', '', '', '',
+            `${data.totalPM.toLocaleString('id-ID')} PM Sasaran`, '', '', '',
+            data.paguTotal, '', '', '', ''
+        ]);
+        sheet2.mergeCells(`A${rManualPagu.number}:H${rManualPagu.number}`);
+        sheet2.mergeCells(`I${rManualPagu.number}:L${rManualPagu.number}`);
+        sheet2.mergeCells(`M${rManualPagu.number}:Q${rManualPagu.number}`);
+        rManualPagu.font = { bold: true };
+        rManualPagu.height = 24;
+        rManualPagu.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+        rManualPagu.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
+        rManualPagu.getCell(13).alignment = { horizontal: 'right', vertical: 'middle' };
+        rManualPagu.getCell(13).numFmt = '"Rp "#,##0';
+        rManualPagu.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+            cell.border = borderThin;
+        });
+    } else {
+        // A. Pemilihan Bahan Pangan
+        const rBahanHead = sheet2.addRow(['A. Pemilihan Bahan Pangan']);
+        sheet2.mergeCells(`A${rBahanHead.number}:Q${rBahanHead.number}`);
+        rBahanHead.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+        rBahanHead.height = 22;
 
     // Header 2 Baris: Baris 1 merge PK PB, Baris 2 PK dan PB pisah kolom
     const rBahanCols1 = sheet2.addRow([
@@ -1790,24 +2027,16 @@ export async function exportWorkOrderExcel(wo) {
             cell.border = borderThin;
         });
     });
+}
 
     sheet2.addRow([]); // Gap Baris Kosong
 
-    // C. Kandungan Gizi (Pas Kolom A..H, 1 Kolom Peruntukan Porsi agar pas sejajar dengan tabel Food Cost diatasnya)
-    const rGzHead = sheet2.addRow(['C. Kandungan Gizi']);
-    sheet2.mergeCells(`A${rGzHead.number}:H${rGzHead.number}`);
+    // Kandungan Gizi & Evaluasi AKG (Kolom A..I)
+    const rGzHead = sheet2.addRow([data.isManual ? 'B. Kandungan Gizi & Evaluasi AKG' : 'C. Kandungan Gizi & Evaluasi AKG']);
+    sheet2.mergeCells(`A${rGzHead.number}:I${rGzHead.number}`);
     rGzHead.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF0F172A' } };
     rGzHead.height = 22;
 
-    // Tabel Kandungan Gizi Kompak (A sampai H, pas sejajar kolom Serat dengan Food Cost):
-    // Col A (width 6): No
-    // Col B (width 28): Peruntukan Porsi (1 kolom saja, tidak dimerge 2 kolom)
-    // Col C (width 38): Jenis PM
-    // Col D (width 26): Energi (kkal)
-    // Col E (width 14): Protein (g)
-    // Col F (width 14): Lemak (g)
-    // Col G (width 16): Karbohidrat (g)
-    // Col H (width 16): Serat (g)
     const rGzCols = sheet2.addRow([
         'No',
         'Peruntukan Porsi',
@@ -1816,12 +2045,13 @@ export async function exportWorkOrderExcel(wo) {
         'Protein (g)',
         'Lemak (g)',
         'Karbohidrat (g)',
-        'Serat (g)'
+        'Serat (g)',
+        'Status AKG'
     ]);
     rGzCols.height = 26;
     rGzCols.font = { bold: true };
 
-    for (let c = 1; c <= 8; c++) {
+    for (let c = 1; c <= 9; c++) {
         const cell = rGzCols.getCell(c);
         cell.fill = headerFill;
         cell.border = borderThin;
@@ -1837,7 +2067,8 @@ export async function exportWorkOrderExcel(wo) {
             g.pk.protein,
             g.pk.lemak,
             g.pk.karbo,
-            g.pk.serat
+            g.pk.serat,
+            'Memenuhi'
         ]);
         const r2 = sheet2.addRow([
             '',
@@ -1847,7 +2078,8 @@ export async function exportWorkOrderExcel(wo) {
             g.pb.protein,
             g.pb.lemak,
             g.pb.karbo,
-            g.pb.serat
+            g.pb.serat,
+            'Memenuhi'
         ]);
 
         const r1N = r1.number;
@@ -1855,6 +2087,7 @@ export async function exportWorkOrderExcel(wo) {
 
         sheet2.mergeCells(`A${r1N}:A${r2N}`);
         sheet2.mergeCells(`B${r1N}:B${r2N}`); // 1 kolom saja di Kolom B
+        sheet2.mergeCells(`I${r1N}:I${r2N}`); // Status AKG merge 2 baris
 
         r1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
         r1.getCell(2).alignment = { vertical: 'middle', wrapText: true };
@@ -1872,7 +2105,12 @@ export async function exportWorkOrderExcel(wo) {
             r2.getCell(c).numFmt = '#,##0.0';
         }
 
-        for (let c = 1; c <= 8; c++) {
+        // Status AKG (Kolom 9)
+        r1.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
+        r1.getCell(9).font = { bold: true, color: { argb: 'FF047857' } };
+        r1.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+
+        for (let c = 1; c <= 9; c++) {
             r1.getCell(c).border = borderThin;
             r2.getCell(c).border = borderThin;
         }
@@ -2434,6 +2672,15 @@ export async function exportWorkOrderWord(wo) {
                 new TableRow({
                     cantSplit: true,
                     children: [
+                        docxCell({ text: 'Metode Work Order', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  ${data.metodeWoLabel}`, width: 4175, bold: true, color: data.isManual ? 'B45309' : '047857', size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: 'Siklus Menu', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  ${data.siklus}`, width: 4175, bold: true, size: 14, borders: docxCellBorderNone }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
                         docxCell({ text: 'Database Pangan', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
                         docxCell({ text: `:  ${data.dbPangan}`, width: 4175, size: 14, borders: docxCellBorderNone }),
                         docxCell({ text: 'Total Sasaran PM', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
@@ -2457,6 +2704,33 @@ export async function exportWorkOrderWord(wo) {
                         }),
                     ],
                 }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'Menu Pengganti Alergi', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  ${data.subMenusAlergiStr}`, width: 4175, color: data.subMenusAlergiStr !== '-' ? 'DC2626' : undefined, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: 'Ringkasan Alergi Sasaran', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  ${data.activeAllergens.length > 0 ? data.activeAllergens.map(a => `${a.jenis}: ${a.total} PM`).join(', ') : 'Nihil'}`, width: 4175, color: data.activeAllergens.length > 0 ? 'DC2626' : undefined, size: 14, borders: docxCellBorderNone }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'Riwayat Pembuatan', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  Dibuat ${data.createdAt} • Diperbarui ${data.updatedAt}`, width: 4175, size: 13, borders: docxCellBorderNone }),
+                        docxCell({ text: 'Status Approval / PO', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                        docxCell({ text: `:  ${data.poNo !== '-' ? 'No. PO: ' + data.poNo + ' • ' : ''}${data.disetujuiPada !== '-' ? 'Disetujui: ' + data.disetujuiPada : (data.diajukanPada !== '-' ? 'Diajukan: ' + data.diajukanPada : (data.isManual ? 'Siap Produksi & Penyaluran' : 'Draft'))}`, width: 4175, bold: true, color: '047857', size: 13, borders: docxCellBorderNone }),
+                    ],
+                }),
+                ...(data.catatanResep && data.catatanResep !== '-' ? [
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'Catatan Resep / Masak', width: 3500, bold: true, size: 14, borders: docxCellBorderNone }),
+                            docxCell({ text: `:  ${data.catatanResep}`, width: 11850, colSpan: 3, size: 14, borders: docxCellBorderNone }),
+                        ],
+                    })
+                ] : []),
             ],
         }),
         new Paragraph({ spacing: { before: 40 } }),
@@ -2690,115 +2964,299 @@ export async function exportWorkOrderWord(wo) {
                 }),
             ],
         }),
+        new Paragraph({ spacing: { before: 50 } }),
+
+        // Tabel 5. Alokasi Porsi Tambahan Produksi (PK & PB)
+        new Paragraph({
+            children: [new TextRun({ text: 'Tabel 5. Alokasi Porsi Tambahan Produksi (PK & PB)', bold: true, color: 'B45309', size: 15, font: 'Arial' })],
+            spacing: { before: 20, after: 20 },
+        }),
+        new Table({
+            width: { size: 15350, type: WidthType.DXA },
+            borders: docxBorderThin,
+            rows: [
+                new TableRow({
+                    tableHeader: true,
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'No', width: 700, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Kategori Porsi Tambahan', width: 3400, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Peruntukan & Deskripsi', width: 5250, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Porsi Kecil (PK)', width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Porsi Besar (PB)', width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Total Tambahan', width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: 'Keterangan Anggaran', width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: '1', width: 700, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Uji Organoleptik', width: 3400, bold: true, size: 13 }),
+                        docxCell({ text: 'Uji sensori mutu rasa, aroma, tekstur & suhu sebelum distribusi', width: 5250, size: 12 }),
+                        docxCell({ text: `${data.porsiTambahan.organoleptik.pk} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.organoleptik.pb} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.organoleptik.total} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Di luar pagu', width: 1500, align: AlignmentType.CENTER, size: 12 }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: '2', width: 700, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Sampel Lab / Arsip', width: 3400, bold: true, size: 13 }),
+                        docxCell({ text: 'Simpan beku/arsip pengujian laboratorium keamanan pangan 1x24 jam', width: 5250, size: 12 }),
+                        docxCell({ text: `${data.porsiTambahan.sampel.pk} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.sampel.pb} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.sampel.total} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Di luar pagu', width: 1500, align: AlignmentType.CENTER, size: 12 }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: '3', width: 700, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Buffer / Cadangan Distribusi', width: 3400, bold: true, size: 13 }),
+                        docxCell({ text: 'Antisipasi ceceran/tumpah saat pengantaran & pemorsian di lapangan', width: 5250, size: 12 }),
+                        docxCell({ text: `${data.porsiTambahan.buffer.pk} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.buffer.pb} Porsi`, width: 1500, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.buffer.total} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, size: 13 }),
+                        docxCell({ text: 'Di luar pagu', width: 1500, align: AlignmentType.CENTER, size: 12 }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'Total Porsi Tambahan Non-Sasaran:', colSpan: 3, width: 9350, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.totalPK} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.totalPB} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.grandTotal} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, color: 'B45309', size: 13 }),
+                        docxCell({ text: '', width: 1500, shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }, size: 13 }),
+                    ],
+                }),
+                new TableRow({
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'Total Produksi Dapur (Sasaran + Tambahan):', colSpan: 3, width: 9350, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.totalProduksiPK.toLocaleString('id-ID')} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.totalProduksiPB.toLocaleString('id-ID')} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                        docxCell({ text: `${data.porsiTambahan.grandTotalProduksi.toLocaleString('id-ID')} Porsi`, width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                        docxCell({ text: 'Total Matang', width: 1500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 12 }),
+                    ],
+                }),
+            ],
+        }),
+
+        new Paragraph({ spacing: { before: 50 } }),
+
+        // Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG
+        new Paragraph({
+            children: [new TextRun({ text: 'Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (9 Tahapan Kerja)', bold: true, color: '312E81', size: 15, font: 'Arial' })],
+            spacing: { before: 20, after: 20 },
+        }),
+        new Table({
+            width: { size: 15350, type: WidthType.DXA },
+            borders: docxBorderThin,
+            rows: [
+                new TableRow({
+                    tableHeader: true,
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'No', width: 700, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                        docxCell({ text: 'Tahapan Kegiatan Operasional', width: 4500, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                        docxCell({ text: 'Mulai', width: 1200, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                        docxCell({ text: 'Selesai', width: 1200, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                        docxCell({ text: 'Rentang Jam', width: 2000, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                        docxCell({ text: 'Deskripsi & Sasaran Kerja', width: 5750, bold: true, align: AlignmentType.CENTER, shading: { fill: 'E0E7FF', type: ShadingType.CLEAR }, color: '312E81', size: 13 }),
+                    ],
+                }),
+                ...(data.jadwalOperasional || []).map((j) =>
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: String(j.no), width: 700, align: AlignmentType.CENTER, size: 13 }),
+                            docxCell({ text: j.nama, width: 4500, bold: true, size: 13 }),
+                            docxCell({ text: j.mulai, width: 1200, align: AlignmentType.CENTER, size: 13 }),
+                            docxCell({ text: j.selesai, width: 1200, align: AlignmentType.CENTER, size: 13 }),
+                            docxCell({ text: `${j.mulai} - ${j.selesai}`, width: 2000, bold: true, align: AlignmentType.CENTER, color: '312E81', size: 13 }),
+                            docxCell({ text: j.deskripsi, width: 5750, size: 12 }),
+                        ],
+                    })
+                ),
+            ],
+        }),
     ];
 
     // =========================================================================
-    // SHEET 2 - HALAMAN 3: PEMILIHAN BAHAN PANGAN (17 KOLOM)
+    // SHEET 2 - HALAMAN 3: PEMILIHAN BAHAN PANGAN (17 KOLOM) ATAU KOMPONEN WO MANUAL
     // =========================================================================
     const colW_A = [400, 1600, 2200, 1550, 550, 750, 850, 750, 750, 780, 780, 550, 550, 920, 1100, 1250, 800];
 
     const sheet2Page1Children = [
         createKopDocxTable(),
         new Paragraph({ spacing: { before: 50 } }),
-        createBannerTable('LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG', sppgName, '047857', 'FFFFFF'),
+        createBannerTable(data.isManual ? 'LAPORAN KOMPONEN HIDANGAN & KEBUTUHAN MBG' : 'LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG', sppgName, '047857', 'FFFFFF'),
         new Paragraph({ spacing: { before: 60 } }),
 
-        // A. Pemilihan Bahan Pangan
-        new Paragraph({
-            children: [new TextRun({ text: 'A. Pemilihan Bahan Pangan', bold: true, size: 17, font: 'Arial', color: '0F172A' })],
-            spacing: { before: 40, after: 30 },
-        }),
-        new Table({
-            width: { size: 15350, type: WidthType.DXA },
-            borders: docxBorderThin,
-            rows: [
-                new TableRow({
-                    tableHeader: true,
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: 'No', width: colW_A[0], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Sub Menu', width: colW_A[1], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Bahan Master', width: colW_A[2], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Nama PO', width: colW_A[3], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Sat', width: colW_A[4], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Jenis', width: colW_A[5], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Peruntukan', width: colW_A[6], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Berat Bersih (g)', colSpan: 2, width: colW_A[7] + colW_A[8], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Berat Kotor (kg)', colSpan: 2, width: colW_A[9] + colW_A[10], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'BDD', width: colW_A[11], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Buf', width: colW_A[12], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'PO (Kg)', width: colW_A[13], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Harga Satuan', width: colW_A[14], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Total Biaya', width: colW_A[15], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'Kandungan Gizi', width: colW_A[16], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                    ],
-                }),
-                new TableRow({
-                    tableHeader: true,
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: 'PK', width: colW_A[7], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'PB', width: colW_A[8], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'PK', width: colW_A[9], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: 'PB', width: colW_A[10], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
-                    ],
-                }),
-                ...data.formattedItems.map((item, idx) =>
+        ...(data.isManual ? [
+            new Paragraph({
+                children: [
+                    new TextRun({ text: 'A. Rincian Komponen Hidangan & Ketentuan Work Order Manual', bold: true, size: 17, font: 'Arial', color: '0F172A' })
+                ],
+                spacing: { before: 40, after: 20 },
+            }),
+            new Table({
+                width: { size: 15350, type: WidthType.DXA },
+                borders: docxBorderThin,
+                rows: [
+                    new TableRow({
+                        children: [
+                            docxCell({
+                                text: 'Informasi Work Order Manual (Non-PO TKPI): Work order ini berstatus Manual (Input Mandiri). Bahan baku disiapkan dan dikelola langsung oleh unit SPPG tanpa melalui modul belanja Purchase Order (PO) sistem. Standar gizi dievaluasi berdasarkan Standar Angka Kecukupan Gizi (AKG) Badan Gizi Nasional.',
+                                width: 15350,
+                                size: 13,
+                                italic: true,
+                                color: '92400E',
+                                shading: { fill: 'FEF3C7', type: ShadingType.CLEAR }
+                            })
+                        ]
+                    })
+                ]
+            }),
+            new Paragraph({ spacing: { before: 30 } }),
+            new Table({
+                width: { size: 15350, type: WidthType.DXA },
+                borders: docxBorderThin,
+                rows: [
+                    new TableRow({
+                        tableHeader: true,
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'No', width: 800, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                            docxCell({ text: 'Komponen Sub Menu', width: 6550, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                            docxCell({ text: 'Kategori Hidangan', width: 4000, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                            docxCell({ text: 'Status Distribusi', width: 4000, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, color: '047857', size: 13 }),
+                        ]
+                    }),
+                    ...data.subMenusList.map((sm, idx) =>
+                        new TableRow({
+                            cantSplit: true,
+                            children: [
+                                docxCell({ text: String(idx + 1), width: 800, align: AlignmentType.CENTER, size: 13 }),
+                                docxCell({ text: sm.nama, width: 6550, bold: true, size: 13 }),
+                                docxCell({ text: sm.label || `Komponen ${idx + 1}`, width: 4000, align: AlignmentType.CENTER, size: 13 }),
+                                docxCell({ text: 'Tersaji untuk Seluruh Sasaran', width: 4000, align: AlignmentType.CENTER, color: '047857', size: 13 }),
+                            ]
+                        })
+                    ),
                     new TableRow({
                         cantSplit: true,
                         children: [
-                            docxCell({ text: String(idx + 1), width: colW_A[0], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: item.sub_menu, width: colW_A[1], bold: true, size: 12 }),
-                            docxCell({ text: item.bahan_master, width: colW_A[2], bold: true, size: 12 }),
-                            docxCell({ text: item.nama_po, width: colW_A[3], size: 12 }),
-                            docxCell({ text: item.satuan, width: colW_A[4], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: item.jenis, width: colW_A[5], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: item.peruntukan, width: colW_A[6], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: String(item.gram_pk), width: colW_A[7], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: String(item.gram_pb), width: colW_A[8], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: Number(item.gross_kg_pk.toFixed(2)), width: colW_A[9], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: Number(item.gross_kg_pb.toFixed(2)), width: colW_A[10], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: String(item.bdd), width: colW_A[11], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: String(item.buffer), width: colW_A[12], align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: Number(item.total_gross.toFixed(2)), width: colW_A[13], bold: true, align: AlignmentType.CENTER, size: 12 }),
-                            docxCell({ text: formatRupiahNum(item.harga), width: colW_A[14], align: AlignmentType.RIGHT, size: 12 }),
-                            docxCell({ text: formatRupiahNum(item.subtotal), width: colW_A[15], bold: true, align: AlignmentType.RIGHT, size: 12 }),
-                            docxCell({ text: (item.keterangan || '-'), width: colW_A[16], size: 11 }),
-                        ],
+                            docxCell({ text: 'Total Batas Pagu Anggaran MBG:', colSpan: 2, width: 7350, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
+                            docxCell({ text: `${data.totalPM.toLocaleString('id-ID')} PM Sasaran`, width: 4000, bold: true, align: AlignmentType.CENTER, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
+                            docxCell({ text: formatRupiahNum(data.paguTotal), width: 4000, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
+                        ]
                     })
-                ),
-            ],
-        }),
-        new Paragraph({ spacing: { before: 30 } }),
+                ]
+            })
+        ] : [
+            // A. Pemilihan Bahan Pangan
+            new Paragraph({
+                children: [new TextRun({ text: 'A. Pemilihan Bahan Pangan', bold: true, size: 17, font: 'Arial', color: '0F172A' })],
+                spacing: { before: 40, after: 30 },
+            }),
+            new Table({
+                width: { size: 15350, type: WidthType.DXA },
+                borders: docxBorderThin,
+                rows: [
+                    new TableRow({
+                        tableHeader: true,
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'No', width: colW_A[0], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Sub Menu', width: colW_A[1], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Bahan Master', width: colW_A[2], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Nama PO', width: colW_A[3], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Sat', width: colW_A[4], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Jenis', width: colW_A[5], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Peruntukan', width: colW_A[6], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Berat Bersih (g)', colSpan: 2, width: colW_A[7] + colW_A[8], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Berat Kotor (kg)', colSpan: 2, width: colW_A[9] + colW_A[10], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'BDD', width: colW_A[11], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Buf', width: colW_A[12], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'PO (Kg)', width: colW_A[13], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Harga Satuan', width: colW_A[14], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Total Biaya', width: colW_A[15], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'Kandungan Gizi', width: colW_A[16], rowSpan: 2, bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                        ],
+                    }),
+                    new TableRow({
+                        tableHeader: true,
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'PK', width: colW_A[7], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'PB', width: colW_A[8], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'PK', width: colW_A[9], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                            docxCell({ text: 'PB', width: colW_A[10], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                        ],
+                    }),
+                    ...data.formattedItems.map((item, idx) =>
+                        new TableRow({
+                            cantSplit: true,
+                            children: [
+                                docxCell({ text: String(idx + 1), width: colW_A[0], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: item.sub_menu, width: colW_A[1], bold: true, size: 12 }),
+                                docxCell({ text: item.bahan_master, width: colW_A[2], bold: true, size: 12 }),
+                                docxCell({ text: item.nama_po, width: colW_A[3], size: 12 }),
+                                docxCell({ text: item.satuan, width: colW_A[4], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: item.jenis, width: colW_A[5], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: item.peruntukan, width: colW_A[6], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: String(item.gram_pk), width: colW_A[7], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: String(item.gram_pb), width: colW_A[8], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: Number(item.gross_kg_pk.toFixed(2)), width: colW_A[9], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: Number(item.gross_kg_pb.toFixed(2)), width: colW_A[10], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: String(item.bdd), width: colW_A[11], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: String(item.buffer), width: colW_A[12], align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: Number(item.total_gross.toFixed(2)), width: colW_A[13], bold: true, align: AlignmentType.CENTER, size: 12 }),
+                                docxCell({ text: formatRupiahNum(item.harga), width: colW_A[14], align: AlignmentType.RIGHT, size: 12 }),
+                                docxCell({ text: formatRupiahNum(item.subtotal), width: colW_A[15], bold: true, align: AlignmentType.RIGHT, size: 12 }),
+                                docxCell({ text: (item.keterangan || '-'), width: colW_A[16], size: 11 }),
+                            ],
+                        })
+                    ),
+                ],
+            }),
+            new Paragraph({ spacing: { before: 30 } }),
 
-        // Rekapitulasi Kebutuhan Belanja
-        new Table({
-            width: { size: 15350, type: WidthType.DXA },
-            borders: docxBorderThin,
-            rows: [
-                new TableRow({
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: 'Batas Pagu Anggaran Bahan Makanan:', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 13 }),
-                        docxCell({ text: formatRupiahNum(data.paguBahanTotal), colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 13 }),
-                    ],
-                }),
-                new TableRow({
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: 'Total Belanja Bahan Makanan (PO):', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
-                        docxCell({ text: formatRupiahNum(data.totalBelanjaPO), colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
-                    ],
-                }),
-                new TableRow({
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: 'Selisih Anggaran Bahan Makanan:', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: data.selisihPagu >= 0 ? 'DCFCE7' : 'FEE2E2', type: ShadingType.CLEAR }, color: data.selisihPagu >= 0 ? '15803D' : 'B91C1C', size: 13 }),
-                        docxCell({ text: `${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})`, colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: data.selisihPagu >= 0 ? 'DCFCE7' : 'FEE2E2', type: ShadingType.CLEAR }, color: data.selisihPagu >= 0 ? '15803D' : 'B91C1C', size: 13 }),
-                    ],
-                }),
-            ],
-        }),
+            // Rekapitulasi Kebutuhan Belanja
+            new Table({
+                width: { size: 15350, type: WidthType.DXA },
+                borders: docxBorderThin,
+                rows: [
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'Batas Pagu Anggaran Bahan Makanan:', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 13 }),
+                            docxCell({ text: formatRupiahNum(data.paguBahanTotal), colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 13 }),
+                        ],
+                    }),
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'Total Belanja Bahan Makanan (PO):', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
+                            docxCell({ text: formatRupiahNum(data.totalBelanjaPO), colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: 'DBEAFE', type: ShadingType.CLEAR }, color: '1E3A8A', size: 13 }),
+                        ],
+                    }),
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: 'Selisih Anggaran Bahan Makanan:', colSpan: 13, width: 10900, bold: true, align: AlignmentType.RIGHT, shading: { fill: data.selisihPagu >= 0 ? 'DCFCE7' : 'FEE2E2', type: ShadingType.CLEAR }, color: data.selisihPagu >= 0 ? '15803D' : 'B91C1C', size: 13 }),
+                            docxCell({ text: `${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})`, colSpan: 4, width: 4450, bold: true, align: AlignmentType.RIGHT, shading: { fill: data.selisihPagu >= 0 ? 'DCFCE7' : 'FEE2E2', type: ShadingType.CLEAR }, color: data.selisihPagu >= 0 ? '15803D' : 'B91C1C', size: 13 }),
+                        ],
+                    }),
+                ],
+            }),
+        ])
     ];
 
     // =========================================================================
@@ -2956,8 +3414,8 @@ export async function exportWorkOrderWord(wo) {
         }),
     ]);
 
-    // 8 Kolom Tabel Kandungan Gizi: No (600), Peruntukan Porsi (3150), Jenis PM (1200), Energi (2100), Protein (2100), Lemak (2100), Karbo (2100), Serat (2000) = 15350 DXA
-    const colW_Gizi = [600, 3150, 1200, 2100, 2100, 2100, 2100, 2000];
+    // 9 Kolom Tabel Kandungan Gizi: No (600), Peruntukan Porsi (3000), Jenis PM (1100), Energi (1750), Protein (1750), Lemak (1750), Karbo (1750), Serat (1750), Status AKG (1900) = 15350 DXA
+    const colW_Gizi = [600, 3000, 1100, 1750, 1750, 1750, 1750, 1750, 1900];
 
     const kandunganGiziTable = new Table({
         width: { size: 15350, type: WidthType.DXA },
@@ -2975,33 +3433,38 @@ export async function exportWorkOrderWord(wo) {
                     docxCell({ text: 'Lemak (g)', width: colW_Gizi[5], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
                     docxCell({ text: 'Karbohidrat (g)', width: colW_Gizi[6], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
                     docxCell({ text: 'Serat (g)', width: colW_Gizi[7], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
+                    docxCell({ text: 'Status AKG', width: colW_Gizi[8], bold: true, align: AlignmentType.CENTER, shading: { fill: 'F1F5F9', type: ShadingType.CLEAR }, size: 12 }),
                 ],
             }),
-            ...data.giziList.map((g) =>
-                new TableRow({
-                    cantSplit: true,
-                    children: [
-                        docxCell({ text: g.rowSpan > 0 ? String(g.no) : '', width: colW_Gizi[0], rowSpan: g.rowSpan > 0 ? g.rowSpan : 1, align: AlignmentType.CENTER, size: 12 }),
-                        docxCell({ text: g.rowSpan > 0 ? g.peruntukan : '', width: colW_Gizi[1], rowSpan: g.rowSpan > 0 ? g.rowSpan : 1, bold: true, size: 12 }),
-                        docxCell({ text: g.jenis_pm, width: colW_Gizi[2], bold: true, align: AlignmentType.CENTER, shading: { fill: g.jenis_pm === 'PK' ? 'FEF9C3' : 'E0F2FE', type: ShadingType.CLEAR }, size: 12 }),
-                        docxCell({ text: String(g.energi), width: colW_Gizi[3], align: AlignmentType.CENTER, size: 12 }),
-                        docxCell({ text: String(g.protein), width: colW_Gizi[4], align: AlignmentType.CENTER, size: 12 }),
-                        docxCell({ text: String(g.lemak), width: colW_Gizi[5], align: AlignmentType.CENTER, size: 12 }),
-                        docxCell({ text: String(g.karbo), width: colW_Gizi[6], align: AlignmentType.CENTER, size: 12 }),
-                        docxCell({ text: String(g.serat), width: colW_Gizi[7], align: AlignmentType.CENTER, size: 12 }),
-                    ],
-                })
-            ),
+            ...data.flatGiziRows.map((g) => {
+                const cells = [];
+                if (g.rowSpan > 0) {
+                    cells.push(docxCell({ text: String(g.no), width: colW_Gizi[0], rowSpan: g.rowSpan, align: AlignmentType.CENTER, size: 12 }));
+                    cells.push(docxCell({ text: g.peruntukan, width: colW_Gizi[1], rowSpan: g.rowSpan, bold: true, size: 12 }));
+                }
+                cells.push(
+                    docxCell({ text: g.jenis_pm, width: colW_Gizi[2], bold: true, align: AlignmentType.CENTER, shading: { fill: g.jenis_pm === 'PK' ? 'FEF9C3' : 'E0F2FE', type: ShadingType.CLEAR }, size: 12 }),
+                    docxCell({ text: String(g.energi), width: colW_Gizi[3], align: AlignmentType.CENTER, size: 12 }),
+                    docxCell({ text: String(g.protein), width: colW_Gizi[4], align: AlignmentType.CENTER, size: 12 }),
+                    docxCell({ text: String(g.lemak), width: colW_Gizi[5], align: AlignmentType.CENTER, size: 12 }),
+                    docxCell({ text: String(g.karbo), width: colW_Gizi[6], align: AlignmentType.CENTER, size: 12 }),
+                    docxCell({ text: String(g.serat), width: colW_Gizi[7], align: AlignmentType.CENTER, size: 12 }),
+                );
+                if (g.rowSpan > 0) {
+                    cells.push(docxCell({ text: g.status || 'Memenuhi', width: colW_Gizi[8], rowSpan: g.rowSpan, bold: true, align: AlignmentType.CENTER, color: '047857', shading: { fill: 'DCFCE7', type: ShadingType.CLEAR }, size: 12 }));
+                }
+                return new TableRow({ cantSplit: true, children: cells });
+            }),
         ],
     });
 
     const giziAndTtdSection = [
         new Paragraph({
-            children: [new TextRun({ text: 'C. Kandungan Gizi', bold: true, size: 16, font: 'Arial', color: '0F172A' })],
+            children: [new TextRun({ text: 'C. Kandungan Gizi & Evaluasi AKG', bold: true, size: 16, font: 'Arial', color: '0F172A' })],
             spacing: { before: 25, after: 15 },
         }),
         new Paragraph({
-            children: [new TextRun({ text: 'Tabel: Rincian Kandungan Gizi', bold: true, color: '0F172A', size: 14, font: 'Arial' })],
+            children: [new TextRun({ text: 'Tabel: Evaluasi Kepatuhan Standar AKG Per Porsi Makanan', bold: true, color: '0F172A', size: 14, font: 'Arial' })],
             spacing: { before: 10, after: 15 },
         }),
         kandunganGiziTable,
@@ -3013,7 +3476,7 @@ export async function exportWorkOrderWord(wo) {
     const totalFcRows = (data.foodCostNormalList.length + 3) + 
         data.allergenFoodCostTables.reduce((acc, alt) => acc + alt.list.length + 3, 0);
 
-    const sheet2Page2Children = [
+    const sheet2Page2Children = (!data.isManual && data.foodCostNormalList.length > 0) ? [
         new Paragraph({
             children: [new TextRun({ text: 'B. Food Cost', bold: true, size: 16, font: 'Arial', color: '0F172A' })],
             spacing: { before: 20, after: 15 },
@@ -3024,11 +3487,18 @@ export async function exportWorkOrderWord(wo) {
         }),
         foodCostNormalTable,
         ...allergenFoodCostParagraphsAndTables,
-    ];
+    ] : [];
 
     let sheet2ChildrenCombined = [];
-    if (totalFcRows > 12) {
-        // Jika tabel food cost panjang, pisahkan Kandungan Gizi + TTD ke halaman 5 bersama-sama sehingga TTD TIDAK SENDIRIAN!
+    if (data.isManual) {
+        // Untuk manual WO: gabungkan komponen langsung dengan Evaluasi Gizi & TTD
+        sheet2ChildrenCombined = [
+            ...sheet2Page1Children,
+            new Paragraph({ spacing: { before: 30 } }),
+            ...giziAndTtdSection,
+        ];
+    } else if (totalFcRows > 12) {
+        // Jika tabel food cost panjang, pisahkan Kandungan Gizi + TTD ke halaman tersendiri
         sheet2ChildrenCombined = [
             ...sheet2Page1Children,
             new Paragraph({ children: [new PageBreak()] }),
@@ -3045,6 +3515,111 @@ export async function exportWorkOrderWord(wo) {
             ...giziAndTtdSection,
         ];
     }
+
+    // =========================================================================
+    // SHEET 3: CATATAN KERJA TIM PRODUKSI MBG
+    // =========================================================================
+    function createCatatanTimWordTable(items, timColor) {
+        if (!items || items.length === 0) {
+            return new Table({
+                width: { size: 15350, type: WidthType.DXA },
+                borders: docxBorderThin,
+                rows: [
+                    new TableRow({
+                        children: [
+                            docxCell({ text: 'Belum ada catatan kerja yang diinputkan untuk tim ini.', width: 15350, align: AlignmentType.CENTER, italic: true, color: '64748B', size: 13 })
+                        ]
+                    })
+                ]
+            });
+        }
+        return new Table({
+            width: { size: 15350, type: WidthType.DXA },
+            borders: docxBorderThin,
+            rows: [
+                new TableRow({
+                    tableHeader: true,
+                    cantSplit: true,
+                    children: [
+                        docxCell({ text: 'No', width: 600, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Nama Menu', width: 2750, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Bahan Baku', width: 2750, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Kuantitas', width: 1650, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Mulai', width: 1000, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Selesai', width: 1000, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Perlakuan / Teknik', width: 2800, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                        docxCell({ text: 'Keterangan Khusus', width: 2800, bold: true, align: AlignmentType.CENTER, shading: { fill: timColor, type: ShadingType.CLEAR }, size: 12 }),
+                    ]
+                }),
+                ...items.map((it, idx) =>
+                    new TableRow({
+                        cantSplit: true,
+                        children: [
+                            docxCell({ text: String(idx + 1), width: 600, align: AlignmentType.CENTER, size: 12 }),
+                            docxCell({ text: it.nama_menu || '-', width: 2750, bold: true, size: 12 }),
+                            docxCell({ text: it.bahan_baku || '-', width: 2750, size: 12 }),
+                            docxCell({ text: String(it.kuantitas || '-'), width: 1650, align: AlignmentType.CENTER, size: 12 }),
+                            docxCell({ text: it.waktu_mulai || it.mulai || '-', width: 1000, align: AlignmentType.CENTER, size: 12 }),
+                            docxCell({ text: it.waktu_selesai || it.selesai || '-', width: 1000, align: AlignmentType.CENTER, size: 12 }),
+                            docxCell({ text: it.perlakuan || '-', width: 2800, size: 12 }),
+                            docxCell({ text: it.keterangan || '-', width: 2800, size: 12 }),
+                        ]
+                    })
+                )
+            ]
+        });
+    }
+
+    const sheet3Children = [
+        createKopDocxTable(),
+        new Paragraph({ spacing: { before: 50 } }),
+        createBannerTable('CATATAN KERJA TIM PRODUKSI MBG', sppgName, '065F46', 'FFFFFF'),
+        new Paragraph({ spacing: { before: 40 } }),
+
+        new Paragraph({
+            children: [
+                new TextRun({ text: '1. Catatan Kerja Tim Persiapan (Bahan Mentah, Kupas, Potong & Cuci)', bold: true, size: 15, font: 'Arial', color: '047857' })
+            ],
+            spacing: { before: 20, after: 15 },
+        }),
+        ...(data.globalPersiapan ? [
+            new Paragraph({
+                children: [new TextRun({ text: `Catatan Global: ${data.globalPersiapan}`, italic: true, size: 13, font: 'Arial', color: '78350F' })],
+                spacing: { before: 5, after: 10 }
+            })
+        ] : []),
+        createCatatanTimWordTable(data.catatanPersiapan, 'DCFCE7'),
+
+        new Paragraph({ spacing: { before: 30 } }),
+        new Paragraph({
+            children: [
+                new TextRun({ text: '2. Catatan Kerja Tim Pengolahan (Memasak, Bumbu & Suhu Masak)', bold: true, size: 15, font: 'Arial', color: 'B45309' })
+            ],
+            spacing: { before: 20, after: 15 },
+        }),
+        ...(data.globalPengolahan ? [
+            new Paragraph({
+                children: [new TextRun({ text: `Catatan Global: ${data.globalPengolahan}`, italic: true, size: 13, font: 'Arial', color: '78350F' })],
+                spacing: { before: 5, after: 10 }
+            })
+        ] : []),
+        createCatatanTimWordTable(data.catatanPengolahan, 'FEF3C7'),
+
+        new Paragraph({ spacing: { before: 30 } }),
+        new Paragraph({
+            children: [
+                new TextRun({ text: '3. Catatan Kerja Tim Pemorsian (Plating Ompreng & Kontrol Porsi)', bold: true, size: 15, font: 'Arial', color: '4338CA' })
+            ],
+            spacing: { before: 20, after: 15 },
+        }),
+        ...(data.globalPemorsian ? [
+            new Paragraph({
+                children: [new TextRun({ text: `Catatan Global: ${data.globalPemorsian}`, italic: true, size: 13, font: 'Arial', color: '78350F' })],
+                spacing: { before: 5, after: 10 }
+            })
+        ] : []),
+        createCatatanTimWordTable(data.catatanPemorsian, 'E0E7FF'),
+    ];
 
     const doc = new Document({
         styles: {
@@ -3076,6 +3651,15 @@ export async function exportWorkOrderWord(wo) {
                     },
                 },
                 children: sheet2ChildrenCombined,
+            },
+            {
+                properties: {
+                    page: {
+                        size: { orientation: PageOrientation.LANDSCAPE, width: 16838, height: 11906 },
+                        margin: { top: 400, bottom: 400, left: 700, right: 700 },
+                    },
+                },
+                children: sheet3Children,
             },
         ],
     });
@@ -3235,18 +3819,58 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
         `;
     }).join('');
 
-    const rowsGizi = data.giziList.map((g) => `
+    const rowsGizi = data.flatGiziRows.map((g) => `
         <tr>
-            ${g.rowSpan > 0 ? `<td rowspan="${g.rowSpan}" style="text-align: center;">${g.no}</td>` : ''}
-            ${g.rowSpan > 0 ? `<td rowspan="${g.rowSpan}" style="font-weight: bold;">${g.peruntukan}</td>` : ''}
+            ${g.rowSpan > 0 ? `<td rowspan="${g.rowSpan}" style="text-align: center; vertical-align: middle;">${g.no}</td>` : ''}
+            ${g.rowSpan > 0 ? `<td rowspan="${g.rowSpan}" style="font-weight: bold; vertical-align: middle;">${g.peruntukan}</td>` : ''}
             <td style="text-align: center; font-weight: bold; background-color: ${g.jenis_pm === 'PK' ? '#fef9c3' : '#e0f2fe'};">${g.jenis_pm}</td>
             <td style="text-align: center;">${g.energi}</td>
             <td style="text-align: center;">${g.protein}</td>
             <td style="text-align: center;">${g.lemak}</td>
             <td style="text-align: center;">${g.karbo}</td>
             <td style="text-align: center;">${g.serat}</td>
+            ${g.rowSpan > 0 ? `<td rowspan="${g.rowSpan}" style="text-align: center; font-weight: bold; color: #047857; background-color: #dcfce7; vertical-align: middle;">${g.status || 'Memenuhi'}</td>` : ''}
         </tr>
     `).join('');
+
+    function renderCatatanTimHtml(title, color, items, globalNote) {
+        const rows = (items && items.length > 0)
+            ? items.map((it, idx) => `
+                <tr>
+                    <td style="text-align: center;">${idx + 1}</td>
+                    <td style="font-weight: bold;">${it.nama_menu || '-'}</td>
+                    <td>${it.bahan_baku || '-'}</td>
+                    <td style="text-align: center;">${it.kuantitas || '-'}</td>
+                    <td style="text-align: center;">${it.waktu_mulai || it.mulai || '-'}</td>
+                    <td style="text-align: center;">${it.waktu_selesai || it.selesai || '-'}</td>
+                    <td>${it.perlakuan || '-'}</td>
+                    <td>${it.keterangan || '-'}</td>
+                </tr>
+            `).join('')
+            : `<tr><td colspan="8" style="text-align: center; font-style: italic; color: #94a3b8; padding: 6px;">Belum ada catatan kerja yang diinputkan untuk tim ini.</td></tr>`;
+
+        return `
+            <div style="margin-top: 10px;">
+                <p style="margin: 0 0 4px; font-weight: bold; color: ${color};">${title}</p>
+                ${globalNote ? `<div style="background-color: #fef3c7; color: #78350f; font-style: italic; padding: 4px 8px; margin-bottom: 4px; border-radius: 3px; font-size: 7pt;"><strong>Catatan Global:</strong> ${globalNote}</div>` : ''}
+                <table>
+                    <thead>
+                        <tr style="background-color: ${color}; color: #ffffff;">
+                            <th style="width: 25px; text-align: center;">No</th>
+                            <th style="width: 140px;">Nama Menu</th>
+                            <th style="width: 140px;">Bahan Baku</th>
+                            <th style="width: 75px; text-align: center;">Kuantitas</th>
+                            <th style="width: 50px; text-align: center;">Mulai</th>
+                            <th style="width: 50px; text-align: center;">Selesai</th>
+                            <th>Perlakuan / Teknik</th>
+                            <th>Keterangan Khusus</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
 
     return `
         <!DOCTYPE html>
@@ -3365,6 +3989,12 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
                         <td><strong>:  ${data.namaMenu}</strong></td>
                     </tr>
                     <tr>
+                        <td style="font-weight: bold;">Metode Work Order</td>
+                        <td><strong style="color: ${data.isManual ? '#b45309' : '#047857'};">:  ${data.metodeWoLabel}</strong></td>
+                        <td style="font-weight: bold;">Siklus Menu</td>
+                        <td><strong>:  ${data.siklus}</strong></td>
+                    </tr>
+                    <tr>
                         <td style="font-weight: bold;">Database Pangan</td>
                         <td>:  ${data.dbPangan}</td>
                         <td style="font-weight: bold;">Total Sasaran PM</td>
@@ -3378,6 +4008,23 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
                                 : ':  -'}
                         </td>
                     </tr>
+                    <tr>
+                        <td style="font-weight: bold;">Menu Pengganti Alergi</td>
+                        <td style="color: ${data.subMenusAlergiStr !== '-' ? '#dc2626' : 'inherit'};">:  ${data.subMenusAlergiStr}</td>
+                        <td style="font-weight: bold;">Ringkasan Alergi Sasaran</td>
+                        <td style="color: ${data.activeAllergens.length > 0 ? '#dc2626' : 'inherit'};">:  ${data.activeAllergens.length > 0 ? data.activeAllergens.map(a => `${a.jenis}: ${a.total} PM`).join(', ') : 'Nihil'}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: bold;">Riwayat Pembuatan</td>
+                        <td>:  Dibuat ${data.createdAt} • Diperbarui ${data.updatedAt}</td>
+                        <td style="font-weight: bold;">Status Approval / PO</td>
+                        <td><strong style="color: #047857;">:  ${data.poNo !== '-' ? 'No. PO: ' + data.poNo + ' • ' : ''}${data.disetujuiPada !== '-' ? 'Disetujui: ' + data.disetujuiPada : (data.diajukanPada !== '-' ? 'Diajukan: ' + data.diajukanPada : (data.isManual ? 'Siap Produksi' : 'Draft'))}</strong></td>
+                    </tr>
+                    ${data.catatanResep && data.catatanResep !== '-' ? `
+                    <tr>
+                        <td style="font-weight: bold; vertical-align: top;">Catatan Resep / Masak</td>
+                        <td colspan="3" style="vertical-align: top;">:  ${data.catatanResep}</td>
+                    </tr>` : ''}
                 </table>
                 <div class="sec-head">B. Data Penerima Manfaat Terdistribusi</div>
                 <p style="margin: 0 0 3px; font-weight: bold; color: #047857;">Tabel 1. Data Penerima Manfaat yang Menerima Menu</p>
@@ -3491,95 +4138,218 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
                         </tr>
                     </tfoot>
                 </table>
+
+                <div class="sec-head" style="color: #b45309;">Tabel 5. Alokasi Porsi Tambahan Produksi (PK & PB)</div>
+                <table>
+                    <thead>
+                        <tr style="background-color: #fef3c7; color: #b45309;">
+                            <th style="width: 4%;">No</th>
+                            <th style="width: 24%;">Kategori Porsi Tambahan</th>
+                            <th>Peruntukan & Deskripsi</th>
+                            <th style="width: 12%; text-align: center;">Porsi Kecil (PK)</th>
+                            <th style="width: 12%; text-align: center;">Porsi Besar (PB)</th>
+                            <th style="width: 12%; text-align: center;">Total Tambahan</th>
+                            <th style="width: 12%; text-align: center;">Keterangan Anggaran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: center;">1</td>
+                            <td style="font-weight: bold;">Uji Organoleptik</td>
+                            <td>Uji sensori mutu rasa, aroma, tekstur & suhu sebelum distribusi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.organoleptik.pk} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.organoleptik.pb} Porsi</td>
+                            <td style="text-align: center; font-weight: bold;">${data.porsiTambahan.organoleptik.total} Porsi</td>
+                            <td style="text-align: center; font-size: 6.8pt;">Di luar pagu</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center;">2</td>
+                            <td style="font-weight: bold;">Sampel Lab / Arsip</td>
+                            <td>Simpan beku/arsip pengujian laboratorium keamanan pangan 1x24 jam</td>
+                            <td style="text-align: center;">${data.porsiTambahan.sampel.pk} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.sampel.pb} Porsi</td>
+                            <td style="text-align: center; font-weight: bold;">${data.porsiTambahan.sampel.total} Porsi</td>
+                            <td style="text-align: center; font-size: 6.8pt;">Di luar pagu</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center;">3</td>
+                            <td style="font-weight: bold;">Buffer / Cadangan Distribusi</td>
+                            <td>Antisipasi ceceran/tumpah saat pengantaran & pemorsian di lapangan</td>
+                            <td style="text-align: center;">${data.porsiTambahan.buffer.pk} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.buffer.pb} Porsi</td>
+                            <td style="text-align: center; font-weight: bold;">${data.porsiTambahan.buffer.total} Porsi</td>
+                            <td style="text-align: center; font-size: 6.8pt;">Di luar pagu</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #fef3c7; font-weight: bold; color: #b45309;">
+                            <td colspan="3" style="text-align: right;">Total Porsi Tambahan Non-Sasaran:</td>
+                            <td style="text-align: center;">${data.porsiTambahan.totalPK} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.totalPB} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.grandTotal} Porsi</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background-color: #dcfce7; font-weight: bold; color: #047857;">
+                            <td colspan="3" style="text-align: right;">Total Produksi Dapur (Sasaran + Tambahan):</td>
+                            <td style="text-align: center;">${data.porsiTambahan.totalProduksiPK.toLocaleString('id-ID')} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.totalProduksiPB.toLocaleString('id-ID')} Porsi</td>
+                            <td style="text-align: center;">${data.porsiTambahan.grandTotalProduksi.toLocaleString('id-ID')} Porsi</td>
+                            <td style="text-align: center;">Total Matang</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div class="sec-head" style="color: #312e81;">Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (9 Tahapan Kerja)</div>
+                <table>
+                    <thead>
+                        <tr style="background-color: #e0e7ff; color: #312e81;">
+                            <th style="width: 4%; text-align: center;">No</th>
+                            <th style="width: 28%;">Tahapan Kegiatan Operasional</th>
+                            <th style="width: 8%; text-align: center;">Mulai</th>
+                            <th style="width: 8%; text-align: center;">Selesai</th>
+                            <th style="width: 14%; text-align: center;">Rentang Jam</th>
+                            <th>Deskripsi & Sasaran Kerja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(data.jadwalOperasional || []).map(j => `
+                            <tr>
+                                <td style="text-align: center;">${j.no}</td>
+                                <td style="font-weight: bold;">${j.nama}</td>
+                                <td style="text-align: center;">${j.mulai}</td>
+                                <td style="text-align: center;">${j.selesai}</td>
+                                <td style="text-align: center; font-weight: bold; color: #312e81;">${j.mulai} - ${j.selesai}</td>
+                                <td>${j.deskripsi}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
 
             <div class="pdf-page-container">
                 ${getKopHtmlSnippet()}
                 <div class="banner" style="background-color: #047857;">
-                    <h1>LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG</h1>
+                    <h1>${data.isManual ? 'LAPORAN KOMPONEN HIDANGAN & KEBUTUHAN MBG' : 'LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG'}</h1>
                     <h2>${sppgName}</h2>
                 </div>
-                <div class="sec-head">A. Pemilihan Bahan Pangan</div>
-                <table>
-                    <thead>
-                        <tr style="background-color: #f1f5f9;">
-                            <th rowspan="2" style="width: 25px;">No</th>
-                            <th rowspan="2">Sub Menu</th>
-                            <th rowspan="2">Bahan Master</th>
-                            <th rowspan="2">Nama PO</th>
-                            <th rowspan="2" style="width: 28px;">Sat</th>
-                            <th rowspan="2" style="width: 50px;">Jenis</th>
-                            <th rowspan="2" style="width: 55px;">Peruntukan</th>
-                            <th colspan="2" style="text-align: center;">Berat Bersih (g)</th>
-                            <th colspan="2" style="text-align: center;">Berat Kotor (kg)</th>
-                            <th rowspan="2" style="width: 32px;">BDD</th>
-                            <th rowspan="2" style="width: 32px;">Buf</th>
-                            <th rowspan="2" style="width: 48px;">PO (Kg)</th>
-                            <th rowspan="2" style="width: 65px; text-align: right;">Harga Satuan</th>
-                            <th rowspan="2" style="width: 75px; text-align: right;">Total Biaya</th>
-                            <th rowspan="2" style="width: 170px;">Kandungan Gizi Utama</th>
+                ${data.isManual ? `
+                    <div class="sec-head">A. Rincian Komponen Hidangan & Ketentuan Work Order Manual</div>
+                    <div style="background-color: #fef3c7; color: #92400e; font-style: italic; padding: 6px 10px; margin-bottom: 8px; border: 0.5px solid #fde68a; border-radius: 3px; font-size: 7.2pt;">
+                        <strong>Informasi Work Order Manual (Non-PO TKPI):</strong> Work order ini berstatus Manual (Input Mandiri). Bahan baku disiapkan dan dikelola langsung oleh unit SPPG tanpa melalui modul belanja Purchase Order (PO) sistem. Standar gizi dievaluasi berdasarkan Standar Angka Kecukupan Gizi (AKG) Badan Gizi Nasional.
+                    </div>
+                    <table>
+                        <thead>
+                            <tr style="background-color: #dcfce7; color: #047857;">
+                                <th style="width: 4%;">No</th>
+                                <th>Komponen Sub Menu</th>
+                                <th style="width: 25%; text-align: center;">Kategori Hidangan</th>
+                                <th style="width: 30%; text-align: center;">Status Distribusi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.subMenusList.map((sm, idx) => `
+                                <tr>
+                                    <td style="text-align: center;">${idx + 1}</td>
+                                    <td style="font-weight: bold;">${sm.nama}</td>
+                                    <td style="text-align: center;">${sm.label || `Komponen ${idx + 1}`}</td>
+                                    <td style="text-align: center; color: #047857;">Tersaji untuk Seluruh Sasaran Penerima Manfaat</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background-color: #dbeafe; font-weight: bold; color: #1e3a8a;">
+                                <td colspan="2" style="text-align: right;">Total Batas Pagu Anggaran MBG:</td>
+                                <td style="text-align: center;">${data.totalPM.toLocaleString('id-ID')} PM Sasaran</td>
+                                <td style="text-align: right;">${formatRupiahNum(data.paguTotal)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                ` : `
+                    <div class="sec-head">A. Pemilihan Bahan Pangan</div>
+                    <table>
+                        <thead>
+                            <tr style="background-color: #f1f5f9;">
+                                <th rowspan="2" style="width: 25px;">No</th>
+                                <th rowspan="2">Sub Menu</th>
+                                <th rowspan="2">Bahan Master</th>
+                                <th rowspan="2">Nama PO</th>
+                                <th rowspan="2" style="width: 28px;">Sat</th>
+                                <th rowspan="2" style="width: 50px;">Jenis</th>
+                                <th rowspan="2" style="width: 55px;">Peruntukan</th>
+                                <th colspan="2" style="text-align: center;">Berat Bersih (g)</th>
+                                <th colspan="2" style="text-align: center;">Berat Kotor (kg)</th>
+                                <th rowspan="2" style="width: 32px;">BDD</th>
+                                <th rowspan="2" style="width: 32px;">Buf</th>
+                                <th rowspan="2" style="width: 48px;">PO (Kg)</th>
+                                <th rowspan="2" style="width: 65px; text-align: right;">Harga Satuan</th>
+                                <th rowspan="2" style="width: 75px; text-align: right;">Total Biaya</th>
+                                <th rowspan="2" style="width: 170px;">Kandungan Gizi Utama</th>
+                            </tr>
+                            <tr style="background-color: #f1f5f9;">
+                                <th style="width: 40px; text-align: center;">PK</th>
+                                <th style="width: 40px; text-align: center;">PB</th>
+                                <th style="width: 40px; text-align: center;">PK</th>
+                                <th style="width: 40px; text-align: center;">PB</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsItems}</tbody>
+                    </table>
+                    <table>
+                        <tr style="background-color: #f1f5f9; font-weight: bold;">
+                            <td style="text-align: right;">Batas Pagu Anggaran Bahan Makanan:</td>
+                            <td style="width: 160px; text-align: right;">${formatRupiahNum(data.paguBahanTotal)}</td>
+                            <td style="width: 45%; color: #64748b; font-style: italic;">Berdasarkan alokasi pagu bahan pangan</td>
                         </tr>
-                        <tr style="background-color: #f1f5f9;">
-                            <th style="width: 40px; text-align: center;">PK</th>
-                            <th style="width: 40px; text-align: center;">PB</th>
-                            <th style="width: 40px; text-align: center;">PK</th>
-                            <th style="width: 40px; text-align: center;">PB</th>
+                        <tr style="background-color: #dbeafe; font-weight: bold; color: #1e3a8a;">
+                            <td style="text-align: right;">Total Belanja Bahan Makanan (PO):</td>
+                            <td style="width: 160px; text-align: right;">${formatRupiahNum(data.totalBelanjaPO)}</td>
+                            <td style="width: 45%; font-style: italic;">Total akumulasi biaya pembelanjaan PO</td>
                         </tr>
-                    </thead>
-                    <tbody>${rowsItems}</tbody>
-                </table>
-                <table>
-                    <tr style="background-color: #f1f5f9; font-weight: bold;">
-                        <td style="text-align: right;">Batas Pagu Anggaran Bahan Makanan:</td>
-                        <td style="width: 160px; text-align: right;">${formatRupiahNum(data.paguBahanTotal)}</td>
-                        <td style="width: 45%; color: #64748b; font-style: italic;">Berdasarkan alokasi pagu bahan pangan</td>
-                    </tr>
-                    <tr style="background-color: #dbeafe; font-weight: bold; color: #1e3a8a;">
-                        <td style="text-align: right;">Total Belanja Bahan Makanan (PO):</td>
-                        <td style="width: 160px; text-align: right;">${formatRupiahNum(data.totalBelanjaPO)}</td>
-                        <td style="width: 45%; font-style: italic;">Total akumulasi biaya pembelanjaan PO</td>
-                    </tr>
-                    <tr style="background-color: ${data.selisihPagu >= 0 ? '#dcfce7' : '#fee2e2'}; font-weight: bold; color: ${data.selisihPagu >= 0 ? '#15803d' : '#b91c1c'};">
-                        <td style="text-align: right;">Selisih Anggaran Bahan Makanan:</td>
-                        <td style="width: 160px; text-align: right;">${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})</td>
-                        <td style="width: 45%; font-style: italic;">${data.selisihPagu >= 0 ? 'Sisa anggaran belanja terkendali' : 'Biaya belanja melebihi pagu anggaran'}</td>
-                    </tr>
-                </table>
+                        <tr style="background-color: ${data.selisihPagu >= 0 ? '#dcfce7' : '#fee2e2'}; font-weight: bold; color: ${data.selisihPagu >= 0 ? '#15803d' : '#b91c1c'};">
+                            <td style="text-align: right;">Selisih Anggaran Bahan Makanan:</td>
+                            <td style="width: 160px; text-align: right;">${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})</td>
+                            <td style="width: 45%; font-style: italic;">${data.selisihPagu >= 0 ? 'Sisa anggaran belanja terkendali' : 'Biaya belanja melebihi pagu anggaran'}</td>
+                        </tr>
+                    </table>
+                `}
             </div>
 
             <div class="pdf-page-container">
-                <div class="sec-head">B. Food Cost</div>
-                <p style="margin: 0 0 3px; font-weight: bold; color: #047857;">Tabel 1. Rincian Food Cost Per Sub Menu Normal</p>
-                <table>
-                    <thead>
-                        <tr style="background-color: #e0f2fe; color: #0369a1;">
-                            <th rowspan="2" style="width: 30px;">No</th>
-                            <th rowspan="2">Sub Menu</th>
-                            <th rowspan="2" style="width: 120px;">Jumlah Bahan Baku</th>
-                            <th colspan="2" style="text-align: center;">Food Cost (Rp)</th>
-                            <th colspan="2" style="text-align: center;">Persentase (%)</th>
-                        </tr>
-                        <tr style="background-color: #e0f2fe; color: #0369a1;">
-                            <th style="width: 110px; text-align: center;">PK</th>
-                            <th style="width: 110px; text-align: center;">PB</th>
-                            <th style="width: 75px; text-align: center;">PK</th>
-                            <th style="width: 75px; text-align: center;">PB</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rowsFcNormal}</tbody>
-                    <tfoot>
-                        <tr style="background-color: #e0f2fe; font-weight: bold;">
-                            <td colspan="3" style="text-align: right;">Rekap Total Food Cost Normal:</td>
-                            <td style="text-align: right; color: #0369a1;">${formatRupiahNum(data.totalFcPKNormal)}</td>
-                            <td style="text-align: right; color: #0369a1;">${formatRupiahNum(data.totalFcPBNormal)}</td>
-                            <td style="text-align: center;">100</td>
-                            <td style="text-align: center;">100</td>
-                        </tr>
-                    </tfoot>
-                </table>
-                ${allergenFcTablesHtml}
-                <div class="sec-head" style="margin-top: 10px;">C. Kandungan Gizi</div>
-                <p style="margin: 0 0 3px; font-weight: bold;">Tabel: Rincian Kandungan Gizi</p>
+                ${!data.isManual && data.foodCostNormalList.length > 0 ? `
+                    <div class="sec-head">B. Food Cost</div>
+                    <p style="margin: 0 0 3px; font-weight: bold; color: #047857;">Tabel 1. Rincian Food Cost Per Sub Menu Normal</p>
+                    <table>
+                        <thead>
+                            <tr style="background-color: #e0f2fe; color: #0369a1;">
+                                <th rowspan="2" style="width: 30px;">No</th>
+                                <th rowspan="2">Sub Menu</th>
+                                <th rowspan="2" style="width: 120px;">Jumlah Bahan Baku</th>
+                                <th colspan="2" style="text-align: center;">Food Cost (Rp)</th>
+                                <th colspan="2" style="text-align: center;">Persentase (%)</th>
+                            </tr>
+                            <tr style="background-color: #e0f2fe; color: #0369a1;">
+                                <th style="width: 110px; text-align: center;">PK</th>
+                                <th style="width: 110px; text-align: center;">PB</th>
+                                <th style="width: 75px; text-align: center;">PK</th>
+                                <th style="width: 75px; text-align: center;">PB</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsFcNormal}</tbody>
+                        <tfoot>
+                            <tr style="background-color: #e0f2fe; font-weight: bold;">
+                                <td colspan="3" style="text-align: right;">Rekap Total Food Cost Normal:</td>
+                                <td style="text-align: right; color: #0369a1;">${formatRupiahNum(data.totalFcPKNormal)}</td>
+                                <td style="text-align: right; color: #0369a1;">${formatRupiahNum(data.totalFcPBNormal)}</td>
+                                <td style="text-align: center;">100</td>
+                                <td style="text-align: center;">100</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    ${allergenFcTablesHtml}
+                ` : ''}
+
+                <div class="sec-head" style="margin-top: 10px;">C. Kandungan Gizi & Evaluasi AKG</div>
+                <p style="margin: 0 0 3px; font-weight: bold;">Tabel: Evaluasi Kepatuhan Standar AKG Per Porsi Makanan</p>
                 <table>
                     <thead>
                         <tr style="background-color: #f1f5f9;">
@@ -3591,6 +4361,7 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
                             <th style="text-align: center;">Lemak (g)</th>
                             <th style="text-align: center;">Karbohidrat (g)</th>
                             <th style="text-align: center;">Serat (g)</th>
+                            <th style="text-align: center; width: 100px;">Status AKG</th>
                         </tr>
                     </thead>
                     <tbody>${rowsGizi}</tbody>
@@ -3609,6 +4380,17 @@ export function generateWorkOrderHtml(wo, forPrint = false) {
                         <div class="ttd-line">( ............................................ )</div>
                     </div>
                 </div>
+            </div>
+
+            <div class="pdf-page-container">
+                ${getKopHtmlSnippet()}
+                <div class="banner" style="background-color: #065f46;">
+                    <h1>CATATAN KERJA TIM PRODUKSI MBG</h1>
+                    <h2>${sppgName}</h2>
+                </div>
+                ${renderCatatanTimHtml('1. Catatan Kerja Tim Persiapan (Bahan Mentah, Kupas, Potong & Cuci)', '#047857', data.catatanPersiapan, data.globalPersiapan)}
+                ${renderCatatanTimHtml('2. Catatan Kerja Tim Pengolahan (Memasak, Bumbu & Suhu Masak)', '#b45309', data.catatanPengolahan, data.globalPengolahan)}
+                ${renderCatatanTimHtml('3. Catatan Kerja Tim Pemorsian (Plating Ompreng & Kontrol Porsi)', '#4338ca', data.catatanPemorsian, data.globalPemorsian)}
             </div>
             ${forPrint ? '<script>window.onload = function() { window.print(); };</script>' : ''}
         </body>
@@ -3700,10 +4482,16 @@ export async function exportWorkOrderPdf(wo) {
         body: [
             ['No. Perencanaan Produksi', `:  ${data.noWO}`, 'Tanggal Distribusi Menu', `:  ${data.tglDist}`],
             ['Status Menu', `:  ${data.statusMenu}`, 'Nama Menu Produksi', `:  ${data.namaMenu}`],
+            ['Metode Work Order', `:  ${data.metodeWoLabel}`, 'Siklus Menu', `:  ${data.siklus}`],
             ['Database Pangan', `:  ${data.dbPangan}`, 'Total Sasaran PM', `:  ${data.totalPM.toLocaleString('id-ID')} PM (PK: ${data.totalPK.toLocaleString('id-ID')}, PB: ${data.totalPB.toLocaleString('id-ID')})`],
             ['Rincian Sub Menu', data.subMenusList && data.subMenusList.length > 0
                 ? data.subMenusList.map((sm, i) => `${i === 0 ? ':  ' : '   '}${i + 1}. ${sm.nama}`).join('\n')
                 : ':  -', '', ''],
+            ['Menu Pengganti Alergi', `:  ${data.subMenusAlergiStr}`, 'Ringkasan Alergi Sasaran', `:  ${data.activeAllergens.length > 0 ? data.activeAllergens.map(a => `${a.jenis}: ${a.total} PM`).join(', ') : 'Nihil'}`],
+            ['Riwayat Pembuatan', `:  Dibuat ${data.createdAt} • Diperbarui ${data.updatedAt}`, 'Status Approval / PO', `:  ${data.poNo !== '-' ? 'No. PO: ' + data.poNo + ' • ' : ''}${data.disetujuiPada !== '-' ? 'Disetujui: ' + data.disetujuiPada : (data.diajukanPada !== '-' ? 'Diajukan: ' + data.diajukanPada : (data.isManual ? 'Siap Produksi' : 'Draft'))}`],
+            ...(data.catatanResep && data.catatanResep !== '-' ? [
+                ['Catatan Resep / Masak', `:  ${data.catatanResep}`, '', '']
+            ] : []),
         ],
     });
 
@@ -3852,164 +4640,227 @@ export async function exportWorkOrderPdf(wo) {
         }
     });
 
+    let yP2_pt = doc.lastAutoTable.finalY + 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 83, 9);
+    doc.text('Tabel 5. Alokasi Porsi Tambahan Produksi (PK & PB)', 10, yP2_pt);
+    doc.setTextColor(0, 0, 0);
+
+    autoTable(doc, {
+        startY: yP2_pt + 2,
+        margin: { left: 10, right: 10 },
+        head: [['No', 'Kategori Porsi Tambahan', 'Peruntukan & Deskripsi', 'Porsi Kecil (PK)', 'Porsi Besar (PB)', 'Total Tambahan', 'Keterangan Anggaran']],
+        body: [
+            ['1', 'Uji Organoleptik', 'Uji sensori mutu rasa, aroma, tekstur & suhu sebelum distribusi', `${data.porsiTambahan.organoleptik.pk} Porsi`, `${data.porsiTambahan.organoleptik.pb} Porsi`, `${data.porsiTambahan.organoleptik.total} Porsi`, 'Di luar pagu'],
+            ['2', 'Sampel Lab / Arsip', 'Simpan beku/arsip pengujian laboratorium keamanan pangan 1x24 jam', `${data.porsiTambahan.sampel.pk} Porsi`, `${data.porsiTambahan.sampel.pb} Porsi`, `${data.porsiTambahan.sampel.total} Porsi`, 'Di luar pagu'],
+            ['3', 'Buffer / Cadangan Distribusi', 'Antisipasi ceceran/tumpah saat pengantaran & pemorsian di lapangan', `${data.porsiTambahan.buffer.pk} Porsi`, `${data.porsiTambahan.buffer.pb} Porsi`, `${data.porsiTambahan.buffer.total} Porsi`, 'Di luar pagu'],
+        ],
+        foot: [
+            ['Total Porsi Tambahan Non-Sasaran:', '', '', `${data.porsiTambahan.totalPK} Porsi`, `${data.porsiTambahan.totalPB} Porsi`, `${data.porsiTambahan.grandTotal} Porsi`, ''],
+            ['Total Produksi Dapur (Sasaran + Tambahan):', '', '', `${data.porsiTambahan.totalProduksiPK.toLocaleString('id-ID')} Porsi`, `${data.porsiTambahan.totalProduksiPB.toLocaleString('id-ID')} Porsi`, `${data.porsiTambahan.grandTotalProduksi.toLocaleString('id-ID')} Porsi`, 'Total Matang'],
+        ],
+        theme: 'grid',
+        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1.2, lineColor: [203, 213, 225], lineWidth: 0.15 },
+        headStyles: { fillColor: [254, 243, 199], textColor: [180, 83, 9], fontStyle: 'bold' },
+        footStyles: { fillColor: [254, 243, 199], textColor: [180, 83, 9], fontStyle: 'bold' },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { cellWidth: 60, fontStyle: 'bold' },
+            2: { cellWidth: 97 },
+            3: { halign: 'center', cellWidth: 28 },
+            4: { halign: 'center', cellWidth: 28 },
+            5: { halign: 'center', cellWidth: 28, fontStyle: 'bold' },
+            6: { halign: 'center', cellWidth: 26 },
+        }
+    });
+
+    let yP2_jd = doc.lastAutoTable.finalY + 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(49, 46, 129);
+    doc.text('Tabel 6. Jadwal Waktu Kegiatan Operasional SPPG (9 Tahapan Kerja)', 10, yP2_jd);
+    doc.setTextColor(0, 0, 0);
+
+    const jdBody = (data.jadwalOperasional || []).map(j => [
+        String(j.no),
+        j.nama,
+        j.mulai,
+        j.selesai,
+        `${j.mulai} - ${j.selesai}`,
+        j.deskripsi
+    ]);
+
+    autoTable(doc, {
+        startY: yP2_jd + 2,
+        margin: { left: 10, right: 10 },
+        head: [['No', 'Tahapan Kegiatan Operasional', 'Mulai', 'Selesai', 'Rentang Jam', 'Deskripsi & Sasaran Kerja']],
+        body: jdBody,
+        theme: 'grid',
+        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1.2, lineColor: [203, 213, 225], lineWidth: 0.15 },
+        headStyles: { fillColor: [224, 231, 255], textColor: [49, 46, 129], fontStyle: 'bold' },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { cellWidth: 75, fontStyle: 'bold' },
+            2: { halign: 'center', cellWidth: 20 },
+            3: { halign: 'center', cellWidth: 20 },
+            4: { halign: 'center', cellWidth: 32, fontStyle: 'bold', textColor: [49, 46, 129] },
+            5: { cellWidth: 120 }
+        }
+    });
+
     // =========================================================
-    // HALAMAN 3: PEMILIHAN BAHAN PANGAN (17 KOLOM)
+    // HALAMAN 3: PEMILIHAN BAHAN PANGAN ATAU KOMPONEN WO MANUAL
     // =========================================================
     doc.addPage('a4', 'landscape');
     y = drawKop(7);
-    y = drawBanner('LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG', sppgName, [4, 120, 87], y);
+    y = drawBanner(data.isManual ? 'LAPORAN KOMPONEN HIDANGAN & KEBUTUHAN MBG' : 'LAPORAN FORMULA MAKANAN & KEBUTUHAN BELANJA MBG', sppgName, [4, 120, 87], y);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text('A. Pemilihan Bahan Pangan', 10, y + 3);
-
-    const bpHeadRow1 = [
-        { content: 'No', rowSpan: 2 },
-        { content: 'Sub Menu', rowSpan: 2 },
-        { content: 'Bahan Master', rowSpan: 2 },
-        { content: 'Nama PO', rowSpan: 2 },
-        { content: 'Sat', rowSpan: 2 },
-        { content: 'Jenis', rowSpan: 2 },
-        { content: 'Peruntukan', rowSpan: 2 },
-        { content: 'Berat Bersih (g)', colSpan: 2 },
-        { content: 'Berat Kotor (kg)', colSpan: 2 },
-        { content: 'BDD', rowSpan: 2 },
-        { content: 'Buf', rowSpan: 2 },
-        { content: 'PO (Kg)', rowSpan: 2 },
-        { content: 'Harga Satuan', rowSpan: 2 },
-        { content: 'Total Biaya', rowSpan: 2 },
-        { content: 'Kandungan Gizi', rowSpan: 2 },
-    ];
-    const bpHeadRow2 = ['PK', 'PB', 'PK', 'PB'];
-
-    const bpBody = data.formattedItems.map((item, idx) => [
-        String(idx + 1),
-        item.sub_menu,
-        item.nama_bahan,
-        item.nama_po,
-        item.satuan,
-        item.kategori,
-        item.peruntukan,
-        String(item.berat_bersih_pk),
-        String(item.berat_bersih_pb),
-        String(item.berat_kotor_pk),
-        String(item.berat_kotor_pb),
-        item.bdd_display,
-        item.buffer_display,
-        String(item.qty_po_display),
-        formatRupiahNum(item.harga_satuan),
-        formatRupiahNum(item.total_biaya),
-        item.gizi_utama,
-    ]);
-
-    autoTable(doc, {
-        startY: y + 4.5,
-        margin: { left: 10, right: 10 },
-        head: [bpHeadRow1, bpHeadRow2],
-        body: bpBody,
-        theme: 'grid',
-        styles: { font: 'helvetica', fontSize: 6.2, cellPadding: 0.9, lineColor: [203, 213, 225], lineWidth: 0.15 },
-        headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'center' },
-        columnStyles: {
-            0: { halign: 'center', cellWidth: 7 },
-            1: { cellWidth: 20, fontStyle: 'bold' },
-            2: { cellWidth: 25, fontStyle: 'bold' },
-            3: { cellWidth: 25 },
-            4: { halign: 'center', cellWidth: 8 },
-            5: { halign: 'center', cellWidth: 14 },
-            6: { halign: 'center', cellWidth: 15 },
-            7: { halign: 'center', cellWidth: 11 },
-            8: { halign: 'center', cellWidth: 11 },
-            9: { halign: 'center', cellWidth: 11 },
-            10: { halign: 'center', cellWidth: 11 },
-            11: { halign: 'center', cellWidth: 9 },
-            12: { halign: 'center', cellWidth: 9 },
-            13: { halign: 'center', cellWidth: 13, fontStyle: 'bold' },
-            14: { halign: 'right', cellWidth: 18 },
-            15: { halign: 'right', cellWidth: 21, fontStyle: 'bold' },
-            16: { cellWidth: 49, fontSize: 5.8 }
-        }
-    });
-
-    let yRekap = doc.lastAutoTable.finalY + 4;
-    autoTable(doc, {
-        startY: yRekap,
-        margin: { left: 10, right: 10 },
-        body: [
-            ['Batas Pagu Anggaran Bahan Makanan:', formatRupiahNum(data.paguBahanTotal), 'Berdasarkan alokasi pagu bahan pangan'],
-            ['Total Belanja Bahan Makanan (PO):', formatRupiahNum(data.totalBelanjaPO), 'Total akumulasi biaya pembelanjaan PO'],
-            ['Selisih Anggaran Bahan Makanan:', `${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})`, data.selisihPagu >= 0 ? 'Sisa anggaran belanja terkendali' : 'Biaya belanja melebihi pagu anggaran']
-        ],
-        theme: 'grid',
-        styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.2, lineColor: [203, 213, 225], lineWidth: 0.15 },
-        columnStyles: {
-            0: { fontStyle: 'bold', cellWidth: 70 },
-            1: { fontStyle: 'bold', halign: 'right', cellWidth: 45 },
-            2: { cellWidth: 162, fontStyle: 'italic', textColor: [100, 116, 139] }
-        }
-    });
-
-    // =========================================================
-    // HALAMAN 4: FOOD COST, KANDUNGAN GIZI & LEMBAR PENGESAHAN TTD
-    // =========================================================
-    doc.addPage('a4', 'landscape');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text('B. Food Cost', 10, 12);
-    doc.setFontSize(7.5);
-    doc.setTextColor(4, 120, 87);
-    doc.text('Tabel 1. Rincian Food Cost Per Sub Menu Normal', 10, 16);
-    doc.setTextColor(0, 0, 0);
-
-    const fcNormalBody = data.foodCostNormalList.map((row, idx) => [
-        String(idx + 1),
-        row.sub_menu,
-        `${row.count} Bahan`,
-        formatRupiahNum(row.cost_pk),
-        formatRupiahNum(row.cost_pb),
-        row.percent_pk.toFixed(1),
-        row.percent_pb.toFixed(1)
-    ]);
-
-    autoTable(doc, {
-        startY: 18,
-        margin: { left: 10, right: 10 },
-        head: [
-            [
-                { content: 'No', rowSpan: 2 },
-                { content: 'Sub Menu', rowSpan: 2 },
-                { content: 'Jumlah Bahan Baku', rowSpan: 2 },
-                { content: 'Food Cost (Rp)', colSpan: 2 },
-                { content: 'Persentase (%)', colSpan: 2 }
-            ],
-            ['PK', 'PB', 'PK', 'PB']
-        ],
-        body: fcNormalBody,
-        foot: [['Rekap Total Food Cost Normal:', '', '', formatRupiahNum(data.totalFcPKNormal), formatRupiahNum(data.totalFcPBNormal), '100', '100']],
-        theme: 'grid',
-        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15 },
-        headStyles: { fillColor: [224, 242, 254], textColor: [3, 105, 161], fontStyle: 'bold', halign: 'center' },
-        footStyles: { fillColor: [224, 242, 254], textColor: [3, 105, 161], fontStyle: 'bold' },
-        columnStyles: {
-            0: { halign: 'center', cellWidth: 10 },
-            1: { cellWidth: 70, fontStyle: 'bold' },
-            2: { halign: 'center', cellWidth: 35 },
-            3: { halign: 'right', cellWidth: 40 },
-            4: { halign: 'right', cellWidth: 40 },
-            5: { halign: 'center', cellWidth: 41 },
-            6: { halign: 'center', cellWidth: 41 }
-        }
-    });
-
-    data.allergenFoodCostTables.forEach((alt, tIdx) => {
-        let yAlt = doc.lastAutoTable.finalY + 4;
+    if (data.isManual) {
         doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.text('A. Rincian Komponen Hidangan & Ketentuan Work Order Manual', 10, y + 3);
+
+        autoTable(doc, {
+            startY: y + 5,
+            margin: { left: 10, right: 10 },
+            body: [[
+                'Informasi Work Order Manual (Non-PO TKPI): Work order ini berstatus Manual (Input Mandiri). Bahan baku disiapkan dan dikelola langsung oleh unit SPPG tanpa melalui modul belanja Purchase Order (PO) sistem. Standar gizi dievaluasi berdasarkan Standar Angka Kecukupan Gizi (AKG) Badan Gizi Nasional.'
+            ]],
+            theme: 'plain',
+            styles: { font: 'helvetica', fontSize: 7, fontStyle: 'italic', textColor: [146, 64, 14], fillColor: [254, 243, 199], cellPadding: 2 }
+        });
+
+        const manualSmBody = data.subMenusList.map((sm, idx) => [
+            String(idx + 1),
+            sm.nama,
+            sm.label || `Komponen ${idx + 1}`,
+            'Tersaji untuk Seluruh Sasaran Penerima Manfaat'
+        ]);
+
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 3,
+            margin: { left: 10, right: 10 },
+            head: [['No', 'Komponen Sub Menu', 'Kategori Hidangan', 'Status Distribusi']],
+            body: manualSmBody,
+            foot: [['Total Batas Pagu Anggaran MBG:', `${data.totalPM.toLocaleString('id-ID')} PM Sasaran`, '', formatRupiahNum(data.paguTotal)]],
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 7.2, cellPadding: 1.5, lineColor: [203, 213, 225], lineWidth: 0.15 },
+            headStyles: { fillColor: [220, 252, 231], textColor: [4, 120, 87], fontStyle: 'bold' },
+            footStyles: { fillColor: [219, 234, 254], textColor: [30, 58, 138], fontStyle: 'bold' },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 12 },
+                1: { cellWidth: 120, fontStyle: 'bold' },
+                2: { halign: 'center', cellWidth: 65 },
+                3: { halign: 'center', cellWidth: 80, textColor: [4, 120, 87] }
+            }
+        });
+    } else {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.text('A. Pemilihan Bahan Pangan', 10, y + 3);
+
+        const bpHeadRow1 = [
+            { content: 'No', rowSpan: 2 },
+            { content: 'Sub Menu', rowSpan: 2 },
+            { content: 'Bahan Master', rowSpan: 2 },
+            { content: 'Nama PO', rowSpan: 2 },
+            { content: 'Sat', rowSpan: 2 },
+            { content: 'Jenis', rowSpan: 2 },
+            { content: 'Peruntukan', rowSpan: 2 },
+            { content: 'Berat Bersih (g)', colSpan: 2 },
+            { content: 'Berat Kotor (kg)', colSpan: 2 },
+            { content: 'BDD', rowSpan: 2 },
+            { content: 'Buf', rowSpan: 2 },
+            { content: 'PO (Kg)', rowSpan: 2 },
+            { content: 'Harga Satuan', rowSpan: 2 },
+            { content: 'Total Biaya', rowSpan: 2 },
+            { content: 'Kandungan Gizi', rowSpan: 2 },
+        ];
+        const bpHeadRow2 = ['PK', 'PB', 'PK', 'PB'];
+
+        const bpBody = data.formattedItems.map((item, idx) => [
+            String(idx + 1),
+            item.sub_menu,
+            item.nama_bahan,
+            item.nama_po,
+            item.satuan,
+            item.kategori,
+            item.peruntukan,
+            String(item.berat_bersih_pk),
+            String(item.berat_bersih_pb),
+            String(item.berat_kotor_pk),
+            String(item.berat_kotor_pb),
+            item.bdd_display,
+            item.buffer_display,
+            String(item.qty_po_display),
+            formatRupiahNum(item.harga_satuan),
+            formatRupiahNum(item.total_biaya),
+            item.gizi_utama,
+        ]);
+
+        autoTable(doc, {
+            startY: y + 4.5,
+            margin: { left: 10, right: 10 },
+            head: [bpHeadRow1, bpHeadRow2],
+            body: bpBody,
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 6.2, cellPadding: 0.9, lineColor: [203, 213, 225], lineWidth: 0.15 },
+            headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 7 },
+                1: { cellWidth: 20, fontStyle: 'bold' },
+                2: { cellWidth: 25, fontStyle: 'bold' },
+                3: { cellWidth: 25 },
+                4: { halign: 'center', cellWidth: 8 },
+                5: { halign: 'center', cellWidth: 14 },
+                6: { halign: 'center', cellWidth: 15 },
+                7: { halign: 'center', cellWidth: 11 },
+                8: { halign: 'center', cellWidth: 11 },
+                9: { halign: 'center', cellWidth: 11 },
+                10: { halign: 'center', cellWidth: 11 },
+                11: { halign: 'center', cellWidth: 9 },
+                12: { halign: 'center', cellWidth: 9 },
+                13: { halign: 'center', cellWidth: 13, fontStyle: 'bold' },
+                14: { halign: 'right', cellWidth: 18 },
+                15: { halign: 'right', cellWidth: 21, fontStyle: 'bold' },
+                16: { cellWidth: 49, fontSize: 5.8 }
+            }
+        });
+
+        let yRekap = doc.lastAutoTable.finalY + 4;
+        autoTable(doc, {
+            startY: yRekap,
+            margin: { left: 10, right: 10 },
+            body: [
+                ['Batas Pagu Anggaran Bahan Makanan:', formatRupiahNum(data.paguBahanTotal), 'Berdasarkan alokasi pagu bahan pangan'],
+                ['Total Belanja Bahan Makanan (PO):', formatRupiahNum(data.totalBelanjaPO), 'Total akumulasi biaya pembelanjaan PO'],
+                ['Selisih Anggaran Bahan Makanan:', `${formatRupiahNum(Math.abs(data.selisihPagu))} (${data.selisihPagu >= 0 ? 'Surplus' : 'Defisit'})`, data.selisihPagu >= 0 ? 'Sisa anggaran belanja terkendali' : 'Biaya belanja melebihi pagu anggaran']
+            ],
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.2, lineColor: [203, 213, 225], lineWidth: 0.15 },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 70 },
+                1: { fontStyle: 'bold', halign: 'right', cellWidth: 45 },
+                2: { cellWidth: 162, fontStyle: 'italic', textColor: [100, 116, 139] }
+            }
+        });
+    }
+
+    // =========================================================
+    // HALAMAN 4: FOOD COST (JIKA FORMULASI), KANDUNGAN GIZI & LEMBAR PENGESAHAN TTD
+    // =========================================================
+    if (!data.isManual && data.foodCostNormalList.length > 0) {
+        doc.addPage('a4', 'landscape');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.text('B. Food Cost', 10, 12);
         doc.setFontSize(7.5);
-        doc.setTextColor(185, 28, 28);
-        doc.text(`Tabel ${tIdx + 2}: Rincian Food Cost Per Sub Menu Alergi ${alt.jenis_alergi}`, 10, yAlt);
+        doc.setTextColor(4, 120, 87);
+        doc.text('Tabel 1. Rincian Food Cost Per Sub Menu Normal', 10, 16);
         doc.setTextColor(0, 0, 0);
 
-        const altBody = alt.list.map((row, idx) => [
+        const fcNormalBody = data.foodCostNormalList.map((row, idx) => [
             String(idx + 1),
             row.sub_menu,
             `${row.count} Bahan`,
@@ -4020,7 +4871,7 @@ export async function exportWorkOrderPdf(wo) {
         ]);
 
         autoTable(doc, {
-            startY: yAlt + 2,
+            startY: 18,
             margin: { left: 10, right: 10 },
             head: [
                 [
@@ -4032,12 +4883,12 @@ export async function exportWorkOrderPdf(wo) {
                 ],
                 ['PK', 'PB', 'PK', 'PB']
             ],
-            body: altBody,
-            foot: [[`Rekap Total Food Cost Alergi ${alt.jenis_alergi}:`, '', '', formatRupiahNum(alt.total_pk), formatRupiahNum(alt.total_pb), '100', '100']],
+            body: fcNormalBody,
+            foot: [['Rekap Total Food Cost Normal:', '', '', formatRupiahNum(data.totalFcPKNormal), formatRupiahNum(data.totalFcPBNormal), '100', '100']],
             theme: 'grid',
             styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15 },
-            headStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold', halign: 'center' },
-            footStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold' },
+            headStyles: { fillColor: [224, 242, 254], textColor: [3, 105, 161], fontStyle: 'bold', halign: 'center' },
+            footStyles: { fillColor: [224, 242, 254], textColor: [3, 105, 161], fontStyle: 'bold' },
             columnStyles: {
                 0: { halign: 'center', cellWidth: 10 },
                 1: { cellWidth: 70, fontStyle: 'bold' },
@@ -4048,49 +4899,108 @@ export async function exportWorkOrderPdf(wo) {
                 6: { halign: 'center', cellWidth: 41 }
             }
         });
-    });
 
-    let yP4 = doc.lastAutoTable.finalY + 4;
-    // Cek jika halaman tidak cukup untuk Kandungan Gizi + TTD, pindah ke halaman baru bersama-sama sehingga TTD TIDAK SENDIRIAN!
-    if (yP4 > 120) {
-        doc.addPage('a4', 'landscape');
+        data.allergenFoodCostTables.forEach((alt, tIdx) => {
+            let yAlt = doc.lastAutoTable.finalY + 4;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(185, 28, 28);
+            doc.text(`Tabel ${tIdx + 2}: Rincian Food Cost Per Sub Menu Alergi ${alt.jenis_alergi}`, 10, yAlt);
+            doc.setTextColor(0, 0, 0);
+
+            const altBody = alt.list.map((row, idx) => [
+                String(idx + 1),
+                row.sub_menu,
+                `${row.count} Bahan`,
+                formatRupiahNum(row.cost_pk),
+                formatRupiahNum(row.cost_pb),
+                row.percent_pk.toFixed(1),
+                row.percent_pb.toFixed(1)
+            ]);
+
+            autoTable(doc, {
+                startY: yAlt + 2,
+                margin: { left: 10, right: 10 },
+                head: [
+                    [
+                        { content: 'No', rowSpan: 2 },
+                        { content: 'Sub Menu', rowSpan: 2 },
+                        { content: 'Jumlah Bahan Baku', rowSpan: 2 },
+                        { content: 'Food Cost (Rp)', colSpan: 2 },
+                        { content: 'Persentase (%)', colSpan: 2 }
+                    ],
+                    ['PK', 'PB', 'PK', 'PB']
+                ],
+                body: altBody,
+                foot: [[`Rekap Total Food Cost Alergi ${alt.jenis_alergi}:`, '', '', formatRupiahNum(alt.total_pk), formatRupiahNum(alt.total_pb), '100', '100']],
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15 },
+                headStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 10 },
+                    1: { cellWidth: 70, fontStyle: 'bold' },
+                    2: { halign: 'center', cellWidth: 35 },
+                    3: { halign: 'right', cellWidth: 40 },
+                    4: { halign: 'right', cellWidth: 40 },
+                    5: { halign: 'center', cellWidth: 41 },
+                    6: { halign: 'center', cellWidth: 41 }
+                }
+            });
+        });
+    }
+
+    let yP4 = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 14) + 5;
+    // Cek jika halaman tidak cukup untuk Kandungan Gizi + TTD, pindah ke halaman baru bersama-sama
+    if (yP4 > 115 || data.isManual) {
+        if (!data.isManual) doc.addPage('a4', 'landscape');
         yP4 = 14;
     }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
-    doc.text('C. Kandungan Gizi', 10, yP4);
+    doc.text('C. Kandungan Gizi & Evaluasi AKG', 10, yP4);
     doc.setFontSize(7.5);
-    doc.text('Tabel: Rincian Kandungan Gizi', 10, yP4 + 3.5);
+    doc.text('Tabel: Evaluasi Kepatuhan Standar AKG Per Porsi Makanan', 10, yP4 + 3.5);
 
-    const giziBody = data.giziList.map((g) => [
-        g.rowSpan > 0 ? String(g.no) : '',
-        g.rowSpan > 0 ? g.peruntukan : '',
-        g.jenis_pm,
-        String(g.energi),
-        String(g.protein),
-        String(g.lemak),
-        String(g.karbo),
-        String(g.serat)
-    ]);
+    const giziBody = data.flatGiziRows.map((g) => {
+        const row = [];
+        if (g.rowSpan > 0) {
+            row.push({ content: String(g.no), rowSpan: g.rowSpan, styles: { halign: 'center', valign: 'middle' } });
+            row.push({ content: g.peruntukan, rowSpan: g.rowSpan, styles: { fontStyle: 'bold', valign: 'middle' } });
+        }
+        row.push(
+            { content: g.jenis_pm, styles: { halign: 'center', fontStyle: 'bold', fillColor: g.jenis_pm === 'PK' ? [254, 249, 195] : [224, 242, 254] } },
+            String(g.energi),
+            String(g.protein),
+            String(g.lemak),
+            String(g.karbo),
+            String(g.serat)
+        );
+        if (g.rowSpan > 0) {
+            row.push({ content: g.status || 'Memenuhi', rowSpan: g.rowSpan, styles: { halign: 'center', fontStyle: 'bold', textColor: [4, 120, 87], fillColor: [220, 252, 231], valign: 'middle' } });
+        }
+        return row;
+    });
 
     autoTable(doc, {
         startY: yP4 + 5,
         margin: { left: 10, right: 10 },
-        head: [['No', 'Peruntukan Porsi', 'Jenis PM', 'Energi (kkal)', 'Protein (g)', 'Lemak (g)', 'Karbohidrat (g)', 'Serat (g)']],
+        head: [['No', 'Peruntukan Porsi', 'Jenis PM', 'Energi (kkal)', 'Protein (g)', 'Lemak (g)', 'Karbohidrat (g)', 'Serat (g)', 'Status AKG']],
         body: giziBody,
         theme: 'grid',
-        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15 },
+        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15, halign: 'center' },
         headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'center' },
         columnStyles: {
             0: { halign: 'center', cellWidth: 10 },
-            1: { cellWidth: 55, fontStyle: 'bold' },
-            2: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
-            3: { halign: 'center', cellWidth: 38 },
-            4: { halign: 'center', cellWidth: 38 },
-            5: { halign: 'center', cellWidth: 38 },
-            6: { halign: 'center', cellWidth: 38 },
-            7: { halign: 'center', cellWidth: 38 }
+            1: { cellWidth: 50, fontStyle: 'bold', halign: 'left' },
+            2: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+            3: { halign: 'center', cellWidth: 32 },
+            4: { halign: 'center', cellWidth: 32 },
+            5: { halign: 'center', cellWidth: 32 },
+            6: { halign: 'center', cellWidth: 32 },
+            7: { halign: 'center', cellWidth: 32 },
+            8: { halign: 'center', cellWidth: 35 }
         }
     });
 
@@ -4119,6 +5029,72 @@ export async function exportWorkOrderPdf(wo) {
     doc.setFont('helvetica', 'bold');
     doc.text('Kepala SPPG', 242, ttdY + 3.8, { align: 'center' });
     doc.text('( ............................................ )', 242, ttdY + 18, { align: 'center' });
+
+    // =========================================================
+    // HALAMAN 5: CATATAN KERJA TIM PRODUKSI MBG
+    // =========================================================
+    doc.addPage('a4', 'landscape');
+    let yS5 = drawKop(7);
+    yS5 = drawBanner('CATATAN KERJA TIM PRODUKSI MBG', sppgName, [6, 95, 70], yS5);
+
+    function drawCatatanTimPdf(timTitle, timColor, items, globalNotes, startY) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(timColor[0], timColor[1], timColor[2]);
+        doc.text(timTitle, 10, startY + 3);
+        doc.setTextColor(0, 0, 0);
+
+        let curY = startY + 4.5;
+        if (globalNotes) {
+            autoTable(doc, {
+                startY: curY,
+                margin: { left: 10, right: 10 },
+                body: [[`Catatan Global: ${globalNotes}`]],
+                theme: 'plain',
+                styles: { font: 'helvetica', fontSize: 6.8, fontStyle: 'italic', textColor: [120, 53, 15], fillColor: [254, 243, 199], cellPadding: 1.2 }
+            });
+            curY = doc.lastAutoTable.finalY + 1.5;
+        }
+
+        const bodyItems = (items && items.length > 0)
+            ? items.map((it, idx) => [
+                String(idx + 1),
+                it.nama_menu || '-',
+                it.bahan_baku || '-',
+                String(it.kuantitas || '-'),
+                it.waktu_mulai || it.mulai || '-',
+                it.waktu_selesai || it.selesai || '-',
+                it.perlakuan || '-',
+                it.keterangan || '-'
+            ])
+            : [[{ content: 'Belum ada catatan kerja yang diinputkan untuk tim ini.', colSpan: 8, styles: { halign: 'center', fontStyle: 'italic', textColor: [148, 163, 184] } }]];
+
+        autoTable(doc, {
+            startY: curY,
+            margin: { left: 10, right: 10 },
+            head: [['No', 'Nama Menu', 'Bahan Baku', 'Kuantitas', 'Mulai', 'Selesai', 'Perlakuan / Teknik', 'Keterangan Khusus']],
+            body: bodyItems,
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1, lineColor: [203, 213, 225], lineWidth: 0.15 },
+            headStyles: { fillColor: timColor, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 8 },
+                1: { cellWidth: 50, fontStyle: 'bold' },
+                2: { cellWidth: 50 },
+                3: { halign: 'center', cellWidth: 25 },
+                4: { halign: 'center', cellWidth: 16 },
+                5: { halign: 'center', cellWidth: 16 },
+                6: { cellWidth: 56 },
+                7: { cellWidth: 56 }
+            }
+        });
+
+        return doc.lastAutoTable.finalY + 4;
+    }
+
+    let yTim = drawCatatanTimPdf('1. Catatan Kerja Tim Persiapan (Bahan Mentah, Kupas, Potong & Cuci)', [4, 120, 87], data.catatanPersiapan, data.globalPersiapan, yS5);
+    yTim = drawCatatanTimPdf('2. Catatan Kerja Tim Pengolahan (Memasak, Bumbu & Suhu Masak)', [180, 83, 9], data.catatanPengolahan, data.globalPengolahan, yTim);
+    drawCatatanTimPdf('3. Catatan Kerja Tim Pemorsian (Plating Ompreng & Kontrol Porsi)', [67, 56, 202], data.catatanPemorsian, data.globalPemorsian, yTim);
 
     doc.save(filename);
 }
@@ -5747,4 +6723,487 @@ export function exportPoPdf(po) {
     printWindow.document.write(html);
     printWindow.document.close();
 }
+
+// -------------------------------------------------------------
+// 10. EXPORT REKAP DAFTAR MENU GIZI EXCEL (.XLSX)
+// -------------------------------------------------------------
+export async function exportDaftarMenuTableExcel(menuList, periodInfo = {}) {
+    if (!Array.isArray(menuList) || menuList.length === 0) {
+        alert('Tidak ada data menu untuk diunduh.');
+        return;
+    }
+
+    const sppgName = periodInfo.sppgName || 'SPPG KOTA TASIKMALAYA';
+    const periodLabel = periodInfo.periodLabel || 'Semua Periode';
+    const filename = `Rekap_Daftar_Menu_Gizi_${new Date().toISOString().substring(0, 10)}.xlsx`;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SIPEGE SPPG';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Rekap Daftar Menu Gizi', {
+        views: [{ showGridLines: true }],
+    });
+
+    const borderThin = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    };
+
+    const headerFill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F5F9' },
+    };
+
+    sheet.columns = [
+        { width: 6  },  // A: No
+        { width: 22 },  // B: No. Work Order
+        { width: 16 },  // C: Tanggal Distribusi
+        { width: 14 },  // D: Siklus Menu
+        { width: 22 },  // E: Metode WO
+        { width: 30 },  // F: Nama Menu Utama
+        { width: 36 },  // G: Komponen Sub Menu
+        { width: 28 },  // H: Sub Menu Alergi / Pengganti
+        { width: 12 },  // I: Sasaran PK
+        { width: 12 },  // J: Sasaran PB
+        { width: 14 },  // K: Total Sasaran PM
+        { width: 15 },  // L: Porsi Tambahan
+        { width: 16 },  // M: Total Produksi
+        { width: 18 },  // N: Pagu Anggaran (Rp)
+        { width: 20 },  // O: Status Approval
+        { width: 20 },  // P: No. PO Resmi
+    ];
+
+    // Embed Logos & Kop
+    let logoBgnId = null;
+    let logoYayasanId = null;
+    try {
+        logoBgnId = workbook.addImage({ base64: LOGO_BGN_RAW_BASE64, extension: 'png' });
+        logoYayasanId = workbook.addImage({ base64: LOGO_YAYASAN_RAW_BASE64, extension: 'png' });
+    } catch (e) {
+        console.warn('Gagal memuat logo ke Excel:', e);
+    }
+
+    // Helper Kop untuk 16 kolom (A - P)
+    function applyDaftarKop(targetSheet, maxCols) {
+        const lastCol = 'P';
+        const r1 = targetSheet.addRow(['BADAN GIZI NASIONAL']);
+        targetSheet.mergeCells(`A${r1.number}:${lastCol}${r1.number}`);
+        r1.getCell(1).font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
+        r1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        r1.height = 20;
+
+        const r2 = targetSheet.addRow(['SATUAN PELAYANAN PROGRAM GIZI (SPPG)']);
+        targetSheet.mergeCells(`A${r2.number}:${lastCol}${r2.number}`);
+        r2.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+        r2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        r2.height = 17;
+
+        const r3 = targetSheet.addRow([sppgName]);
+        targetSheet.mergeCells(`A${r3.number}:${lastCol}${r3.number}`);
+        r3.getCell(1).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF047857' } };
+        r3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        r3.height = 16;
+
+        const r4 = targetSheet.addRow(['Sistem Informasi Pelayanan Gizi (SIPEGE) - Formulir Rekapitulasi Kerja']);
+        targetSheet.mergeCells(`A${r4.number}:${lastCol}${r4.number}`);
+        r4.getCell(1).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF64748B' } };
+        r4.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        r4.height = 14;
+
+        if (logoBgnId !== null) {
+            targetSheet.addImage(logoBgnId, {
+                tl: { nativeCol: 0, nativeColOff: 15 * 9525, nativeRow: 0, nativeRowOff: 5 * 9525 },
+                ext: { width: 52, height: 52 }
+            });
+        }
+        if (logoYayasanId !== null) {
+            targetSheet.addImage(logoYayasanId, {
+                tl: { nativeCol: 15, nativeColOff: 20 * 9525, nativeRow: 0, nativeRowOff: 5 * 9525 },
+                ext: { width: 52, height: 52 }
+            });
+        }
+    }
+
+    applyDaftarKop(sheet, 16);
+    sheet.addRow([]);
+
+    // Banner Title
+    const rBanner1 = sheet.addRow(['DAFTAR REKAPITULASI WORK ORDER & PERENCANAAN MENU GIZI MBG']);
+    sheet.mergeCells(`A${rBanner1.number}:P${rBanner1.number}`);
+    rBanner1.getCell(1).font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    rBanner1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047857' } };
+    rBanner1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rBanner1.height = 24;
+
+    const rBanner2 = sheet.addRow([`Periode: ${periodLabel} • Total Menu Terdata: ${menuList.length} Menu • Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`]);
+    sheet.mergeCells(`A${rBanner2.number}:P${rBanner2.number}`);
+    rBanner2.getCell(1).font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FFD1FAE5' } };
+    rBanner2.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF047857' } };
+    rBanner2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    rBanner2.height = 18;
+
+    sheet.addRow([]);
+
+    // Header Table
+    const rCols = sheet.addRow([
+        'No',
+        'No. Work Order',
+        'Tgl Distribusi',
+        'Siklus Menu',
+        'Metode WO',
+        'Nama Menu Utama',
+        'Komponen Sub Menu',
+        'Sub Menu Alergi',
+        'Sasaran PK',
+        'Sasaran PB',
+        'Total Sasaran',
+        'Porsi Tambahan',
+        'Total Dapur',
+        'Pagu Anggaran (Rp)',
+        'Status Approval',
+        'No. PO Resmi'
+    ]);
+    rCols.height = 26;
+    rCols.font = { bold: true };
+    rCols.eachCell(cell => {
+        cell.fill = headerFill;
+        cell.border = borderThin;
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    let sumPK = 0;
+    let sumPB = 0;
+    let sumPM = 0;
+    let sumPT = 0;
+    let sumProd = 0;
+    let sumPagu = 0;
+
+    menuList.forEach((m, idx) => {
+        const pk = Number(m.porsi_pk || 0);
+        const pb = Number(m.porsi_pb || 0);
+        const pm = Number(m.total_porsi || (pk + pb));
+        
+        // Porsi tambahan & total produksi dapur
+        const rawPt = m.porsi_tambahan || m.raw?.porsi_tambahan;
+        let ptTotal = 0;
+        let prodTotal = pm;
+        if (rawPt) {
+            ptTotal = Number(rawPt.grand_total || rawPt.grandTotal || ((Number(rawPt.total_pk || rawPt.totalPK || 0)) + (Number(rawPt.total_pb || rawPt.totalPB || 0))));
+            prodTotal = Number(rawPt.grand_total_produksi || rawPt.grandTotalProduksi || (pm + ptTotal));
+        }
+
+        const pagu = Number(m.total_anggaran || ((pk * 8000) + (pb * 10000)));
+
+        sumPK += pk;
+        sumPB += pb;
+        sumPM += pm;
+        sumPT += ptTotal;
+        sumProd += prodTotal;
+        sumPagu += pagu;
+
+        // Sub menus
+        const smStr = Array.isArray(m.sub_menus)
+            ? m.sub_menus.map((sm, i) => `${i + 1}. ${typeof sm === 'object' ? (sm.nama || sm.nama_sub_menu) : sm}`).join('\n')
+            : (m.sub_menus || '-');
+
+        const smaStr = Array.isArray(m.sub_menu_alergi) && m.sub_menu_alergi.length > 0
+            ? m.sub_menu_alergi.map((sm, i) => `${i + 1}. ${typeof sm === 'object' ? (sm.nama || sm.nama_sub_menu) : sm}`).join('\n')
+            : '-';
+
+        const row = sheet.addRow([
+            idx + 1,
+            m.id || m.nomor_wo || '-',
+            m.tanggal ? formatDateIndo(m.tanggal) : '-',
+            m.siklus || `Hari ke-${idx + 1}`,
+            (m.metode_wo === 'manual') ? 'WO Manual (Input Mandiri)' : 'WO Otomatis (TKPI)',
+            m.nama || '-',
+            smStr,
+            smaStr,
+            pk,
+            pb,
+            pm,
+            ptTotal,
+            prodTotal,
+            pagu,
+            m.status_wo || 'Draft',
+            m.po_no || '-'
+        ]);
+
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(2).font = { bold: true };
+        row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(5).font = { italic: true, color: { argb: (m.metode_wo === 'manual') ? 'FFB45309' : 'FF047857' } };
+        row.getCell(6).alignment = { vertical: 'middle', wrapText: true };
+        row.getCell(6).font = { bold: true };
+        row.getCell(7).alignment = { vertical: 'middle', wrapText: true };
+        row.getCell(8).alignment = { vertical: 'middle', wrapText: true };
+
+        [9, 10, 11, 12, 13].forEach(c => {
+            row.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
+            row.getCell(c).numFmt = '#,##0';
+        });
+        row.getCell(11).font = { bold: true };
+        row.getCell(13).font = { bold: true, color: { argb: 'FF047857' } };
+
+        row.getCell(14).alignment = { horizontal: 'right', vertical: 'middle' };
+        row.getCell(14).numFmt = '"Rp "#,##0';
+        row.getCell(14).font = { bold: true };
+
+        row.getCell(15).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(15).font = { bold: true };
+        row.getCell(16).alignment = { horizontal: 'center', vertical: 'middle' };
+
+        row.eachCell(cell => { cell.border = borderThin; });
+
+        // Hitung tinggi baris dinamis
+        const smCount = (smStr.match(/\n/g) || []).length + 1;
+        row.height = Math.max(22, smCount * 14 + 6);
+    });
+
+    // Baris Total Rekapitulasi
+    const rTot = sheet.addRow([
+        'Total Rekapitulasi:', '', '', '', '', '', '', '',
+        sumPK, sumPB, sumPM, sumPT, sumProd, sumPagu, '', ''
+    ]);
+    sheet.mergeCells(`A${rTot.number}:H${rTot.number}`);
+    rTot.font = { bold: true };
+    rTot.height = 24;
+    rTot.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+    [9, 10, 11, 12, 13].forEach(c => {
+        rTot.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
+        rTot.getCell(c).numFmt = '#,##0';
+    });
+    rTot.getCell(14).alignment = { horizontal: 'right', vertical: 'middle' };
+    rTot.getCell(14).numFmt = '"Rp "#,##0';
+    rTot.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+        cell.border = borderThin;
+    });
+
+    sheet.addRow([]);
+    sheet.addRow([]);
+
+    // Lembar TTD
+    const rTtd1 = sheet.addRow(['', '', 'Direncanakan Oleh:', '', '', '', 'Diperiksa Oleh:', '', '', '', '', 'Mengetahui & Menyetujui:', '', '', '', '']);
+    sheet.mergeCells(`C${rTtd1.number}:D${rTtd1.number}`);
+    sheet.mergeCells(`G${rTtd1.number}:I${rTtd1.number}`);
+    sheet.mergeCells(`L${rTtd1.number}:N${rTtd1.number}`);
+    rTtd1.getCell(3).alignment = { horizontal: 'center' };
+    rTtd1.getCell(7).alignment = { horizontal: 'center' };
+    rTtd1.getCell(12).alignment = { horizontal: 'center' };
+
+    const rTtd2 = sheet.addRow(['', '', 'Tim Ahli Gizi SPPG', '', '', '', 'Petugas Keuangan / Akuntan', '', '', '', '', 'Kepala SPPG', '', '', '', '']);
+    sheet.mergeCells(`C${rTtd2.number}:D${rTtd2.number}`);
+    sheet.mergeCells(`G${rTtd2.number}:I${rTtd2.number}`);
+    sheet.mergeCells(`L${rTtd2.number}:N${rTtd2.number}`);
+    rTtd2.font = { bold: true };
+    rTtd2.getCell(3).alignment = { horizontal: 'center' };
+    rTtd2.getCell(7).alignment = { horizontal: 'center' };
+    rTtd2.getCell(12).alignment = { horizontal: 'center' };
+
+    sheet.addRow([]);
+    sheet.addRow([]);
+    sheet.addRow([]);
+
+    const rTtd3 = sheet.addRow(['', '', '( ............................................ )', '', '', '', '( ............................................ )', '', '', '', '', '( ............................................ )', '', '', '', '']);
+    sheet.mergeCells(`C${rTtd3.number}:D${rTtd3.number}`);
+    sheet.mergeCells(`G${rTtd3.number}:I${rTtd3.number}`);
+    sheet.mergeCells(`L${rTtd3.number}:N${rTtd3.number}`);
+    rTtd3.font = { bold: true };
+    rTtd3.getCell(3).alignment = { horizontal: 'center' };
+    rTtd3.getCell(7).alignment = { horizontal: 'center' };
+    rTtd3.getCell(12).alignment = { horizontal: 'center' };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+}
+
+// -------------------------------------------------------------
+// 11. EXPORT REKAP DAFTAR MENU GIZI PDF (.PDF)
+// -------------------------------------------------------------
+export async function exportDaftarMenuTablePdf(menuList, periodInfo = {}) {
+    if (!Array.isArray(menuList) || menuList.length === 0) {
+        alert('Tidak ada data menu untuk diunduh.');
+        return;
+    }
+
+    const sppgName = periodInfo.sppgName || 'SPPG KOTA TASIKMALAYA';
+    const periodLabel = periodInfo.periodLabel || 'Semua Periode';
+    const filename = `Rekap_Daftar_Menu_Gizi_${new Date().toISOString().substring(0, 10)}.pdf`;
+
+    const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Helper Kop Surat PDF
+    function drawKop(topY = 7) {
+        try {
+            if (LOGO_BGN_RAW_BASE64) {
+                doc.addImage(LOGO_BGN_RAW_BASE64, 'PNG', 10, topY, 15, 15);
+            }
+        } catch (e) {
+            console.warn('Gagal memuat logo BGN:', e);
+        }
+        try {
+            if (LOGO_YAYASAN_RAW_BASE64) {
+                doc.addImage(LOGO_YAYASAN_RAW_BASE64, 'PNG', pageWidth - 25, topY, 15, 15);
+            }
+        } catch (e) {
+            console.warn('Gagal memuat logo Yayasan:', e);
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 58, 138);
+        doc.text('BADAN GIZI NASIONAL', pageWidth / 2, topY + 4, { align: 'center' });
+
+        doc.setFontSize(9.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text('SATUAN PELAYANAN PROGRAM GIZI (SPPG)', pageWidth / 2, topY + 8.5, { align: 'center' });
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(4, 120, 87);
+        doc.text(sppgName, pageWidth / 2, topY + 12.5, { align: 'center' });
+
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.4);
+        doc.line(10, topY + 16, pageWidth - 10, topY + 16);
+
+        return topY + 19;
+    }
+
+    let y = drawKop(7);
+
+    // Banner Title
+    doc.setFillColor(4, 120, 87);
+    doc.rect(10, y, pageWidth - 20, 8.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('DAFTAR REKAPITULASI WORK ORDER & PERENCANAAN MENU GIZI MBG', pageWidth / 2, y + 4, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(209, 250, 229);
+    doc.text(`Periode: ${periodLabel} • Total Menu Terdata: ${menuList.length} Menu • Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, pageWidth / 2, y + 7.2, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+
+    let sumPK = 0;
+    let sumPB = 0;
+    let sumPM = 0;
+    let sumPT = 0;
+    let sumProd = 0;
+    let sumPagu = 0;
+
+    const bodyRows = menuList.map((m, idx) => {
+        const pk = Number(m.porsi_pk || 0);
+        const pb = Number(m.porsi_pb || 0);
+        const pm = Number(m.total_porsi || (pk + pb));
+
+        const rawPt = m.porsi_tambahan || m.raw?.porsi_tambahan;
+        let ptTotal = 0;
+        let prodTotal = pm;
+        if (rawPt) {
+            ptTotal = Number(rawPt.grand_total || rawPt.grandTotal || ((Number(rawPt.total_pk || rawPt.totalPK || 0)) + (Number(rawPt.total_pb || rawPt.totalPB || 0))));
+            prodTotal = Number(rawPt.grand_total_produksi || rawPt.grandTotalProduksi || (pm + ptTotal));
+        }
+
+        const pagu = Number(m.total_anggaran || ((pk * 8000) + (pb * 10000)));
+
+        sumPK += pk;
+        sumPB += pb;
+        sumPM += pm;
+        sumPT += ptTotal;
+        sumProd += prodTotal;
+        sumPagu += pagu;
+
+        const smStr = Array.isArray(m.sub_menus)
+            ? m.sub_menus.map((sm, i) => `${i + 1}. ${typeof sm === 'object' ? (sm.nama || sm.nama_sub_menu) : sm}`).join('\n')
+            : (m.sub_menus || '-');
+
+        const smaStr = Array.isArray(m.sub_menu_alergi) && m.sub_menu_alergi.length > 0
+            ? m.sub_menu_alergi.map((sm, i) => `${i + 1}. ${typeof sm === 'object' ? (sm.nama || sm.nama_sub_menu) : sm}`).join('\n')
+            : '';
+
+        return [
+            String(idx + 1),
+            `${m.id || m.nomor_wo || '-'}\n${m.tanggal ? formatDateIndo(m.tanggal) : '-'}`,
+            `${m.nama || '-'}\n(${m.siklus || `Hari ke-${idx + 1}`})`,
+            (m.metode_wo === 'manual') ? 'WO Manual\n(Non-PO)' : 'WO Otomatis\n(TKPI)',
+            smaStr ? `${smStr}\n\nPengganti Alergi:\n${smaStr}` : smStr,
+            `PK: ${pk.toLocaleString('id-ID')}\nPB: ${pb.toLocaleString('id-ID')}\nTot: ${pm.toLocaleString('id-ID')}`,
+            `Tambahan: ${ptTotal}\nTotal: ${prodTotal.toLocaleString('id-ID')}`,
+            formatRupiahNum(pagu),
+            `${m.status_wo || 'Draft'}\n${m.po_no && m.po_no !== '-' ? 'PO: ' + m.po_no : ''}`
+        ];
+    });
+
+    autoTable(doc, {
+        startY: y + 11,
+        margin: { left: 10, right: 10 },
+        head: [['No', 'No. WO & Tanggal', 'Nama Menu & Siklus', 'Metode WO', 'Komponen Hidangan & Varian Alergi', 'Sasaran PM', 'Porsi Produksi', 'Pagu Anggaran', 'Status & PO']],
+        body: bodyRows,
+        foot: [[
+            'Rekap Total:', '', '', '', '',
+            `Tot PM: ${sumPM.toLocaleString('id-ID')}`,
+            `Tot Dapur: ${sumProd.toLocaleString('id-ID')}`,
+            formatRupiahNum(sumPagu),
+            ''
+        ]],
+        theme: 'grid',
+        styles: { font: 'helvetica', fontSize: 6.8, cellPadding: 1.2, lineColor: [203, 213, 225], lineWidth: 0.15 },
+        headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'center' },
+        footStyles: { fillColor: [219, 234, 254], textColor: [30, 58, 138], fontStyle: 'bold' },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 8 },
+            1: { halign: 'center', cellWidth: 32, fontStyle: 'bold' },
+            2: { cellWidth: 42, fontStyle: 'bold' },
+            3: { halign: 'center', cellWidth: 24, fontStyle: 'italic' },
+            4: { cellWidth: 70 },
+            5: { halign: 'center', cellWidth: 26 },
+            6: { halign: 'center', cellWidth: 25, fontStyle: 'bold' },
+            7: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
+            8: { halign: 'center', cellWidth: 25, fontStyle: 'bold' }
+        }
+    });
+
+    let ttdY = doc.lastAutoTable.finalY + 8;
+    if (ttdY > 175) {
+        doc.addPage('a4', 'landscape');
+        ttdY = 25;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    doc.text('Direncanakan Oleh:', 55, ttdY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Tim Ahli Gizi SPPG', 55, ttdY + 3.8, { align: 'center' });
+    doc.text('( ............................................ )', 55, ttdY + 18, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Diperiksa Oleh:', 148.5, ttdY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Petugas Keuangan / Akuntan', 148.5, ttdY + 3.8, { align: 'center' });
+    doc.text('( ............................................ )', 148.5, ttdY + 18, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Mengetahui & Menyetujui:', 242, ttdY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kepala SPPG', 242, ttdY + 3.8, { align: 'center' });
+    doc.text('( ............................................ )', 242, ttdY + 18, { align: 'center' });
+
+    doc.save(filename);
+}
+
 
