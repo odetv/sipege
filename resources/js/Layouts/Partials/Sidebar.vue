@@ -224,7 +224,6 @@ function getInitialMenu() {
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
     if (isLaporanSppgActive.value) return "laporan-sppg";
-    if (isLabelActive.value) return "label";
     if (isPetunjukActive.value) return "petunjuk";
     if (isAsetDigitalActive.value) return "aset-digital";
     if (isPengaturanActive.value) return "pengaturan";
@@ -257,7 +256,6 @@ const isKeuanganExpanded = computed(
 const isLaporanSppgExpanded = computed(
     () => activeExpandedMenu.value === "laporan-sppg",
 );
-const isLabelExpanded = computed(() => activeExpandedMenu.value === "label");
 const isPetunjukExpanded = computed(
     () => activeExpandedMenu.value === "petunjuk",
 );
@@ -288,8 +286,6 @@ watch(
             activeExpandedMenu.value = "keuangan";
         } else if (isLaporanSppgActive.value) {
             activeExpandedMenu.value = "laporan-sppg";
-        } else if (isLabelActive.value) {
-            activeExpandedMenu.value = "label";
         } else if (isPetunjukActive.value) {
             activeExpandedMenu.value = "petunjuk";
         } else if (isAsetDigitalActive.value) {
@@ -360,13 +356,6 @@ function toggleKeuanganMenu() {
         activeExpandedMenu.value === "keuangan" ? null : "keuangan";
 }
 
-function toggleLabelMenu() {
-    if (props.isCollapsed) {
-        emit("update:isCollapsed", false);
-    }
-    activeExpandedMenu.value =
-        activeExpandedMenu.value === "label" ? null : "label";
-}
 
 function toggleLaporanSppgMenu() {
     if (props.isCollapsed) {
@@ -1378,83 +1367,7 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 5. Menu Label (Accordion with Submenu) -->
-                <div class="space-y-0.5">
-                    <!-- Parent Label Button -->
-                    <button
-                        type="button"
-                        @click="toggleLabelMenu"
-                        :title="isCollapsed ? 'Label' : ''"
-                        :class="[
-                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
-                            route().current('label.*')
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            isCollapsed
-                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                                : 'px-3.5 py-2.5 gap-3',
-                        ]"
-                    >
-                        <Tag class="h-4 w-4 shrink-0" />
-                        <span
-                            :class="[
-                                'flex-1 truncate',
-                                isCollapsed ? 'inline lg:hidden' : 'inline',
-                            ]"
-                            >Label</span
-                        >
-                        <ChevronDown
-                            :class="[
-                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
-                                isCollapsed ? 'hidden' : 'block',
-                                isLabelExpanded
-                                    ? 'rotate-180 text-primary'
-                                    : '',
-                            ]"
-                        />
-                    </button>
-
-                    <!-- Sub-menu Items: Buat Label & Daftar Label -->
-                    <div
-                        v-if="!isCollapsed && isLabelExpanded"
-                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
-                    >
-                        <!-- Sub-menu 1: Buat Label -->
-                        <Link
-                            :href="route('label.buat')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('label.buat') ||
-                                (route().current('label.index') &&
-                                    (page.props.activeSubMenu === 'buat' ||
-                                        !page.props.activeSubMenu))
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Edit3 class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Buat Label</span>
-                        </Link>
-
-                        <!-- Sub-menu 2: Daftar Label -->
-                        <Link
-                            :href="route('label.daftar')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('label.daftar') ||
-                                (route().current('label.index') &&
-                                    page.props.activeSubMenu === 'daftar')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <ClipboardList class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Daftar Label</span>
-                        </Link>
-                    </div>
-                </div>
-
-                <!-- Menu Laporan (Accordion with Submenu) -->
+                <!-- 6. Menu Laporan (Accordion with Submenu) -->
                 <div class="space-y-0.5">
                     <!-- Parent Laporan Button -->
                     <button
@@ -1512,7 +1425,40 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 7. Menu Supplier Rekanan -->
+                <!-- 7. Menu Label (Direct Menu Item) -->
+                <Link
+                    :href="route('label.index')"
+                    :title="isCollapsed ? 'Label' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('label.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Tag class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Label</span
+                    >
+                    <div
+                        v-if="route().current('label.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 8. Menu Supplier Rekanan -->
                 <Link
                     :href="route('supplier.index')"
                     :title="isCollapsed ? 'Supplier' : ''"
@@ -1544,6 +1490,22 @@ function logout() {
                         ]"
                     ></div>
                 </Link>
+
+                <!-- SECTION: LAINNYA -->
+                <div :class="['pt-3', isCollapsed ? 'pt-2' : 'pt-4']">
+                    <div
+                        v-if="isCollapsed"
+                        class="hidden lg:block mx-auto my-1 w-6 border-t border-slate-200"
+                    ></div>
+                    <p
+                        :class="[
+                            'px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 transition-opacity',
+                            isCollapsed ? 'block lg:hidden' : 'block',
+                        ]"
+                    >
+                        Lainnya
+                    </p>
+                </div>
 
 
                 <!-- 7. Menu Petunjuk (Accordion with Submenu: SOP, Juknis, Pedoman) -->

@@ -339,7 +339,7 @@ const submit = () => {
                         :href="route('register')"
                         class="text-indigo-600 font-semibold hover:underline ml-1"
                     >
-                        Daftar Baru
+                        Daftar
                     </Link>
                 </div>
             </div>

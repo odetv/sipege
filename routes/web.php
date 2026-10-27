@@ -146,14 +146,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');
     Route::resource('petugas', PetugasController::class);
 
-    // Label SPPG
+    // Label SPPG (Menu Langsung)
     Route::prefix('label')->name('label.')->group(function () {
         Route::get('/', [LabelController::class, 'index'])->name('index');
         Route::get('/buat', [LabelController::class, 'buat'])->name('buat');
         Route::get('/daftar', [LabelController::class, 'daftar'])->name('daftar');
-        Route::post('/', [LabelController::class, 'store'])->name('store');
-        Route::put('/{id}', [LabelController::class, 'update'])->name('update');
-        Route::delete('/{id}', [LabelController::class, 'destroy'])->name('destroy');
     });
 
     // Menu Laporan SPPG

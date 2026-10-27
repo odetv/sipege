@@ -694,7 +694,7 @@ function submit() {
     <Head title="Daftar ke Sistem" />
 
     <div
-        class="min-h-screen bg-gradient-to-b from-slate-50 via-slate-100/60 to-blue-50/40 py-8 px-4 sm:px-6 lg:px-8"
+        class="min-h-screen bg-gradient-to-b from-slate-50 via-slate-100/60 to-blue-50/40 py-6 sm:py-8 px-3 sm:px-6 lg:px-8"
     >
         <div class="max-w-4xl mx-auto">
             <!-- Header -->
@@ -731,13 +731,13 @@ function submit() {
             </div>
 
             <!-- Stepper / Indicator -->
-            <div class="mb-8 max-w-2xl mx-auto">
-                <div class="grid grid-cols-3 gap-2 sm:gap-4 relative">
+            <div class="mb-6 sm:mb-8 max-w-2xl mx-auto">
+                <div class="grid grid-cols-3 gap-1.5 sm:gap-4 relative">
                     <!-- Step 1 -->
                     <div
                         @click="currentStep > 1 ? goToStep(1) : null"
                         :class="[
-                            'flex flex-col sm:flex-row items-center gap-2 p-3 rounded-xl border text-left transition-all duration-200',
+                            'flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-xl border text-left transition-all duration-200',
                             currentStep === 1
                                 ? 'bg-white border-primary shadow-sm ring-2 ring-primary/10'
                                 : currentStep > 1
@@ -777,7 +777,7 @@ function submit() {
                     <div
                         @click="currentStep > 2 ? goToStep(2) : null"
                         :class="[
-                            'flex flex-col sm:flex-row items-center gap-2 p-3 rounded-xl border text-left transition-all duration-200',
+                            'flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-xl border text-left transition-all duration-200',
                             currentStep === 2
                                 ? 'bg-white border-primary shadow-sm ring-2 ring-primary/10'
                                 : currentStep > 2
@@ -816,7 +816,7 @@ function submit() {
                     <!-- Step 3 -->
                     <div
                         :class="[
-                            'flex flex-col sm:flex-row items-center gap-2 p-3 rounded-xl border text-left transition-all duration-200',
+                            'flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-xl border text-left transition-all duration-200',
                             currentStep === 3
                                 ? 'bg-white border-primary shadow-sm ring-2 ring-primary/10'
                                 : 'bg-white/60 border-slate-200 opacity-60',
@@ -852,7 +852,7 @@ function submit() {
                     <!-- ================= STEP 1: PROFIL PENGGUNA (KEPALA SPPG) ================= -->
                     <div
                         v-show="currentStep === 1"
-                        class="p-6 sm:p-8 space-y-8"
+                        class="p-4 sm:p-8 space-y-6 sm:space-y-8"
                     >
                         <!-- Section Header -->
                         <div class="border-b border-slate-100 pb-4">
@@ -2147,12 +2147,12 @@ function submit() {
 
                         <!-- Footer Step 1 -->
                         <div
-                            class="flex items-center justify-between pt-4 border-t border-slate-100"
+                            class="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100"
                         >
-                            <Link :href="route('login')">
+                            <Link :href="route('login')" class="w-full sm:w-auto text-center">
                                 <Button
                                     variant="ghost"
-                                    className="text-slate-600 text-xs"
+                                    className="w-full sm:w-auto text-slate-600 text-xs py-2.5"
                                 >
                                     Sudah punya akun? Masuk
                                 </Button>
@@ -2161,7 +2161,7 @@ function submit() {
                             <Button
                                 type="button"
                                 @click="nextStep"
-                                className="flex items-center gap-2 px-6"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5"
                             >
                                 <span>Lanjut ke Data SPPG</span>
                                 <ArrowRight class="h-4 w-4" />
@@ -2172,7 +2172,7 @@ function submit() {
                     <!-- ================= STEP 2: DATA UNIT SPPG ================= -->
                     <div
                         v-show="currentStep === 2"
-                        class="p-6 sm:p-8 space-y-8"
+                        class="p-4 sm:p-8 space-y-6 sm:space-y-8"
                     >
                         <!-- Section Header -->
                         <div class="border-b border-slate-100 pb-4">
@@ -2673,13 +2673,13 @@ function submit() {
 
                         <!-- Footer Step 2 -->
                         <div
-                            class="flex items-center justify-between pt-4 border-t border-slate-100"
+                            class="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100"
                         >
                             <Button
                                 type="button"
                                 variant="outline"
                                 @click="prevStep"
-                                className="flex items-center gap-2"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5"
                             >
                                 <ArrowLeft class="h-4 w-4" />
                                 <span>Kembali</span>
@@ -2688,7 +2688,7 @@ function submit() {
                             <Button
                                 type="button"
                                 @click="nextStep"
-                                className="flex items-center gap-2 px-6"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5"
                             >
                                 <span>Tinjau Ringkasan Data</span>
                                 <ArrowRight class="h-4 w-4" />
@@ -2699,7 +2699,7 @@ function submit() {
                     <!-- ================= STEP 3: REVIEW & KONFIRMASI ================= -->
                     <div
                         v-show="currentStep === 3"
-                        class="p-6 sm:p-8 space-y-6"
+                        class="p-4 sm:p-8 space-y-6"
                     >
                         <div class="border-b border-slate-100 pb-4">
                             <Badge variant="secondary" className="mb-1 text-xs"
@@ -2998,13 +2998,13 @@ function submit() {
 
                         <!-- Footer Step 3 -->
                         <div
-                            class="flex items-center justify-between pt-4 border-t border-slate-100"
+                            class="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100"
                         >
                             <Button
                                 type="button"
                                 variant="outline"
                                 @click="prevStep"
-                                className="flex items-center gap-2"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5"
                             >
                                 <ArrowLeft class="h-4 w-4" />
                                 <span>Kembali</span>
@@ -3014,7 +3014,7 @@ function submit() {
                                 type="submit"
                                 :disabled="form.processing || !isAgreed"
                                 :className="[
-                                    'flex items-center gap-2 px-8 h-11 transition-all duration-200',
+                                    'w-full sm:w-auto flex items-center justify-center gap-2 px-8 h-11 transition-all duration-200',
                                     isAgreed && !form.processing
                                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 cursor-pointer opacity-100'
                                         : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60',

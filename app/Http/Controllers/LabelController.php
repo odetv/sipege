@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\KelompokPenerimaManfaat;
 use App\Models\Periode;
-use App\Models\SavedLabel;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use Illuminate\Http\RedirectResponse;
@@ -17,14 +16,13 @@ class LabelController extends Controller
     /**
      * Helper data loader for Label pages.
      */
-    private function getLabelPageData(Request $request, string $activeSubMenu = 'buat'): array
+    private function getLabelPageData(Request $request): array
     {
         $user = $request->user();
         $unitSppg = $user->getCachedUnitSppg();
 
         $kelompokList = [];
         $workOrders = [];
-        $savedLabels = [];
         $todayStr = date('Y-m-d');
         $activeWorkOrder = null;
 
@@ -126,10 +124,6 @@ class LabelController extends Controller
                 $activeWorkOrder = $workOrders->firstWhere('tanggal', $todayStr) ?: $workOrders->first();
             }
 
-            // Ambil saved labels
-            $savedLabels = SavedLabel::where('unit_sppg_id', $unitSppg->id)
-                ->orderBy('created_at', 'desc')
-                ->get();
         }
 
         $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
@@ -150,214 +144,35 @@ class LabelController extends Controller
             'kelompokList' => $kelompokList,
             'workOrders' => $workOrders,
             'initialActiveWo' => $activeWorkOrder,
-            'savedLabels' => $savedLabels,
             'periodes' => $periodes,
-            'activeSubMenu' => $request->query('tab') ?: $activeSubMenu,
-            'editLabelId' => $request->query('edit_id'),
         ];
     }
 
     /**
-     * Tampilkan halaman generator label (Default: Buat Label).
+     * Tampilkan halaman generator label.
      */
     public function index(Request $request): Response
     {
-        $tab = $request->query('tab', 'buat');
-        return Inertia::render('Label/Index', $this->getLabelPageData($request, $tab));
+        return Inertia::render('Label/Index', $this->getLabelPageData($request));
     }
 
     /**
-     * Submenu: Buat Label
+     * Alias route untuk buat label -> redirect ke index
      */
-    public function buat(Request $request): Response
+    public function buat(): RedirectResponse
     {
-        return Inertia::render('Label/Index', $this->getLabelPageData($request, 'buat'));
+        return redirect()->route('label.index');
     }
 
     /**
-     * Submenu: Daftar Label
+     * Alias route untuk daftar label -> redirect ke index
      */
-    public function daftar(Request $request): Response
+    public function daftar(): RedirectResponse
     {
-        return Inertia::render('Label/Index', $this->getLabelPageData($request, 'daftar'));
+        return redirect()->route('label.index');
     }
 
-    /**
-     * Simpan label baru ke database.
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-        $unitSppg = $user->unitSppg;
 
-        if (!$unitSppg) {
-            return redirect()->back()->with('error', 'Unit SPPG tidak ditemukan.');
-        }
-
-        $validated = $request->validate([
-            'work_order_id' => 'nullable',
-            'nama_menu' => 'required|string|max:255',
-            'tanggal_produksi' => 'required|date',
-            'jam_produksi' => 'nullable|string|max:20',
-            'batas_konsumsi' => 'nullable|string|max:20',
-            'petunjuk_menu' => 'nullable|string',
-            'template_id' => 'nullable|string|max:100',
-            'template_name' => 'nullable|string|max:255',
-            'aspect_ratio' => 'nullable|string|max:20',
-            'gizi_data' => 'nullable|array',
-            'selected_kelompok_ids' => 'nullable|array',
-            'kelompoks_snapshot' => 'nullable|array',
-            'total_sasaran' => 'nullable|integer',
-            'total_porsi' => 'nullable|integer',
-            'total_pk' => 'nullable|integer',
-            'total_pb' => 'nullable|integer',
-            'keterangan' => 'nullable|string',
-        ]);
-
-        // Generate Nomor Label unik misal LBL-20260909-001
-        $dateCode = date('Ymd', strtotime($validated['tanggal_produksi']));
-        $countToday = SavedLabel::where('unit_sppg_id', $unitSppg->id)
-            ->whereDate('tanggal_produksi', $validated['tanggal_produksi'])
-            ->count();
-        $nomorLabel = sprintf('LBL-%s-%03d', $dateCode, $countToday + 1);
-
-        // Jika work_order_id berupa string nomor_wo, id numerik, atau uuid
-        $woId = null;
-        if (!empty($validated['work_order_id'])) {
-            $woVal = (string)$validated['work_order_id'];
-            if (is_numeric($woVal)) {
-                $foundWo = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                    ->where('id', (int)$woVal)
-                    ->first();
-                $woId = $foundWo?->id;
-            } elseif (\Illuminate\Support\Str::isUuid($woVal)) {
-                $foundWo = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                    ->where('uuid', $woVal)
-                    ->first();
-                $woId = $foundWo?->id;
-            } else {
-                $foundWo = WorkOrder::where('unit_sppg_id', $unitSppg->id)
-                    ->where('nomor_wo', $woVal)
-                    ->first();
-                $woId = $foundWo?->id;
-            }
-        }
-
-        SavedLabel::create([
-            'nomor_label' => $nomorLabel,
-            'unit_sppg_id' => $unitSppg->id,
-            'work_order_id' => $woId,
-            'nama_menu' => $validated['nama_menu'],
-            'tanggal_produksi' => $validated['tanggal_produksi'],
-            'jam_produksi' => $validated['jam_produksi'] ?? '07:00',
-            'batas_konsumsi' => $validated['batas_konsumsi'] ?? '10:00',
-            'petunjuk_menu' => $validated['petunjuk_menu'] ?? null,
-            'template_id' => $validated['template_id'] ?? 'bgn_standard_fixed_white',
-            'template_name' => $validated['template_name'] ?? 'Standar Resmi BGN (Putih)',
-            'aspect_ratio' => $validated['aspect_ratio'] ?? '3:2',
-            'gizi_data' => $validated['gizi_data'] ?? [],
-            'selected_kelompok_ids' => $validated['selected_kelompok_ids'] ?? [],
-            'kelompoks_snapshot' => $validated['kelompoks_snapshot'] ?? [],
-            'total_sasaran' => (int)($validated['total_sasaran'] ?? 0),
-            'total_porsi' => (int)($validated['total_porsi'] ?? 0),
-            'total_pk' => (int)($validated['total_pk'] ?? 0),
-            'total_pb' => (int)($validated['total_pb'] ?? 0),
-            'keterangan' => $validated['keterangan'] ?? null,
-        ]);
-
-        return redirect()->route('label.daftar')->with('success', "Label {$nomorLabel} berhasil disimpan ke Daftar Label.");
-    }
-
-    /**
-     * Perbarui label yang sudah ada.
-     */
-    public function update(Request $request, int|string $id): RedirectResponse
-    {
-        $user = $request->user();
-        $unitSppg = $user->unitSppg;
-
-        if (!$unitSppg) {
-            return redirect()->back()->with('error', 'Unit SPPG tidak ditemukan.');
-        }
-
-        $savedLabel = SavedLabel::where('unit_sppg_id', $unitSppg->id)
-            ->where(function ($q) use ($id) {
-                if (is_numeric($id)) {
-                    $q->where('id', $id);
-                } else {
-                    $q->where('nomor_label', $id);
-                }
-            })
-            ->firstOrFail();
-
-        $validated = $request->validate([
-            'nama_menu' => 'required|string|max:255',
-            'tanggal_produksi' => 'required|date',
-            'jam_produksi' => 'nullable|string|max:20',
-            'batas_konsumsi' => 'nullable|string|max:20',
-            'petunjuk_menu' => 'nullable|string',
-            'template_id' => 'nullable|string|max:100',
-            'template_name' => 'nullable|string|max:255',
-            'aspect_ratio' => 'nullable|string|max:20',
-            'gizi_data' => 'nullable|array',
-            'selected_kelompok_ids' => 'nullable|array',
-            'kelompoks_snapshot' => 'nullable|array',
-            'total_sasaran' => 'nullable|integer',
-            'total_porsi' => 'nullable|integer',
-            'total_pk' => 'nullable|integer',
-            'total_pb' => 'nullable|integer',
-            'keterangan' => 'nullable|string',
-        ]);
-
-        $savedLabel->update([
-            'nama_menu' => $validated['nama_menu'],
-            'tanggal_produksi' => $validated['tanggal_produksi'],
-            'jam_produksi' => $validated['jam_produksi'] ?? ($savedLabel->jam_produksi ?: '07:00'),
-            'batas_konsumsi' => $validated['batas_konsumsi'] ?? ($savedLabel->batas_konsumsi ?: '10:00'),
-            'petunjuk_menu' => $validated['petunjuk_menu'] ?? $savedLabel->petunjuk_menu,
-            'template_id' => $validated['template_id'] ?? $savedLabel->template_id,
-            'template_name' => $validated['template_name'] ?? $savedLabel->template_name,
-            'aspect_ratio' => $validated['aspect_ratio'] ?? $savedLabel->aspect_ratio,
-            'gizi_data' => $validated['gizi_data'] ?? $savedLabel->gizi_data,
-            'selected_kelompok_ids' => $validated['selected_kelompok_ids'] ?? $savedLabel->selected_kelompok_ids,
-            'kelompoks_snapshot' => $validated['kelompoks_snapshot'] ?? $savedLabel->kelompoks_snapshot,
-            'total_sasaran' => (int)($validated['total_sasaran'] ?? $savedLabel->total_sasaran),
-            'total_porsi' => (int)($validated['total_porsi'] ?? $savedLabel->total_porsi),
-            'total_pk' => (int)($validated['total_pk'] ?? $savedLabel->total_pk),
-            'total_pb' => (int)($validated['total_pb'] ?? $savedLabel->total_pb),
-            'keterangan' => $validated['keterangan'] ?? $savedLabel->keterangan,
-        ]);
-
-        return redirect()->route('label.daftar')->with('success', "Label {$savedLabel->nomor_label} berhasil diperbarui.");
-    }
-
-    /**
-     * Hapus label tersimpan dari database.
-     */
-    public function destroy(Request $request, int|string $id): RedirectResponse
-    {
-        $user = $request->user();
-        $unitSppg = $user->unitSppg;
-
-        if (!$unitSppg) {
-            return redirect()->back()->with('error', 'Unit SPPG tidak ditemukan.');
-        }
-
-        $savedLabel = SavedLabel::where('unit_sppg_id', $unitSppg->id)
-            ->where(function ($q) use ($id) {
-                if (is_numeric($id)) {
-                    $q->where('id', $id);
-                } else {
-                    $q->where('nomor_label', $id);
-                }
-            })
-            ->firstOrFail();
-
-        $nomor = $savedLabel->nomor_label;
-        $savedLabel->delete();
-
-        return redirect()->route('label.daftar')->with('success', "Label {$nomor} berhasil dihapus.");
-    }
 
     /**
      * Pastikan nilai AKG PK & PB normal selalu tersedia (termasuk untuk WO manual)
@@ -523,26 +338,10 @@ class LabelController extends Controller
      */
     private function calculateAkgAlergiForWo(WorkOrder $wo): array
     {
-        // 1. Jika Work Order memiliki akg_alergi riil yang tersimpan (misal dari mode manual atau edit gizi), prioritaskan itu!
-        if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
-            $hasRealData = false;
-            foreach ($wo->akg_alergi as $j => $data) {
-                if (is_array($data) && (
-                    !empty($data['akg_pb']) || !empty($data['akg_pk']) ||
-                    !empty($data['pb']) || !empty($data['pk'])
-                )) {
-                    $hasRealData = true;
-                    break;
-                }
-            }
-            if ($hasRealData) {
-                return $wo->akg_alergi;
-            }
-        }
-
         $items = $wo->items;
         $rawAlergi = $wo->sub_menu_alergi ?: [];
 
+        // Himpun hanya jenis alergi yang memang dikonfigurasi / dipilih di Work Order
         $configuredAllergies = [];
         if (is_array($rawAlergi)) {
             foreach ($rawAlergi as $subKey => $arr) {
@@ -567,6 +366,30 @@ class LabelController extends Controller
                         $configuredAllergies[] = $j;
                     }
                 }
+            }
+        }
+
+        // Jika Work Order ini tidak memiliki varian menu alergi yang dipilih/digunakan, return array kosong
+        if (empty($configuredAllergies)) {
+            return [];
+        }
+
+        // 1. Jika Work Order memiliki akg_alergi riil yang tersimpan, prioritaskan itu HANYA untuk jenis alergi yang memang dikonfigurasi/dipilih
+        if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
+            $filteredAkg = [];
+            foreach ($configuredAllergies as $cJenis) {
+                foreach ($wo->akg_alergi as $j => $data) {
+                    if (strcasecmp(trim($j), $cJenis) === 0 && is_array($data)) {
+                        $pkEnergi = (float)($data['akg_pb']['energi'] ?? $data['akg_pk']['energi'] ?? $data['pb']['energi'] ?? $data['pk']['energi'] ?? 0);
+                        if ($pkEnergi > 0) {
+                            $filteredAkg[$cJenis] = $data;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!empty($filteredAkg)) {
+                return $filteredAkg;
             }
         }
 
