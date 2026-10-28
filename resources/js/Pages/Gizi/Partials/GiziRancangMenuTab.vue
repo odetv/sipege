@@ -1445,21 +1445,47 @@ function normalizeKelompokForWo(k) {
     }
 
     // Hitung total PK & PB dari rincian jika ada
-    const calcPK = rincianArr
-        .filter((r) => r.is_menerima !== false && r.jenis_porsi === "Porsi Kecil")
-        .reduce(
-            (sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0),
+    const hasRincianData = rincianArr.some(
+        (r) =>
+            (Number(r.jumlah_laki_laki) || 0) +
+                (Number(r.jumlah_perempuan) || 0) >
             0,
-        );
-    const calcPB = rincianArr
-        .filter((r) => r.is_menerima !== false && r.jenis_porsi === "Porsi Besar")
-        .reduce(
-            (sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0),
-            0,
-        );
+    );
 
-    const pk = calcPK > 0 ? calcPK : Number(k.total_porsi_kecil) || 0;
-    const pb = calcPB > 0 ? calcPB : Number(k.total_porsi_besar) || 0;
+    let pk = 0;
+    let pb = 0;
+
+    if (hasRincianData) {
+        pk = rincianArr
+            .filter(
+                (r) =>
+                    r.is_menerima !== false &&
+                    r.jenis_porsi === "Porsi Kecil",
+            )
+            .reduce(
+                (sum, r) =>
+                    sum +
+                    ((Number(r.jumlah_laki_laki) || 0) +
+                        (Number(r.jumlah_perempuan) || 0)),
+                0,
+            );
+        pb = rincianArr
+            .filter(
+                (r) =>
+                    r.is_menerima !== false &&
+                    r.jenis_porsi === "Porsi Besar",
+            )
+            .reduce(
+                (sum, r) =>
+                    sum +
+                    ((Number(r.jumlah_laki_laki) || 0) +
+                        (Number(r.jumlah_perempuan) || 0)),
+                0,
+            );
+    } else {
+        pk = Number(k.total_porsi_kecil) || Number(k.porsi_kecil) || 0;
+        pb = Number(k.total_porsi_besar) || Number(k.porsi_besar) || 0;
+    }
 
     const normAlergi = normalizeAlergiItems(
         k.keterangan_alergi,

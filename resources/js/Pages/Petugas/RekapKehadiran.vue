@@ -27,8 +27,14 @@ import {
     Sparkles,
     ArrowRight,
     RefreshCw,
+    FileText,
 } from "lucide-vue-next";
-import { downloadRekapAbsenGajiExcel, formatTanggalIndo } from "@/Services/exportPetugasHelper";
+import { 
+    downloadRekapAbsenGajiExcel, 
+    downloadBukuTandaTerimaHarianExcel, 
+    downloadSlipGajiPdf,
+    formatTanggalIndo 
+} from "@/Services/exportPetugasHelper";
 import DateRangePicker from "@/Components/DateRangePicker.vue";
 import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
 
@@ -45,6 +51,7 @@ const props = defineProps({
     initialPeriodeId: { type: [String, Number], default: "all" },
     initialPresensiMap: { type: Object, default: () => ({}) },
     initialAbsensiMap: { type: Object, default: () => ({}) }, // fallback backwards compatibility
+    initialPresensiDetailsMap: { type: Object, default: () => ({}) },
 });
 
 const page = usePage();
@@ -545,14 +552,16 @@ function getJabatanBadgeClass(jabatan) {
     if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
     const j = jabatan.toLowerCase();
     if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
-    if (j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
     if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
     if (j.includes("chef")) return "bg-amber-50 text-amber-700 border-amber-200";
     if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
     if (j.includes("persiapan")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
     if (j.includes("pemorsian")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-sky-50 text-sky-700 border-sky-200";
-    if (j.includes("cuci")) return "bg-cyan-50 text-cyan-700 border-cyan-200";
+    if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
+    if (j.includes("admin")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     if (j.includes("kebersihan")) return "bg-purple-50 text-purple-700 border-purple-200";
     if (j.includes("keamanan")) return "bg-rose-50 text-rose-700 border-rose-200";
     return "bg-slate-50 text-slate-700 border-slate-200";
@@ -619,25 +628,43 @@ const computedPetugasStats = computed(() => {
     props.petugas.forEach((p) => {
         const pAtt = matrixPresensi.value[p.id] || {};
         let h = 0, h2 = 0, l = 0, i = 0, s = 0, tk = 0, kosong = 0;
+        let totalHonor = 0;
+        const dailyRates = [];
+        const defaultRate = parseInt(p.gaji_harian_bgn) || 0;
 
-        if (p.status === "Aktif") {
-            dateColumns.value.forEach((dt) => {
-                const st = pAtt[dt.dateStr] || "";
-                if (st === "H") h++;
-                else if (st === "H2") h2++;
-                else if (st === "L") l++;
-                else if (st === "I") i++;
-                else if (st === "S") s++;
-                else if (st === "TK") tk++;
-                else kosong++;
-            });
+        dateColumns.value.forEach((dt) => {
+            const st = pAtt[dt.dateStr] || "";
+            const snap = props.initialPresensiDetailsMap?.[p.id]?.[dt.dateStr];
+            const dailyGaji = (snap && snap.gaji_harian_bgn !== undefined && snap.gaji_harian_bgn !== null)
+                ? Number(snap.gaji_harian_bgn)
+                : defaultRate;
+
+            if (st === "H") {
+                h++;
+                totalHonor += dailyGaji * 1.0;
+                dailyRates.push(dailyGaji);
+            } else if (st === "H2") {
+                h2++;
+                totalHonor += dailyGaji * 0.5;
+                dailyRates.push(dailyGaji);
+            } else if (st === "L") l++;
+            else if (st === "I") i++;
+            else if (st === "S") s++;
+            else if (st === "TK") tk++;
+            else kosong++;
+        });
+
+        let minGaji = null;
+        let maxGaji = null;
+        let isGajiVarying = false;
+        if (dailyRates.length > 0) {
+            minGaji = Math.min(...dailyRates);
+            maxGaji = Math.max(...dailyRates);
+            isGajiVarying = minGaji !== maxGaji;
         }
 
-        // Nominal hak honor presensi murni hanya dari Gaji BGN saja (Bonus dialihkan ke menu Rekap Bonus)
-        const honorPerHari = parseInt(p.gaji_harian_bgn) || 0;
         // Hadir Penuh dihitung 1 manday, Hadir Setengah Hari dihitung 0.5 manday (gaji harian dipotong setengah)
         const mandays = h + (h2 * 0.5);
-        const totalHonor = mandays * honorPerHari;
         const rate = Math.round((mandays / totalDays) * 100);
 
         stats[p.id] = {
@@ -650,8 +677,11 @@ const computedPetugasStats = computed(() => {
             kosong,
             mandays,
             rate,
-            totalHonor,
-            honorPerHari,
+            totalHonor: Math.round(totalHonor),
+            honorPerHari: defaultRate,
+            isGajiVarying,
+            minGaji,
+            maxGaji,
         };
     });
 
@@ -730,34 +760,16 @@ const hadirPerTanggal = computed(() => {
     return map;
 });
 
-// ─── Modal Download Excel Dinamis (Hari Ini / Bulanan / Periodik & Kustom) ────
+// ─── Modal Download Excel Dinamis (Buku TTD Harian / Rekap Matriks) ───────────
 const isExportModalOpen = ref(false);
 const isExportMenuOpen = ref(false);
 const isExporting = ref(false);
-const exportOption = ref("current"); // 'today', 'bulanan', 'periodik', 'current'
-const exportStartDate = ref(tanggalMulai.value);
-const exportEndDate = ref(tanggalSelesai.value);
+const exportDocType = ref("ttd_harian"); // 'ttd_harian' (Buku TTD Harian per Sheet DD-MM-YYYY) vs 'rekap_matriks' (Matriks Periode)
 
-function openExportModal(defaultOpt = null) {
+function openExportModal(docType = null) {
     isExportMenuOpen.value = false;
-    if (defaultOpt) {
-        exportOption.value = defaultOpt;
-    } else {
-        exportOption.value = modeSkala.value === "periodik" ? "periodik" : "bulanan";
-    }
-
-    if (exportOption.value === "today") {
-        exportStartDate.value = todayStr.value;
-        exportEndDate.value = todayStr.value;
-    } else if (exportOption.value === "current") {
-        exportStartDate.value = tanggalMulai.value;
-        exportEndDate.value = tanggalSelesai.value;
-    } else if (exportOption.value === "bulanan") {
-        exportStartDate.value = tanggalMulai.value;
-        exportEndDate.value = getDefaultEndDate("bulanan", exportStartDate.value);
-    } else if (exportOption.value === "periodik") {
-        exportStartDate.value = tanggalMulai.value;
-        exportEndDate.value = getDefaultEndDate("periodik", exportStartDate.value);
+    if (docType) {
+        exportDocType.value = docType;
     }
     isExportModalOpen.value = true;
 }
@@ -765,20 +777,6 @@ function openExportModal(defaultOpt = null) {
 function closeExportModal() {
     isExportModalOpen.value = false;
 }
-
-watch(exportOption, (newOpt) => {
-    if (newOpt === "today") {
-        exportStartDate.value = todayStr.value;
-        exportEndDate.value = todayStr.value;
-    } else if (newOpt === "bulanan") {
-        exportEndDate.value = getDefaultEndDate("bulanan", exportStartDate.value);
-    } else if (newOpt === "periodik") {
-        exportEndDate.value = getDefaultEndDate("periodik", exportStartDate.value);
-    } else if (newOpt === "current") {
-        exportStartDate.value = tanggalMulai.value;
-        exportEndDate.value = tanggalSelesai.value;
-    }
-});
 
 async function downloadHariIniDirect() {
     isExportMenuOpen.value = false;
@@ -801,17 +799,58 @@ async function downloadHariIniDirect() {
             petugas: props.petugas,
             presensiMap: matrixPresensi.value,
             kehadiranMap: matrixPresensi.value,
+            presensiDetailsMap: props.initialPresensiDetailsMap,
             dateList: exportDateList,
             startDate: todayStr.value,
             endDate: todayStr.value,
             unitSppg: props.unitSppg,
             periode: activePeriode,
             modeHariKerja: 1,
+            user: page.props.auth?.user,
         });
 
         showToast(`File Excel Presensi Hari Ini (${formatTanggalIndo(todayStr.value)}) berhasil didownload!`);
     } catch (e) {
         console.error("Gagal export excel hari ini:", e);
+        showToast("Gagal mengunduh file Excel: " + (e?.message || e));
+    } finally {
+        isExporting.value = false;
+    }
+}
+
+async function downloadTandaTerimaHarianDirect() {
+    isExportMenuOpen.value = false;
+    isExporting.value = true;
+    try {
+        let activePeriode = null;
+        if (selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, "0");
+        const exportDateList = [{
+            dateStr: todayStr.value,
+            dayNum: d,
+            label: "1",
+        }];
+
+        await downloadBukuTandaTerimaHarianExcel({
+            petugas: props.petugas,
+            presensiMap: matrixPresensi.value,
+            kehadiranMap: matrixPresensi.value,
+            presensiDetailsMap: props.initialPresensiDetailsMap,
+            dateList: exportDateList,
+            startDate: todayStr.value,
+            endDate: todayStr.value,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            user: page.props.auth?.user,
+        });
+
+        showToast(`Buku Tanda Terima Honor Harian (${formatTanggalIndo(todayStr.value)}) berhasil didownload!`);
+    } catch (e) {
+        console.error("Gagal export format TTD harian:", e);
         showToast("Gagal mengunduh file Excel: " + (e?.message || e));
     } finally {
         isExporting.value = false;
@@ -826,47 +865,142 @@ async function handleExecuteExport() {
             activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
         }
 
-        // Hitung list tanggal untuk export
-        const exportDateList = [];
-        let cur = new Date(exportStartDate.value + "T00:00:00");
-        const end = new Date(exportEndDate.value + "T00:00:00");
-        let idx = 1;
-        while (cur <= end && idx <= 60) {
-            const y = cur.getFullYear();
-            const m = String(cur.getMonth() + 1).padStart(2, "0");
-            const d = String(cur.getDate()).padStart(2, "0");
-            exportDateList.push({
-                dateStr: `${y}-${m}-${d}`,
-                dayNum: d,
-                label: String(idx),
-            });
-            cur.setDate(cur.getDate() + 1);
-            idx++;
-        }
+        // List tanggal diambil langsung dari filter tanggal yang aktif di tabel (dateColumns)
+        const exportDateList = dateColumns.value.map((dt) => ({
+            dateStr: dt.dateStr,
+            dayNum: dt.dayNum,
+            label: String(dt.index),
+        }));
 
         const days = exportDateList.length;
-        const modeHari = exportOption.value === "today" ? 1 : (exportOption.value === "bulanan" ? 28 : (exportOption.value === "periodik" ? 14 : days));
+        const startStr = tanggalMulai.value;
+        const endStr = tanggalSelesai.value;
 
-        await downloadRekapAbsenGajiExcel({
-            petugas: props.petugas,
-            presensiMap: matrixPresensi.value,
-            kehadiranMap: matrixPresensi.value,
-            dateList: exportDateList,
-            startDate: exportStartDate.value,
-            endDate: exportEndDate.value,
-            unitSppg: props.unitSppg,
-            periode: activePeriode,
-            modeHariKerja: modeHari,
-        });
+        if (exportDocType.value === "ttd_harian") {
+            await downloadBukuTandaTerimaHarianExcel({
+                petugas: props.petugas,
+                presensiMap: matrixPresensi.value,
+                kehadiranMap: matrixPresensi.value,
+                presensiDetailsMap: props.initialPresensiDetailsMap,
+                dateList: exportDateList,
+                startDate: startStr,
+                endDate: endStr,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                user: page.props.auth?.user,
+            });
+            const labelHasil = days === 1 
+                ? `Hari Ini (${formatTanggalIndo(startStr)})` 
+                : `${days} Hari (Pisah Sheet DD-MM-YYYY)`;
+            showToast(`Buku Tanda Terima Honor Harian (${labelHasil}) berhasil didownload!`);
+        } else if (exportDocType.value === "slip_gaji_pdf") {
+            await downloadSlipGajiPdf({
+                petugas: filteredPetugas.value,
+                presensiMap: matrixPresensi.value,
+                presensiDetailsMap: props.initialPresensiDetailsMap,
+                dateList: exportDateList,
+                startDate: startStr,
+                endDate: endStr,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                user: page.props.auth?.user,
+            });
+            const labelHasil = days === 1 ? `Hari Ini (${formatTanggalIndo(startStr)})` : `${days} Hari`;
+            showToast(`Slip Gaji PDF (${labelHasil}) berhasil didownload!`);
+        } else {
+            await downloadRekapAbsenGajiExcel({
+                petugas: props.petugas,
+                presensiMap: matrixPresensi.value,
+                kehadiranMap: matrixPresensi.value,
+                presensiDetailsMap: props.initialPresensiDetailsMap,
+                dateList: exportDateList,
+                startDate: startStr,
+                endDate: endStr,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                modeHariKerja: days,
+                user: page.props.auth?.user,
+            });
+            const labelHasil = days === 1 ? `Hari Ini (${formatTanggalIndo(startStr)})` : `${days} Hari`;
+            showToast(`File Excel Rekap Presensi & Gaji (${labelHasil}) berhasil didownload!`);
+        }
 
-        const labelHasil = exportOption.value === "today" || days === 1 ? `Hari Ini (${formatTanggalIndo(exportStartDate.value)})` : `${days} Hari`;
-        showToast(`File Excel Rekap Presensi & Gaji (${labelHasil}) berhasil didownload!`);
         closeExportModal();
     } catch (e) {
-        console.error("Gagal export excel:", e);
-        showToast("Gagal mengunduh file Excel: " + (e?.message || e));
+        console.error("Gagal export:", e);
+        showToast("Gagal mengunduh file: " + (e?.message || e));
     } finally {
         isExporting.value = false;
+    }
+}
+
+async function downloadSlipGajiDirect() {
+    isExportMenuOpen.value = false;
+    isExporting.value = true;
+    try {
+        let activePeriode = null;
+        if (selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const exportDateList = dateColumns.value.map((dt) => ({
+            dateStr: dt.dateStr,
+            dayNum: dt.dayNum,
+            label: String(dt.index),
+        }));
+
+        const days = exportDateList.length;
+        const startStr = tanggalMulai.value;
+        const endStr = tanggalSelesai.value;
+
+        await downloadSlipGajiPdf({
+            petugas: filteredPetugas.value,
+            presensiMap: matrixPresensi.value,
+            presensiDetailsMap: props.initialPresensiDetailsMap,
+            dateList: exportDateList,
+            startDate: startStr,
+            endDate: endStr,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            user: page.props.auth?.user,
+        });
+
+        const labelHasil = days === 1 ? `Hari Ini (${formatTanggalIndo(startStr)})` : `${days} Hari`;
+        showToast(`Slip Gaji PDF (${labelHasil}) berhasil didownload!`);
+    } catch (e) {
+        console.error("Gagal export Slip Gaji PDF:", e);
+        showToast("Gagal mengunduh Slip Gaji PDF: " + (e?.message || e));
+    } finally {
+        isExporting.value = false;
+    }
+}
+
+async function downloadSlipSinglePetugas(p) {
+    if (!p) return;
+    try {
+        let activePeriode = null;
+        if (selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((pr) => String(pr.id) === String(selectedPeriodeId.value)) || null;
+        }
+        const exportDateList = dateColumns.value.map((dt) => ({
+            dateStr: dt.dateStr,
+            dayNum: dt.dayNum,
+            label: String(dt.index),
+        }));
+        await downloadSlipGajiPdf({
+            petugas: [p],
+            presensiMap: matrixPresensi.value,
+            presensiDetailsMap: props.initialPresensiDetailsMap,
+            dateList: exportDateList,
+            startDate: tanggalMulai.value,
+            endDate: tanggalSelesai.value,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            user: page.props.auth?.user,
+        });
+        showToast(`Slip Gaji PDF untuk ${p.nama} berhasil didownload!`);
+    } catch (e) {
+        showToast("Gagal mengunduh Slip Gaji PDF: " + (e?.message || e));
     }
 }
 
@@ -883,6 +1017,101 @@ function closeDetailModal() {
     isDetailModalOpen.value = false;
     detailPetugas.value = null;
 }
+
+// ─── State Expand Rincian Harian Petugas ─────────────────────────────────────
+const expandedPetugasIds = ref(new Set());
+
+function toggleExpandPetugas(id) {
+    if (expandedPetugasIds.value.has(id)) {
+        expandedPetugasIds.value.delete(id);
+    } else {
+        expandedPetugasIds.value.add(id);
+    }
+}
+
+function isPetugasExpanded(id) {
+    return expandedPetugasIds.value.has(id);
+}
+
+function toggleAllExpand() {
+    if (expandedPetugasIds.value.size === props.petugas.length) {
+        expandedPetugasIds.value.clear();
+    } else {
+        props.petugas.forEach((p) => expandedPetugasIds.value.add(p.id));
+    }
+}
+
+function getDailySnapshot(petugasId, dateStr) {
+    return props.initialPresensiDetailsMap?.[petugasId]?.[dateStr] || null;
+}
+
+function getDailyGaji(p, dateStr) {
+    const snap = getDailySnapshot(p.id, dateStr);
+    if (snap && snap.gaji_harian_bgn !== undefined && snap.gaji_harian_bgn !== null) {
+        return Number(snap.gaji_harian_bgn);
+    }
+    return Number(p.gaji_harian_bgn) || 0;
+}
+
+function getDailyBonus(p, dateStr) {
+    const snap = getDailySnapshot(p.id, dateStr);
+    if (snap && snap.bonus_harian_mitra !== undefined && snap.bonus_harian_mitra !== null) {
+        return Number(snap.bonus_harian_mitra);
+    }
+    return Number(p.bonus_harian_mitra) || 0;
+}
+
+function getDailyJabatan(p, dateStr) {
+    const snap = getDailySnapshot(p.id, dateStr);
+    return snap?.jabatan || p.jabatan || "-";
+}
+
+function getDailyHonor(p, dateStr) {
+    const st = matrixPresensi.value[p.id]?.[dateStr] || "";
+    const g = getDailyGaji(p, dateStr);
+    if (st === "H") return g * 1.0;
+    if (st === "H2") return g * 0.5;
+    return 0;
+}
+
+// ─── Tampilan Tab: Matriks vs Log Rincian Harian ─────────────────────────────
+const activeViewTab = ref("matriks"); // 'matriks' | 'harian'
+const selectedLogDateFilter = ref("all");
+
+const filteredDailyLogs = computed(() => {
+    const list = [];
+    const dates = selectedLogDateFilter.value === "all"
+        ? dateColumns.value
+        : dateColumns.value.filter((d) => d.dateStr === selectedLogDateFilter.value);
+
+    dates.forEach((dt) => {
+        filteredPetugas.value.forEach((p) => {
+            const st = matrixPresensi.value[p.id]?.[dt.dateStr] || "";
+            const snap = getDailySnapshot(p.id, dt.dateStr);
+            const gaji = getDailyGaji(p, dt.dateStr);
+            const bonus = getDailyBonus(p, dt.dateStr);
+            const jabatan = getDailyJabatan(p, dt.dateStr);
+            const honor = getDailyHonor(p, dt.dateStr);
+            const statusPetugas = snap?.status_petugas || p.status || "Aktif";
+
+            list.push({
+                petugasId: p.id,
+                dateStr: dt.dateStr,
+                dayName: dt.dayName,
+                nama: snap?.nama || p.nama,
+                nik: snap?.nik || p.nik,
+                jabatan,
+                status: st,
+                gajiHarian: gaji,
+                bonusHarian: bonus,
+                hakDiterima: honor,
+                statusPetugas,
+            });
+        });
+    });
+
+    return list;
+});
 </script>
 
 <template>
@@ -940,26 +1169,26 @@ function closeDetailModal() {
 
                 <!-- Action Buttons: Icon + Text (Responsive Icon-Only di HP) -->
                 <div class="flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-                    <!-- Link ke Master Petugas -->
+                    <!-- Link ke Daftar Petugas -->
                     <Link
                         :href="route('petugas.index')"
                         class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                        title="Daftar Master Petugas"
+                        title="Daftar Petugas"
                     >
                         <Users class="h-4 w-4 text-slate-500" />
-                        <span class="hidden md:inline">Master Petugas</span>
+                        <span class="hidden md:inline">Daftar Petugas</span>
                     </Link>
 
                     <!-- Tombol Download Excel Rekap & Gaji dengan Menu Cepat -->
                     <div class="relative inline-flex items-stretch rounded-lg shadow-xs">
                         <button
                             type="button"
-                            @click="openExportModal()"
+                            @click="openExportModal('ttd_harian')"
                             class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-                            title="Download File Excel Rekap Absen & Gaji"
+                            title="Download Buku Tanda Terima Honor Harian / Rekap Excel"
                         >
                             <FileSpreadsheet class="h-4 w-4" />
-                            <span class="hidden sm:inline">Download Excel</span>
+                            <span class="hidden sm:inline">Download</span>
                             <span class="sm:hidden">Excel</span>
                         </button>
                         <button
@@ -981,67 +1210,73 @@ function closeDetailModal() {
                         <!-- Dropdown Menu Cepat -->
                         <div
                             v-if="isExportMenuOpen"
-                            class="absolute right-0 top-full mt-1.5 z-50 w-64 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                            class="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                         >
                             <div class="p-1">
+                                <!-- Opsi 1: Buku Tanda Terima Harian (Per Sheet DD-MM-YYYY) -->
                                 <button
                                     type="button"
-                                    @click="downloadHariIniDirect"
-                                    class="w-full text-left p-2.5 rounded-lg hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                    @click="openExportModal('ttd_harian')"
+                                    class="w-full text-left p-2 rounded-lg bg-teal-50/70 hover:bg-teal-100/80 text-teal-950 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div class="p-1.5 rounded-md bg-teal-600 text-white mt-0.5 shrink-0 shadow-2xs">
+                                        <FileSpreadsheet class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <p class="text-xs font-bold leading-tight text-teal-900">Buku Tanda Terima Harian</p>
+                                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200/80 text-teal-800">BARU</span>
+                                        </div>
+                                        <p class="text-[10px] text-teal-700 font-normal mt-0.5 leading-snug">Pisah per tgl (Sheet DD-MM-YYYY), total nominal, rekap hadir & TTD fisik</p>
+                                    </div>
+                                </button>
+
+                                <!-- Opsi 2: Tanda Terima Hari Ini (1 Sheet DD-MM-YYYY) Langsung -->
+                                <button
+                                    type="button"
+                                    @click="downloadTandaTerimaHarianDirect"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
                                 >
                                     <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
                                         <CalendarCheck class="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <p class="text-xs font-bold leading-tight text-emerald-800">Download Hari Ini Saja</p>
-                                        <p class="text-[10px] text-slate-500 font-normal mt-0.5">Tanggal {{ formatTanggalIndo(todayStr) }} (1 Hari)</p>
+                                        <p class="text-xs font-bold leading-tight text-slate-900">TTD Hari Ini (1 Sheet)</p>
+                                        <p class="text-[10px] text-slate-500 font-normal mt-0.5">Langsung download tgl {{ formatTanggalIndo(todayStr) }}</p>
                                     </div>
                                 </button>
-                            </div>
-                            <div class="p-1">
+
+                                <!-- Opsi 3: Rekap Presensi & Gaji Matriks Periode -->
                                 <button
                                     type="button"
-                                    @click="openExportModal('today')"
-                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                    @click="openExportModal('rekap_matriks')"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
                                 >
-                                    <span class="flex items-center gap-2">
-                                        <Calendar class="h-3.5 w-3.5 text-emerald-600" />
-                                        <span>Hari Ini (Buka Modal)</span>
-                                    </span>
-                                    <span class="text-[10px] text-slate-400">1 Hari</span>
+                                    <div class="p-1.5 rounded-md bg-slate-100 text-slate-700 mt-0.5 shrink-0">
+                                        <Layers class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold leading-tight text-slate-900">Rekap Presensi & Gaji (Matriks)</p>
+                                        <p class="text-[10px] text-slate-500 font-normal mt-0.5">Matriks horizontal periode + ringkasan divisi</p>
+                                    </div>
                                 </button>
+
+                                <!-- Opsi 4: Slip Gaji (.pdf) Berdasarkan Filter Aktif -->
                                 <button
                                     type="button"
-                                    @click="openExportModal('bulanan')"
-                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                    @click="downloadSlipGajiDirect"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-emerald-50/70 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 border-t border-slate-100"
                                 >
-                                    <span class="flex items-center gap-2">
-                                        <Clock class="h-3.5 w-3.5 text-slate-400" />
-                                        <span>Rekap Bulanan</span>
-                                    </span>
-                                    <span class="text-[10px] text-slate-400">28 Hari</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="openExportModal('periodik')"
-                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
-                                >
-                                    <span class="flex items-center gap-2">
-                                        <Calendar class="h-3.5 w-3.5 text-slate-400" />
-                                        <span>Rekap Periodik</span>
-                                    </span>
-                                    <span class="text-[10px] text-slate-400">14 Hari</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="openExportModal('current')"
-                                    class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
-                                >
-                                    <span class="flex items-center gap-2">
-                                        <Filter class="h-3.5 w-3.5 text-slate-400" />
-                                        <span>Sesuai Tabel / Kustom...</span>
-                                    </span>
-                                    <span class="text-[10px] text-slate-400">{{ dateColumns.length }} Hari</span>
+                                    <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-800 mt-0.5 shrink-0">
+                                        <FileText class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <p class="text-xs font-bold leading-tight text-emerald-950">Download Slip Gaji (.pdf)</p>
+                                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-900">PDF</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 font-normal mt-0.5">Slip cetak resmi per personil (rentang filter aktif)</p>
+                                    </div>
                                 </button>
                             </div>
                         </div>
@@ -1062,7 +1297,6 @@ function closeDetailModal() {
                     >
                         <Save class="h-4 w-4" />
                         <span>{{ isSaving ? 'Menyimpan...' : 'Simpan' }}</span>
-                        <span class="hidden md:inline" v-if="!isSaving">Presensi</span>
                     </button>
                 </div>
             </div>
@@ -1228,17 +1462,77 @@ function closeDetailModal() {
                 </div>
             </div>
 
+            <!-- ─── Segmented Tab Switcher: Matriks Kalender vs Log Rincian Harian ──── -->
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="inline-flex p-1 rounded-xl bg-slate-200/80 border border-slate-300/80 text-xs font-semibold shadow-inner">
+                    <button
+                        type="button"
+                        @click="activeViewTab = 'matriks'"
+                        :class="[
+                            'flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer',
+                            activeViewTab === 'matriks'
+                                ? 'bg-white text-emerald-800 font-bold shadow-xs ring-1 ring-slate-200'
+                                : 'text-slate-600 hover:text-slate-900',
+                        ]"
+                    >
+                        <CalendarCheck class="h-4 w-4 text-emerald-600" />
+                        <span>Matriks Presensi (Kalender)</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="activeViewTab = 'harian'"
+                        :class="[
+                            'flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer',
+                            activeViewTab === 'harian'
+                                ? 'bg-white text-emerald-800 font-bold shadow-xs ring-1 ring-slate-200'
+                                : 'text-slate-600 hover:text-slate-900',
+                        ]"
+                    >
+                        <Clock class="h-4 w-4 text-emerald-600" />
+                        <span>Log Rincian Harian (Tabel Lengkap)</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-mono">
+                            {{ filteredDailyLogs.length }} Baris
+                        </span>
+                    </button>
+                </div>
+
+                <div v-if="activeViewTab === 'harian'" class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-600">Filter Tanggal:</span>
+                    <select
+                        v-model="selectedLogDateFilter"
+                        class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 shadow-2xs"
+                    >
+                        <option value="all">Semua Tanggal ({{ dateColumns.length }} Hari)</option>
+                        <option v-for="dt in dateColumns" :key="dt.dateStr" :value="dt.dateStr">
+                            {{ formatTanggalIndo(dt.dateStr) }} ({{ dt.dayName }}){{ dt.dateStr === todayStr ? ' - Hari Ini' : '' }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
             <!-- ─── TABEL MATRIKS PENCATATAN PRESENSI ──────────────────────── -->
-            <div class="rounded-xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
+            <div v-if="activeViewTab === 'matriks'" class="rounded-xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
                 <!-- Toolbar Tabel & Keterangan Status Presensi -->
                 <div class="px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-slate-50/60">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                         <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">
                             Matriks Presensi ({{ filteredPetugas.length }} Personil)
                         </span>
                         <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-800">
                             {{ dateColumns.length }} Kolom Tanggal
                         </span>
+                        <button
+                            type="button"
+                            @click="toggleAllExpand"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            :title="expandedPetugasIds.size === props.petugas.length ? 'Tutup semua rincian harian' : 'Buka rincian harian seluruh personil'"
+                        >
+                            <ChevronDown
+                                class="h-3.5 w-3.5 text-slate-500 transition-transform duration-200"
+                                :class="{ 'rotate-180 text-emerald-600': expandedPetugasIds.size > 0 }"
+                            />
+                            <span>{{ expandedPetugasIds.size === props.petugas.length ? 'Tutup Semua Rincian' : 'Buka Semua Rincian Harian' }}</span>
+                        </button>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-[11px] text-slate-600 font-medium">
@@ -1365,140 +1659,290 @@ function closeDetailModal() {
 
                         <!-- Table Body -->
                         <tbody class="divide-y divide-slate-100">
-                            <tr
-                                v-for="(p, idx) in filteredPetugas"
-                                :key="p.id"
-                                :class="[
-                                    'transition-colors',
-                                    p.status === 'Nonaktif' ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/80',
-                                ]"
-                            >
-                                <!-- No (Sticky Left) -->
-                                <td class="py-2.5 px-2.5 text-center font-medium text-slate-500 sticky left-0 bg-white z-10 border-r border-slate-200 text-xs">
-                                    {{ idx + 1 }}
-                                </td>
-
-                                <!-- Personil & Divisi (Sticky Left - Tanpa Logo Profile) -->
-                                <td class="py-2.5 px-3 sticky left-9 bg-white z-10 border-r border-slate-200">
-                                    <div class="min-w-0">
-                                        <p class="font-bold text-slate-900 truncate leading-snug text-xs">
-                                            {{ p.nama }}
-                                        </p>
-                                        <div class="flex items-center gap-1 mt-0.5 flex-wrap">
-                                            <span
-                                                v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
-                                                :key="jab"
-                                                :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
-                                            >
-                                                {{ jab }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </td>
-
-                                <!-- Tarif Harian (BGN) -->
-                                <td class="py-2 px-3 text-right font-medium text-slate-800 border-r border-slate-200">
-                                    <p class="font-semibold text-slate-900 text-xs">
-                                        {{ formatRupiah(p.gaji_harian_bgn) }}
-                                    </p>
-                                    <p class="text-[9px] text-slate-500">
-                                        BGN / Hari
-                                    </p>
-                                </td>
-
-                                <!-- Sel Matriks Interaktif per Tanggal -->
-                                <td
-                                    v-for="dt in dateColumns"
-                                    :key="dt.dateStr"
+                            <template v-for="(p, idx) in filteredPetugas" :key="p.id">
+                                <tr
                                     :class="[
-                                        'py-1.5 px-0.5 text-center border-r border-slate-100/80',
-                                        dt.dateStr === todayStr ? 'bg-emerald-50/40 ring-1 ring-emerald-300/40' : (dt.isWeekend ? 'bg-amber-50/20' : ''),
+                                        'transition-colors',
+                                        isPetugasExpanded(p.id) ? 'bg-emerald-50/30' : (p.status === 'Nonaktif' ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/80'),
                                     ]"
                                 >
-                                    <!-- Tombol Badge Interaktif (Klik untuk switch status) -->
-                                    <button
-                                        v-if="p.status === 'Aktif'"
-                                        type="button"
-                                        @click="cycleStatus(p.id, dt.dateStr, true)"
+                                    <!-- No (Sticky Left) -->
+                                    <td class="py-2.5 px-2 text-center font-medium text-slate-500 sticky left-0 bg-white z-10 border-r border-slate-200 text-xs">
+                                        <div class="flex items-center justify-center gap-0.5">
+                                            <button
+                                                type="button"
+                                                @click="toggleExpandPetugas(p.id)"
+                                                class="p-0.5 rounded hover:bg-emerald-100 text-slate-400 hover:text-emerald-700 transition-colors cursor-pointer"
+                                                :title="isPetugasExpanded(p.id) ? 'Tutup Rincian Harian' : 'Buka Rincian Log Harian Petugas'"
+                                            >
+                                                <ChevronDown
+                                                    class="h-3.5 w-3.5 transition-transform duration-200"
+                                                    :class="{ 'rotate-180 text-emerald-600': isPetugasExpanded(p.id) }"
+                                                />
+                                            </button>
+                                            <span>{{ idx + 1 }}</span>
+                                        </div>
+                                    </td>
+
+                                    <!-- Personil & Divisi (Sticky Left - Tanpa Logo Profile) -->
+                                    <td class="py-2.5 px-3 sticky left-9 bg-white z-10 border-r border-slate-200">
+                                        <div class="min-w-0">
+                                            <div class="flex items-center justify-between gap-1">
+                                                <p
+                                                    class="font-bold text-slate-900 truncate leading-snug text-xs cursor-pointer hover:text-emerald-700 transition-colors"
+                                                    @click="toggleExpandPetugas(p.id)"
+                                                    :title="isPetugasExpanded(p.id) ? 'Klik untuk tutup rincian harian' : 'Klik untuk lihat rincian log per hari'"
+                                                >
+                                                    {{ p.nama }}
+                                                </p>
+                                                <span
+                                                    v-if="isPetugasExpanded(p.id)"
+                                                    class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-emerald-100 text-emerald-800 shrink-0"
+                                                >
+                                                    Detail Buka
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                                <span
+                                                    v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                                    :key="jab"
+                                                    :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                                >
+                                                    {{ jab }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <!-- Tarif Harian (BGN) -->
+                                    <td class="py-2 px-3 text-right font-medium text-slate-800 border-r border-slate-200">
+                                        <template v-if="computedPetugasStats[p.id]?.isGajiVarying">
+                                            <p class="font-semibold text-slate-900 text-xs">
+                                                Bervariasi
+                                            </p>
+                                            <p class="text-[9px] text-emerald-600 font-mono" title="Rentang tarif gaji harian">
+                                                {{ formatRibuan(computedPetugasStats[p.id]?.minGaji) }} - {{ formatRibuan(computedPetugasStats[p.id]?.maxGaji) }}
+                                            </p>
+                                        </template>
+                                        <template v-else>
+                                            <p class="font-semibold text-slate-900 text-xs">
+                                                {{ formatRupiah(computedPetugasStats[p.id]?.honorPerHari ?? p.gaji_harian_bgn) }}
+                                            </p>
+                                            <p class="text-[9px] text-slate-500">
+                                                BGN / Hari
+                                            </p>
+                                        </template>
+                                    </td>
+
+                                    <!-- Sel Matriks Interaktif per Tanggal -->
+                                    <td
+                                        v-for="dt in dateColumns"
+                                        :key="dt.dateStr"
                                         :class="[
-                                            'w-7 h-7 rounded-md text-[11px] font-black transition-transform active:scale-90 flex items-center justify-center mx-auto cursor-pointer select-none',
-                                            getStatusBadgeStyle(matrixPresensi[p.id]?.[dt.dateStr] || ''),
-                                        ]"
-                                        :title="`${p.nama} (${dt.dayName}, ${dt.dateStr}): ${getStatusTitle(matrixPresensi[p.id]?.[dt.dateStr] || '')} (Klik untuk pilih status)`"
-                                    >
-                                        {{ getStatusLabel(matrixPresensi[p.id]?.[dt.dateStr] || '') }}
-                                    </button>
-                                    <span v-else class="text-slate-300 text-[11px]">-</span>
-                                </td>
-
-                                <!-- Rekap Hadir Penuh (H) -->
-                                <td class="py-2 px-2 text-center font-bold text-emerald-800 bg-emerald-50/60 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.hadir ?? 0 }}
-                                </td>
-
-                                <!-- Rekap Hadir Setengah Hari (½) -->
-                                <td class="py-2 px-2 text-center font-bold text-teal-800 bg-teal-50/60 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.setengahHari ?? 0 }}
-                                </td>
-
-                                <!-- Rekap Libur (L) -->
-                                <td class="py-2 px-2 text-center font-bold text-slate-700 bg-slate-50 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.libur ?? 0 }}
-                                </td>
-
-                                <!-- Rekap Izin (I) -->
-                                <td class="py-2 px-2 text-center font-bold text-amber-800 bg-amber-50/60 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.izin ?? 0 }}
-                                </td>
-
-                                <!-- Rekap Sakit (S) -->
-                                <td class="py-2 px-2 text-center font-bold text-blue-800 bg-blue-50/60 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.sakit ?? 0 }}
-                                </td>
-
-                                <!-- Rekap Tanpa Keterangan (TK) -->
-                                <td class="py-2 px-2 text-center font-bold text-rose-800 bg-rose-50/60 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.tanpaKeterangan ?? 0 }}
-                                </td>
-
-                                <!-- Mandays (Hari Kerja Efektif) -->
-                                <td class="py-2 px-2 text-center font-black text-emerald-950 bg-emerald-100/50 border-r border-slate-200">
-                                    {{ computedPetugasStats[p.id]?.mandays ?? 0 }}
-                                </td>
-
-                                <!-- % Hadir -->
-                                <td class="py-2 px-2 text-center border-r border-slate-200">
-                                    <span
-                                        :class="[
-                                            'px-1.5 py-0.5 rounded text-[10px] font-bold',
-                                            (computedPetugasStats[p.id]?.rate ?? 0) >= 90
-                                                ? 'bg-emerald-100 text-emerald-800'
-                                                : (computedPetugasStats[p.id]?.rate ?? 0) >= 70
-                                                ? 'bg-amber-100 text-amber-800'
-                                                : 'bg-rose-100 text-rose-800',
+                                            'py-1.5 px-0.5 text-center border-r border-slate-100/80',
+                                            dt.dateStr === todayStr ? 'bg-emerald-50/40 ring-1 ring-emerald-300/40' : (dt.isWeekend ? 'bg-amber-50/20' : ''),
                                         ]"
                                     >
-                                        {{ computedPetugasStats[p.id]?.rate ?? 0 }}%
-                                    </span>
-                                </td>
+                                        <!-- Tombol Badge Interaktif (Klik untuk switch status) -->
+                                        <button
+                                            v-if="p.status === 'Aktif' || matrixPresensi[p.id]?.[dt.dateStr]"
+                                            type="button"
+                                            @click="cycleStatus(p.id, dt.dateStr, true)"
+                                            :class="[
+                                                'w-7 h-7 rounded-md text-[11px] font-black transition-transform active:scale-90 flex items-center justify-center mx-auto cursor-pointer select-none',
+                                                getStatusBadgeStyle(matrixPresensi[p.id]?.[dt.dateStr] || ''),
+                                            ]"
+                                            :title="`${p.nama} (${dt.dayName}, ${dt.dateStr}): ${getStatusTitle(matrixPresensi[p.id]?.[dt.dateStr] || '')}${initialPresensiDetailsMap?.[p.id]?.[dt.dateStr]?.gaji_harian_bgn !== undefined ? ' • Gaji BGN: ' + formatRupiah(initialPresensiDetailsMap[p.id][dt.dateStr].gaji_harian_bgn) : ''} (Klik untuk pilih status)`"
+                                        >
+                                            {{ getStatusLabel(matrixPresensi[p.id]?.[dt.dateStr] || '') }}
+                                        </button>
+                                        <span v-else class="text-slate-300 text-[11px]">-</span>
+                                    </td>
 
-                                <!-- Total Hak Honor -->
-                                <td class="py-2 px-3 text-right font-bold text-emerald-900 border-r border-slate-200">
-                                    {{ formatRupiah(computedPetugasStats[p.id]?.totalHonor ?? 0) }}
-                                </td>
+                                    <!-- Rekap Hadir Penuh (H) -->
+                                    <td class="py-2 px-2 text-center font-bold text-emerald-800 bg-emerald-50/60 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.hadir ?? 0 }}
+                                    </td>
 
-                                <!-- Aksi Detail Modal -->
-                                <td class="py-2 px-2 text-center">
-                                    <button
-                                        type="button"
-                                        @click="openDetailModal(p)"
-                                        class="p-1 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                                        title="Rincian Slip Honor Presensi Petugas"
-                                    >
-                                        <Eye class="h-4 w-4" />
-                                    </button>
-                                </td>
-                            </tr>
+                                    <!-- Rekap Hadir Setengah Hari (½) -->
+                                    <td class="py-2 px-2 text-center font-bold text-teal-800 bg-teal-50/60 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.setengahHari ?? 0 }}
+                                    </td>
+
+                                    <!-- Rekap Libur (L) -->
+                                    <td class="py-2 px-2 text-center font-bold text-slate-700 bg-slate-50 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.libur ?? 0 }}
+                                    </td>
+
+                                    <!-- Rekap Izin (I) -->
+                                    <td class="py-2 px-2 text-center font-bold text-amber-800 bg-amber-50/60 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.izin ?? 0 }}
+                                    </td>
+
+                                    <!-- Rekap Sakit (S) -->
+                                    <td class="py-2 px-2 text-center font-bold text-blue-800 bg-blue-50/60 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.sakit ?? 0 }}
+                                    </td>
+
+                                    <!-- Rekap Tanpa Keterangan (TK) -->
+                                    <td class="py-2 px-2 text-center font-bold text-rose-800 bg-rose-50/60 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.tanpaKeterangan ?? 0 }}
+                                    </td>
+
+                                    <!-- Mandays (Hari Kerja Efektif) -->
+                                    <td class="py-2 px-2 text-center font-black text-emerald-950 bg-emerald-100/50 border-r border-slate-200">
+                                        {{ computedPetugasStats[p.id]?.mandays ?? 0 }}
+                                    </td>
+
+                                    <!-- % Hadir -->
+                                    <td class="py-2 px-2 text-center border-r border-slate-200">
+                                        <span
+                                            :class="[
+                                                'px-1.5 py-0.5 rounded text-[10px] font-bold',
+                                                (computedPetugasStats[p.id]?.rate ?? 0) >= 90
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : (computedPetugasStats[p.id]?.rate ?? 0) >= 70
+                                                    ? 'bg-amber-100 text-amber-800'
+                                                    : 'bg-rose-100 text-rose-800',
+                                            ]"
+                                        >
+                                            {{ computedPetugasStats[p.id]?.rate ?? 0 }}%
+                                        </span>
+                                    </td>
+
+                                    <!-- Total Hak Honor -->
+                                    <td class="py-2 px-3 text-right font-bold text-emerald-900 border-r border-slate-200">
+                                        {{ formatRupiah(computedPetugasStats[p.id]?.totalHonor ?? 0) }}
+                                    </td>
+
+                                    <!-- Aksi Detail Modal -->
+                                    <td class="py-2 px-2 text-center">
+                                        <div class="flex items-center justify-center gap-1">
+                                            <button
+                                                type="button"
+                                                @click="toggleExpandPetugas(p.id)"
+                                                class="p-1 rounded-md text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                                :title="isPetugasExpanded(p.id) ? 'Tutup Rincian Harian' : 'Buka Rincian Log Harian'"
+                                            >
+                                                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180 text-emerald-600': isPetugasExpanded(p.id) }" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="openDetailModal(p)"
+                                                class="p-1 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                                                title="Rincian Slip Honor Presensi Petugas"
+                                            >
+                                                <Eye class="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Baris Accordion Rincian Harian Petugas (Muncul saat diklik) -->
+                                <tr
+                                    v-if="isPetugasExpanded(p.id)"
+                                    class="bg-gradient-to-r from-emerald-50/40 via-teal-50/20 to-slate-50 border-b-2 border-emerald-300"
+                                >
+                                    <td :colspan="10 + dateColumns.length" class="p-3 sm:p-4">
+                                        <div class="bg-white rounded-xl border border-emerald-200 shadow-xs overflow-hidden">
+                                            <!-- Header Box Accordion -->
+                                            <div class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex flex-wrap items-center justify-between gap-2">
+                                                <div class="flex items-center gap-2">
+                                                    <CalendarCheck class="h-4 w-4 text-emerald-200 shrink-0" />
+                                                    <span class="font-bold text-xs">
+                                                        Rincian Log Presensi & Hak Honor Harian: {{ p.nama }}
+                                                    </span>
+                                                    <span class="text-[10px] text-emerald-100 hidden sm:inline">
+                                                        ({{ dateColumns.length }} Hari Kerja)
+                                                    </span>
+                                                </div>
+                                                <div class="flex items-center gap-2.5 text-xs flex-wrap">
+                                                    <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-mono">
+                                                        NIK: {{ p.nik }}
+                                                    </span>
+                                                    <span class="text-[10px] bg-emerald-500/40 px-2 py-0.5 rounded text-white font-semibold">
+                                                        Mandays: {{ computedPetugasStats[p.id]?.mandays ?? 0 }} hari
+                                                    </span>
+                                                    <span class="text-[11px] bg-white text-emerald-950 font-bold px-2 py-0.5 rounded shadow-2xs">
+                                                        Total Hak: {{ formatRupiah(computedPetugasStats[p.id]?.totalHonor ?? 0) }}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Tabel Rincian Per Hari -->
+                                            <div class="overflow-x-auto max-h-72 overflow-y-auto">
+                                                <table class="w-full text-xs text-left">
+                                                    <thead class="bg-slate-100/90 text-slate-700 font-bold text-[11px] sticky top-0 z-10 border-b border-slate-200">
+                                                        <tr>
+                                                            <th class="py-2 px-3 w-10 text-center">No</th>
+                                                            <th class="py-2 px-3">Tanggal & Hari</th>
+                                                            <th class="py-2 px-3 text-center">Status Presensi</th>
+                                                            <th class="py-2 px-3">Jabatan (Snapshot)</th>
+                                                            <th class="py-2 px-3 text-right">Gaji Harian BGN</th>
+                                                            <th class="py-2 px-3 text-right">Bonus Mitra</th>
+                                                            <th class="py-2 px-3 text-right font-bold text-emerald-800">Hak Diterima</th>
+                                                            <th class="py-2 px-3 text-center">Status Pegawai</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-slate-100 text-[11px]">
+                                                        <tr
+                                                            v-for="(dt, dIdx) in dateColumns"
+                                                            :key="dt.dateStr"
+                                                            :class="[
+                                                                'hover:bg-slate-50/80 transition-colors',
+                                                                dt.dateStr === todayStr ? 'bg-emerald-50/40 font-semibold' : '',
+                                                            ]"
+                                                        >
+                                                            <td class="py-2 px-3 text-center text-slate-400">{{ dIdx + 1 }}</td>
+                                                            <td class="py-2 px-3 font-medium">
+                                                                <span class="font-bold text-slate-800">{{ formatTanggalIndo(dt.dateStr) }}</span>
+                                                                <span class="text-slate-500 ml-1.5">({{ dt.dayName }})</span>
+                                                                <span v-if="dt.dateStr === todayStr" class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold">Hari Ini</span>
+                                                            </td>
+                                                            <td class="py-2 px-3 text-center">
+                                                                <span
+                                                                    :class="[
+                                                                        'px-2 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1',
+                                                                        getStatusBadgeStyle(matrixPresensi[p.id]?.[dt.dateStr] || ''),
+                                                                    ]"
+                                                                >
+                                                                    {{ getStatusTitle(matrixPresensi[p.id]?.[dt.dateStr] || '') }}
+                                                                </span>
+                                                            </td>
+                                                            <td class="py-2 px-3 text-slate-700">
+                                                                <span class="px-1.5 py-0.5 rounded text-[10px] border font-medium" :class="getJabatanBadgeClass(getDailyJabatan(p, dt.dateStr))">
+                                                                    {{ getDailyJabatan(p, dt.dateStr) }}
+                                                                </span>
+                                                            </td>
+                                                            <td class="py-2 px-3 text-right font-mono text-slate-800">
+                                                                {{ formatRupiah(getDailyGaji(p, dt.dateStr)) }}
+                                                            </td>
+                                                            <td class="py-2 px-3 text-right font-mono text-slate-500">
+                                                                {{ formatRupiah(getDailyBonus(p, dt.dateStr)) }}
+                                                            </td>
+                                                            <td class="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                                                                {{ formatRupiah(getDailyHonor(p, dt.dateStr)) }}
+                                                            </td>
+                                                            <td class="py-2 px-3 text-center">
+                                                                <span
+                                                                    :class="[
+                                                                        'px-1.5 py-0.5 rounded text-[9px] font-semibold',
+                                                                        (getDailySnapshot(p.id, dt.dateStr)?.status_petugas || p.status) === 'Aktif'
+                                                                            ? 'bg-emerald-100 text-emerald-800'
+                                                                            : 'bg-slate-200 text-slate-600'
+                                                                    ]"
+                                                                >
+                                                                    {{ getDailySnapshot(p.id, dt.dateStr)?.status_petugas || p.status }}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
 
                             <tr v-if="filteredPetugas.length === 0">
                                 <td :colspan="10 + dateColumns.length" class="py-10 text-center text-slate-500">
@@ -1579,6 +2023,111 @@ function closeDetailModal() {
                 </div>
             </div>
 
+            <!-- ─── TABEL LOG RINCIAN HARIAN (TABEL LENGKAP PER HARI) ───────── -->
+            <div v-if="activeViewTab === 'harian'" class="rounded-xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2.5">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            <Clock class="h-4 w-4 text-emerald-600" />
+                            <span>Log Rincian Harian Presensi & Hak Honor Petugas</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5">
+                            Menampilkan data riil kehadiran dan snapshot honorarium masing-masing personil per hari
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                            {{ filteredDailyLogs.length }} Catatan Log
+                        </span>
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                            <Eye class="h-3.5 w-3.5 text-slate-500" />
+                            <span>Hanya Lihat (Read-Only)</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-slate-100/95 text-slate-700 font-bold sticky top-0 z-20 border-b border-slate-200 text-[11px]">
+                            <tr>
+                                <th class="py-2.5 px-3 w-12 text-center">No</th>
+                                <th class="py-2.5 px-3 min-w-[130px]">Tanggal & Hari</th>
+                                <th class="py-2.5 px-3 min-w-[170px]">Nama Petugas & NIK</th>
+                                <th class="py-2.5 px-3 min-w-[140px]">Jabatan (Snapshot)</th>
+                                <th class="py-2.5 px-3 text-center min-w-[130px]">Status Presensi</th>
+                                <th class="py-2.5 px-3 text-right min-w-[110px]">Gaji Harian BGN</th>
+                                <th class="py-2.5 px-3 text-right min-w-[100px]">Bonus Mitra</th>
+                                <th class="py-2.5 px-3 text-right min-w-[120px] font-bold text-emerald-800">Hak Diterima</th>
+                                <th class="py-2.5 px-3 text-center min-w-[100px]">Status Pegawai</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr
+                                v-for="(log, idx) in filteredDailyLogs"
+                                :key="`${log.petugasId}-${log.dateStr}`"
+                                :class="[
+                                    'hover:bg-slate-50/80 transition-colors',
+                                    log.dateStr === todayStr ? 'bg-emerald-50/30 font-semibold' : '',
+                                ]"
+                            >
+                                <td class="py-2 px-3 text-center text-slate-400">{{ idx + 1 }}</td>
+                                <td class="py-2 px-3 font-medium">
+                                    <span class="font-bold text-slate-800">{{ formatTanggalIndo(log.dateStr) }}</span>
+                                    <span class="text-slate-500 ml-1.5">({{ log.dayName }})</span>
+                                    <span v-if="log.dateStr === todayStr" class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold">Hari Ini</span>
+                                </td>
+                                <td class="py-2 px-3">
+                                    <p class="font-bold text-slate-900 leading-snug">{{ log.nama }}</p>
+                                    <p class="text-[10px] text-slate-500 font-mono mt-0.5">NIK: {{ log.nik }}</p>
+                                </td>
+                                <td class="py-2 px-3 text-slate-700">
+                                    <span class="px-2 py-0.5 rounded text-[10px] border font-medium" :class="getJabatanBadgeClass(log.jabatan)">
+                                        {{ log.jabatan }}
+                                    </span>
+                                </td>
+                                <td class="py-2 px-3 text-center">
+                                    <span
+                                        :class="[
+                                            'px-2.5 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs select-none',
+                                            getStatusBadgeStyle(log.status),
+                                        ]"
+                                    >
+                                        {{ getStatusTitle(log.status) }}
+                                    </span>
+                                </td>
+                                <td class="py-2 px-3 text-right font-mono text-slate-800">
+                                    {{ formatRupiah(log.gajiHarian) }}
+                                </td>
+                                <td class="py-2 px-3 text-right font-mono text-slate-500">
+                                    {{ formatRupiah(log.bonusHarian) }}
+                                </td>
+                                <td class="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                                    {{ formatRupiah(log.hakDiterima) }}
+                                </td>
+                                <td class="py-2 px-3 text-center">
+                                    <span
+                                        :class="[
+                                            'px-1.5 py-0.5 rounded text-[9px] font-semibold',
+                                            log.statusPetugas === 'Aktif'
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : 'bg-slate-200 text-slate-600'
+                                        ]"
+                                    >
+                                        {{ log.statusPetugas }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr v-if="filteredDailyLogs.length === 0">
+                                <td colspan="9" class="py-12 text-center text-slate-400">
+                                    <Clock class="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                    <p class="font-medium">Tidak ada log presensi yang cocok dengan filter tanggal ini.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- ─── MODAL DOWNLOAD EXCEL (Bulanan / Periodik & Rentang Tanggal) ─── -->
             <Teleport to="body">
                 <div
@@ -1586,13 +2135,20 @@ function closeDetailModal() {
                     class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
                     style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
                 >
-                    <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
-                        <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+                    <div class="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+                        <!-- Modal Header -->
+                        <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 text-white flex items-center justify-between">
                             <div class="flex items-center gap-2.5">
-                                <FileSpreadsheet class="h-5 w-5 text-emerald-200" />
+                                <div class="p-2 rounded-xl bg-white/10 backdrop-blur-xs">
+                                    <FileSpreadsheet class="h-5 w-5 text-emerald-200" />
+                                </div>
                                 <div>
-                                    <h3 class="text-sm font-bold">Download File Excel Rekap Presensi & Gaji</h3>
-                                    <p class="text-[11px] text-emerald-100">Pilih skala siklus kerja dan rentang tanggal export</p>
+                                    <h3 class="text-sm font-bold leading-tight">
+                                        {{ exportDocType === 'ttd_harian' ? 'Download Buku Tanda Terima Honor Harian' : 'Download Rekapitulasi Presensi & Gaji' }}
+                                    </h3>
+                                    <p class="text-[11px] text-emerald-100">
+                                        {{ exportDocType === 'ttd_harian' ? 'File Excel khusus tanda terima per hari (1 sheet per tanggal DD-MM-YYYY)' : 'Format matriks horizontal periode & ringkasan per divisi' }}
+                                    </p>
                                 </div>
                             </div>
                             <button
@@ -1604,117 +2160,174 @@ function closeDetailModal() {
                             </button>
                         </div>
 
-                        <div class="p-5 space-y-4">
-                            <!-- Pilihan Format Skala -->
-                            <div class="space-y-2">
+                        <div class="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                            <!-- Pilihan Jenis Dokumen Excel -->
+                            <div class="space-y-1.5">
                                 <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                    Pilihan Format Siklus
+                                    Pilih Jenis Dokumen Excel
                                 </label>
-                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <label
                                         :class="[
-                                            'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
-                                            exportOption === 'today'
-                                                ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-500'
+                                            'flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all',
+                                            exportDocType === 'ttd_harian'
+                                                ? 'border-teal-500 bg-teal-50/80 ring-2 ring-teal-500/20'
                                                 : 'border-slate-200 hover:bg-slate-50',
                                         ]"
                                     >
-                                        <input type="radio" value="today" v-model="exportOption" class="sr-only" />
-                                        <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                            Hari Ini
-                                        </span>
-                                        <span class="text-[10px] text-slate-500">1 Hari Saja</span>
+                                        <input type="radio" value="ttd_harian" v-model="exportDocType" class="sr-only" />
+                                        <div class="p-1.5 rounded-lg mt-0.5 shrink-0" :class="exportDocType === 'ttd_harian' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'">
+                                            <FileSpreadsheet class="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs font-bold text-slate-900">Buku TTD Harian</span>
+                                                <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200 text-teal-800">BARU</span>
+                                            </div>
+                                            <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                                1 Sheet per Tanggal (DD-MM-YYYY), kolom TTD fisik, total nominal & rekapitulasi kehadiran.
+                                            </p>
+                                        </div>
                                     </label>
 
                                     <label
                                         :class="[
-                                            'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
-                                            exportOption === 'bulanan'
-                                                ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-500'
+                                            'flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all',
+                                            exportDocType === 'rekap_matriks'
+                                                ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20'
                                                 : 'border-slate-200 hover:bg-slate-50',
                                         ]"
                                     >
-                                        <input type="radio" value="bulanan" v-model="exportOption" class="sr-only" />
-                                        <span class="text-xs font-bold text-slate-900">Bulanan</span>
-                                        <span class="text-[10px] text-slate-500">28 Hari Kerja</span>
+                                        <input type="radio" value="rekap_matriks" v-model="exportDocType" class="sr-only" />
+                                        <div class="p-1.5 rounded-lg mt-0.5 shrink-0" :class="exportDocType === 'rekap_matriks' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'">
+                                            <Layers class="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold text-slate-900">Rekap Matriks Periode</span>
+                                            <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                                Matriks horizontal tanggal 1 s.d N & ringkasan divisi (.xlsx).
+                                            </p>
+                                        </div>
                                     </label>
 
+                                    <!-- Pilihan 3: Slip Gaji PDF -->
                                     <label
                                         :class="[
-                                            'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
-                                            exportOption === 'periodik'
-                                                ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-500'
+                                            'flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all col-span-1 sm:col-span-2',
+                                            exportDocType === 'slip_gaji_pdf'
+                                                ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20'
                                                 : 'border-slate-200 hover:bg-slate-50',
                                         ]"
                                     >
-                                        <input type="radio" value="periodik" v-model="exportOption" class="sr-only" />
-                                        <span class="text-xs font-bold text-slate-900">Periodik</span>
-                                        <span class="text-[10px] text-slate-500">14 Hari Kerja</span>
+                                        <input type="radio" value="slip_gaji_pdf" v-model="exportDocType" class="sr-only" />
+                                        <div class="p-1.5 rounded-lg mt-0.5 shrink-0" :class="exportDocType === 'slip_gaji_pdf' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'">
+                                            <FileText class="h-4 w-4" />
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs font-bold text-slate-900">Slip Gaji Petugas SPPG (.pdf)</span>
+                                                <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-900">PDF RESMI</span>
+                                            </div>
+                                            <p class="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                                Cetak slip gaji per personil (1 slip per lembar A4 portrait / 1 halaman per orang) memuat rincian mandays, hak honor BGN, iuran BPJS TK, dan kolom tanda tangan 3 pihak.
+                                            </p>
+                                        </div>
                                     </label>
-
-                                    <label
-                                        :class="[
-                                            'flex flex-col p-2.5 rounded-xl border cursor-pointer transition-all',
-                                            exportOption === 'current'
-                                                ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-500'
-                                                : 'border-slate-200 hover:bg-slate-50',
-                                        ]"
-                                    >
-                                        <input type="radio" value="current" v-model="exportOption" class="sr-only" />
-                                        <span class="text-xs font-bold text-slate-900">Tabel Aktif</span>
-                                        <span class="text-[10px] text-slate-500">{{ dateColumns.length }} Hari</span>
-                                    </label>
-                                </div>
-                                <div v-if="exportOption === 'today'" class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
-                                    <CalendarCheck class="h-4 w-4 text-emerald-600 shrink-0" />
-                                    <span>Mengekspor daftar presensi personil khusus untuk <strong>Hari Ini ({{ formatTanggalIndo(exportStartDate) }})</strong>.</span>
                                 </div>
                             </div>
 
-                            <!-- Rentang Tanggal Export -->
-                            <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                    Rentang Tanggal Export
-                                </label>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <span class="text-[11px] text-slate-500">Dari Tanggal:</span>
-                                        <input
-                                            v-model="exportStartDate"
-                                            type="date"
-                                            class="mt-1 w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-                                        />
+                            <!-- Info Rentang Tanggal Filter Aktif (Sesuai Filter Tabel Halaman) -->
+                            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="p-2 rounded-lg bg-teal-100 text-teal-700 shrink-0">
+                                        <Calendar class="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <span class="text-[11px] text-slate-500">Sampai Tanggal:</span>
-                                        <input
-                                            v-model="exportEndDate"
-                                            type="date"
-                                            class="mt-1 w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-                                        />
+                                        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rentang Tanggal Dokumen (Sesuai Filter)</p>
+                                        <p class="font-bold text-slate-800 text-xs mt-0.5">
+                                            {{ formatTanggalIndo(tanggalMulai) }}
+                                            <span v-if="tanggalMulai !== tanggalSelesai"> s.d. {{ formatTanggalIndo(tanggalSelesai) }}</span>
+                                        </p>
                                     </div>
                                 </div>
+                                <span class="px-2.5 py-1 rounded-full bg-teal-100/70 border border-teal-200 text-teal-800 font-bold text-[11px] shrink-0">
+                                    {{ dateColumns.length }} Hari Kerja
+                                </span>
                             </div>
 
-                            <!-- Info Preview Dokumen -->
-                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                                <div class="flex items-center justify-between text-slate-700 font-semibold">
+                            <!-- Info Preview Dokumen Berdasarkan exportDocType -->
+                            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                                <div class="flex items-center justify-between text-slate-700 font-semibold border-b border-slate-200/80 pb-2">
                                     <span>Unit SPPG:</span>
                                     <span class="text-slate-900 font-bold">{{ unitSppg?.nama ?? 'SPPG Buleleng Sukasada Tegallinggah' }}</span>
                                 </div>
-                                <div class="flex items-center justify-between text-slate-700">
-                                    <span>Sheet 1:</span>
-                                    <span class="text-emerald-700 font-bold">Rekap Presensi & Gaji (Kop & Tanda Tangan)</span>
+
+                                <!-- Preview Khusus Slip Gaji PDF -->
+                                <div v-if="exportDocType === 'slip_gaji_pdf'" class="space-y-1.5 text-slate-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-medium">Format Dokumen:</span>
+                                        <span class="text-emerald-800 font-bold">PDF Resmi (1 Slip per Lembar A4 Portrait / 1 Halaman per Orang)</span>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-[11px] text-emerald-950 space-y-1">
+                                        <p class="font-bold flex items-center gap-1.5">
+                                            <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                            <span>Rincian Setiap Lembar Slip:</span>
+                                        </p>
+                                        <ul class="list-disc list-inside space-y-0.5 pl-1 text-slate-700">
+                                            <li>Kop resmi SPPG (Logo BGN & Logo Yayasan Pesantren Miftahul Ulum)</li>
+                                            <li>Identitas personil (Nama, NIK, Jabatan, Bank/Rekening, Jam Kerja)</li>
+                                            <li>Rekapitulasi kehadiran (Hadir H, ½ Hari, Libur, Izin, Sakit, TK & Total Mandays)</li>
+                                            <li>Perhitungan honor mandays (Mandays x Gaji Pokok Harian BGN)</li>
+                                            <li>Iuran BPJS Ketenagakerjaan (JKK & JKM) & Total Diterima + Terbilang</li>
+                                            <li>Tanda tangan 3 pihak: Penerima, Pengawas Keuangan, dan Kepala SPPG</li>
+                                        </ul>
+                                    </div>
                                 </div>
-                                <div class="flex items-center justify-between text-slate-700">
-                                    <span>Sheet 2:</span>
-                                    <span class="text-teal-700 font-bold">Ringkasan per Divisi</span>
+
+                                <!-- Preview Khusus Buku TTD Harian -->
+                                <div v-else-if="exportDocType === 'ttd_harian'" class="space-y-1.5 text-slate-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-medium">Struktur Lembar Excel:</span>
+                                        <span class="text-teal-800 font-bold">1 Sheet per Tanggal (DD-MM-YYYY)</span>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-teal-50/70 border border-teal-200 text-[11px] text-teal-900 space-y-1">
+                                        <p class="font-bold flex items-center gap-1.5">
+                                            <CheckCircle2 class="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                                            <span>Format Setiap Sheet (Nama Sheet: DD-MM-YYYY):</span>
+                                        </p>
+                                        <ul class="list-disc list-inside space-y-0.5 pl-1 text-slate-700">
+                                            <li>Tabel personil + kolom tanda tangan fisik zig-zag (tinggi 28pt)</li>
+                                            <li>Total nominal harian (Gaji Pokok BGN, Iuran BPJS TK, Total Diterima)</li>
+                                            <li>Rekapitulasi kehadiran (jumlah Hadir, Hadir ½ Hari, Izin, Sakit, Alpa, Libur)</li>
+                                            <li>Pengesahan tanda tangan: Kepala SPPG & Pengawas Keuangan / Gizi</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- Preview Khusus Rekap Matriks Periode -->
+                                <div v-else class="space-y-1.5 text-slate-700">
+                                    <div class="flex items-center justify-between">
+                                        <span>Sheet 1:</span>
+                                        <span class="text-emerald-700 font-bold">Rekap Presensi & Gaji (Matriks & TTD Pengesahan)</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span>Sheet 2:</span>
+                                        <span class="text-slate-800 font-bold">Ringkasan per Divisi (Executive Summary)</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span>Sheet 3:</span>
+                                        <span class="text-emerald-800 font-bold">Rincian Detail Harian (Log Presensi Lengkap)</span>
+                                    </div>
+                                    <div class="pt-1 text-[11px] text-emerald-800 font-medium flex items-center gap-1.5">
+                                        <CheckCircle2 class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                        <span>Dilengkapi lembar pengesahan Kepala SPPG & Pengawas Keuangan/Gizi.</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                        <!-- Modal Actions -->
+                        <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
                             <button
                                 type="button"
                                 @click="closeExportModal"
@@ -1728,8 +2341,10 @@ function closeDetailModal() {
                                 :disabled="isExporting"
                                 class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                             >
-                                <FileSpreadsheet class="h-4 w-4" />
-                                <span>{{ isExporting ? 'Mengekspor File...' : 'Download File Excel (.xlsx)' }}</span>
+                                <component :is="exportDocType === 'slip_gaji_pdf' ? FileText : FileSpreadsheet" class="h-4 w-4" />
+                                <span>
+                                    {{ isExporting ? 'Mengekspor File...' : (exportDocType === 'slip_gaji_pdf' ? 'Download Slip Gaji (.pdf)' : (exportDocType === 'ttd_harian' ? 'Download Buku TTD Harian (.xlsx)' : 'Download Rekap Presensi (.xlsx)')) }}
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -1839,7 +2454,12 @@ function closeDetailModal() {
                                     <div>
                                         <p class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Total Hak Honor Diterima</p>
                                         <p class="text-[11px] text-emerald-700 mt-0.5">
-                                            {{ computedPetugasStats[detailPetugas.id]?.mandays ?? 0 }} mandays x {{ formatRibuan(computedPetugasStats[detailPetugas.id]?.honorPerHari ?? 0) }}
+                                            <span v-if="computedPetugasStats[detailPetugas.id]?.isGajiVarying">
+                                                Tarif harian bervariasi (Rp {{ formatRibuan(computedPetugasStats[detailPetugas.id]?.minGaji) }} - Rp {{ formatRibuan(computedPetugasStats[detailPetugas.id]?.maxGaji) }})
+                                            </span>
+                                            <span v-else>
+                                                {{ computedPetugasStats[detailPetugas.id]?.mandays ?? 0 }} mandays x {{ formatRibuan(computedPetugasStats[detailPetugas.id]?.honorPerHari ?? 0) }}
+                                            </span>
                                         </p>
                                     </div>
                                     <p class="text-xl font-black text-emerald-950">
@@ -1847,9 +2467,81 @@ function closeDetailModal() {
                                     </p>
                                 </div>
                             </div>
+
+                            <!-- Tabel Rincian Riwayat Harian di Modal Slip -->
+                            <div class="p-3.5 rounded-xl border border-slate-200 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                        <Clock class="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Rincian Log Harian ({{ dateColumns.length }} Hari Kerja)</span>
+                                    </p>
+                                    <span class="text-[10px] text-slate-500 font-mono">
+                                        {{ formatTanggalIndo(tanggalMulai) }} – {{ formatTanggalIndo(tanggalSelesai) }}
+                                    </span>
+                                </div>
+
+                                <div class="overflow-x-auto max-h-56 overflow-y-auto rounded-lg border border-slate-200">
+                                    <table class="w-full text-xs text-left">
+                                        <thead class="bg-slate-100 text-slate-700 font-bold text-[10px] sticky top-0 z-10 border-b border-slate-200">
+                                            <tr>
+                                                <th class="py-1.5 px-2.5 w-8 text-center">No</th>
+                                                <th class="py-1.5 px-2.5">Tanggal</th>
+                                                <th class="py-1.5 px-2 text-center">Presensi</th>
+                                                <th class="py-1.5 px-2.5">Jabatan Snapshot</th>
+                                                <th class="py-1.5 px-2.5 text-right">Tarif BGN</th>
+                                                <th class="py-1.5 px-2.5 text-right font-bold text-emerald-800">Hak Diterima</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 text-[10px]">
+                                            <tr
+                                                v-for="(dt, idx) in dateColumns"
+                                                :key="dt.dateStr"
+                                                :class="[
+                                                    'hover:bg-slate-50 transition-colors',
+                                                    dt.dateStr === todayStr ? 'bg-emerald-50/50 font-semibold' : '',
+                                                ]"
+                                            >
+                                                <td class="py-1.5 px-2.5 text-center text-slate-400">{{ idx + 1 }}</td>
+                                                <td class="py-1.5 px-2.5">
+                                                    <span class="font-medium text-slate-800">{{ formatTanggalIndo(dt.dateStr) }}</span>
+                                                    <span class="text-slate-400 ml-1">({{ dt.dayName }})</span>
+                                                </td>
+                                                <td class="py-1.5 px-2 text-center">
+                                                    <span
+                                                        :class="[
+                                                            'px-1.5 py-0.5 rounded font-bold text-[9px]',
+                                                            getStatusBadgeStyle(matrixPresensi[detailPetugas.id]?.[dt.dateStr] || ''),
+                                                        ]"
+                                                    >
+                                                        {{ getStatusLabel(matrixPresensi[detailPetugas.id]?.[dt.dateStr] || '') }}
+                                                    </span>
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-slate-700">
+                                                    {{ getDailyJabatan(detailPetugas, dt.dateStr) }}
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-right font-mono text-slate-600">
+                                                    {{ formatRupiah(getDailyGaji(detailPetugas, dt.dateStr)) }}
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-700">
+                                                    {{ formatRupiah(getDailyHonor(detailPetugas, dt.dateStr)) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+                        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                            <button
+                                type="button"
+                                @click="downloadSlipSinglePetugas(detailPetugas)"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                                title="Download Slip Gaji resmi dalam format PDF"
+                            >
+                                <FileText class="h-3.5 w-3.5" />
+                                <span>Download Slip Gaji (.pdf)</span>
+                            </button>
                             <button
                                 type="button"
                                 @click="closeDetailModal"

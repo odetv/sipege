@@ -15,6 +15,8 @@ import {
     Check,
     RotateCcw,
     Layers,
+    FileSpreadsheet,
+    FileText,
 } from "lucide-vue-next";
 import DateRangePicker from "@/Components/DateRangePicker.vue";
 import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
@@ -53,6 +55,8 @@ const emit = defineEmits([
     "resetDistribusi",
     "openExportModal",
     "downloadHariIniDirect",
+    "downloadTandaTerimaHarianDirect",
+    "downloadBuktiDistribusiDirect",
 ]);
 
 const isExportMenuOpen = ref(false);
@@ -168,83 +172,106 @@ function onApplyDateRange(newRange) {
                     </div>
                 </div>
 
-                <!-- Dropdown Menu Ekspor Excel -->
-                <div class="relative">
-                    <div class="inline-flex rounded-lg shadow-2xs">
-                        <button
-                            type="button"
-                            @click="$emit('openExportModal', 'current')"
-                            :disabled="isExporting"
-                            class="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
-                            title="Buka dialog ekspor Excel"
-                        >
-                            <Download class="h-4 w-4" />
-                            <span>{{ isExporting ? 'Mengekspor...' : 'Ekspor Excel' }}</span>
-                        </button>
-                        <button
-                            type="button"
-                            @click="isExportMenuOpen = !isExportMenuOpen"
-                            :disabled="isExporting"
-                            class="px-2 py-1.5 sm:py-2 rounded-r-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold transition-colors border-l border-emerald-600 cursor-pointer disabled:opacity-50"
-                            title="Opsi ekspor cepat"
-                        >
-                            <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': isExportMenuOpen }" />
-                        </button>
-                    </div>
+                <!-- Dropdown Menu Ekspor Excel & PDF (Identik Rekap Kehadiran) -->
+                <div class="relative inline-flex items-stretch rounded-lg shadow-xs">
+                    <button
+                        type="button"
+                        @click="$emit('openExportModal', 'ttd_harian')"
+                        :disabled="isExporting"
+                        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        title="Download Buku Tanda Terima Distribusi Harian / Rekap Excel"
+                    >
+                        <FileSpreadsheet class="h-4 w-4" />
+                        <span class="hidden sm:inline">Download</span>
+                        <span class="sm:hidden">Excel</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="isExportMenuOpen = !isExportMenuOpen"
+                        :disabled="isExporting"
+                        class="inline-flex items-center px-1.5 sm:px-2 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer disabled:opacity-50"
+                        title="Opsi Pilihan Download"
+                    >
+                        <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': isExportMenuOpen }" />
+                    </button>
 
-                    <div v-if="isExportMenuOpen" class="fixed inset-0 z-40" @click="isExportMenuOpen = false"></div>
-
+                    <!-- Backdrop Click Outside untuk Menu Dropdown -->
                     <div
                         v-if="isExportMenuOpen"
-                        class="absolute right-0 top-full mt-1.5 z-50 w-64 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs divide-y divide-slate-100 select-none"
+                        class="fixed inset-0 z-40"
+                        @click="isExportMenuOpen = false"
+                    ></div>
+
+                    <!-- Dropdown Menu Cepat (4 Opsi Identik Rekap Kehadiran) -->
+                    <div
+                        v-if="isExportMenuOpen"
+                        class="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                     >
                         <div class="p-1">
+                            <!-- Opsi 1: Buku Tanda Terima Distribusi Harian (Per Sheet DD-MM-YYYY) -->
                             <button
                                 type="button"
-                                @click="isExportMenuOpen = false; $emit('downloadHariIniDirect')"
-                                class="w-full text-left p-2.5 rounded-lg hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                @click="isExportMenuOpen = false; $emit('openExportModal', 'ttd_harian')"
+                                class="w-full text-left p-2 rounded-lg bg-teal-50/70 hover:bg-teal-100/80 text-teal-950 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                            >
+                                <div class="p-1.5 rounded-md bg-teal-600 text-white mt-0.5 shrink-0 shadow-2xs">
+                                    <FileSpreadsheet class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-1.5">
+                                        <p class="text-xs font-bold leading-tight text-teal-900">Buku Tanda Terima Harian</p>
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200/80 text-teal-800">BARU</span>
+                                    </div>
+                                    <p class="text-[10px] text-teal-700 font-normal mt-0.5 leading-snug">Pisah per tgl (Sheet DD-MM-YYYY), rincian porsi, PIC & TTD fisik</p>
+                                </div>
+                            </button>
+
+                            <!-- Opsi 2: Tanda Terima Hari Ini (1 Sheet DD-MM-YYYY) Langsung -->
+                            <button
+                                type="button"
+                                @click="isExportMenuOpen = false; $emit('downloadTandaTerimaHarianDirect')"
+                                class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
                             >
                                 <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
                                     <CalendarCheck class="h-4 w-4" />
                                 </div>
                                 <div>
-                                    <p class="text-xs font-bold leading-tight text-emerald-800">Download Hari Ini Saja</p>
-                                    <p class="text-[10px] text-slate-500 font-normal mt-0.5">Tanggal {{ formatTanggalIndo(todayStr) }} (1 Hari)</p>
+                                    <p class="text-xs font-bold leading-tight text-slate-900">TTD Distribusi Hari Ini (1 Sheet)</p>
+                                    <p class="text-[10px] text-slate-500 font-normal mt-0.5">Langsung download tgl {{ formatTanggalIndo(todayStr) }}</p>
                                 </div>
                             </button>
-                        </div>
-                        <div class="p-1">
+
+                            <!-- Opsi 3: Rekap Matriks Distribusi Periode -->
                             <button
                                 type="button"
-                                @click="isExportMenuOpen = false; $emit('openExportModal', 'bulanan')"
-                                class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                @click="isExportMenuOpen = false; $emit('openExportModal', 'rekap_matriks')"
+                                class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
                             >
-                                <span class="flex items-center gap-2">
-                                    <Clock class="h-3.5 w-3.5 text-slate-400" />
-                                    <span>Rekap Bulanan</span>
-                                </span>
-                                <span class="text-[10px] text-slate-400">28 Hari</span>
+                                <div class="p-1.5 rounded-md bg-slate-100 text-slate-700 mt-0.5 shrink-0">
+                                    <Layers class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold leading-tight text-slate-900">Rekap Distribusi (Matriks)</p>
+                                    <p class="text-[10px] text-slate-500 font-normal mt-0.5">Matriks horizontal periode + ringkasan alokasi & pengesahan</p>
+                                </div>
                             </button>
+
+                            <!-- Opsi 4: Bukti Distribusi PM (.pdf) Berdasarkan Filter Aktif -->
                             <button
                                 type="button"
-                                @click="isExportMenuOpen = false; $emit('openExportModal', 'periodik')"
-                                class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
+                                @click="isExportMenuOpen = false; $emit('downloadBuktiDistribusiDirect')"
+                                class="w-full text-left p-2 rounded-lg hover:bg-emerald-50/70 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 border-t border-slate-100"
                             >
-                                <span class="flex items-center gap-2">
-                                    <Calendar class="h-3.5 w-3.5 text-slate-400" />
-                                    <span>Rekap Periodik</span>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="isExportMenuOpen = false; $emit('openExportModal', 'current')"
-                                class="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center justify-between cursor-pointer transition-colors"
-                            >
-                                <span class="flex items-center gap-2">
-                                    <Filter class="h-3.5 w-3.5 text-slate-400" />
-                                    <span>Sesuai Tabel / Kustom...</span>
-                                </span>
-                                <span class="text-[10px] text-slate-400">{{ dateColumns.length }} Hari</span>
+                                <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-800 mt-0.5 shrink-0">
+                                    <FileText class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-1.5">
+                                        <p class="text-xs font-bold leading-tight text-emerald-950">Download Bukti Distribusi (.pdf)</p>
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-900">PDF</span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 font-normal mt-0.5">Bukti tanda terima resmi 1 halaman per sasaran PM</p>
+                                </div>
                             </button>
                         </div>
                     </div>

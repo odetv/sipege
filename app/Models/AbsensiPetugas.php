@@ -16,6 +16,10 @@ class AbsensiPetugas extends Model
 
     protected $casts = [
         'tanggal' => 'date',
+        'gaji_harian_bgn' => 'integer',
+        'bonus_harian_mitra' => 'integer',
+        'iuran_bpjs_tk' => 'integer',
+        'snapshot_petugas' => 'array',
     ];
 
     public function petugas(): BelongsTo

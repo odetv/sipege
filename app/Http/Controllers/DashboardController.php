@@ -81,11 +81,33 @@ class DashboardController extends Controller
                 });
         }
 
+        $pengawasGizi = null;
+        $pengawasKeuangan = null;
+        if ($unitSppg) {
+            $pengawasGizi = \App\Models\Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where(function ($q) {
+                    $q->where('jabatan', 'like', '%Pengawas Gizi%')
+                      ->orWhere('jabatan', 'like', '%PLOG%');
+                })
+                ->orderByRaw("CASE WHEN status = 'Aktif' THEN 0 ELSE 1 END")
+                ->first();
+
+            $pengawasKeuangan = \App\Models\Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where(function ($q) {
+                    $q->where('jabatan', 'like', '%Pengawas Keuangan%')
+                      ->orWhere('jabatan', 'like', '%PLOK%');
+                })
+                ->orderByRaw("CASE WHEN status = 'Aktif' THEN 0 ELSE 1 END")
+                ->first();
+        }
+
         return Inertia::render('Dashboard/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,
             'workOrders' => $workOrders,
+            'pengawasGizi' => $pengawasGizi,
+            'pengawasKeuangan' => $pengawasKeuangan,
         ]);
     }
 

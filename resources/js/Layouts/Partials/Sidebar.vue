@@ -501,7 +501,7 @@ function logout() {
                         isCollapsed ? 'block lg:hidden' : 'block',
                     ]"
                 >
-                    Menu Utama
+                    Utama
                 </p>
 
                 <!-- 1. Dashboard -->
@@ -740,7 +740,56 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 4. Menu Khusus Work Order (Accordion with Submenu) -->
+                <!-- 4. Menu Supplier Rekanan -->
+                <Link
+                    :href="route('supplier.index')"
+                    :title="isCollapsed ? 'Supplier' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('supplier.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Store class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Supplier</span
+                    >
+                    <div
+                        v-if="route().current('supplier.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- SECTION: OPERASIONAL -->
+                <div :class="['pt-3', isCollapsed ? 'pt-2' : 'pt-4']">
+                    <div
+                        v-if="isCollapsed"
+                        class="hidden lg:block mx-auto my-1 w-6 border-t border-slate-200"
+                    ></div>
+                    <p
+                        :class="[
+                            'px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 transition-opacity',
+                            isCollapsed ? 'block lg:hidden' : 'block',
+                        ]"
+                    >
+                        Operasional
+                    </p>
+                </div>
+
+                <!-- 5. Menu Khusus Work Order (Accordion with Submenu) -->
                 <div class="space-y-0.5">
                     <!-- Parent Work Order Button -->
                     <button
@@ -1449,39 +1498,6 @@ function logout() {
                     >
                     <div
                         v-if="route().current('label.*')"
-                        :class="[
-                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
-                            isCollapsed
-                                ? 'inline-block lg:hidden'
-                                : 'inline-block',
-                        ]"
-                    ></div>
-                </Link>
-
-                <!-- 8. Menu Supplier Rekanan -->
-                <Link
-                    :href="route('supplier.index')"
-                    :title="isCollapsed ? 'Supplier' : ''"
-                    :class="[
-                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
-                        route().current('supplier.*')
-                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                        isCollapsed
-                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
-                            : 'px-3.5 py-2.5 gap-3',
-                    ]"
-                >
-                    <Store class="h-4 w-4 shrink-0" />
-                    <span
-                        :class="[
-                            'flex-1 truncate',
-                            isCollapsed ? 'inline lg:hidden' : 'inline',
-                        ]"
-                        >Supplier</span
-                    >
-                    <div
-                        v-if="route().current('supplier.*')"
                         :class="[
                             'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
                             isCollapsed

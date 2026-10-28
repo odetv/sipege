@@ -48,6 +48,32 @@ function selectTab(tab) {
         </button>
 
         <button
+            @click="selectTab('pengawas_gizi')"
+            :class="[
+                'px-3.5 py-2 sm:px-4 text-xs sm:text-sm font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-start text-left gap-2 shrink-0 whitespace-nowrap',
+                activeTab === 'pengawas_gizi'
+                    ? 'bg-white text-primary shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+            ]"
+        >
+            <User class="h-4 w-4 shrink-0" />
+            <span>Data Pengawas Gizi</span>
+        </button>
+
+        <button
+            @click="selectTab('pengawas_keuangan')"
+            :class="[
+                'px-3.5 py-2 sm:px-4 text-xs sm:text-sm font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-start text-left gap-2 shrink-0 whitespace-nowrap',
+                activeTab === 'pengawas_keuangan'
+                    ? 'bg-white text-primary shadow-xs border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60',
+            ]"
+        >
+            <User class="h-4 w-4 shrink-0" />
+            <span>Data Pengawas Keuangan</span>
+        </button>
+
+        <button
             @click="selectTab('maps')"
             :class="[
                 'px-3.5 py-2 sm:px-4 text-xs sm:text-sm font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-start text-left gap-2 shrink-0 whitespace-nowrap',

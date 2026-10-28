@@ -43,6 +43,8 @@ const flash = computed(() => page.props.flash ?? {});
 // ─── Preset Jam Kerja per Divisi (Mendukung Normal 1 Rentang & Kustom Multi-Shift) ──
 const presetJamDivisi = {
     "Kepala SPPG": { type: "normal", mulai: "07:00", selesai: "16:00" },
+    "Pengawas Gizi": { type: "normal", mulai: "03:00", selesai: "12:00" },
+    "Pengawas Keuangan": { type: "normal", mulai: "07:00", selesai: "16:00" },
     "PLOG": { type: "normal", mulai: "03:00", selesai: "12:00" },
     "PLOK": { type: "normal", mulai: "07:00", selesai: "16:00" },
     "Koordinator Lapangan": {
@@ -82,8 +84,7 @@ const presetJamDivisi = {
     "Persiapan": { type: "normal", mulai: "19:00", selesai: "03:00" },
     "Pemorsian (Koordinator)": { type: "normal", mulai: "04:00", selesai: "12:00" },
     "Pemorsian": { type: "normal", mulai: "04:00", selesai: "12:00" },
-    "Pengemudi (Koordinator 1)": { type: "normal", mulai: "06:00", selesai: "14:00" },
-    "Pengemudi (Koordinator 2)": { type: "normal", mulai: "06:00", selesai: "14:00" },
+    "Pengemudi (Koordinator)": { type: "normal", mulai: "06:00", selesai: "14:00" },
     "Pengemudi": { type: "normal", mulai: "06:00", selesai: "14:00" },
     "Distribusi": { type: "normal", mulai: "06:00", selesai: "14:00" },
     "Cuci Ompreng (Koordinator)": { type: "normal", mulai: "12:00", selesai: "20:00" },
@@ -123,21 +124,16 @@ const presetJamDivisi = {
 // Preset Jabatan Options Dropdown
 const listOpsiJabatan = [
     "Kepala SPPG",
-    "PLOG",
-    "PLOK",
+    "Pengawas Gizi",
+    "Pengawas Keuangan",
     "Koordinator Lapangan",
     "Chef",
-    "Pengolahan (Koordinator)",
     "Pengolahan",
-    "Persiapan (Koordinator)",
     "Persiapan",
-    "Pemorsian (Koordinator)",
     "Pemorsian",
     "Pengemudi",
-    "Pengemudi (Koordinator 1)",
-    "Pengemudi (Koordinator 2)",
     "Cuci Ompreng",
-    "Cuci Ompreng (Koordinator)",
+    "Koordinator",
     "Admin",
     "Kebersihan",
     "Keamanan",
@@ -148,7 +144,9 @@ function parseJabatanList(str) {
     if (!str) return [];
     const normalized = str
         .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
-        .replace(/\ba\.k\.a\.?\s+/gi, ", ");
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
     const parts = normalized.split(/[,&/]/);
     return parts
         .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
@@ -166,6 +164,7 @@ function matchJabatan(petugasJabatan, filterVal) {
 }
 
 // Preset Bank Options Dropdown
+// Preset Bank Options Dropdown (Langsung nama bank tanpa kata 'Bank')
 const listOpsiBank = [
     "BNI",
     "BRI",
@@ -175,24 +174,54 @@ const listOpsiBank = [
     "BTN",
     "BPD Bali",
     "CIMB Niaga",
-    "Bank Danamon",
-    "Bank Permata",
+    "Danamon",
+    "Permata",
     "Lainnya",
 ];
+
+// State pilihan bank & bank kustom jika memilih 'Lainnya'
+const selectedBankOption = ref("BNI");
+const customBankName = ref("");
+
+function onSelectBankOptionChange() {
+    if (selectedBankOption.value === "Lainnya") {
+        form.jenis_bank = customBankName.value.trim();
+        if (!form.jenis_bank) {
+            clientErrors.value.jenis_bank = "Nama bank lainnya wajib diketik.";
+        } else {
+            delete clientErrors.value.jenis_bank;
+        }
+    } else {
+        form.jenis_bank = selectedBankOption.value;
+        customBankName.value = "";
+        delete clientErrors.value.jenis_bank;
+    }
+}
+
+function onCustomBankInput(e) {
+    customBankName.value = e.target.value;
+    form.jenis_bank = customBankName.value.trim();
+    if (!form.jenis_bank) {
+        clientErrors.value.jenis_bank = "Nama bank lainnya wajib diketik.";
+    } else {
+        delete clientErrors.value.jenis_bank;
+    }
+}
 
 // Helper Badge Divisi
 function getJabatanBadgeClass(jabatan) {
     if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
     const j = jabatan.toLowerCase();
     if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
-    if (j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
     if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
     if (j.includes("chef")) return "bg-amber-50 text-amber-700 border-amber-200";
     if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
     if (j.includes("persiapan")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
     if (j.includes("pemorsian")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-sky-50 text-sky-700 border-sky-200";
-    if (j.includes("cuci")) return "bg-cyan-50 text-cyan-700 border-cyan-200";
+    if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
     if (j.includes("admin")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     if (j.includes("kebersihan")) return "bg-purple-50 text-purple-700 border-purple-200";
     if (j.includes("keamanan")) return "bg-rose-50 text-rose-700 border-rose-200";
@@ -596,7 +625,11 @@ function validateForm() {
         errors.jabatan = "Jabatan / Divisi wajib dipilih (minimal 1 jabatan).";
     }
 
-    if (!form.jenis_bank || form.jenis_bank.trim().length === 0) {
+    if (selectedBankOption.value === "Lainnya") {
+        if (!customBankName.value || !customBankName.value.trim()) {
+            errors.jenis_bank = "Nama bank lainnya wajib diketik.";
+        }
+    } else if (!form.jenis_bank || form.jenis_bank.trim().length === 0) {
         errors.jenis_bank = "Jenis bank payroll wajib dipilih atau diisi.";
     }
 
@@ -669,6 +702,8 @@ function openCreateModal() {
     form.iuran_bpjs_tk = 16800;
 
     form.jenis_bank = "BNI";
+    selectedBankOption.value = "BNI";
+    customBankName.value = "";
     form.nomor_rekening = "";
     displayGajiBgn.value = "0";
     displayBonusMitra.value = "0";
@@ -700,7 +735,23 @@ function openEditModal(p) {
     selectedJabatans.value = parseJabatanList(p.jabatan);
     form.jabatan = selectedJabatans.value.join(", ") || p.jabatan || "";
 
-    form.jenis_bank = p.jenis_bank || "BNI";
+    const knownBanks = ["BNI", "BRI", "BCA", "Mandiri", "BSI", "BTN", "BPD Bali", "CIMB Niaga", "Danamon", "Permata"];
+    const rawBank = (p.jenis_bank || "BNI").trim();
+    const cleanBank = rawBank.replace(/^Bank\s+/i, "").trim();
+
+    if (knownBanks.includes(cleanBank)) {
+        selectedBankOption.value = cleanBank;
+        customBankName.value = "";
+        form.jenis_bank = cleanBank;
+    } else if (cleanBank === "Lainnya" || cleanBank === "") {
+        selectedBankOption.value = "Lainnya";
+        customBankName.value = "";
+        form.jenis_bank = "";
+    } else {
+        selectedBankOption.value = "Lainnya";
+        customBankName.value = cleanBank;
+        form.jenis_bank = cleanBank;
+    }
     form.nomor_rekening = p.nomor_rekening || "";
     form.jam_kerja = p.jam_kerja || "";
     form.gaji_harian_bgn = p.gaji_harian_bgn ?? 0;
@@ -1797,7 +1848,8 @@ watch(
                                     </label>
                                     <div class="space-y-1.5">
                                         <select
-                                            v-model="form.jenis_bank"
+                                            v-model="selectedBankOption"
+                                            @change="onSelectBankOptionChange"
                                             required
                                             :class="[
                                                 'w-full px-3 py-2 rounded-lg border text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary',
@@ -1805,17 +1857,22 @@ watch(
                                             ]"
                                         >
                                             <option v-for="bank in listOpsiBank" :key="bank" :value="bank">
-                                                Bank {{ bank }}
+                                                {{ bank }}
                                             </option>
                                         </select>
                                         <!-- Custom input jika memilih Lainnya -->
-                                        <input
-                                            v-if="form.jenis_bank === 'Lainnya'"
-                                            v-model="form.jenis_bank"
-                                            type="text"
-                                            placeholder="Ketik nama bank lainnya..."
-                                            class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
-                                        />
+                                        <div v-if="selectedBankOption === 'Lainnya'" class="pt-0.5">
+                                            <input
+                                                v-model="customBankName"
+                                                @input="onCustomBankInput"
+                                                type="text"
+                                                placeholder="Ketik nama bank lainnya (contoh: Nagari, BJB, dll)..."
+                                                class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary bg-white shadow-2xs"
+                                            />
+                                            <p class="text-[10px] text-slate-500 mt-1 italic">
+                                                *Ketik nama bank langsung tanpa kata "Bank" (misal: Nagari, BJB, Muamalat).
+                                            </p>
+                                        </div>
                                     </div>
                                     <p v-if="clientErrors.jenis_bank || form.errors.jenis_bank" class="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
                                         <AlertCircle class="h-3 w-3 shrink-0" />
@@ -2077,7 +2134,7 @@ watch(
                                     <p class="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider">Rekening Payroll</p>
                                     <div class="flex items-center gap-2 mt-0.5">
                                         <span class="px-2 py-0.5 rounded bg-emerald-200/80 text-emerald-900 font-bold text-xs">
-                                            Bank {{ detailPetugas.jenis_bank || 'BNI' }}
+                                            {{ detailPetugas.jenis_bank || 'BNI' }}
                                         </span>
                                         <span class="text-sm font-mono font-extrabold text-slate-900">
                                             {{ detailPetugas.nomor_rekening || '-' }}

@@ -1408,23 +1408,26 @@ function normalizeKelompokForWo(k) {
     const subCats = getSubKategoriByKategori(k.kategori);
     let rincianArr = [];
     if (Array.isArray(k.rincian) && k.rincian.length > 0) {
-        rincianArr = k.rincian.map((r) => ({
-            id: r.id,
-            sub_kategori: r.sub_kategori,
-            jenis_porsi:
-                r.jenis_porsi ||
-                getJenisPorsiBySubKategori(r.sub_kategori, k.kategori),
-            is_menerima:
-                r.is_menerima !== undefined ? Boolean(r.is_menerima) : true,
-            waktu_batas_makan:
-                r.waktu_batas_makan ||
-                getDefaultBatasMakan(k.nama_kelompok, r.sub_kategori),
-            jumlah_laki_laki: Number(r.jumlah_laki_laki) || 0,
-            jumlah_perempuan: Number(r.jumlah_perempuan) || 0,
-            total:
-                (Number(r.jumlah_laki_laki) || 0) +
-                (Number(r.jumlah_perempuan) || 0),
-        }));
+        rincianArr = k.rincian.map((r) => {
+            const isMenerima =
+                r.is_menerima !== undefined ? Boolean(r.is_menerima) : true;
+            const jmlL = Number(r.jumlah_laki_laki) || 0;
+            const jmlP = Number(r.jumlah_perempuan) || 0;
+            return {
+                id: r.id,
+                sub_kategori: r.sub_kategori,
+                jenis_porsi:
+                    r.jenis_porsi ||
+                    getJenisPorsiBySubKategori(r.sub_kategori, k.kategori),
+                is_menerima: isMenerima,
+                waktu_batas_makan:
+                    r.waktu_batas_makan ||
+                    getDefaultBatasMakan(k.nama_kelompok, r.sub_kategori),
+                jumlah_laki_laki: jmlL,
+                jumlah_perempuan: jmlP,
+                total: isMenerima ? jmlL + jmlP : 0,
+            };
+        });
     } else {
         rincianArr = subCats.map((sub) => {
             const jp = getJenisPorsiBySubKategori(sub, k.kategori);
@@ -1441,21 +1444,47 @@ function normalizeKelompokForWo(k) {
         });
     }
 
-    const calcPK = rincianArr
-        .filter((r) => r.jenis_porsi === "Porsi Kecil")
-        .reduce(
-            (sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0),
+    const hasRincianData = rincianArr.some(
+        (r) =>
+            (Number(r.jumlah_laki_laki) || 0) +
+                (Number(r.jumlah_perempuan) || 0) >
             0,
-        );
-    const calcPB = rincianArr
-        .filter((r) => r.jenis_porsi === "Porsi Besar")
-        .reduce(
-            (sum, r) => sum + (r.jumlah_laki_laki + r.jumlah_perempuan || 0),
-            0,
-        );
+    );
 
-    const pk = calcPK > 0 ? calcPK : Number(k.total_porsi_kecil) || 0;
-    const pb = calcPB > 0 ? calcPB : Number(k.total_porsi_besar) || 0;
+    let pk = 0;
+    let pb = 0;
+
+    if (hasRincianData) {
+        pk = rincianArr
+            .filter(
+                (r) =>
+                    r.is_menerima !== false &&
+                    r.jenis_porsi === "Porsi Kecil",
+            )
+            .reduce(
+                (sum, r) =>
+                    sum +
+                    ((Number(r.jumlah_laki_laki) || 0) +
+                        (Number(r.jumlah_perempuan) || 0)),
+                0,
+            );
+        pb = rincianArr
+            .filter(
+                (r) =>
+                    r.is_menerima !== false &&
+                    r.jenis_porsi === "Porsi Besar",
+            )
+            .reduce(
+                (sum, r) =>
+                    sum +
+                    ((Number(r.jumlah_laki_laki) || 0) +
+                        (Number(r.jumlah_perempuan) || 0)),
+                0,
+            );
+    } else {
+        pk = Number(k.total_porsi_kecil) || Number(k.porsi_kecil) || 0;
+        pb = Number(k.total_porsi_besar) || Number(k.porsi_besar) || 0;
+    }
 
     const normAlergi = normalizeAlergiItems(
         k.keterangan_alergi,
@@ -2283,7 +2312,7 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         tab_tujuan: activeManualTab.value,
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
-        akg_alergi: akgAlergi.value,
+        akg_alergi: filteredAkgAlergiPayload.value,
         catatan: {
             ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
             jadwal_operasional: payloadJadwalOperasional.value,
@@ -2378,8 +2407,18 @@ const configuredAllergiesList = computed(() => {
 watch(
     configuredAllergiesList,
     (newList) => {
-        if (newList.length > 0 && !selectedAlergiFormulaTab.value) {
+        const activeJenisSet = new Set(newList.map((it) => it.jenis));
+        // Bersihkan key akgAlergi yang sudah tidak dikonfigurasi / dihapus oleh user
+        Object.keys(akgAlergi.value).forEach((k) => {
+            if (!activeJenisSet.has(k)) {
+                delete akgAlergi.value[k];
+            }
+        });
+
+        if (newList.length > 0 && (!selectedAlergiFormulaTab.value || !activeJenisSet.has(selectedAlergiFormulaTab.value))) {
             selectedAlergiFormulaTab.value = newList[0].jenis;
+        } else if (newList.length === 0) {
+            selectedAlergiFormulaTab.value = "";
         }
         newList.forEach((item) => {
             const j = item.jenis;
@@ -2405,6 +2444,17 @@ watch(
     },
     { immediate: true, deep: true },
 );
+
+const filteredAkgAlergiPayload = computed(() => {
+    const activeJenis = new Set(configuredAllergiesList.value.map((it) => it.jenis));
+    const result = {};
+    activeJenis.forEach((j) => {
+        if (akgAlergi.value[j]) {
+            result[j] = akgAlergi.value[j];
+        }
+    });
+    return result;
+});
 
 function handleSwitchToFormulaTab() {
     if (!validateStep1()) {
@@ -2466,7 +2516,7 @@ function handleSavePerencanaanManualComplete() {
         tab_tujuan: "formula",
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
-        akg_alergi: akgAlergi.value,
+        akg_alergi: filteredAkgAlergiPayload.value,
         catatan: {
             ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
             jadwal_operasional: payloadJadwalOperasional.value,

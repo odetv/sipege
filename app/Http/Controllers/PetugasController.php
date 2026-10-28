@@ -204,9 +204,20 @@ class PetugasController extends Controller
                 ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->get();
 
+            $presensiDetailsMap = [];
             foreach ($presensiRecords as $rec) {
                 $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
                 $presensiMap[$rec->petugas_id][$tglStr] = $rec->status;
+                $presensiDetailsMap[$rec->petugas_id][$tglStr] = [
+                    'status' => $rec->status,
+                    'nama' => $rec->nama,
+                    'nik' => $rec->nik,
+                    'jabatan' => $rec->jabatan,
+                    'gaji_harian_bgn' => (int) ($rec->gaji_harian_bgn ?? 0),
+                    'bonus_harian_mitra' => (int) ($rec->bonus_harian_mitra ?? 0),
+                    'iuran_bpjs_tk' => (int) ($rec->iuran_bpjs_tk ?? 0),
+                    'status_petugas' => $rec->status_petugas ?? 'Aktif',
+                ];
             }
         }
 
@@ -221,6 +232,7 @@ class PetugasController extends Controller
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialPresensiMap' => $presensiMap,
+            'initialPresensiDetailsMap' => $presensiDetailsMap ?? [],
         ]);
     }
 
@@ -348,9 +360,20 @@ class PetugasController extends Controller
                 ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->get();
 
+            $presensiDetailsMap = [];
             foreach ($presensiRecords as $rec) {
                 $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
                 $presensiMap[$rec->petugas_id][$tglStr] = $rec->status;
+                $presensiDetailsMap[$rec->petugas_id][$tglStr] = [
+                    'status' => $rec->status,
+                    'nama' => $rec->nama,
+                    'nik' => $rec->nik,
+                    'jabatan' => $rec->jabatan,
+                    'gaji_harian_bgn' => (int) ($rec->gaji_harian_bgn ?? 0),
+                    'bonus_harian_mitra' => (int) ($rec->bonus_harian_mitra ?? 0),
+                    'iuran_bpjs_tk' => (int) ($rec->iuran_bpjs_tk ?? 0),
+                    'status_petugas' => $rec->status_petugas ?? 'Aktif',
+                ];
             }
         }
 
@@ -365,6 +388,7 @@ class PetugasController extends Controller
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialPresensiMap' => $presensiMap,
+            'initialPresensiDetailsMap' => $presensiDetailsMap ?? [],
         ]);
     }
 
@@ -466,6 +490,16 @@ class PetugasController extends Controller
             return back()->with('error', 'Tidak ada data presensi yang dikirim.');
         }
 
+        $allPetugas = Petugas::where('unit_sppg_id', $unitSppg->id)->get()->keyBy('id');
+        $existingRecords = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
+            ->whereIn('petugas_id', array_keys($matrix))
+            ->get()
+            ->keyBy(function ($r) {
+                $tStr = $r->tanggal instanceof Carbon ? $r->tanggal->format('Y-m-d') : substr((string)$r->tanggal, 0, 10);
+                return $r->petugas_id . '_' . $tStr;
+            });
+
+        $todayStr = Carbon::today()->format('Y-m-d');
         $allowedStatuses = ['H', 'H2', 'L', 'I', 'S', 'TK'];
         $now = Carbon::now();
         $records = [];
@@ -475,13 +509,58 @@ class PetugasController extends Controller
             if (! is_array($dates)) {
                 continue;
             }
+            $p = $allPetugas->get((int) $petugasId);
+
             foreach ($dates as $tgl => $status) {
                 if (in_array($status, $allowedStatuses)) {
+                    $existKey = ((int) $petugasId) . '_' . $tgl;
+                    $exist = $existingRecords->get($existKey);
+
+                    // Jika catatan di hari lampau sudah memiliki snapshot petugas, pertahankan snapshot lampau tersebut
+                    // agar rekap historis masa lalu tidak terdistorsi jika data master petugas diubah di masa depan.
+                    if ($exist && !empty($exist->nama) && $exist->gaji_harian_bgn !== null && $tgl < $todayStr) {
+                        $pNama = $exist->nama;
+                        $pNik = $exist->nik;
+                        $pJabatan = $exist->jabatan;
+                        $pGaji = (int) $exist->gaji_harian_bgn;
+                        $pBonus = (int) $exist->bonus_harian_mitra;
+                        $pBpjs = (int) $exist->iuran_bpjs_tk;
+                        $pStatus = $exist->status_petugas ?? 'Aktif';
+                        $pSnapshot = is_array($exist->snapshot_petugas) ? json_encode($exist->snapshot_petugas) : $exist->snapshot_petugas;
+                    } else {
+                        // Untuk hari ini, masa depan, atau yang belum punya snapshot: gunakan profil master petugas saat ini
+                        $pNama = $p?->nama;
+                        $pNik = $p?->nik;
+                        $pJabatan = $p?->jabatan;
+                        $pGaji = (int) ($p?->gaji_harian_bgn ?? 0);
+                        $pBonus = (int) ($p?->bonus_harian_mitra ?? 0);
+                        $pBpjs = (int) ($p?->iuran_bpjs_tk ?? 0);
+                        $pStatus = $p?->status ?? 'Aktif';
+                        $pSnapshot = json_encode([
+                            'nama' => $pNama,
+                            'nik' => $pNik,
+                            'jabatan' => $pJabatan,
+                            'jam_kerja' => $p?->jam_kerja ?? '-',
+                            'gaji_harian_bgn' => $pGaji,
+                            'bonus_harian_mitra' => $pBonus,
+                            'iuran_bpjs_tk' => $pBpjs,
+                            'status' => $pStatus,
+                        ]);
+                    }
+
                     $records[] = [
                         'petugas_id' => (int) $petugasId,
                         'unit_sppg_id' => $unitSppg->id,
                         'tanggal' => $tgl,
                         'status' => $status,
+                        'nama' => $pNama,
+                        'nik' => $pNik,
+                        'jabatan' => $pJabatan,
+                        'gaji_harian_bgn' => $pGaji,
+                        'bonus_harian_mitra' => $pBonus,
+                        'iuran_bpjs_tk' => $pBpjs,
+                        'status_petugas' => $pStatus,
+                        'snapshot_petugas' => $pSnapshot,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
@@ -496,7 +575,19 @@ class PetugasController extends Controller
                 AbsensiPetugas::upsert(
                     $chunk,
                     ['petugas_id', 'tanggal'],
-                    ['unit_sppg_id', 'status', 'updated_at']
+                    [
+                        'unit_sppg_id',
+                        'status',
+                        'nama',
+                        'nik',
+                        'jabatan',
+                        'gaji_harian_bgn',
+                        'bonus_harian_mitra',
+                        'iuran_bpjs_tk',
+                        'status_petugas',
+                        'snapshot_petugas',
+                        'updated_at',
+                    ]
                 );
             }
         }
@@ -799,12 +890,23 @@ class PetugasController extends Controller
                 $presensiRecords = $presensiQuery->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])->get();
             }
 
+            $presensiDetailsMap = [];
             foreach ($presensiRecords as $rec) {
                 $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
                 $presensiMap[$rec->petugas_id][$tglStr] = $rec->status;
+                $presensiDetailsMap[$rec->petugas_id][$tglStr] = [
+                    'status' => $rec->status,
+                    'nama' => $rec->nama,
+                    'nik' => $rec->nik,
+                    'jabatan' => $rec->jabatan,
+                    'gaji_harian_bgn' => (int) ($rec->gaji_harian_bgn ?? 0),
+                    'bonus_harian_mitra' => (int) ($rec->bonus_harian_mitra ?? 0),
+                    'iuran_bpjs_tk' => (int) ($rec->iuran_bpjs_tk ?? 0),
+                    'status_petugas' => $rec->status_petugas ?? 'Aktif',
+                ];
             }
 
-            // Hitung mandays per petugas
+            // Hitung mandays dan total gaji harian presensi per petugas berbasis snapshot per hari
             foreach ($petugas as $p) {
                 $pDates = $presensiMap[$p->id] ?? [];
                 $mandays = 0;
@@ -814,14 +916,28 @@ class PetugasController extends Controller
                 $izinCount = 0;
                 $sakitCount = 0;
                 $tkCount = 0;
+                $totalGajiPresensi = 0;
+                $totalBonusPresensi = 0;
 
-                foreach ($pDates as $st) {
+                foreach ($pDates as $tglStr => $st) {
+                    $snap = $presensiDetailsMap[$p->id][$tglStr] ?? null;
+                    $dailyGaji = ($snap && isset($snap['gaji_harian_bgn']) && $snap['gaji_harian_bgn'] !== null)
+                        ? (int) $snap['gaji_harian_bgn']
+                        : (int) $p->gaji_harian_bgn;
+                    $dailyBonus = ($snap && isset($snap['bonus_harian_mitra']) && $snap['bonus_harian_mitra'] !== null)
+                        ? (int) $snap['bonus_harian_mitra']
+                        : (int) $p->bonus_harian_mitra;
+
                     if ($st === 'H') {
                         $mandays += 1.0;
                         $hadirCount++;
+                        $totalGajiPresensi += $dailyGaji * 1.0;
+                        $totalBonusPresensi += $dailyBonus * 1.0;
                     } elseif ($st === 'H2') {
                         $mandays += 0.5;
                         $setengahCount++;
+                        $totalGajiPresensi += $dailyGaji * 0.5;
+                        $totalBonusPresensi += $dailyBonus * 0.5;
                     } elseif ($st === 'L') {
                         $liburCount++;
                     } elseif ($st === 'I') {
@@ -841,6 +957,8 @@ class PetugasController extends Controller
                     'izin' => $izinCount,
                     'sakit' => $sakitCount,
                     'tk' => $tkCount,
+                    'total_gaji_presensi' => (int) round($totalGajiPresensi),
+                    'total_bonus_presensi' => (int) round($totalBonusPresensi),
                 ];
             }
 
@@ -861,6 +979,7 @@ class PetugasController extends Controller
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialPresensiMap' => $presensiMap,
+            'initialPresensiDetailsMap' => $presensiDetailsMap ?? [],
             'mandaysMap' => $mandaysMap,
             'initialSelectedDates' => $selectedDatesList,
         ]);
@@ -1201,6 +1320,8 @@ class PetugasController extends Controller
             if (!$p->jabatan) return [];
             $str = preg_replace('/\(a\.k\.a\.?\s*([^)]+)\)/i', ', $1', $p->jabatan);
             $str = preg_replace('/\ba\.k\.a\.?\s+/i', ', ', $str);
+            $str = preg_replace('/\((Koordinator[^)]*)\)/i', ', $1', $str);
+            $str = preg_replace('/\bKoordinator\s*[12]\b/i', 'Koordinator', $str);
             $parts = preg_split('~[,&/]~', $str);
             return array_filter(array_map(fn($s) => trim($s, " \t\n\r\0\x0B()"), $parts));
         })->unique()->values()->all();

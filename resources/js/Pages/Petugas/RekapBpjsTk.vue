@@ -196,8 +196,9 @@ async function handleExportExcel() {
 function getJabatanBadgeClass(jabatan) {
     const j = (jabatan || "").toLowerCase();
     if (j.includes("kepala") || j.includes("manager")) return "bg-purple-50 text-purple-700 border-purple-200";
-    if (j.includes("ahli gizi")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (j.includes("akuntan") || j.includes("keuangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j.includes("gizi")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (j.includes("keuangan") || j.includes("akuntan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
     if (j.includes("masak") || j.includes("koki") || j.includes("chef")) return "bg-amber-50 text-amber-700 border-amber-200";
     if (j.includes("distribusi") || j.includes("driver")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
     return "bg-slate-50 text-slate-700 border-slate-200";

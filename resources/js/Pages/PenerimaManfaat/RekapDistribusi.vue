@@ -7,13 +7,20 @@ import RekapDistribusiKpiCards from "./Partials/RekapDistribusiKpiCards.vue";
 import RekapDistribusiMatrixTable from "./Partials/RekapDistribusiMatrixTable.vue";
 import RekapDistribusiExportModal from "./Partials/RekapDistribusiExportModal.vue";
 import RekapDistribusiWoDetailModal from "./Partials/RekapDistribusiWoDetailModal.vue";
-import { downloadRekapDistribusiExcel } from "@/Services/exportDistribusiHelper";
+import {
+    downloadRekapDistribusiExcel,
+    downloadBukuTandaTerimaDistribusiHarianExcel,
+    downloadBuktiDistribusiPdf,
+} from "@/Services/exportDistribusiHelper";
+import { CheckCircle2 } from "lucide-vue-next";
+import { formatTanggalIndo } from "@/Services/exportPetugasHelper";
 
 const props = defineProps({
     user: { type: Object, default: () => ({}) },
     unitSppg: { type: Object, default: null },
     periodes: { type: Array, default: () => [] },
     activePeriode: { type: Object, default: null },
+    petugas: { type: Array, default: () => [] },
     distribusiList: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({}) },
     stats: { type: Object, default: () => ({}) },
@@ -551,38 +558,97 @@ function handleOpenKpmDetail(item) {
     showWoModal.value = true;
 }
 
-// ─── Ekspor Excel ─────────────────────────────────────────────────────────────
+// ─── Ekspor Dokumen Distribusi (Excel & PDF) ──────────────────────────────────
 const isExporting = ref(false);
 const showExportModal = ref(false);
-const exportModalMode = ref("current");
+const exportDocType = ref("ttd_harian"); // 'ttd_harian' | 'rekap_matriks' | 'bukti_distribusi_pdf'
 
-function openExportModal(mode = "current") {
-    exportModalMode.value = mode;
+function openExportModal(docType = "ttd_harian") {
+    if (docType && ["ttd_harian", "rekap_matriks", "bukti_distribusi_pdf"].includes(docType)) {
+        exportDocType.value = docType;
+    } else {
+        exportDocType.value = "ttd_harian";
+    }
     showExportModal.value = true;
 }
 
-async function handleDownloadExcel(customStart = null, customEnd = null) {
+async function handleExecuteExport(typeOrDate = null, customStart = null, customEnd = null) {
     try {
         isExporting.value = true;
-        // Tangkal jika dipanggil dari DOM event object (bukan string tanggal)
-        const sDate = (typeof customStart === "string" && customStart.length >= 8) ? customStart : tanggalMulai.value;
-        const eDate = (typeof customEnd === "string" && customEnd.length >= 8) ? customEnd : tanggalSelesai.value;
 
-        await downloadRekapDistribusiExcel({
-            distribusiList: filteredItems.value,
-            matrixDistribusi: matrixDistribusi.value,
-            dateColumns: dateColumns.value,
-            stats: computedSummary.value,
-            startDate: sDate,
-            endDate: eDate,
-            mode: modeSkala.value,
-            unitSppg: props.unitSppg,
-        });
+        let targetDocType = exportDocType.value;
+        if (typeof typeOrDate === "string" && ["ttd_harian", "rekap_matriks", "bukti_distribusi_pdf"].includes(typeOrDate)) {
+            targetDocType = typeOrDate;
+        }
+
+        const sDate = (typeof customStart === "string" && customStart.length >= 8) ? customStart : tanggalMulai.value;
+        const eDate = (typeof customEnd === "string" && customEnd.length >= 8) ? customEnd : (tanggalSelesai.value || sDate);
+
+        let activePeriode = null;
+        if (selectedPeriodeId.value && selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const days = dateColumns.value.length;
+
+        if (targetDocType === "ttd_harian") {
+            await downloadBukuTandaTerimaDistribusiHarianExcel({
+                distribusiList: filteredItems.value,
+                matrixDistribusi: matrixDistribusi.value,
+                matrixDetailMap: props.matrixDetailMap,
+                woByDateMap: props.woByDateMap,
+                dateColumns: dateColumns.value,
+                startDate: sDate,
+                endDate: eDate,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                petugas: props.petugas || [],
+                user: props.user,
+            });
+            const labelHasil = sDate === eDate 
+                ? `Hari Ini (${formatTanggalIndo(sDate)})` 
+                : `${days} Hari (Pisah Sheet DD-MM-YYYY)`;
+            showToast(`Buku Tanda Terima Distribusi Harian (${labelHasil}) berhasil didownload!`);
+        } else if (targetDocType === "bukti_distribusi_pdf") {
+            await downloadBuktiDistribusiPdf({
+                distribusiList: filteredItems.value,
+                matrixDistribusi: matrixDistribusi.value,
+                matrixDetailMap: props.matrixDetailMap,
+                woByDateMap: props.woByDateMap,
+                dateColumns: dateColumns.value,
+                startDate: sDate,
+                endDate: eDate,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                petugas: props.petugas || [],
+                user: props.user,
+            });
+            const labelHasil = sDate === eDate ? `Hari Ini (${formatTanggalIndo(sDate)})` : `${days} Hari`;
+            showToast(`Bukti Tanda Terima Distribusi PDF (${labelHasil}) berhasil didownload!`);
+        } else {
+            await downloadRekapDistribusiExcel({
+                distribusiList: filteredItems.value,
+                matrixDistribusi: matrixDistribusi.value,
+                matrixDetailMap: props.matrixDetailMap,
+                woByDateMap: props.woByDateMap,
+                dateColumns: dateColumns.value,
+                stats: computedSummary.value,
+                startDate: sDate,
+                endDate: eDate,
+                mode: modeSkala.value,
+                unitSppg: props.unitSppg,
+                periode: activePeriode,
+                petugas: props.petugas || [],
+                user: props.user,
+            });
+            const labelHasil = sDate === eDate ? `Hari Ini (${formatTanggalIndo(sDate)})` : `${days} Hari`;
+            showToast(`File Excel Rekap Matriks Distribusi (${labelHasil}) berhasil didownload!`);
+        }
+
         showExportModal.value = false;
-        showToast("Laporan Excel Rekap Distribusi berhasil diunduh.");
     } catch (err) {
-        console.error("Gagal export Excel:", err);
-        alert("Terjadi kesalahan saat mengekspor Excel: " + (err?.message || err));
+        console.error("Gagal export file distribusi:", err);
+        showToast("Terjadi kesalahan saat mengekspor: " + (err?.message || err));
     } finally {
         isExporting.value = false;
     }
@@ -590,7 +656,86 @@ async function handleDownloadExcel(customStart = null, customEnd = null) {
 
 // Direct 1 Hari Export
 async function downloadHariIniDirect() {
-    await handleDownloadExcel(todayStr.value, todayStr.value);
+    await downloadTandaTerimaHarianDirect();
+}
+
+async function downloadTandaTerimaHarianDirect() {
+    try {
+        isExporting.value = true;
+        let activePeriode = null;
+        if (selectedPeriodeId.value && selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, "0");
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const singleDayColumn = [{
+            dateStr: todayStr.value,
+            dayNum: d,
+            monthNum: m,
+            dayName: ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][now.getDay()],
+            isWeekend: now.getDay() === 0 || now.getDay() === 6,
+            isSunday: now.getDay() === 0,
+            isToday: true,
+            index: 1,
+            label: `${d}/${m}`,
+        }];
+
+        await downloadBukuTandaTerimaDistribusiHarianExcel({
+            distribusiList: filteredItems.value,
+            matrixDistribusi: matrixDistribusi.value,
+            matrixDetailMap: props.matrixDetailMap,
+            woByDateMap: props.woByDateMap,
+            dateColumns: singleDayColumn,
+            startDate: todayStr.value,
+            endDate: todayStr.value,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            petugas: props.petugas || [],
+            user: props.user,
+        });
+
+        showToast(`Buku Tanda Terima Distribusi Hari Ini (${formatTanggalIndo(todayStr.value)}) berhasil didownload!`);
+    } catch (e) {
+        console.error("Gagal export TTD harian hari ini:", e);
+        showToast("Gagal mengunduh file Excel: " + (e?.message || e));
+    } finally {
+        isExporting.value = false;
+    }
+}
+
+async function downloadBuktiDistribusiDirect() {
+    try {
+        isExporting.value = true;
+        let activePeriode = null;
+        if (selectedPeriodeId.value && selectedPeriodeId.value !== "all") {
+            activePeriode = props.periodes?.find((p) => String(p.id) === String(selectedPeriodeId.value)) || null;
+        }
+
+        const days = dateColumns.value.length;
+        await downloadBuktiDistribusiPdf({
+            distribusiList: filteredItems.value,
+            matrixDistribusi: matrixDistribusi.value,
+            matrixDetailMap: props.matrixDetailMap,
+            woByDateMap: props.woByDateMap,
+            dateColumns: dateColumns.value,
+            startDate: tanggalMulai.value,
+            endDate: tanggalSelesai.value,
+            unitSppg: props.unitSppg,
+            periode: activePeriode,
+            petugas: props.petugas || [],
+            user: props.user,
+        });
+
+        const labelHasil = days === 1 ? `Hari Ini (${formatTanggalIndo(tanggalMulai.value)})` : `${days} Hari`;
+        showToast(`Bukti Tanda Terima Distribusi PDF (${labelHasil}) berhasil didownload!`);
+    } catch (e) {
+        console.error("Gagal export Bukti Distribusi PDF:", e);
+        showToast("Gagal mengunduh Bukti Distribusi PDF: " + (e?.message || e));
+    } finally {
+        isExporting.value = false;
+    }
 }
 
 // ─── Toast System ─────────────────────────────────────────────────────────────
@@ -613,23 +758,25 @@ function showToast(msg) {
 
     <AppLayout>
         <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto space-y-4">
-            <!-- ─── Toast Notification ───────────────────────────────────────── -->
-            <transition
-                enter-active-class="transform ease-out duration-300 transition"
-                enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-                enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
-                leave-active-class="transition ease-in duration-100"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-if="showToastNotification"
-                    class="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-slate-900 text-white px-4 py-3 shadow-xl border border-slate-700 flex items-center gap-3 text-xs font-medium"
+            <!-- ─── Toast Notification (Teleport to body identical to Rekap Kehadiran) ─── -->
+            <Teleport to="body">
+                <transition
+                    enter-active-class="transform transition ease-out duration-300"
+                    enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+                    enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
+                    leave-active-class="transition ease-in duration-200"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0"
                 >
-                    <div class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></div>
-                    <span>{{ toastMessage }}</span>
-                </div>
-            </transition>
+                    <div
+                        v-if="showToastNotification"
+                        class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-5 z-[99999] flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-900 text-white shadow-xl border border-slate-700 text-xs"
+                    >
+                        <CheckCircle2 class="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span class="font-medium">{{ toastMessage }}</span>
+                    </div>
+                </transition>
+            </Teleport>
 
             <!-- ─── Komponen 1: Control Bar (Filter & Aksi) ───────────────────── -->
             <RekapDistribusiControlBar
@@ -658,6 +805,8 @@ function showToast(msg) {
                 @resetDistribusi="resetDistribusi"
                 @openExportModal="openExportModal"
                 @downloadHariIniDirect="downloadHariIniDirect"
+                @downloadTandaTerimaHarianDirect="downloadTandaTerimaHarianDirect"
+                @downloadBuktiDistribusiDirect="downloadBuktiDistribusiDirect"
             />
 
             <!-- ─── Komponen 2: KPI Statistics Cards (6 Cards) ────────────────── -->
@@ -697,12 +846,12 @@ function showToast(msg) {
             @close="showWoModal = false"
         />
 
-        <!-- ─── Modal Dialog Ekspor Excel ───────────────────────────────────── -->
+        <!-- ─── Modal Dialog Ekspor Distribusi (Excel & PDF) ─────────────── -->
         <RekapDistribusiExportModal
             :show="showExportModal"
             :isOpen="showExportModal"
-            :mode="exportModalMode"
-            :initialMode="exportModalMode"
+            :mode="exportDocType"
+            :initialDocType="exportDocType"
             :startDate="tanggalMulai"
             :endDate="tanggalSelesai"
             :tanggalMulai="tanggalMulai"
@@ -710,10 +859,10 @@ function showToast(msg) {
             :todayStr="todayStr"
             :periodes="periodes"
             :totalDays="dateColumns.length"
+            :unitSppg="unitSppg"
             :isExporting="isExporting"
             @close="showExportModal = false"
-            @confirmExport="handleDownloadExcel"
-            @confirm="handleDownloadExcel"
+            @confirm="handleExecuteExport"
         />
     </AppLayout>
 </template>

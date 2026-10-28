@@ -253,23 +253,6 @@ class LaporanController extends Controller
      */
     private function calculateAkgAlergiForWo(WorkOrder $wo): array
     {
-        // 1. Jika Work Order memiliki akg_alergi riil yang tersimpan, prioritaskan itu!
-        if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
-            $hasRealData = false;
-            foreach ($wo->akg_alergi as $j => $data) {
-                if (is_array($data) && (
-                    !empty($data['akg_pb']) || !empty($data['akg_pk']) ||
-                    !empty($data['pb']) || !empty($data['pk'])
-                )) {
-                    $hasRealData = true;
-                    break;
-                }
-            }
-            if ($hasRealData) {
-                return $wo->akg_alergi;
-            }
-        }
-
         $items = $wo->items;
         $rawAlergi = $wo->sub_menu_alergi ?: [];
 
@@ -297,6 +280,25 @@ class LaporanController extends Controller
                         $configuredAllergies[] = $j;
                     }
                 }
+            }
+        }
+
+        // 1. Jika Work Order memiliki akg_alergi riil yang tersimpan, prioritaskan itu HANYA untuk jenis alergi yang memang dikonfigurasi/dipilih
+        if (!empty($wo->akg_alergi) && is_array($wo->akg_alergi)) {
+            $filteredAkg = [];
+            foreach ($configuredAllergies as $cJenis) {
+                foreach ($wo->akg_alergi as $j => $data) {
+                    if (strcasecmp(trim($j), $cJenis) === 0 && is_array($data)) {
+                        $pkEnergi = (float)($data['akg_pb']['energi'] ?? $data['akg_pk']['energi'] ?? $data['pb']['energi'] ?? $data['pk']['energi'] ?? 0);
+                        if ($pkEnergi > 0) {
+                            $filteredAkg[$cJenis] = $data;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!empty($filteredAkg)) {
+                return $filteredAkg;
             }
         }
 

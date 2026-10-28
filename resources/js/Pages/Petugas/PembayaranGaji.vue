@@ -49,6 +49,7 @@ const props = defineProps({
     initialTanggalSelesai: { type: String, default: "" },
     initialPeriodeId: { type: [String, Number], default: "all" },
     initialPresensiMap: { type: Object, default: () => ({}) },
+    initialPresensiDetailsMap: { type: Object, default: () => ({}) },
     mandaysMap: { type: Object, default: () => ({}) },
     initialSelectedDates: { type: Array, default: () => [] },
 });
@@ -617,6 +618,9 @@ const rows = ref([]);
 function calculateAutoAmount(p, mode) {
     const rateBgn = parseInt(p.gaji_harian_bgn) || 0; // Total Gaji BGN (tanpa menghitung bonus harian mitra)
     if (mode === "presensi") {
+        if (props.mandaysMap[p.id]?.total_gaji_presensi !== undefined && props.mandaysMap[p.id]?.total_gaji_presensi !== null) {
+            return props.mandaysMap[p.id].total_gaji_presensi;
+        }
         const mandays = props.mandaysMap[p.id]?.mandays ?? 0;
         return Math.round(mandays * rateBgn);
     } else if (mode === "bgn_20") {
@@ -1748,7 +1752,12 @@ function copyRowRekening(id, text) {
                                                 <span
                                                     v-for="jab in (r.petugas.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
                                                     :key="jab"
-                                                    class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                                                    :class="[
+                                                        'text-[10px] px-1.5 py-0.2 rounded font-semibold border',
+                                                        jab.toLowerCase().includes('koordinator')
+                                                            ? 'bg-sky-50 text-sky-800 border-sky-300'
+                                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                    ]"
                                                 >
                                                     {{ jab }}
                                                 </span>

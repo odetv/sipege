@@ -9,6 +9,7 @@ import DashboardWoTrackingBar from "@/Pages/Dashboard/Partials/DashboardWoTracki
 import DashboardNavTabs from "@/Pages/Dashboard/Partials/DashboardNavTabs.vue";
 import DashboardUnitTab from "@/Pages/Dashboard/Partials/DashboardUnitTab.vue";
 import DashboardProfileTab from "@/Pages/Dashboard/Partials/DashboardProfileTab.vue";
+import DashboardPengawasTab from "@/Pages/Dashboard/Partials/DashboardPengawasTab.vue";
 import DashboardMapTab from "@/Pages/Dashboard/Partials/DashboardMapTab.vue";
 
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -29,6 +30,14 @@ const props = defineProps({
     workOrders: {
         type: Array,
         default: () => [],
+    },
+    pengawasGizi: {
+        type: Object,
+        default: null,
+    },
+    pengawasKeuangan: {
+        type: Object,
+        default: null,
     },
 });
 
@@ -185,7 +194,27 @@ function switchTab(tab) {
             :domisili-full-address="domisiliFullAddress"
         />
 
-        <!-- ================= TAB 3: PETA & GEOSPASIAL ================= -->
+        <!-- ================= TAB 3: DATA PENGAWAS GIZI ================= -->
+        <DashboardPengawasTab
+            v-show="activeTab === 'pengawas_gizi'"
+            title="Pengawas Gizi"
+            role="Pengawas Gizi"
+            type="gizi"
+            :petugas="pengawasGizi"
+            :unit-sppg="unitSppg"
+        />
+
+        <!-- ================= TAB 4: DATA PENGAWAS KEUANGAN ================= -->
+        <DashboardPengawasTab
+            v-show="activeTab === 'pengawas_keuangan'"
+            title="Pengawas Keuangan"
+            role="Pengawas Keuangan"
+            type="keuangan"
+            :petugas="pengawasKeuangan"
+            :unit-sppg="unitSppg"
+        />
+
+        <!-- ================= TAB 5: PETA & GEOSPASIAL ================= -->
         <DashboardMapTab
             v-show="activeTab === 'maps'"
             ref="mapTabRef"

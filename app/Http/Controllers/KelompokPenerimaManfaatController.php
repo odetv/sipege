@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DistribusiPenerimaManfaat;
 use App\Models\KelompokPenerimaManfaat;
 use App\Models\Periode;
-use App\Models\RincianPenerimaManfaat;
+use App\Models\Petugas;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderKelompok;
 use Carbon\Carbon;
@@ -961,6 +961,7 @@ class KelompokPenerimaManfaatController extends Controller
             'unitSppg' => $unitSppg,
             'periodes' => $periodes,
             'activePeriode' => $activePeriode,
+            'petugas' => Petugas::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)->get(),
             'distribusiList' => $distribusiList,
             'summary' => $summary,
             'stats' => $summary,

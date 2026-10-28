@@ -1010,11 +1010,16 @@ const varianAlergiList = computed(() => {
     safeAkgAlergi =
         safeAkgAlergi && typeof safeAkgAlergi === "object" ? safeAkgAlergi : {};
 
-    if (Object.keys(safeAkgAlergi).length > 0) {
+    // Fallback HANYA jika di sub_menu_alergi dan items tidak ada konfigurasi alergi sama sekali (misal WO manual)
+    if (Object.keys(alergiMap).length === 0 && Object.keys(safeAkgAlergi).length > 0) {
         Object.keys(safeAkgAlergi).forEach((k) => {
             const j = extractCleanJenis(k);
             if (j && !alergiMap[j]) {
-                alergiMap[j] = { jenis: j, pengganti: {} };
+                const data = safeAkgAlergi[k];
+                const pkEnergi = Number(data?.akg_pb?.energi ?? data?.akg_pk?.energi ?? data?.pb?.energi ?? data?.pk?.energi ?? 0);
+                if (pkEnergi > 0) {
+                    alergiMap[j] = { jenis: j, pengganti: {} };
+                }
             }
         });
     }
