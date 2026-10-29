@@ -226,6 +226,25 @@ onUnmounted(() => {
     window.removeEventListener("keydown", handleKeydown);
     document.body.style.overflow = "";
 });
+
+const pageTitle = computed(() => {
+    switch (currentTab.value) {
+        case "logo":
+            return "Logo - SIPEGE";
+        case "denah":
+            return "Denah - SIPEGE";
+        case "struktur":
+            return "Struktur - SIPEGE";
+        case "plang-ruangan":
+            return "Plang Ruangan - SIPEGE";
+        case "poster":
+            return "Poster - SIPEGE";
+        case "kop-dokumen":
+            return "Kop Dokumen - SIPEGE";
+        default:
+            return "Aset Digital - SIPEGE";
+    }
+});
 </script>
 
 <template>
@@ -235,7 +254,7 @@ onUnmounted(() => {
         :user="$page.props.auth?.user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Aset Digital SPPG" />
+        <Head :title="pageTitle" />
 
         <div class="space-y-5">
             <!-- ─── 1. HERO HEADER BANNER ────────────────────────────────────────── -->

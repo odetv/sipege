@@ -38,7 +38,7 @@ const props = defineProps({
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Label SPPG" />
+        <Head title="Label - SIPEGE" />
 
         <div class="space-y-5">
             <LabelCetakTab

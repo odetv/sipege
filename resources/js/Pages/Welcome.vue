@@ -6,7 +6,6 @@ import CardContent from "@/Components/ui/CardContent.vue";
 import Badge from "@/Components/ui/Badge.vue";
 import {
     LogIn,
-    UserPlus,
     Users,
     UtensilsCrossed,
     Wallet,
@@ -26,42 +25,42 @@ defineProps({
     >
         <!-- Navbar -->
         <header
-            class="border-b border-slate-200/80 bg-white/80 backdrop-blur-md sticky top-0 z-50"
+            class="border-b border-slate-200/80 bg-white/85 backdrop-blur-md sticky top-0 z-50 shadow-2xs"
         >
             <div
-                class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2"
+                class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 min-h-[5rem] sm:min-h-[5.75rem] flex items-center justify-between gap-4"
             >
                 <!-- Logo BGN di Header -->
-                <Link :href="'/'" class="flex items-center gap-2 sm:gap-3 group shrink-0 min-w-0">
+                <Link :href="'/'" class="flex items-center gap-3 sm:gap-4 group shrink-0 min-w-0">
                     <img
                         src="/images/logo/BGN_LOGO_MAIN.png"
                         alt="Logo Badan Gizi Nasional"
-                        class="h-8 w-8 sm:h-10 sm:w-10 object-contain drop-shadow-sm transition-transform duration-200 group-hover:scale-105 shrink-0"
+                        class="h-10 w-10 sm:h-12 sm:w-12 object-contain drop-shadow-xs transition-transform duration-200 group-hover:scale-105 shrink-0"
                     />
                     <div class="min-w-0">
                         <h1
-                            class="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-slate-900 group-hover:text-primary transition-colors"
+                            class="font-extrabold text-lg sm:text-2xl leading-tight tracking-tight text-slate-900 group-hover:text-primary transition-colors"
                         >
                             SIPEGE
                         </h1>
                         <p
-                            class="text-[10px] sm:text-[11px] text-slate-500 font-medium leading-none truncate max-w-[130px] sm:max-w-none"
+                            class="text-xs sm:text-sm text-slate-500 font-medium leading-none truncate max-w-[150px] sm:max-w-none mt-1"
                         >
                             Sistem Pengelolaan SPPG
                         </p>
                     </div>
                 </Link>
 
-                <!-- Auth Navigation -->
-                <nav class="flex items-center gap-1.5 sm:gap-3 shrink-0">
+                <!-- Auth Navigation: Hanya 1 Tombol Masuk -->
+                <nav class="flex items-center gap-3 shrink-0">
                     <Link
                         v-if="$page.props.auth?.user"
                         :href="route('dashboard')"
                     >
                         <Button
                             variant="default"
-                            size="sm"
-                            className="flex items-center gap-1.5 sm:gap-2 shadow-xs text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3.5 rounded-lg sm:rounded-xl font-semibold"
+                            size="default"
+                            className="flex items-center gap-2 text-xs sm:text-sm h-10 sm:h-11 px-5 sm:px-6 rounded-xl font-bold shadow-xs hover:shadow transition-all"
                         >
                             <span>Dashboard</span>
                         </Button>
@@ -69,23 +68,12 @@ defineProps({
                     <template v-else>
                         <Link :href="route('login')">
                             <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg sm:rounded-xl font-semibold border-slate-200"
-                            >
-                                <LogIn class="h-3.5 w-3.5 text-slate-600" />
-                                <span>Masuk</span>
-                            </Button>
-                        </Link>
-
-                        <Link :href="route('register')">
-                            <Button
                                 variant="default"
-                                size="sm"
-                                className="flex items-center gap-1 sm:gap-1.5 shadow-xs text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg sm:rounded-xl font-semibold"
+                                size="default"
+                                className="flex items-center gap-2 text-xs sm:text-sm h-10 sm:h-11 px-5 sm:px-6 rounded-xl font-bold shadow-xs hover:shadow transition-all"
                             >
-                                <UserPlus class="h-3.5 w-3.5" />
-                                <span>Daftar</span>
+                                <LogIn class="h-4 w-4" />
+                                <span>Masuk</span>
                             </Button>
                         </Link>
                     </template>

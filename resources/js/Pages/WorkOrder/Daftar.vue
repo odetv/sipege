@@ -246,6 +246,45 @@ function executeBulkDeleteWo() {
     });
 }
 
+// ─── Status Update Actions (Single & Bulk) ──────────────────────────────────
+const isUpdatingStatus = ref(false);
+
+function handleUpdateStatus(wo, newStatus) {
+    const targetId = wo.uuid || wo.id;
+    isUpdatingStatus.value = true;
+    router.post(
+        route("work-order.update-status", { id: targetId }),
+        { status: newStatus },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                isUpdatingStatus.value = false;
+            },
+        }
+    );
+}
+
+function handleBulkUpdateStatus(newStatus) {
+    if (selectedWoIds.value.length === 0) return;
+    isUpdatingStatus.value = true;
+    router.post(
+        route("work-order.bulk-status"),
+        {
+            ids: selectedWoIds.value,
+            status: newStatus,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                clearSelection();
+            },
+            onFinish: () => {
+                isUpdatingStatus.value = false;
+            },
+        }
+    );
+}
+
 // ─── Rentang Tanggal & Periode SPPG Filter State ─────────────────────────────
 const todayStr = computed(() => {
     const now = new Date();
@@ -557,7 +596,7 @@ const totalManual = computed(
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Work Order - Daftar WO" />
+        <Head title="Daftar WO - SIPEGE" />
 
         <div class="space-y-6">
             <!-- Header Halaman & Tombol Aksi -->
@@ -756,13 +795,22 @@ const totalManual = computed(
                         </div>
 
                         <!-- Action Buttons saat ada WO yang dipilih -->
-                        <div v-if="selectedWoIds.length > 0" class="flex items-center gap-2">
+                        <div v-if="selectedWoIds.length > 0" class="flex items-center gap-2 flex-wrap">
                             <button
                                 type="button"
                                 @click="clearSelection"
                                 class="px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer shadow-2xs"
                             >
                                 Batal Pilihan
+                            </button>
+                            <button
+                                type="button"
+                                @click="handleBulkUpdateStatus('Siap Produksi')"
+                                class="px-3.5 py-1.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                                title="Ubah status seluruh WO terpilih menjadi Siap Produksi"
+                            >
+                                <CheckCircle2 class="h-3.5 w-3.5" />
+                                <span>Set Siap Produksi ({{ selectedWoIds.length }})</span>
                             </button>
                             <button
                                 type="button"
@@ -833,18 +881,21 @@ const totalManual = computed(
                                 <div class="flex flex-wrap items-center gap-1.5 pt-1">
                                     <div class="flex items-center gap-1">
                                         <span class="text-[10px] text-slate-400 font-bold">Status:</span>
-                                        <span
+                                        <button
+                                            type="button"
+                                            @click.stop="handleUpdateStatus(wo, (wo.status === 'Siap Produksi' ? 'Draft' : 'Siap Produksi'))"
                                             :class="[
-                                                'px-2 py-0.5 rounded-full text-[10.5px] font-bold uppercase',
-                                                wo.status === 'Disetujui' || wo.status === 'Completed'
-                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                'px-2 py-0.5 rounded-full text-[10.5px] font-bold uppercase transition-all hover:scale-105 cursor-pointer shadow-2xs',
+                                                wo.status === 'Disetujui' || wo.status === 'Completed' || wo.status === 'Siap Produksi'
+                                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                                     : wo.status === 'In Progress'
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-slate-100 text-slate-700',
+                                                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300',
                                             ]"
+                                            :title="`Klik untuk ubah status ke ${wo.status === 'Siap Produksi' ? 'Draft' : 'Siap Produksi'}`"
                                         >
                                             {{ wo.status || 'Draft' }}
-                                        </span>
+                                        </button>
                                     </div>
 
                                     <!-- Badge Indikator Porsi Tambahan -->
@@ -866,7 +917,29 @@ const totalManual = computed(
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100" @click.stop>
+                            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 flex-wrap" @click.stop>
+                                <!-- Tombol Cepat Siap Produksi / Draft -->
+                                <button
+                                    v-if="wo.status === 'Draft' || !wo.status"
+                                    type="button"
+                                    @click="handleUpdateStatus(wo, 'Siap Produksi')"
+                                    class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                                    title="Klik untuk langsung mengaktifkan status WO ini menjadi Siap Produksi"
+                                >
+                                    <CheckCircle2 class="h-3.5 w-3.5" />
+                                    <span>Siap Produksi</span>
+                                </button>
+                                <button
+                                    v-else-if="wo.status === 'Siap Produksi'"
+                                    type="button"
+                                    @click="handleUpdateStatus(wo, 'Draft')"
+                                    class="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                                    title="Klik untuk mengembalikan status WO ini ke Draft"
+                                >
+                                    <RotateCcw class="h-3 w-3 text-slate-500" />
+                                    <span>Draft</span>
+                                </button>
+
                                 <button
                                     type="button"
                                     @click="handleEditWo(wo)"

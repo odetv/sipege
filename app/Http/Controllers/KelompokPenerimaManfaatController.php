@@ -829,19 +829,21 @@ class KelompokPenerimaManfaatController extends Controller
                 // Tentukan status distribusi untuk tanggal ini:
                 $savedStatus = $savedDistribusiMap[$kId][$dateStr] ?? null;
 
-                if ($savedStatus !== null && $savedStatus !== '') {
-                    $finalStatus = $savedStatus;
-                } elseif ($woInfo && $wok) {
+                if ($woInfo && $wok) {
                     if (!$wok['is_menerima']) {
                         $finalStatus = 'L'; // Libur / tidak menerima di WO
                     } else {
                         $woStatus = strtolower((string)$woInfo['status']);
                         if (in_array($woStatus, ['selesai', 'siap produksi', 'terkirim'])) {
-                            $finalStatus = 'T'; // Terkirim
+                            $finalStatus = 'T'; // Terkirim / Siap Produksi
+                        } elseif ($savedStatus !== null && $savedStatus !== '') {
+                            $finalStatus = $savedStatus;
                         } else {
                             $finalStatus = 'P'; // Proses/Terjadwal
                         }
                     }
+                } elseif ($savedStatus !== null && $savedStatus !== '') {
+                    $finalStatus = $savedStatus;
                 } elseif ($isSunday) {
                     $finalStatus = 'L';
                 } else {
@@ -1263,19 +1265,21 @@ class KelompokPenerimaManfaatController extends Controller
                 $savedStatus = $savedDistribusiMap[$kId][$dateStr] ?? null;
                 $isT = false;
 
-                if ($savedStatus !== null && $savedStatus !== '') {
-                    $isT = ($savedStatus === 'T');
-                } elseif ($woInfo && $wok) {
+                if ($woInfo && $wok) {
                     if (!$wok['is_menerima'] || $wok['total_penerima'] <= 0) {
                         $isT = false;
                     } else {
                         $woStatus = strtolower((string)$woInfo['status']);
                         if (in_array($woStatus, ['selesai', 'siap produksi', 'terkirim'])) {
                             $isT = true;
+                        } elseif ($savedStatus !== null && $savedStatus !== '') {
+                            $isT = ($savedStatus === 'T');
                         } elseif ($mode === 'hari_ini') {
                             $isT = true;
                         }
                     }
+                } elseif ($savedStatus !== null && $savedStatus !== '') {
+                    $isT = ($savedStatus === 'T');
                 }
 
                 if ($isT) {

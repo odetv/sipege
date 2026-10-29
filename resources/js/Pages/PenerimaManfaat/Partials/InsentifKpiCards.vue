@@ -61,26 +61,8 @@ function formatNumber(num) {
 
 <template>
     <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
-        <!-- Card 1: Penerima Terpilih -->
-        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
-            <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                <Users class="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-            <div class="min-w-0 flex-1">
-                <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                    Penerima Terpilih
-                </p>
-                <p class="text-base sm:text-xl font-black text-slate-900 leading-tight">
-                    {{ displaySelected }} <span class="text-xs font-normal text-slate-400">/ {{ displayTotalRows }} Titik</span>
-                </p>
-                <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                    Total {{ formatNumber(displayJiwa) }} PM Terlayani
-                </p>
-            </div>
-        </div>
-
-        <!-- Card 2: Total Dana Insentif Tunai (Span 2 Kolom di HP) -->
-        <div class="p-3.5 sm:p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 col-span-2 lg:col-span-2">
+        <!-- Card 2: Total Dana Insentif Tunai (Banner Utama di HP, Kolom 2 di Desktop) -->
+        <div class="p-3.5 sm:p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 col-span-2 lg:col-span-2 order-1 lg:order-2">
             <div class="p-2.5 sm:p-3 rounded-lg bg-emerald-600 text-white shrink-0 shadow-xs">
                 <DollarSign class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
@@ -97,8 +79,26 @@ function formatNumber(num) {
             </div>
         </div>
 
-        <!-- Card 3: Alokasi Satuan Pendidikan -->
-        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+        <!-- Card 1: Penerima Terpilih (Kolom 1 di HP baris 2, Kolom 1 di Desktop) -->
+        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-1 order-2 lg:order-1">
+            <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                <Users class="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div class="min-w-0 flex-1">
+                <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    Penerima Terpilih
+                </p>
+                <p class="text-base sm:text-xl font-black text-slate-900 leading-tight">
+                    {{ displaySelected }} <span class="text-xs font-normal text-slate-400">/ {{ displayTotalRows }} Titik</span>
+                </p>
+                <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                    Total {{ formatNumber(displayJiwa) }} PM Terlayani
+                </p>
+            </div>
+        </div>
+
+        <!-- Card 3: Alokasi Satuan Pendidikan (Kolom 2 di HP baris 2, Kolom 3 di Desktop) -->
+        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-1 order-3 lg:order-3">
             <div class="p-2 sm:p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
                 <Building2 class="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
@@ -115,8 +115,8 @@ function formatNumber(num) {
             </div>
         </div>
 
-        <!-- Card 4: Alokasi Posyandu -->
-        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+        <!-- Card 4: Alokasi Posyandu (Banner di HP baris 3, Kolom 4 di Desktop) -->
+        <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-2 sm:col-span-2 lg:col-span-1 order-4 lg:order-4">
             <div class="p-2 sm:p-3 rounded-lg bg-pink-50 text-pink-600 shrink-0">
                 <HeartPulse class="h-4 w-4 sm:h-5 sm:w-5" />
             </div>

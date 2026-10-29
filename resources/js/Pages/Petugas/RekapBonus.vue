@@ -25,6 +25,7 @@ import {
     BadgePercent,
     ShieldCheck,
     FileText,
+    Loader2,
 } from "lucide-vue-next";
 import { 
     downloadRekapBonusExcel, 
@@ -534,9 +535,25 @@ const kpiStats = computed(() => {
     let totalBonusHarianRate = 0;
     let totalHadirPenuh = 0;
     let totalSetengahHari = 0;
+    let totalLibur = 0;
+    let totalIzin = 0;
+    let totalSakit = 0;
+    let totalTK = 0;
+    let totalTargetMandays = 0;
+    const totalDays = dateColumns.value.length || 0;
 
     props.petugas.forEach((p) => {
-        const st = computedBonusStats.value[p.id] || { mandays: 0, totalBonus: 0, bonusPerHari: 0, hadir: 0, setengahHari: 0 };
+        const st = computedBonusStats.value[p.id] || {
+            mandays: 0,
+            totalBonus: 0,
+            bonusPerHari: 0,
+            hadir: 0,
+            setengahHari: 0,
+            libur: 0,
+            izin: 0,
+            sakit: 0,
+            tanpaKeterangan: 0,
+        };
         if (p.status === "Aktif" || st.mandays > 0) {
             if (st.mandays > 0) totalPenerima++;
             totalMandays += st.mandays;
@@ -544,8 +561,17 @@ const kpiStats = computed(() => {
             totalBonusHarianRate += st.bonusPerHari;
             totalHadirPenuh += st.hadir;
             totalSetengahHari += st.setengahHari;
+            totalLibur += st.libur;
+            totalIzin += st.izin;
+            totalSakit += st.sakit;
+            totalTK += st.tanpaKeterangan;
+            totalTargetMandays += totalDays;
         }
     });
+
+    const persentaseKehadiran = totalTargetMandays > 0
+        ? Math.round((totalMandays / totalTargetMandays) * 100)
+        : 0;
 
     return {
         totalPenerima,
@@ -554,7 +580,29 @@ const kpiStats = computed(() => {
         totalBonusHarianRate,
         totalHadirPenuh,
         totalSetengahHari,
+        totalLibur,
+        totalIzin,
+        totalSakit,
+        totalTK,
+        persentaseKehadiran,
     };
+});
+
+// Total hadir per tanggal (menghitung hadir penuh + 0.5 hadir setengah)
+const hadirPerTanggal = computed(() => {
+    const map = {};
+    dateColumns.value.forEach((dt) => {
+        let count = 0;
+        props.petugas.forEach((p) => {
+            if (p.status === "Aktif") {
+                const st = matrixPresensi.value[p.id]?.[dt.dateStr] || "";
+                if (st === "H") count += 1;
+                else if (st === "H2") count += 0.5;
+            }
+        });
+        map[dt.dateStr] = count;
+    });
+    return map;
 });
 
 // ─── State Expand Rincian Harian Petugas ─────────────────────────────────────
@@ -713,7 +761,15 @@ async function downloadHariIniDirect() {
     }
 }
 
+async function executeExportDirect(docType = "ttd_harian") {
+    exportDocType.value = docType;
+    await handleExecuteExport();
+}
+
 async function handleExecuteExport() {
+    if (isExporting.value) return;
+    isExportMenuOpen.value = false;
+    closeExportModal();
     isExporting.value = true;
     try {
         let activePeriode = null;
@@ -861,7 +917,7 @@ async function downloadSlipBonusSinglePetugas(p) {
 
 <template>
     <AppLayout>
-        <Head title="Rekap Bonus Petugas SPPG - SIPEGE" />
+        <Head title="Rekap Bonus - SIPEGE" />
 
         <div class="space-y-3.5 sm:space-y-4">
             <!-- ─── Notification Toast ────────────────────────────────────── -->
@@ -912,8 +968,8 @@ async function downloadSlipBonusSinglePetugas(p) {
                     </div>
                 </div>
 
-                <!-- Action Buttons: Icon + Text (Responsive Icon-Only di HP) -->
-                <div class="flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                <!-- Action Buttons: Icon + Text (Responsive Mobile & Desktop) -->
+                <div class="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-end flex-wrap">
                     <!-- Link ke Daftar Petugas -->
                     <Link
                         :href="route('petugas.index')"
@@ -928,18 +984,21 @@ async function downloadSlipBonusSinglePetugas(p) {
                     <div class="relative inline-flex items-stretch rounded-lg shadow-xs">
                         <button
                             type="button"
-                            @click="openExportModal('ttd_harian')"
-                            class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-                            title="Download Buku Tanda Terima Bonus Harian / Rekap Excel"
+                            @click="executeExportDirect('ttd_harian')"
+                            :disabled="isExporting"
+                            class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                            title="Download Buku Tanda Terima Bonus Harian"
                         >
-                            <FileSpreadsheet class="h-4 w-4" />
-                            <span class="hidden sm:inline">Download</span>
-                            <span class="sm:hidden">Excel</span>
+                            <Loader2 v-if="isExporting" class="h-4 w-4 animate-spin" />
+                            <FileSpreadsheet v-else class="h-4 w-4" />
+                            <span class="hidden sm:inline">{{ isExporting ? 'Mengekspor...' : 'Download' }}</span>
+                            <span class="sm:hidden">{{ isExporting ? '...' : 'Excel' }}</span>
                         </button>
                         <button
                             type="button"
                             @click="isExportMenuOpen = !isExportMenuOpen"
-                            class="inline-flex items-center px-1.5 sm:px-2 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer"
+                            :disabled="isExporting"
+                            class="inline-flex items-center px-1.5 sm:px-2 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer disabled:opacity-50"
                             title="Opsi Pilihan Download"
                         >
                             <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': isExportMenuOpen }" />
@@ -955,14 +1014,15 @@ async function downloadSlipBonusSinglePetugas(p) {
                         <!-- Dropdown Menu Cepat -->
                         <div
                             v-if="isExportMenuOpen"
-                            class="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                            class="absolute right-0 top-full mt-1.5 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                         >
                             <div class="p-1">
-                                <!-- Opsi 1: Buku Tanda Terima Bonus Harian (Per Sheet DD-MM-YYYY) -->
+                                <!-- Opsi 1: Buku Tanda Terima Bonus Harian (Per Sheet DD-MM-YYYY) Langsung -->
                                 <button
                                     type="button"
-                                    @click="openExportModal('ttd_harian')"
-                                    class="w-full text-left p-2 rounded-lg bg-amber-50/70 hover:bg-amber-100/80 text-amber-950 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                    @click="executeExportDirect('ttd_harian')"
+                                    :disabled="isExporting"
+                                    class="w-full text-left p-2 rounded-lg bg-amber-50/70 hover:bg-amber-100/80 text-amber-950 font-bold flex items-start gap-2.5 cursor-pointer transition-colors disabled:opacity-50"
                                 >
                                     <div class="p-1.5 rounded-md bg-amber-600 text-white mt-0.5 shrink-0 shadow-2xs">
                                         <FileSpreadsheet class="h-4 w-4" />
@@ -980,7 +1040,8 @@ async function downloadSlipBonusSinglePetugas(p) {
                                 <button
                                     type="button"
                                     @click="downloadHariIniDirect"
-                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
+                                    :disabled="isExporting"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 disabled:opacity-50"
                                 >
                                     <div class="p-1.5 rounded-md bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
                                         <CalendarCheck class="h-4 w-4" />
@@ -991,11 +1052,12 @@ async function downloadSlipBonusSinglePetugas(p) {
                                     </div>
                                 </button>
 
-                                <!-- Opsi 3: Rekap Bonus Periode -->
+                                <!-- Opsi 3: Rekap Bonus Periode Langsung -->
                                 <button
                                     type="button"
-                                    @click="openExportModal('rekap_bonus')"
-                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5"
+                                    @click="executeExportDirect('rekap_bonus')"
+                                    :disabled="isExporting"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-slate-100 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 disabled:opacity-50"
                                 >
                                     <div class="p-1.5 rounded-md bg-slate-100 text-slate-700 mt-0.5 shrink-0">
                                         <Layers class="h-4 w-4" />
@@ -1006,11 +1068,12 @@ async function downloadSlipBonusSinglePetugas(p) {
                                     </div>
                                 </button>
 
-                                <!-- Opsi 4: Slip Bonus (.pdf) Berdasarkan Filter Aktif -->
+                                <!-- Opsi 4: Slip Bonus (.pdf) Berdasarkan Filter Aktif Langsung -->
                                 <button
                                     type="button"
                                     @click="downloadSlipBonusDirect"
-                                    class="w-full text-left p-2 rounded-lg hover:bg-orange-50/70 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 border-t border-slate-100"
+                                    :disabled="isExporting"
+                                    class="w-full text-left p-2 rounded-lg hover:bg-orange-50/70 text-slate-800 font-semibold flex items-start gap-2.5 cursor-pointer transition-colors mt-0.5 border-t border-slate-100 disabled:opacity-50"
                                 >
                                     <div class="p-1.5 rounded-md bg-orange-100 text-orange-800 mt-0.5 shrink-0">
                                         <FileText class="h-4 w-4" />
@@ -1056,9 +1119,9 @@ async function downloadSlipBonusSinglePetugas(p) {
                 @filter-change="onDateFilterChange"
             >
                 <template #extra-filters>
-                    <div class="flex items-center gap-2 flex-wrap w-full md:w-auto">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto md:flex md:items-center">
                         <!-- Search Box -->
-                        <div class="relative flex-1 md:w-56">
+                        <div class="relative w-full md:w-56">
                             <Search class="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                                 v-model="searchQuery"
@@ -1071,7 +1134,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                         <!-- Dropdown Filter Jabatan -->
                         <select
                             v-model="selectedJabatanFilter"
-                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs"
+                            class="w-full md:w-auto px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs"
                         >
                             <option value="all">Semua Divisi / Jabatan</option>
                             <option v-for="j in props.daftarJabatan" :key="j" :value="j">{{ j }}</option>
@@ -1080,7 +1143,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                         <!-- Dropdown Status Pegawai -->
                         <select
                             v-model="selectedStatusFilter"
-                            class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs"
+                            class="w-full md:w-auto px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs"
                         >
                             <option value="all">Semua Status</option>
                             <option value="Aktif">Personil Aktif</option>
@@ -1091,9 +1154,9 @@ async function downloadSlipBonusSinglePetugas(p) {
             </PeriodDateFilterBar>
 
             <!-- ─── KPI SUMMARY CARDS ─── -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 <!-- Card 1: Penerima Aktif -->
-                <div class="p-3 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
                     <div class="flex items-center justify-between">
                         <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Penerima Hak Bonus</p>
                         <Users class="h-3.5 w-3.5 text-slate-600" />
@@ -1107,7 +1170,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                 </div>
 
                 <!-- Card 2: Total Mandays Terhitung -->
-                <div class="p-3 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
                     <div class="flex items-center justify-between">
                         <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Total Mandays</p>
                         <CalendarCheck class="h-3.5 w-3.5 text-blue-600" />
@@ -1121,12 +1184,12 @@ async function downloadSlipBonusSinglePetugas(p) {
                 </div>
 
                 <!-- Card 3: Total Tarif Harian -->
-                <div class="p-3 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
                     <div class="flex items-center justify-between">
                         <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Tarif Harian Total</p>
                         <Coins class="h-3.5 w-3.5 text-amber-600" />
                     </div>
-                    <p class="text-sm sm:text-base font-bold text-amber-900 mt-1 truncate" :title="formatRupiah(kpiStats.totalBonusHarianRate)">
+                    <p class="text-xs sm:text-base font-bold text-amber-900 mt-1 truncate" :title="formatRupiah(kpiStats.totalBonusHarianRate)">
                         {{ formatRupiah(kpiStats.totalBonusHarianRate) }}
                     </p>
                     <p class="text-[10px] text-amber-700 font-semibold mt-0.5 truncate">
@@ -1135,12 +1198,12 @@ async function downloadSlipBonusSinglePetugas(p) {
                 </div>
 
                 <!-- Card 4: Grand Total Bonus Terhitung -->
-                <div class="p-3 sm:p-3.5 rounded-xl bg-amber-50/70 border border-amber-300 shadow-2xs">
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-amber-50/70 border border-amber-300 shadow-2xs">
                     <div class="flex items-center justify-between">
                         <p class="text-[10px] sm:text-[11px] font-bold text-amber-800 uppercase tracking-wider">Total Hak Bonus</p>
                         <DollarSign class="h-3.5 w-3.5 text-amber-700" />
                     </div>
-                    <p class="text-sm sm:text-base font-black text-amber-950 mt-1 truncate" :title="formatRupiah(kpiStats.grandTotalBonus)">
+                    <p class="text-xs sm:text-base font-black text-amber-950 mt-1 truncate" :title="formatRupiah(kpiStats.grandTotalBonus)">
                         {{ formatRupiah(kpiStats.grandTotalBonus) }}
                     </p>
                     <p class="text-[10px] text-amber-700 font-semibold mt-0.5 truncate">
@@ -1151,34 +1214,34 @@ async function downloadSlipBonusSinglePetugas(p) {
 
             <!-- ─── Segmented Tab Switcher: Matriks Kalender vs Log Rincian Harian ──── -->
             <div class="flex items-center justify-between gap-3 flex-wrap">
-                <div class="inline-flex p-1 rounded-xl bg-slate-200/80 border border-slate-300/80 text-xs font-semibold shadow-inner">
+                <div class="w-full sm:w-auto grid grid-cols-2 sm:inline-flex p-1 rounded-xl bg-slate-200/80 border border-slate-300/80 text-xs font-semibold shadow-inner">
                     <button
                         type="button"
                         @click="activeViewTab = 'matriks'"
                         :class="[
-                            'flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer',
+                            'flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer',
                             activeViewTab === 'matriks'
                                 ? 'bg-white text-emerald-800 font-bold shadow-xs ring-1 ring-slate-200'
                                 : 'text-slate-600 hover:text-slate-900',
                         ]"
                     >
-                        <CalendarCheck class="h-4 w-4 text-emerald-600" />
-                        <span>Matriks Bonus (Kalender)</span>
+                        <CalendarCheck class="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span class="truncate">Matriks (Kalender)</span>
                     </button>
                     <button
                         type="button"
                         @click="activeViewTab = 'harian'"
                         :class="[
-                            'flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer',
+                            'flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer',
                             activeViewTab === 'harian'
                                 ? 'bg-white text-emerald-800 font-bold shadow-xs ring-1 ring-slate-200'
                                 : 'text-slate-600 hover:text-slate-900',
                         ]"
                     >
-                        <Clock class="h-4 w-4 text-emerald-600" />
-                        <span>Log Rincian Harian Bonus</span>
-                        <span class="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-mono">
-                            {{ filteredDailyLogs.length }} Baris
+                        <Clock class="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span class="truncate">Log Harian</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-mono hidden xs:inline">
+                            {{ filteredDailyLogs.length }}
                         </span>
                     </button>
                 </div>
@@ -1234,36 +1297,43 @@ async function downloadSlipBonusSinglePetugas(p) {
                     </div>
                 </div>
 
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat rincian tanggal & honor</span>
+                </div>
+
                 <!-- Kontainer Tabel Horizontal Scroll -->
                 <div class="overflow-x-auto relative">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <!-- Table Head: Baris 1 Visualisasi Rentang -->
-                        <thead class="bg-slate-50 text-slate-700 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
-                            <tr>
-                                <th colspan="3" class="py-1 px-3 text-left bg-slate-100 border-r border-slate-200">
-                                    Informasi Personil & Tarif Bonus
+                    <table class="w-full text-left text-xs border-collapse min-w-[1100px]">
+                        <!-- Table Head: Baris 1 Visualisasi Rentang Terpilih -->
+                        <thead class="sticky top-0 z-20">
+                            <!-- Strip Indikator Rentang Tanggal Terpilih Menyatu di Header -->
+                            <tr class="border-b border-emerald-700/60 text-white">
+                                <th colspan="3" class="py-1 px-3 bg-slate-800 text-slate-200 text-[10px] font-bold uppercase tracking-wider sticky left-0 z-30 border-r border-slate-700">
+                                    Informasi Personil
                                 </th>
                                 <th
                                     :colspan="dateColumns.length"
-                                    class="py-1 px-2 text-center bg-gradient-to-r from-amber-600 via-teal-700 to-emerald-700 text-white text-[11px] font-black tracking-wider uppercase border-r border-emerald-600 shadow-inner"
+                                    class="py-1 px-2 text-center bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-[11px] font-black tracking-wider uppercase border-r border-emerald-600 shadow-inner"
                                 >
                                     Rentang Kalender Terpilih: {{ formatTanggalIndo(tanggalMulai) }} – {{ formatTanggalIndo(tanggalSelesai) }} ({{ dateColumns.length }} Hari Kerja)
                                 </th>
                                 <th colspan="10" class="py-1 px-2 text-center bg-slate-800 text-slate-200 text-[10px] font-bold uppercase tracking-wider">
-                                    Rekapitulasi Akumulasi Hak Bonus
+                                    Rekapitulasi Akumulasi & Hak Honor
                                 </th>
                             </tr>
 
-                            <!-- Baris 2: Header Utama -->
+                            <!-- Baris 2: Kolom Header Utama -->
                             <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <!-- Kolom Tetap Kiri: No, Personil & Divisi, Tarif -->
                                 <th class="py-2.5 px-2.5 w-9 text-center sticky left-0 bg-slate-100 z-30 border-r border-slate-200 font-bold">
                                     No
                                 </th>
                                 <th class="py-2.5 px-3 min-w-[170px] sm:min-w-[210px] sticky left-9 bg-slate-100 z-30 border-r border-slate-200 font-bold">
                                     Personil & Divisi
                                 </th>
-                                <th class="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200 font-bold text-amber-900">
-                                    Bonus Harian
+                                <th class="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200 font-bold">
+                                    Tarif Harian
                                 </th>
 
                                 <!-- Kolom Matriks Tanggal Interaktif -->
@@ -1309,12 +1379,24 @@ async function downloadSlipBonusSinglePetugas(p) {
                                 </th>
 
                                 <!-- Kolom Rekap Kanan -->
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-emerald-50 text-emerald-800 font-bold border-r border-slate-200" title="Hadir Penuh (H)">H</th>
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-teal-50 text-teal-800 font-bold border-r border-slate-200" title="Hadir Setengah Hari (½)">½</th>
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200" title="Libur Operasional (L)">L</th>
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-amber-50 text-amber-800 font-bold border-r border-slate-200" title="Total Izin (I)">I</th>
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-blue-50 text-blue-800 font-bold border-r border-slate-200" title="Total Sakit (S)">S</th>
-                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-rose-50 text-rose-800 font-bold border-r border-slate-200" title="Tanpa Keterangan (TK)">TK</th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-emerald-50 text-emerald-800 font-bold border-r border-slate-200" title="Hadir Penuh (H)">
+                                    H
+                                </th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-teal-50 text-teal-800 font-bold border-r border-slate-200" title="Hadir Setengah Hari (½)">
+                                    ½
+                                </th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200" title="Libur Operasional (L)">
+                                    L
+                                </th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-amber-50 text-amber-800 font-bold border-r border-slate-200" title="Total Izin (I)">
+                                    I
+                                </th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-blue-50 text-blue-800 font-bold border-r border-slate-200" title="Total Sakit (S)">
+                                    S
+                                </th>
+                                <th class="py-2.5 px-2 text-center w-8 sm:w-9 bg-rose-50 text-rose-800 font-bold border-r border-slate-200" title="Tanpa Keterangan (TK)">
+                                    TK
+                                </th>
                                 <th class="py-2.5 px-2 text-center min-w-[50px] bg-emerald-100/60 text-emerald-900 font-black border-r border-slate-200" title="Total Hari Kerja Terhitung (H + 0.5*½)">
                                     Mandays
                                 </th>
@@ -1322,7 +1404,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                     %
                                 </th>
                                 <th class="py-2.5 px-3 text-right min-w-[120px] font-bold text-slate-800">
-                                    Total Hak Bonus
+                                    Total Hak Honor
                                 </th>
                                 <th class="py-2.5 px-2 text-center w-10">
                                     Aksi
@@ -1336,7 +1418,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                 <tr
                                     :class="[
                                         'transition-colors',
-                                        isPetugasExpanded(p.id) ? 'bg-amber-50/25' : (p.status === 'Nonaktif' ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/80'),
+                                        isPetugasExpanded(p.id) ? 'bg-emerald-50/30' : (p.status === 'Nonaktif' ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/80'),
                                     ]"
                                 >
                                     <!-- No (Sticky Left) -->
@@ -1345,12 +1427,12 @@ async function downloadSlipBonusSinglePetugas(p) {
                                             <button
                                                 type="button"
                                                 @click="toggleExpandPetugas(p.id)"
-                                                class="p-0.5 rounded hover:bg-amber-100 text-slate-400 hover:text-amber-700 transition-colors cursor-pointer"
+                                                class="p-0.5 rounded hover:bg-emerald-100 text-slate-400 hover:text-emerald-700 transition-colors cursor-pointer"
                                                 :title="isPetugasExpanded(p.id) ? 'Tutup Rincian Harian' : 'Buka Rincian Log Harian Bonus'"
                                             >
                                                 <ChevronDown
                                                     class="h-3.5 w-3.5 transition-transform duration-200"
-                                                    :class="{ 'rotate-180 text-amber-600': isPetugasExpanded(p.id) }"
+                                                    :class="{ 'rotate-180 text-emerald-600': isPetugasExpanded(p.id) }"
                                                 />
                                             </button>
                                             <span>{{ idx + 1 }}</span>
@@ -1362,7 +1444,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                         <div class="min-w-0">
                                             <div class="flex items-center justify-between gap-1">
                                                 <p
-                                                    class="font-bold text-slate-900 truncate leading-snug text-xs cursor-pointer hover:text-amber-700 transition-colors"
+                                                    class="font-bold text-slate-900 truncate leading-snug text-xs cursor-pointer hover:text-emerald-700 transition-colors"
                                                     @click="toggleExpandPetugas(p.id)"
                                                     :title="isPetugasExpanded(p.id) ? 'Klik untuk tutup rincian harian' : 'Klik untuk lihat rincian log per hari'"
                                                 >
@@ -1370,7 +1452,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                 </p>
                                                 <span
                                                     v-if="isPetugasExpanded(p.id)"
-                                                    class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 shrink-0"
+                                                    class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-emerald-100 text-emerald-800 shrink-0"
                                                 >
                                                     Detail Buka
                                                 </span>
@@ -1391,10 +1473,10 @@ async function downloadSlipBonusSinglePetugas(p) {
                                     </td>
 
                                     <!-- Tarif Bonus Harian (Mitra) -->
-                                    <td class="py-2 px-3 text-right font-medium text-amber-700 border-r border-slate-200">
+                                    <td class="py-2 px-3 text-right font-medium text-slate-800 border-r border-slate-200">
                                         <template v-if="computedBonusStats[p.id]?.isBonusVarying">
                                             <p class="font-semibold text-slate-900 text-xs">Bervariasi</p>
-                                            <p class="text-[9px] text-amber-600 font-mono" title="Rentang tarif bonus harian">
+                                            <p class="text-[9px] text-emerald-600 font-mono" title="Rentang tarif bonus harian">
                                                 {{ formatRibuan(computedBonusStats[p.id]?.minBonus) }} - {{ formatRibuan(computedBonusStats[p.id]?.maxBonus) }}
                                             </p>
                                         </template>
@@ -1482,7 +1564,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                     </td>
 
                                     <!-- Total Hak Bonus -->
-                                    <td class="py-2 px-3 text-right font-bold text-amber-900 border-r border-slate-200">
+                                    <td class="py-2 px-3 text-right font-bold text-emerald-900 border-r border-slate-200">
                                         {{ formatRupiah(computedBonusStats[p.id]?.totalBonus ?? 0) }}
                                     </td>
 
@@ -1492,10 +1574,10 @@ async function downloadSlipBonusSinglePetugas(p) {
                                             <button
                                                 type="button"
                                                 @click="toggleExpandPetugas(p.id)"
-                                                class="p-1 rounded-md text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
+                                                class="p-1 rounded-md text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
                                                 :title="isPetugasExpanded(p.id) ? 'Tutup Rincian Harian' : 'Buka Rincian Log Harian Bonus'"
                                             >
-                                                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180 text-amber-600': isPetugasExpanded(p.id) }" />
+                                                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180 text-emerald-600': isPetugasExpanded(p.id) }" />
                                             </button>
                                             <button
                                                 type="button"
@@ -1512,18 +1594,18 @@ async function downloadSlipBonusSinglePetugas(p) {
                                 <!-- Baris Accordion Rincian Harian Bonus Petugas -->
                                 <tr
                                     v-if="isPetugasExpanded(p.id)"
-                                    class="bg-gradient-to-r from-amber-50/40 via-emerald-50/20 to-slate-50 border-b-2 border-amber-300"
+                                    class="bg-gradient-to-r from-emerald-50/40 via-teal-50/20 to-slate-50 border-b-2 border-emerald-300"
                                 >
                                     <td :colspan="10 + dateColumns.length" class="p-3 sm:p-4">
-                                        <div class="bg-white rounded-xl border border-amber-200 shadow-xs overflow-hidden">
+                                        <div class="bg-white rounded-xl border border-emerald-200 shadow-xs overflow-hidden">
                                             <!-- Header Box Accordion -->
-                                            <div class="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-emerald-700 text-white flex flex-wrap items-center justify-between gap-2">
+                                            <div class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex flex-wrap items-center justify-between gap-2">
                                                 <div class="flex items-center gap-2">
-                                                    <Coins class="h-4 w-4 text-amber-200 shrink-0" />
+                                                    <Coins class="h-4 w-4 text-emerald-200 shrink-0" />
                                                     <span class="font-bold text-xs">
                                                         Rincian Log Hak Bonus Harian: {{ p.nama }}
                                                     </span>
-                                                    <span class="text-[10px] text-amber-100 hidden sm:inline">
+                                                    <span class="text-[10px] text-emerald-100 hidden sm:inline">
                                                         ({{ dateColumns.length }} Hari Kerja)
                                                     </span>
                                                 </div>
@@ -1531,10 +1613,10 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                     <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-mono">
                                                         NIK: {{ p.nik }}
                                                     </span>
-                                                    <span class="text-[10px] bg-amber-500/40 px-2 py-0.5 rounded text-white font-semibold">
+                                                    <span class="text-[10px] bg-emerald-500/40 px-2 py-0.5 rounded text-white font-semibold">
                                                         Mandays: {{ computedBonusStats[p.id]?.mandays ?? 0 }} hari
                                                     </span>
-                                                    <span class="text-[11px] bg-white text-amber-950 font-bold px-2 py-0.5 rounded shadow-2xs">
+                                                    <span class="text-[11px] bg-white text-emerald-950 font-bold px-2 py-0.5 rounded shadow-2xs">
                                                         Total Bonus: {{ formatRupiah(computedBonusStats[p.id]?.totalBonus ?? 0) }}
                                                     </span>
                                                 </div>
@@ -1550,7 +1632,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                             <th class="py-2 px-3 text-center">Status Presensi</th>
                                                             <th class="py-2 px-3">Jabatan (Snapshot)</th>
                                                             <th class="py-2 px-3 text-right">Tarif Bonus Mitra</th>
-                                                            <th class="py-2 px-3 text-right font-bold text-amber-800">Hak Bonus Diterima</th>
+                                                            <th class="py-2 px-3 text-right font-bold text-emerald-800">Hak Bonus Diterima</th>
                                                             <th class="py-2 px-3 text-center">Status Pegawai</th>
                                                         </tr>
                                                     </thead>
@@ -1560,7 +1642,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                             :key="dt.dateStr"
                                                             :class="[
                                                                 'hover:bg-slate-50/80 transition-colors',
-                                                                dt.dateStr === todayStr ? 'bg-amber-50/40 font-semibold' : '',
+                                                                dt.dateStr === todayStr ? 'bg-emerald-50/40 font-semibold' : '',
                                                             ]"
                                                         >
                                                             <td class="py-2 px-3 text-center text-slate-400">{{ dIdx + 1 }}</td>
@@ -1587,7 +1669,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                             <td class="py-2 px-3 text-right font-mono text-slate-800">
                                                                 {{ formatRupiah(getDailyBonus(p, dt.dateStr)) }}
                                                             </td>
-                                                            <td class="py-2 px-3 text-right font-mono font-bold text-amber-700">
+                                                            <td class="py-2 px-3 text-right font-mono font-bold text-emerald-700">
                                                                 {{ formatRupiah(getDailyHonorBonus(p, dt.dateStr)) }}
                                                             </td>
                                                             <td class="py-2 px-3 text-center">
@@ -1623,23 +1705,46 @@ async function downloadSlipBonusSinglePetugas(p) {
                         <tfoot class="bg-slate-100/90 text-slate-800 border-t-2 border-slate-300 font-bold sticky bottom-0 z-20">
                             <tr>
                                 <td colspan="3" class="py-3 px-3 text-right uppercase tracking-wider text-xs border-r border-slate-300">
-                                    Total Terhitung:
+                                    Total Mandays Hadir:
                                 </td>
-                                <td :colspan="dateColumns.length" class="border-r border-slate-300"></td>
-                                <td class="py-3 px-2 text-center text-emerald-900 bg-emerald-100/80 border-r border-slate-300 text-xs font-bold">
+                                <!-- Total Hadir per Tanggal -->
+                                <td
+                                    v-for="dt in dateColumns"
+                                    :key="'tot-' + dt.dateStr"
+                                    :class="[
+                                        'py-2.5 px-0.5 text-center text-[11px] font-black border-r border-slate-200',
+                                        dt.dateStr === todayStr ? 'bg-emerald-100 text-emerald-900' : 'text-emerald-800',
+                                    ]"
+                                    :title="`Total Hadir di tanggal ${dt.dateStr}: ${hadirPerTanggal[dt.dateStr]} orang`"
+                                >
+                                    {{ hadirPerTanggal[dt.dateStr] }}
+                                </td>
+                                <!-- Grand Totals Kanan -->
+                                <td class="py-3 px-2 text-center text-emerald-800 bg-emerald-100/70 border-r border-slate-300 text-xs">
                                     {{ kpiStats.totalHadirPenuh }}
                                 </td>
-                                <td class="py-3 px-2 text-center text-teal-900 bg-teal-100/80 border-r border-slate-300 text-xs font-bold">
+                                <td class="py-3 px-2 text-center text-teal-800 bg-teal-100/70 border-r border-slate-300 text-xs">
                                     {{ kpiStats.totalSetengahHari }}
                                 </td>
-                                <td colspan="4" class="border-r border-slate-300"></td>
+                                <td class="py-3 px-2 text-center text-slate-700 bg-slate-200/70 border-r border-slate-300 text-xs">
+                                    {{ kpiStats.totalLibur }}
+                                </td>
+                                <td class="py-3 px-2 text-center text-amber-800 bg-amber-100/70 border-r border-slate-300 text-xs">
+                                    {{ kpiStats.totalIzin }}
+                                </td>
+                                <td class="py-3 px-2 text-center text-blue-800 bg-blue-100/70 border-r border-slate-300 text-xs">
+                                    {{ kpiStats.totalSakit }}
+                                </td>
+                                <td class="py-3 px-2 text-center text-rose-800 bg-rose-100/70 border-r border-slate-300 text-xs">
+                                    {{ kpiStats.totalTK }}
+                                </td>
                                 <td class="py-3 px-2 text-center text-emerald-950 bg-emerald-200/70 border-r border-slate-300 text-xs font-black">
                                     {{ kpiStats.totalMandays }}
                                 </td>
-                                <td class="py-3 px-2 text-center border-r border-slate-300 text-xs">
-                                    -
+                                <td class="py-3 px-2 text-center text-xs border-r border-slate-300">
+                                    {{ kpiStats.persentaseKehadiran }}%
                                 </td>
-                                <td class="py-3 px-3 text-right text-amber-950 bg-amber-100/70 text-xs font-black">
+                                <td class="py-3 px-3 text-right text-emerald-900 text-xs font-black">
                                     {{ formatRupiah(kpiStats.grandTotalBonus) }}
                                 </td>
                                 <td></td>
@@ -1690,8 +1795,13 @@ async function downloadSlipBonusSinglePetugas(p) {
                     </div>
                 </div>
 
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between text-[11px] text-amber-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat rincian snapshot bonus</span>
+                </div>
+
                 <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table class="w-full text-xs text-left border-collapse">
+                    <table class="w-full text-xs text-left border-collapse min-w-[850px]">
                         <thead class="bg-slate-100/95 text-slate-700 font-bold sticky top-0 z-20 border-b border-slate-200 text-[11px]">
                             <tr>
                                 <th class="py-2.5 px-3 w-12 text-center">No</th>
@@ -1967,11 +2077,11 @@ async function downloadSlipBonusSinglePetugas(p) {
                         </div>
 
                         <!-- Modal Actions -->
-                        <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                        <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-2 sm:gap-2.5">
                             <button
                                 type="button"
                                 @click="closeExportModal"
-                                class="px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                class="w-full sm:w-auto px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer text-center"
                             >
                                 Batal
                             </button>
@@ -1979,10 +2089,10 @@ async function downloadSlipBonusSinglePetugas(p) {
                                 type="button"
                                 @click="handleExecuteExport"
                                 :disabled="isExporting"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                             >
                                 <component :is="exportDocType === 'slip_bonus_pdf' ? FileText : FileSpreadsheet" class="h-4 w-4" />
-                                <span>
+                                <span class="truncate">
                                     {{ isExporting ? 'Mengekspor File...' : (exportDocType === 'slip_bonus_pdf' ? 'Download Slip Bonus (.pdf)' : (exportDocType === 'ttd_harian' ? 'Download Buku TTD Bonus (.xlsx)' : 'Download Rekap Bonus (.xlsx)')) }}
                                 </span>
                             </button>
@@ -2172,20 +2282,20 @@ async function downloadSlipBonusSinglePetugas(p) {
                             </div>
                         </div>
 
-                        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2">
                             <button
                                 type="button"
                                 @click="downloadSlipBonusSinglePetugas(detailPetugas)"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer text-center"
                                 title="Download Slip Bonus Mitra resmi dalam format PDF"
                             >
-                                <FileText class="h-3.5 w-3.5" />
+                                <FileText class="h-3.5 w-3.5 shrink-0" />
                                 <span>Download Slip Bonus (.pdf)</span>
                             </button>
                             <button
                                 type="button"
                                 @click="closeDetailModal"
-                                class="px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                class="w-full sm:w-auto px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer text-center"
                             >
                                 Tutup
                             </button>

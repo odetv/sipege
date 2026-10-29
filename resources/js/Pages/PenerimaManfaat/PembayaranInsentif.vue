@@ -338,11 +338,12 @@ function openReceipt(item) {
 }
 
 function printAllReceipts() {
-    if (selectedRows.value.length === 0) {
-        alert("Pilih minimal 1 titik sasaran untuk mencetak kuitansi.");
+    if (selectedRows.value.length === 0 && editableItems.value.length === 0) {
+        alert("Tidak ada titik sasaran untuk mengunduh kuitansi.");
         return;
     }
-    openReceipt(selectedRows.value[0]);
+    selectedReceiptItem.value = null;
+    showReceiptModal.value = true;
 }
 
 // ─── Ekspor Excel Daftar Pembayaran Tunai ─────────────────────────────────────
@@ -368,10 +369,10 @@ async function handleExportExcel() {
 </script>
 
 <template>
-    <Head title="Pembayaran Insentif Penerima Manfaat - SIPEGE" />
+    <Head title="Pembayaran Insentif - SIPEGE" />
 
     <AppLayout>
-        <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto space-y-4">
+        <div class="space-y-6 pb-16">
             <!-- ─── Komponen 1: Control Bar (Filter & Aksi) ───────────────────── -->
             <InsentifControlBar
                 v-model:searchQuery="searchQuery"
@@ -384,12 +385,10 @@ async function handleExportExcel() {
                 :rentangHariCount="rentangHariCount"
                 :labelSiklus="labelSiklus"
                 :unitSppg="unitSppg"
-                :isExporting="isExporting"
                 @dateFilterChange="onDateFilterChange"
                 @changeModeSkala="changeModeSkala"
                 @selectPeriode="selectPeriode"
                 @applyDateRange="onApplyDateRange"
-                @exportExcel="handleExportExcel"
                 @printAllReceipts="printAllReceipts"
             />
 
@@ -418,14 +417,19 @@ async function handleExportExcel() {
             />
         </div>
 
-        <!-- ─── Modal Kuitansi Tanda Terima Kas Tunai ──────────────────────── -->
+        <!-- ─── Modal Kuitansi Pembayaran Insentif Resmi ─── -->
         <InsentifReceiptModal
-            :isOpen="showReceiptModal"
+            :show="showReceiptModal"
             :item="selectedReceiptItem"
-            :unitSppg="unitSppg"
-            :tanggalMulai="tanggalMulai"
-            :tanggalSelesai="tanggalSelesai"
-            :todayStr="todayStr"
+            :initial-item="selectedReceiptItem"
+            :selected-rows="selectedRows"
+            :all-rows="editableItems"
+            :unit-sppg="unitSppg"
+            :periodes="periodes"
+            :selected-periode="selectedPeriode"
+            :start-date="tanggalMulai"
+            :end-date="tanggalSelesai"
+            :rentang-hari-count="rentangHariCount"
             @close="showReceiptModal = false"
         />
     </AppLayout>

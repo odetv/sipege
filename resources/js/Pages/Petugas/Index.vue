@@ -869,7 +869,7 @@ watch(
 </script>
 
 <template>
-    <Head title="Data Petugas SPPG - SIPEGE" />
+    <Head title="Daftar Petugas - SIPEGE" />
 
     <AppLayout>
         <div class="space-y-6 pb-12">

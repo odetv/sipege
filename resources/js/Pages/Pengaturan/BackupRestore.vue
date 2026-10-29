@@ -125,7 +125,7 @@ function handleMockAction(pesan) {
 </script>
 
 <template>
-    <Head title="Pengaturan Backup & Restore Sistem" />
+    <Head title="Backup & Restore - SIPEGE" />
 
     <AppLayout>
         <div class="space-y-4 max-w-full pb-16">

@@ -697,7 +697,7 @@ function submitForm() {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Tambah Kelompok Penerima Manfaat" />
+        <Head title="Tambah KPM - SIPEGE" />
 
         <div class="max-w-6xl mx-auto space-y-6 pb-12">
             <!-- Top Navigation Bar -->

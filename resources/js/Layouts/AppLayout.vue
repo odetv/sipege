@@ -55,7 +55,7 @@ defineExpose({
 
 <template>
     <div
-        class="h-screen w-screen overflow-hidden bg-slate-50/70 text-slate-900 flex"
+        class="h-screen h-[100dvh] w-screen overflow-hidden bg-slate-50/70 text-slate-900 flex"
     >
         <!-- Backdrop Mobile -->
         <div
@@ -75,7 +75,7 @@ defineExpose({
         />
 
         <!-- Main Wrapper -->
-        <div class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+        <div class="flex-1 flex flex-col h-screen h-[100dvh] overflow-hidden min-w-0">
             <!-- Reusable Header -->
             <slot
                 name="header"

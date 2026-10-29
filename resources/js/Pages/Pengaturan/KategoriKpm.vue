@@ -104,13 +104,20 @@ function closeModal() {
 }
 
 function submitForm() {
+    const updateRouteName = route().has("penerima-manfaat.kategori-kpm.update")
+        ? "penerima-manfaat.kategori-kpm.update"
+        : "pengaturan.kategori-kpm.update";
+    const storeRouteName = route().has("penerima-manfaat.kategori-kpm.store")
+        ? "penerima-manfaat.kategori-kpm.store"
+        : "pengaturan.kategori-kpm.store";
+
     if (isEditing.value) {
-        form.put(route("pengaturan.kategori-kpm.update", editingId.value), {
+        form.put(route(updateRouteName, editingId.value), {
             preserveScroll: true,
             onSuccess: () => closeModal(),
         });
     } else {
-        form.post(route("pengaturan.kategori-kpm.store"), {
+        form.post(route(storeRouteName), {
             preserveScroll: true,
             onSuccess: () => closeModal(),
         });
@@ -131,7 +138,11 @@ function closeDeleteModal() {
 function confirmDelete() {
     if (!deletingItem.value) return;
     isDeleting.value = true;
-    router.delete(route("pengaturan.kategori-kpm.destroy", deletingItem.value.id), {
+    const destroyRouteName = route().has("penerima-manfaat.kategori-kpm.destroy")
+        ? "penerima-manfaat.kategori-kpm.destroy"
+        : "pengaturan.kategori-kpm.destroy";
+
+    router.delete(route(destroyRouteName, deletingItem.value.id), {
         preserveScroll: true,
         onSuccess: () => closeDeleteModal(),
         onFinish: () => {
@@ -151,7 +162,11 @@ function closeResetModal() {
 
 function confirmReset() {
     isResetting.value = true;
-    router.post(route("pengaturan.kategori-kpm.reset"), {}, {
+    const resetRouteName = route().has("penerima-manfaat.kategori-kpm.reset")
+        ? "penerima-manfaat.kategori-kpm.reset"
+        : "pengaturan.kategori-kpm.reset";
+
+    router.post(route(resetRouteName), {}, {
         preserveScroll: true,
         onSuccess: () => closeResetModal(),
         onFinish: () => {
@@ -172,46 +187,46 @@ function getPaguBadgeClass(pagu) {
 </script>
 
 <template>
-    <Head title="Pengaturan Kategori KPM" />
+    <Head title="Kategori KPM - SIPEGE" />
 
     <AppLayout>
-        <div class="space-y-4 max-w-full pb-16">
+        <div class="space-y-6 pb-16">
             <!-- ─── HEADER UTAMA ─── -->
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2">
-                        <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-2xs">
-                            <Tag class="h-5 w-5" />
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs">
+                            <Tag class="h-6 w-6" />
                         </div>
                         <div>
-                            <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                                 Kategori Kelompok Penerima Manfaat (KPM)
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                     Pagu Standar BGN
                                 </span>
                             </h1>
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs sm:text-sm text-slate-500">
                                 Kelola kategori sasaran penerima manfaat beserta pagu anggaran per porsi operasional SPPG.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2.5">
                     <button
                         type="button"
                         @click="openResetModal"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 sm:py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs transition-colors cursor-pointer"
                         title="Kembalikan ke 11 Kategori Standar Default BGN"
                     >
-                        <RotateCcw class="h-3.5 w-3.5 text-slate-500" />
+                        <RotateCcw class="h-4 w-4 text-slate-500" />
                         <span>Reset ke Default</span>
                     </button>
 
                     <button
                         type="button"
                         @click="openAddModal"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold shadow-2xs transition-colors cursor-pointer"
                     >
                         <Plus class="h-4 w-4" />
                         <span>Tambah Kategori</span>

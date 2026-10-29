@@ -50,6 +50,8 @@ import {
     Network,
     Signpost,
     FileImage,
+    Trash2,
+    KeyRound,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -87,7 +89,10 @@ const isPetugasActive = computed(() => {
 
 const isPenerimaManfaatActive = computed(() => {
     try {
-        return route().current("penerima-manfaat.*");
+        return (
+            route().current("penerima-manfaat.*") ||
+            route().current("pengaturan.kategori-kpm.*")
+        );
     } catch {
         return false;
     }
@@ -182,6 +187,14 @@ const isLabelActive = computed(() => {
     }
 });
 
+const isResiduActive = computed(() => {
+    try {
+        return route().current("residu.*");
+    } catch {
+        return false;
+    }
+});
+
 const isPetunjukActive = computed(() => {
     try {
         return route().current("petunjuk.*") || route().current("sop.*");
@@ -201,7 +214,8 @@ const isAsetDigitalActive = computed(() => {
 const isPengaturanActive = computed(() => {
     try {
         return (
-            route().current("pengaturan.*") ||
+            (route().current("pengaturan.*") &&
+                !route().current("pengaturan.kategori-kpm.*")) ||
             route().current("periode.*")
         );
     } catch {
@@ -430,12 +444,12 @@ function logout() {
     <!-- ================= SHADCN SIDEBAR (EXPAND / COLLAPSE) ================= -->
     <aside
         :class="[
-            'fixed inset-y-0 left-0 z-[9999] h-screen bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none',
+            'fixed inset-y-0 left-0 z-[9999] h-screen h-[100dvh] max-h-[100dvh] bg-white border-r border-slate-200/90 flex flex-col justify-between transition-all duration-300 ease-in-out select-none',
             // Tampilan Mobile: Selalu w-64, slide in/out dengan transform
             'w-64',
             isMobileOpen ? 'translate-x-0' : '-translate-x-full',
             // Tampilan Desktop: Static, lebar mengikuti isCollapsed
-            'lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 lg:z-auto',
+            'lg:static lg:h-screen lg:h-[100dvh] lg:shrink-0 lg:translate-x-0 lg:z-auto',
             isCollapsed ? 'lg:w-20' : 'lg:w-64',
         ]"
     >
@@ -586,6 +600,7 @@ function logout() {
                                 !route().current('petugas.kehadiran') &&
                                 !route().current('petugas.rekap-bonus') &&
                                 !route().current('petugas.rekap-bpjs-tk') &&
+                                !route().current('petugas.rekap-asuransi*') &&
                                 !route().current('petugas.pembayaran-gaji')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
@@ -624,18 +639,19 @@ function logout() {
                             <span class="truncate">Rekap Bonus</span>
                         </Link>
 
-                        <!-- Sub-menu 4: Rekap BPJS TK -->
+                        <!-- Sub-menu 4: Rekap Asuransi -->
                         <Link
-                            :href="route('petugas.rekap-bpjs-tk')"
+                            :href="route('petugas.rekap-asuransi')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('petugas.rekap-bpjs-tk')
+                                route().current('petugas.rekap-asuransi*') ||
+                                route().current('petugas.rekap-bpjs-tk*')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <ShieldCheck class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Rekap BPJS TK</span>
+                            <span class="truncate">Rekap Asuransi</span>
                         </Link>
 
                         <!-- Sub-menu 5: Pembayaran Gaji (BNI Direct) -->
@@ -655,7 +671,7 @@ function logout() {
                 </div>
 
 
-                <!-- 4. Menu Penerima Manfaat (Accordion with 3 Sub-menus: Daftar PM, Rekap Distribusi, Pembayaran Insentif) -->
+                <!-- 3. Menu Penerima Manfaat (Accordion with 3 Sub-menus: Daftar KPM, Rekap Distribusi, Pembayaran Insentif) -->
                 <div class="space-y-0.5">
                     <!-- Parent Penerima Manfaat Button -->
                     <button
@@ -689,28 +705,47 @@ function logout() {
                         />
                     </button>
 
-                    <!-- Sub-menu Items: Daftar PM, Rekap Distribusi, Pembayaran Insentif -->
+                    <!-- Sub-menu Items: Daftar KPM, Kategori KPM, Rekap Distribusi, Pembayaran Insentif -->
                     <div
                         v-if="!isCollapsed && isPenerimaManfaatExpanded"
                         class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                     >
-                        <!-- Sub-menu 1: Daftar PM -->
+                        <!-- Sub-menu 1: Daftar KPM -->
                         <Link
-                            :href="route('penerima-manfaat.index')"
+                            :href="route('penerima-manfaat.daftar-kpm')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                (route().current('penerima-manfaat.index') || route().current('penerima-manfaat.*')) &&
+                                (route().current('penerima-manfaat.daftar-kpm') ||
+                                route().current('penerima-manfaat.daftar-pm') ||
+                                ((route().current('penerima-manfaat.index') || route().current('penerima-manfaat.*')) &&
                                 !route().current('penerima-manfaat.rekap-distribusi') &&
-                                !route().current('penerima-manfaat.pembayaran-insentif*')
+                                !route().current('penerima-manfaat.pembayaran-insentif*') &&
+                                !route().current('penerima-manfaat.kategori-kpm*') &&
+                                !route().current('pengaturan.kategori-kpm.*')))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <Users class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Daftar PM</span>
+                            <span class="truncate">Daftar KPM</span>
                         </Link>
 
-                        <!-- Sub-menu 2: Rekap Distribusi -->
+                        <!-- Sub-menu 2: Kategori KPM -->
+                        <Link
+                            :href="route().has('penerima-manfaat.kategori-kpm.index') ? route('penerima-manfaat.kategori-kpm.index') : route('pengaturan.kategori-kpm.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                (route().current('penerima-manfaat.kategori-kpm.*') ||
+                                route().current('pengaturan.kategori-kpm.*'))
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Tag class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kategori KPM</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Rekap Distribusi -->
                         <Link
                             :href="route('penerima-manfaat.rekap-distribusi')"
                             :class="[
@@ -724,7 +759,7 @@ function logout() {
                             <span class="truncate">Rekap Distribusi</span>
                         </Link>
 
-                        <!-- Sub-menu 3: Pembayaran Insentif -->
+                        <!-- Sub-menu 4: Pembayaran Insentif -->
                         <Link
                             :href="route('penerima-manfaat.pembayaran-insentif')"
                             :class="[
@@ -740,7 +775,7 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 4. Menu Supplier Rekanan -->
+                <!-- 4. Menu Supplier (Rekanan SPPG) -->
                 <Link
                     :href="route('supplier.index')"
                     :title="isCollapsed ? 'Supplier' : ''"
@@ -983,20 +1018,22 @@ function logout() {
                             <span class="truncate">Kalender Menu</span>
                         </Link>
 
-                        <!-- Sub-menu 6: Resep -->
+                        <!-- Sub-menu 6: Resep Makanan -->
                         <Link
-                            :href="route('gizi.resep')"
+                            :href="route('gizi.resep-makanan')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('gizi.resep-makanan') ||
                                 route().current('gizi.resep') ||
                                 (route().current('gizi.index') &&
-                                    page.props.activeTab === 'resep')
+                                    (page.props.activeTab === 'resep' ||
+                                        page.props.activeTab === 'resep-makanan'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <BookOpen class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Resep</span>
+                            <span class="truncate">Resep Makanan</span>
                         </Link>
                     </div>
                 </div>
@@ -1098,12 +1135,14 @@ function logout() {
 
                         <!-- 4. Survei Harga Pasar -->
                         <Link
-                            :href="route('keuangan.survei-harga')"
+                            :href="route('keuangan.survei-harga-pasar')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.survei-harga-pasar') ||
                                 route().current('keuangan.survei-harga') ||
                                 (route().current('keuangan.*') &&
-                                    (page.props.activeTab === 'survei-harga' ||
+                                    (page.props.activeTab === 'survei-harga-pasar' ||
+                                        page.props.activeTab === 'survei-harga' ||
                                         page.props.activeTab === 'survei_harga'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
@@ -1457,11 +1496,13 @@ function logout() {
                         v-if="!isCollapsed && isLaporanSppgExpanded"
                         class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                     >
-                        <!-- Sub-menu 1: Laporan Harian Lintas Sektor -->
+                        <!-- Sub-menu 1: Laporan Harian -->
                         <Link
-                            :href="route('laporan.harian-lintas-sektor')"
+                            :href="route('laporan.laporan-harian')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('laporan.laporan-harian') ||
+                                route().current('laporan.harian') ||
                                 route().current('laporan.harian-lintas-sektor') ||
                                 route().current('laporan.index')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
@@ -1498,6 +1539,39 @@ function logout() {
                     >
                     <div
                         v-if="route().current('label.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 8. Menu Residu (Pencatatan Limbah Harian) -->
+                <Link
+                    :href="route('residu.index')"
+                    :title="isCollapsed ? 'Residu' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('residu.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <Trash2 class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Residu</span
+                    >
+                    <div
+                        v-if="route().current('residu.*')"
                         :class="[
                             'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
                             isCollapsed
@@ -1791,7 +1865,7 @@ function logout() {
                         />
                     </button>
 
-                    <!-- Sub-menu Items: Periode & Kategori KPM -->
+                    <!-- Sub-menu Items: Periode & Backup Restore -->
                     <div
                         v-if="!isCollapsed && isPengaturanExpanded"
                         class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
@@ -1810,21 +1884,7 @@ function logout() {
                             <span class="truncate">Periode</span>
                         </Link>
 
-                        <!-- Sub-menu 2: Kategori KPM -->
-                        <Link
-                            :href="route('pengaturan.kategori-kpm.index')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('pengaturan.kategori-kpm.*')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Tag class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Kategori KPM</span>
-                        </Link>
-
-                        <!-- Sub-menu 3: Backup & Restore -->
+                        <!-- Sub-menu 2: Backup & Restore -->
                         <Link
                             :href="route('pengaturan.backup-restore.index')"
                             :class="[
@@ -1837,6 +1897,20 @@ function logout() {
                             <DatabaseBackup class="h-3.5 w-3.5 shrink-0" />
                             <span class="truncate">Backup & Restore</span>
                         </Link>
+
+                        <!-- Sub-menu 3: Kunci API -->
+                        <Link
+                            :href="route('pengaturan.api-key.index')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('pengaturan.api-key.*') || route().current('pengaturan.kunci-api.*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <KeyRound class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Kunci API</span>
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -1844,30 +1918,30 @@ function logout() {
 
         <!-- BAWAH: Profil Pengguna (Avatar) & Tombol Keluar -->
         <div
-            class="p-3 border-t border-slate-100 bg-slate-50/50 space-y-2 shrink-0"
+            class="p-2.5 sm:p-3 border-t border-slate-100 bg-slate-50/70 space-y-2 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         >
             <!-- User Info Card (Full pada Mobile, di Desktop tersembunyi saat isCollapsed) -->
             <div
                 :class="[
-                    'items-center gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs',
+                    'items-center gap-2.5 p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs',
                     isCollapsed ? 'flex lg:hidden' : 'flex',
                 ]"
             >
                 <div
-                    class="h-10 w-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-xs"
+                    class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center shrink-0 shadow-xs"
                 >
                     {{ userInitials }}
                 </div>
                 <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold text-slate-900 leading-tight">
+                    <p class="text-xs font-bold text-slate-900 leading-tight truncate">
                         {{ fullName }}
                     </p>
-                    <p class="text-[11px] text-slate-500 leading-tight mt-0.5">
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 leading-tight mt-0.5 truncate">
                         {{ currentUser.email }}
                     </p>
-                    <div class="mt-1">
+                    <div class="mt-0.5">
                         <span
-                            class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-semibold uppercase tracking-wider rounded bg-slate-100 text-slate-600"
+                            class="inline-flex items-center px-1.5 py-0.2 text-[9.5px] sm:text-[10px] font-semibold uppercase tracking-wider rounded bg-slate-100 text-slate-600"
                         >
                             {{ currentUser.role || "Guest" }}
                         </span>

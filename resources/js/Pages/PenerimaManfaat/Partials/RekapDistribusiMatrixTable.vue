@@ -129,9 +129,9 @@ const totalHariAdaWo = computed(() => {
 </script>
 
 <template>
-    <div class="rounded-xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
+    <div class="rounded-2xl bg-white border border-slate-200/90 shadow-2xs overflow-hidden">
         <!-- Toolbar Tabel & Keterangan Status Distribusi (Persis Rekap Kehadiran) -->
-        <div class="px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-slate-50/60">
+        <div class="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-slate-50/60">
             <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">
                     Matriks Distribusi ({{ items.length }} Titik Sasaran)
@@ -170,9 +170,14 @@ const totalHariAdaWo = computed(() => {
             </div>
         </div>
 
+        <!-- Mobile Swipe Hint -->
+        <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+            <span>👉 Geser tabel ke kanan untuk melihat kalender tanggal & rekap porsi</span>
+        </div>
+
         <!-- Kontainer Tabel dengan Horizontal Scroll Presisi -->
         <div class="overflow-x-auto relative">
-            <table class="w-full text-left text-xs border-collapse">
+            <table class="w-full text-left text-xs border-collapse min-w-[1100px]">
                 <!-- Table Head: Baris 1 Visualisasi Rentang Terpilih -->
                 <thead class="sticky top-0 z-20">
                     <tr class="border-b border-emerald-700/60 text-white">

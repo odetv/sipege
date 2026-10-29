@@ -36,7 +36,10 @@ import {
     ChevronRight,
     Sparkles,
     Trash2,
+    ArrowRight,
+    Receipt,
 } from "lucide-vue-next";
+import KwitansiGajiModal from "./Partials/KwitansiGajiModal.vue";
 
 const props = defineProps({
     petugas: { type: Array, default: () => [] },
@@ -103,6 +106,81 @@ function normalizeModeGaji(m) {
     return "";
 }
 
+// ─── Pilihan Tab Bank Payroll ─────────────────────────────────────────────────
+const activeBankTab = ref("BNI");
+
+const bankTabs = [
+    {
+        id: "BNI",
+        code: "BNI",
+        name: "BNI",
+        fullName: "Bank Negara Indonesia (Persero) Tbk",
+        serviceName: "BNI Direct (Inhouse)",
+        status: "active",
+        statusLabel: "Aktif",
+        activeClass: "bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-500/20",
+        logoBg: "bg-gradient-to-br from-teal-600 to-emerald-700 text-white",
+        themeColor: "emerald",
+        description: "Generator batch transfer resmi BNI Direct CSV (Sheet Inhouse) & template Excel .XLS 3 kolom.",
+    },
+    {
+        id: "BRI",
+        code: "BRI",
+        name: "BRI",
+        fullName: "Bank Rakyat Indonesia (Persero) Tbk",
+        serviceName: "CMS BRI (Mass Transfer)",
+        status: "soon",
+        statusLabel: "Segera Hadir",
+        activeClass: "bg-blue-50 border-blue-500 text-blue-950 shadow-xs ring-1 ring-blue-500/20",
+        logoBg: "bg-gradient-to-br from-blue-700 to-blue-900 text-white",
+        themeColor: "blue",
+        description: "Format ekspor Cash Management System (CMS) BRI untuk payroll massal BritAma & Simpedes.",
+    },
+    {
+        id: "Mandiri",
+        code: "MDR",
+        name: "Mandiri",
+        fullName: "Bank Mandiri (Persero) Tbk",
+        serviceName: "MCM 2.0 (Payroll)",
+        status: "soon",
+        statusLabel: "Segera Hadir",
+        activeClass: "bg-amber-50 border-amber-500 text-amber-950 shadow-xs ring-1 ring-amber-500/20",
+        logoBg: "bg-gradient-to-br from-slate-900 to-blue-950 text-amber-400 border border-amber-400/30",
+        themeColor: "amber",
+        description: "Template file upload payroll Mandiri Cash Management (MCM 2.0) batch payroll transfer.",
+    },
+    {
+        id: "BCA",
+        code: "BCA",
+        name: "BCA",
+        fullName: "Bank Central Asia Tbk",
+        serviceName: "KlikBCA Bisnis (Payroll)",
+        status: "soon",
+        statusLabel: "Segera Hadir",
+        activeClass: "bg-sky-50 border-sky-500 text-sky-950 shadow-xs ring-1 ring-sky-500/20",
+        logoBg: "bg-gradient-to-br from-sky-700 to-blue-800 text-white",
+        themeColor: "sky",
+        description: "Format file payroll batch text/CSV untuk nasabah korporasi KlikBCA Bisnis.",
+    },
+    {
+        id: "Lainnya",
+        code: "ALL",
+        name: "Bank Lainnya",
+        fullName: "Multi-Bank & Transfer Antar Bank",
+        serviceName: "BI-FAST / SKN / Online",
+        status: "soon",
+        statusLabel: "Segera Hadir",
+        activeClass: "bg-purple-50 border-purple-500 text-purple-950 shadow-xs ring-1 ring-purple-500/20",
+        logoBg: "bg-gradient-to-br from-purple-700 to-indigo-800 text-white",
+        themeColor: "purple",
+        description: "Format standar transfer antar bank (BI-FAST / SKN / RTGS) ke berbagai bank daerah & swasta.",
+    },
+];
+
+const currentBankInfo = computed(() => {
+    return bankTabs.find((b) => b.id === activeBankTab.value) || bankTabs[0];
+});
+
 // ─── State Filter & Mode Perhitungan ──────────────────────────────────────────
 const modeSkala = ref(normalizeModeGaji(props.initialMode) || "hari_ini");
 const selectedPeriodeId = ref(props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all");
@@ -111,7 +189,7 @@ const tanggalSelesai = ref(props.initialTanggalSelesai || todayStr.value);
 const modePerhitungan = ref("presensi");
 const isFilterAllTime = ref(false);
 
-// Mode Pemilihan Tanggal: 'range' (Deret Rentang / Periode) vs 'custom_dates' (Pilih Bebas / Loncat-loncat)
+// Mode Pemilihan Tanggal: 'range' (Deret Rentang / Periode) vs 'custom_dates' (Pilih Tanggal Bebas)
 const dateSelectionType = ref(
     props.initialMode === "custom_dates" || (props.initialSelectedDates && props.initialSelectedDates.length > 0)
         ? "custom_dates"
@@ -186,7 +264,7 @@ const is28HariActive = computed(() => dateSelectionType.value === "range" && ren
 
 const labelSiklus = computed(() => {
     if (dateSelectionType.value === "custom_dates") {
-        return `Pilihan Bebas: ${selectedDates.value.length} Tanggal (Loncat-loncat)`;
+        return `Pilihan Bebas: ${selectedDates.value.length} Tanggal`;
     }
     if (selectedPeriode.value) {
         return `Siklus: Periode ${selectedPeriode.value.nomor_periode} (${rentangHariCount.value} Hari Kerja)`;
@@ -341,7 +419,7 @@ function onDateFilterChange(payload) {
     applyFilterTanggal();
 }
 
-// ─── Multi-Date Picker Calendar Logic (Loncat-loncat Tanggal) ───────────────
+// ─── Multi-Date Picker Calendar Logic (Pilih Tanggal Bebas) ──────────────────
 const monthNamesIndo = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember",
@@ -793,6 +871,26 @@ const missingRekeningCount = computed(() => {
     }).length;
 });
 
+// ─── Modal Kuitansi Pembayaran Gaji ──────────────────────────────────────────
+const isKwitansiModalOpen = ref(false);
+const kwitansiInitialPetugasId = ref(null);
+
+function openKwitansiModal(petugasId = null) {
+    kwitansiInitialPetugasId.value = petugasId;
+    isKwitansiModalOpen.value = true;
+}
+
+const defaultPengawasKeuangan = computed(() => {
+    const pengawas = props.petugas?.find((p) =>
+        (p.jabatan || "").toLowerCase().includes("pengawas keuangan")
+    );
+    return (
+        pengawas?.nama ||
+        props.unitSppg?.nama_pengawas_keuangan ||
+        "I Gusti Ayu Made Padmi Swari"
+    );
+});
+
 // ─── BNI Direct CSV Generator (Clean & Compliant) ─────────────────────────────
 function sanitizeBniText(text, maxLen = 40) {
     if (!text) return "";
@@ -954,7 +1052,8 @@ function triggerDownloadCsv() {
     }
 }
 
-// ─── Trigger Download Template .XLS BNI Direct (Hanya 3 Kolom) ───────────────
+// ─── Trigger Download Template .XLS & CSV BNI Direct ─────────────────────────
+const isBniDropdownOpen = ref(false);
 const isDownloadingExcel = ref(false);
 const downloadExcelSuccess = ref(false);
 
@@ -1078,7 +1177,7 @@ function copyRowRekening(id, text) {
 </script>
 
 <template>
-    <Head title="Pembayaran Gaji & Payroll BNI Direct - SIPEGE" />
+    <Head title="Pembayaran Gaji - SIPEGE" />
 
     <AppLayout>
         <div class="space-y-6 pb-16">
@@ -1094,49 +1193,199 @@ function copyRowRekening(id, text) {
                                 Pembayaran Gaji Petugas SPPG
                             </h1>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Generator otomatis batch transfer payroll BNI Direct (Sheet Inhouse) sesuai kehadiran & kompensasi personil
+                                <template v-if="activeBankTab === 'BNI'">
+                                    Generator otomatis batch transfer payroll BNI Direct (Sheet Inhouse) sesuai kehadiran & kompensasi personil
+                                </template>
+                                <template v-else>
+                                    Modul payroll batch transfer untuk {{ currentBankInfo.fullName }} ({{ currentBankInfo.serviceName }}) — Segera Hadir
+                                </template>
                             </p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Right Action Buttons -->
-                <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
+                <div v-if="activeBankTab === 'BNI'" class="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
                     <button
                         type="button"
                         @click="openPreviewModal"
-                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer flex-1 sm:flex-none min-w-0 truncate"
+                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer min-w-0 truncate"
                         title="Lihat isi format file CSV BNI Direct"
                     >
                         <Eye class="h-4 w-4 text-slate-500 shrink-0" />
                         <span class="truncate">Preview CSV</span>
                     </button>
 
-                    <!-- Download Template .XLS (Hanya 3 Kolom Diisi) -->
+                    <!-- Download Kuitansi Gaji PDF (1 Lembar per Halaman) -->
                     <button
                         type="button"
-                        @click="triggerDownloadExcel"
-                        :disabled="isDownloadingExcel || totalSelectedCount === 0"
-                        title="Download template .xls resmi BNI Direct dengan hanya mengisi data di 3 kolom (Rek. Tujuan, Nama, Amount) tanpa mengubah format template"
-                        class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none min-w-0 truncate"
+                        @click="openKwitansiModal(null)"
+                        :disabled="totalSelectedCount === 0"
+                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer min-w-0 truncate"
+                        title="Download file PDF kuitansi resmi gaji petugas (1 kuitansi per halaman A4 atau per orangan)"
                     >
-                        <FileSpreadsheet class="h-4 w-4 shrink-0" />
-                        <span v-if="isDownloadingExcel" class="truncate">Menyiapkan .xls...</span>
-                        <span v-else class="truncate">Download Template .XLS</span>
+                        <Receipt class="h-4 w-4 shrink-0 text-emerald-400" />
+                        <span class="truncate">Kuitansi</span>
                     </button>
 
-                    <!-- Download CSV BNI Direct -->
+                    <!-- 1 Tombol Dropdown Download Format BNI Direct (.CSV & .XLS) -->
+                    <div class="relative col-span-2 sm:col-span-1 inline-flex">
+                        <button
+                            type="button"
+                            @click="isBniDropdownOpen = !isBniDropdownOpen"
+                            :disabled="(isDownloading || isDownloadingExcel) || totalSelectedCount === 0"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto min-w-0"
+                            title="Download format transfer payroll BNI Direct (.csv atau template .xls)"
+                        >
+                            <RefreshCw v-if="isDownloading || isDownloadingExcel" class="h-4 w-4 shrink-0 animate-spin" />
+                            <Download v-else class="h-4 w-4 shrink-0" />
+                            <span class="truncate">
+                                {{ isDownloading ? 'Menyiapkan .csv...' : (isDownloadingExcel ? 'Menyiapkan .xls...' : 'Download BNI Direct') }}
+                            </span>
+                            <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="{ 'rotate-180': isBniDropdownOpen }" />
+                        </button>
+
+                        <!-- Backdrop Click Outside -->
+                        <div v-if="isBniDropdownOpen" class="fixed inset-0 z-40" @click="isBniDropdownOpen = false"></div>
+
+                        <!-- Dropdown Menu -->
+                        <div
+                            v-if="isBniDropdownOpen"
+                            class="absolute right-0 top-full mt-1.5 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-2xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                        >
+                            <div class="p-1.5 space-y-1">
+                                <!-- Opsi 1: Download CSV BNI Direct -->
+                                <button
+                                    type="button"
+                                    @click="isBniDropdownOpen = false; triggerDownloadCsv()"
+                                    class="w-full text-left p-2.5 rounded-xl hover:bg-emerald-50/80 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div class="p-2 rounded-lg bg-emerald-600 text-white mt-0.5 shrink-0 shadow-2xs">
+                                        <Download class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs font-bold text-emerald-950">Download CSV BNI Direct</span>
+                                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-800">.CSV</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                                            Format batch transfer resmi siap upload langsung ke portal BNI Direct Corporate.
+                                        </p>
+                                    </div>
+                                </button>
+
+                                <!-- Opsi 2: Download Template .XLS -->
+                                <button
+                                    type="button"
+                                    @click="isBniDropdownOpen = false; triggerDownloadExcel()"
+                                    class="w-full text-left p-2.5 rounded-xl hover:bg-teal-50/80 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div class="p-2 rounded-lg bg-teal-600 text-white mt-0.5 shrink-0 shadow-2xs">
+                                        <FileSpreadsheet class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs font-bold text-teal-950">Download Template .XLS</span>
+                                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200 text-teal-800">.XLS</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                                            Template Excel resmi BNI Direct (hanya 3 kolom terisi: Rekening, Nama, Amount).
+                                        </p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="flex items-center gap-2 flex-wrap w-full lg:w-auto">
                     <button
                         type="button"
-                        @click="triggerDownloadCsv"
-                        :disabled="isDownloading || totalSelectedCount === 0"
-                        class="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto min-w-0"
+                        @click="activeBankTab = 'BNI'"
+                        class="inline-flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer w-full sm:w-auto"
                     >
-                        <Download class="h-4 w-4 shrink-0" />
-                        <span>Download CSV BNI Direct</span>
+                        <CreditCard class="h-4 w-4 shrink-0" />
+                        <span>Gunakan BNI Direct (Layanan Aktif)</span>
                     </button>
                 </div>
             </div>
+
+            <!-- ─── TAB PILIHAN BANK PAYROLL ─── -->
+            <div class="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-100 px-1">
+                    <div class="flex items-center gap-2">
+                        <div class="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+                            <Building2 class="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h2 class="text-xs font-extrabold text-slate-900">Pilih Portal Bank Payroll</h2>
+                            <p class="text-[11px] text-slate-500">Pilih format batch transfer perbankan untuk pencairan gaji petugas</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px]">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                            Layanan Berfungsi: BNI Direct
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
+                    <button
+                        v-for="bank in bankTabs"
+                        :key="bank.id"
+                        type="button"
+                        @click="activeBankTab = bank.id"
+                        :class="[
+                            'group relative flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl border text-left transition-all cursor-pointer',
+                            activeBankTab === bank.id
+                                ? bank.activeClass
+                                : 'bg-slate-50/50 hover:bg-white border-slate-200/90 hover:border-slate-300 text-slate-700'
+                        ]"
+                    >
+                        <!-- Logo Badge -->
+                        <div
+                            :class="[
+                                'h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 tracking-wider shadow-2xs transition-transform group-hover:scale-105',
+                                bank.logoBg
+                            ]"
+                        >
+                            {{ bank.code }}
+                        </div>
+
+                        <!-- Info -->
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between gap-1">
+                                <span class="text-xs font-black truncate">{{ bank.name }}</span>
+                                <span
+                                    v-if="bank.status === 'active'"
+                                    class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0"
+                                >
+                                    <span class="h-1 w-1 rounded-full bg-emerald-600 animate-pulse"></span>
+                                    <span>Aktif</span>
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-slate-200/80 text-slate-500 shrink-0"
+                                >
+                                    Segera
+                                </span>
+                            </div>
+                            <p class="text-[10.5px] text-slate-500 truncate mt-0.5 font-medium">
+                                {{ bank.serviceName }}
+                            </p>
+                        </div>
+
+                        <!-- Active Line Indicator -->
+                        <div
+                            v-if="activeBankTab === bank.id"
+                            class="absolute -bottom-px left-3 right-3 h-0.5 rounded-full bg-current opacity-90"
+                        ></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ─── KONTEN BANK BNI DIRECT (AKTIF BEROPERASI) ─── -->
+            <div v-if="activeBankTab === 'BNI'" class="space-y-6">
 
             <!-- Download Success Alert -->
             <div
@@ -1184,7 +1433,7 @@ function copyRowRekening(id, text) {
                 </button>
             </div>
 
-            <!-- ─── TAB SWITCHER MODE TANGGAL: DERET RENTANG vs LONCAT-LONCAT ─── -->
+            <!-- ─── TAB SWITCHER MODE TANGGAL: DERET RENTANG vs PILIH TANGGAL BEBAS ─── -->
             <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                 <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
                     <button
@@ -1198,7 +1447,7 @@ function copyRowRekening(id, text) {
                         ]"
                     >
                         <CalendarRange class="h-3.5 w-3.5" />
-                        <span>Deret Rentang Tanggal / Periode</span>
+                        <span>Deret Tanggal</span>
                     </button>
 
                     <button
@@ -1212,12 +1461,12 @@ function copyRowRekening(id, text) {
                         ]"
                     >
                         <CalendarCheck class="h-3.5 w-3.5" />
-                        <span>Pilih Tanggal Bebas (Loncat-loncat)</span>
+                        <span>Pilih Tanggal</span>
                         <span
                             v-if="selectedDates.length > 0"
                             class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800"
                         >
-                            {{ selectedDates.length }} Tgl
+                            {{ selectedDates.length }}
                         </span>
                     </button>
                 </div>
@@ -1233,7 +1482,7 @@ function copyRowRekening(id, text) {
                         <span class="text-slate-400 font-normal ml-1">({{ rentangHariCount }} hari)</span>
                     </span>
                     <span v-else class="font-bold text-emerald-700">
-                        {{ selectedDates.length }} Tanggal Dipilih (Diskrit/Loncat)
+                        {{ selectedDates.length }} Tanggal Dipilih
                     </span>
                 </div>
             </div>
@@ -1254,7 +1503,7 @@ function copyRowRekening(id, text) {
                             type="button"
                             @click="convertRangeToCustomDates"
                             class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 transition-colors cursor-pointer"
-                            title="Ubah rentang ini ke mode pilihan tanggal bebas agar bisa uncheck / loncat tanggal"
+                            title="Ubah rentang ini ke mode pilihan tanggal bebas"
                         >
                             <Sparkles class="h-3.5 w-3.5 text-emerald-600" />
                             <span>Pilih Tanggal Bebas dari Rentang Ini</span>
@@ -1263,7 +1512,7 @@ function copyRowRekening(id, text) {
                 </PeriodDateFilterBar>
             </div>
 
-            <!-- ─── Panel 2: Multi-Date Calendar (Pilih Tanggal Bebas / Loncat-loncat) ─── -->
+            <!-- ─── Panel 2: Multi-Date Calendar (Pilih Tanggal Bebas) ─── -->
             <div
                 v-show="dateSelectionType === 'custom_dates'"
                 class="bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200"
@@ -1557,26 +1806,8 @@ function copyRowRekening(id, text) {
 
             <!-- ─── KPI Summary Cards (Responsive 2 Kolom di HP) ───────────── -->
             <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
-                <!-- Card 1: Penerima Terpilih -->
-                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
-                    <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                        <Users class="h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-                            Penerima Terpilih
-                        </p>
-                        <p class="text-base sm:text-xl font-black text-slate-900 leading-tight">
-                            {{ totalSelectedCount }} <span class="text-xs font-normal text-slate-400">/ {{ rows.length }}</span>
-                        </p>
-                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                            Personil payroll
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Card 2: Total Nominal Payroll (Span 2 Kolom di HP) -->
-                <div class="p-3.5 sm:p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 col-span-2 lg:col-span-2">
+                <!-- Card 2: Total Nominal Payroll (Banner Utama di HP, Kolom 2 di Desktop) -->
+                <div class="p-3 sm:p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 col-span-2 lg:col-span-2 order-1 lg:order-2">
                     <div class="p-2.5 sm:p-3 rounded-lg bg-emerald-600 text-white shrink-0 shadow-xs">
                         <DollarSign class="h-5 w-5 sm:h-6 sm:w-6" />
                     </div>
@@ -1593,8 +1824,26 @@ function copyRowRekening(id, text) {
                     </div>
                 </div>
 
-                <!-- Card 3: Status Rekening BNI -->
-                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                <!-- Card 1: Penerima Terpilih (Kolom 1 di HP baris 2, Kolom 1 di Desktop) -->
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-1 order-2 lg:order-1">
+                    <div class="p-2 sm:p-3 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                        <Users class="h-4 w-4 sm:h-5 sm:w-5" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                            Penerima Terpilih
+                        </p>
+                        <p class="text-base sm:text-xl font-black text-slate-900 leading-tight">
+                            {{ totalSelectedCount }} <span class="text-xs font-normal text-slate-400">/ {{ rows.length }}</span>
+                        </p>
+                        <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                            Personil payroll
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 3: Status Rekening BNI (Kolom 2 di HP baris 2, Kolom 3 di Desktop) -->
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-1 order-3 lg:order-3">
                     <div class="p-2 sm:p-3 rounded-lg bg-blue-50 text-blue-600 shrink-0">
                         <CreditCard class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
@@ -1614,8 +1863,8 @@ function copyRowRekening(id, text) {
                     </div>
                 </div>
 
-                <!-- Card 4: Rata-rata Honor -->
-                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5">
+                <!-- Card 4: Rata-rata Honor (Banner di HP baris 3, Kolom 4 di Desktop) -->
+                <div class="p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 col-span-2 sm:col-span-2 lg:col-span-1 order-4 lg:order-4">
                     <div class="p-2 sm:p-3 rounded-lg bg-amber-50 text-amber-600 shrink-0">
                         <Clock class="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
@@ -1634,10 +1883,10 @@ function copyRowRekening(id, text) {
             </div>
 
             <!-- ─── Table Search & Filter Bar ─────────────────────────────── -->
-            <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-1 min-w-[280px]">
+            <div class="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <!-- Search Input -->
-                    <div class="relative flex-1">
+                    <div class="relative w-full">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                         <input
                             v-model="searchQuery"
@@ -1650,7 +1899,7 @@ function copyRowRekening(id, text) {
                     <!-- Filter Jabatan -->
                     <select
                         v-model="filterJabatan"
-                        class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:ring-1 focus:ring-primary focus:border-primary bg-white"
+                        class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer"
                     >
                         <option value="all">Semua Jabatan</option>
                         <option v-for="j in daftarJabatan" :key="j" :value="j">
@@ -1661,7 +1910,7 @@ function copyRowRekening(id, text) {
                     <!-- Filter Status Penggajian & Rekening -->
                     <select
                         v-model="filterRekening"
-                        class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer"
+                        class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer"
                     >
                         <option value="all">Semua Status</option>
                         <option value="siap">● Siap Transfer (Valid & Gaji > 0)</option>
@@ -1671,8 +1920,8 @@ function copyRowRekening(id, text) {
                 </div>
 
                 <!-- Selection Status Text -->
-                <div class="text-xs text-slate-500 flex items-center gap-3">
-                    <span>
+                <div class="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500">
+                    <span class="truncate">
                         Terpilih: <b class="text-emerald-700 font-bold">{{ totalSelectedCount }}</b> dari <b>{{ rows.length }}</b> personil
                     </span>
                     <button
@@ -1687,8 +1936,13 @@ function copyRowRekening(id, text) {
 
             <!-- ─── Interactive Payroll Table ─────────────────────────────── -->
             <div class="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat rincian gaji & rekening</span>
+                </div>
+
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs">
+                    <table class="w-full text-left text-xs min-w-[1050px]">
                         <thead class="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
                             <tr>
                                 <th class="px-3 py-3 w-10 text-center">
@@ -1706,6 +1960,7 @@ function copyRowRekening(id, text) {
                                 <th class="px-4 py-3 min-w-[140px] text-right">Tarif Gaji BGN</th>
                                 <th class="px-4 py-3 min-w-[200px] text-right">Total Gaji BGN (Rp)</th>
                                 <th class="px-3.5 py-3 w-24 text-center">Status</th>
+                                <th class="px-3.5 py-3 w-24 text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700">
@@ -1906,10 +2161,23 @@ function copyRowRekening(id, text) {
                                         Siap
                                     </span>
                                 </td>
+
+                                <!-- Aksi Kuitansi Per Orangan -->
+                                <td class="px-3.5 py-3 text-center">
+                                    <button
+                                        type="button"
+                                        @click="openKwitansiModal(r.petugas.id)"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs whitespace-nowrap"
+                                        title="Lihat & cetak kuitansi per orangan untuk personil ini"
+                                    >
+                                        <Receipt class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                        <span>Kwitansi</span>
+                                    </button>
+                                </td>
                             </tr>
 
                             <tr v-if="filteredRows.length === 0">
-                                <td colspan="8" class="px-4 py-12 text-center text-slate-400">
+                                <td colspan="9" class="px-4 py-12 text-center text-slate-400">
                                     <p class="font-medium text-sm text-slate-600">
                                         Tidak ada petugas yang cocok dengan filter pencarian
                                     </p>
@@ -1940,6 +2208,118 @@ function copyRowRekening(id, text) {
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+            </div>
+            </div> <!-- ─── AKHIR KONTEN BANK BNI DIRECT ─── -->
+
+            <!-- ─── KONTEN BANK NON-BNI (DALAM TAHAP PENGEMBANGAN) ─── -->
+            <div v-else class="space-y-5 animate-in fade-in duration-200">
+                <!-- Hero Under Development Card -->
+                <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 sm:p-8 text-center relative overflow-hidden">
+                    <!-- Subtle background decoration circles -->
+                    <div class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-slate-100/70 blur-3xl pointer-events-none"></div>
+                    <div class="absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-slate-100/70 blur-3xl pointer-events-none"></div>
+
+                    <div class="relative max-w-2xl mx-auto space-y-4">
+                        <!-- Big Logo Badge -->
+                        <div class="mx-auto flex items-center justify-center">
+                            <div :class="['h-16 w-16 sm:h-20 sm:w-20 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shadow-md tracking-wider transition-transform hover:scale-105', currentBankInfo.logoBg]">
+                                {{ currentBankInfo.code }}
+                            </div>
+                        </div>
+
+                        <!-- Status & Titles -->
+                        <div class="space-y-2">
+                            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                <Sparkles class="h-3.5 w-3.5 text-amber-600" />
+                                <span>Fitur Payroll {{ currentBankInfo.name }} Sedang Disiapkan</span>
+                            </div>
+                            <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                Batch Transfer {{ currentBankInfo.serviceName }}
+                            </h2>
+                            <p class="text-xs font-semibold text-slate-600">
+                                {{ currentBankInfo.fullName }}
+                            </p>
+                            <p class="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-xl mx-auto pt-1">
+                                Sistem pembuatan file batch transfer otomatis untuk <b>{{ currentBankInfo.name }}</b> saat ini sedang dalam proses penyesuaian format file perbankan. Saat ini operasional pembayaran gaji personil SPPG aktif berjalan melalui portal <b>BNI Direct</b>.
+                            </p>
+                        </div>
+
+                        <!-- Quick Switch Back to BNI Button -->
+                        <div class="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+                            <button
+                                type="button"
+                                @click="activeBankTab = 'BNI'"
+                                class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer w-full sm:w-auto"
+                            >
+                                <CreditCard class="h-4 w-4" />
+                                <span>Beralih ke Tab BNI Direct (Berfungsi Penuh)</span>
+                                <ArrowRight class="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Planned Features / Technical Readiness Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2.5">
+                        <div class="p-2.5 rounded-xl bg-blue-50 text-blue-600 w-fit">
+                            <FileSpreadsheet class="h-5 w-5" />
+                        </div>
+                        <h3 class="text-xs font-bold text-slate-800">Format Template {{ currentBankInfo.code }}</h3>
+                        <p class="text-[11.5px] text-slate-500 leading-relaxed">
+                            Pembuatan berkas upload payroll otomatis sesuai struktur kolom dan format baku sistem batch transfer {{ currentBankInfo.serviceName }}.
+                        </p>
+                        <div class="pt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-amber-700">
+                            <Clock class="h-3 w-3" />
+                            <span>Tahap Perancangan Format</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2.5">
+                        <div class="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 w-fit">
+                            <ShieldAlert class="h-5 w-5" />
+                        </div>
+                        <h3 class="text-xs font-bold text-slate-800">Validasi Nomor Rekening</h3>
+                        <p class="text-[11.5px] text-slate-500 leading-relaxed">
+                            Validasi digit rekening, kode cabang, dan nama pemilik rekening agar tidak terjadi penolakan transaksi saat pengiriman massal.
+                        </p>
+                        <div class="pt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-amber-700">
+                            <Clock class="h-3 w-3" />
+                            <span>Tahap Penyesuaian API / Aturan</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2.5">
+                        <div class="p-2.5 rounded-xl bg-purple-50 text-purple-600 w-fit">
+                            <Building2 class="h-5 w-5" />
+                        </div>
+                        <h3 class="text-xs font-bold text-slate-800">Rekonsiliasi SPJ Otomatis</h3>
+                        <p class="text-[11.5px] text-slate-500 leading-relaxed">
+                            Sinkronisasi otomatis hasil batch transfer dengan Buku Pembantu Bank (BP Bank) dan BKU pada modul Keuangan SPPG.
+                        </p>
+                        <div class="pt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-amber-700">
+                            <Clock class="h-3 w-3" />
+                            <span>Tahap Integrasi Buku Pembantu</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Database Notice Box -->
+                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <Info class="h-4 w-4 text-slate-500 shrink-0" />
+                        <span>
+                            Database SPPG saat ini mencatat seluruh personil terdaftar menggunakan rekening BNI. Jika personil memiliki rekening {{ currentBankInfo.name }}, data dapat disesuaikan pada modul Daftar Petugas.
+                        </span>
+                    </div>
+                    <Link
+                        :href="route('petugas.index')"
+                        class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0"
+                    >
+                        <span>Ke Daftar Petugas</span>
+                        <ArrowRight class="h-3.5 w-3.5" />
+                    </Link>
                 </div>
             </div>
         </div>
@@ -2003,32 +2383,50 @@ function copyRowRekening(id, text) {
                     </div>
 
                     <!-- Footer Actions -->
-                    <div class="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
-                        <span class="text-xs text-slate-500 font-mono">
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50">
+                        <span class="text-xs text-slate-500 font-mono w-full sm:w-auto text-center sm:text-left">
                             Total: <b>{{ totalSelectedCount }} records</b> • <b>{{ formatRupiah(totalPayrollAmount) }}</b>
                         </span>
-                        <div class="flex items-center gap-2">
+                        <div class="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                             <button
                                 type="button"
                                 @click="copyPreviewToClipboard"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs"
                             >
                                 <Check v-if="isCopied" class="h-4 w-4 text-emerald-600" />
                                 <Copy v-else class="h-4 w-4" />
-                                <span>{{ isCopied ? "Tersalin!" : "Salin Semua Teks" }}</span>
+                                <span>{{ isCopied ? "Tersalin!" : "Salin Teks" }}</span>
                             </button>
                             <button
                                 type="button"
                                 @click="() => { closePreviewModal(); triggerDownloadCsv(); }"
-                                class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
                             >
                                 <Download class="h-4 w-4" />
-                                <span>Download File CSV</span>
+                                <span>Download CSV</span>
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         </Teleport>
+
+        <!-- ─── Modal Kuitansi Pembayaran Gaji Resmi ─── -->
+        <KwitansiGajiModal
+            :show="isKwitansiModalOpen"
+            :selected-rows="selectedRows"
+            :all-rows="rows"
+            :unit-sppg="unitSppg"
+            :periodes="periodes"
+            :selected-periode="selectedPeriode"
+            :start-date="tanggalMulai"
+            :end-date="tanggalSelesai"
+            :date-selection-type="dateSelectionType"
+            :selected-dates="selectedDates"
+            :rentang-hari-count="rentangHariCount"
+            :default-pengawas-keuangan="defaultPengawasKeuangan"
+            :initial-petugas-id="kwitansiInitialPetugasId"
+            @close="isKwitansiModalOpen = false"
+        />
     </AppLayout>
 </template>

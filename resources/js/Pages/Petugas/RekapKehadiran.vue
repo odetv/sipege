@@ -1116,7 +1116,7 @@ const filteredDailyLogs = computed(() => {
 
 <template>
     <AppLayout>
-        <Head title="Rekap Presensi Petugas SPPG - SIPEGE" />
+        <Head title="Rekap Kehadiran - SIPEGE" />
 
         <div class="space-y-3.5 sm:space-y-4">
             <!-- ─── Notification Toast ────────────────────────────────────── -->
@@ -1167,8 +1167,8 @@ const filteredDailyLogs = computed(() => {
                     </div>
                 </div>
 
-                <!-- Action Buttons: Icon + Text (Responsive Icon-Only di HP) -->
-                <div class="flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                <!-- Action Buttons: Icon + Text (Responsive Mobile & Desktop) -->
+                <div class="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-end flex-wrap">
                     <!-- Link ke Daftar Petugas -->
                     <Link
                         :href="route('petugas.index')"
@@ -1210,7 +1210,7 @@ const filteredDailyLogs = computed(() => {
                         <!-- Dropdown Menu Cepat -->
                         <div
                             v-if="isExportMenuOpen"
-                            class="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                            class="absolute right-0 top-full mt-1.5 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                         >
                             <div class="p-1">
                                 <!-- Opsi 1: Buku Tanda Terima Harian (Per Sheet DD-MM-YYYY) -->
@@ -1547,9 +1547,14 @@ const filteredDailyLogs = computed(() => {
                     </div>
                 </div>
 
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat kalender tanggal & hak honor</span>
+                </div>
+
                 <!-- Kontainer Tabel dengan Horizontal Scroll Presisi -->
                 <div class="overflow-x-auto relative">
-                    <table class="w-full text-left text-xs border-collapse">
+                    <table class="w-full text-left text-xs border-collapse min-w-[1100px]">
                         <!-- Table Head: Baris 1 Visualisasi Rentang Terpilih -->
                         <thead class="sticky top-0 z-20">
                             <!-- Strip Indikator Rentang Tanggal Terpilih Menyatu di Header -->
@@ -2046,8 +2051,13 @@ const filteredDailyLogs = computed(() => {
                     </div>
                 </div>
 
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat rincian snapshot presensi</span>
+                </div>
+
                 <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table class="w-full text-xs text-left border-collapse">
+                    <table class="w-full text-xs text-left border-collapse min-w-[850px]">
                         <thead class="bg-slate-100/95 text-slate-700 font-bold sticky top-0 z-20 border-b border-slate-200 text-[11px]">
                             <tr>
                                 <th class="py-2.5 px-3 w-12 text-center">No</th>

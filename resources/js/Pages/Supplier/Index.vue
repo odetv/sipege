@@ -490,7 +490,7 @@ function submitDelete() {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Supplier Rekanan SPPG" />
+        <Head title="Supplier - SIPEGE" />
 
         <div class="space-y-6 pb-16">
             <!-- ─── FLASH ALERTS ────────────────────────────────────────────── -->

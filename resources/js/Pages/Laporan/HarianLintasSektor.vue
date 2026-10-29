@@ -1660,8 +1660,8 @@ const activeTab = ref("narasi");
 </script>
 
 <template>
-    <AppLayout title="Laporan Harian Lintas Sektor">
-        <Head title="Laporan Harian Lintas Sektor" />
+    <AppLayout title="Laporan Harian">
+        <Head title="Laporan Harian - SIPEGE" />
 
         <div class="space-y-6 pb-12 max-w-7xl mx-auto">
             <!-- HERO HEADER BANNER (SELARAS DENGAN RANCANG MENU MBG) -->

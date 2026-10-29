@@ -141,6 +141,28 @@ watch(
 function selectSubMenu(tabId) {
     activeSubMenu.value = tabId;
 }
+
+const pageTitle = computed(() => {
+    switch (activeSubMenu.value) {
+        case "database-pangan":
+        case "tkpi":
+            return "Database Pangan - SIPEGE";
+        case "analisa-pm":
+            return "Analisa PM - SIPEGE";
+        case "daftar-menu":
+            return "Daftar Menu - SIPEGE";
+        case "rancang-menu":
+        case "buat-menu":
+            return "Rancang Menu - SIPEGE";
+        case "kalender-menu":
+            return "Kalender Menu - SIPEGE";
+        case "resep":
+        case "resep-makanan":
+            return "Resep Makanan - SIPEGE";
+        default:
+            return "Gizi - SIPEGE";
+    }
+});
 </script>
 
 <template>
@@ -150,7 +172,7 @@ function selectSubMenu(tabId) {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Gizi" />
+        <Head :title="pageTitle" />
 
         <div class="space-y-6">
             <!-- 1. SUB MENU 1: DATABASE PANGAN -->

@@ -18,39 +18,63 @@ export const STORAGE_KEY_KOP = 'sipege_active_kop_dokumen';
  * - Garis Ganda Kedinasan
  */
 export function getDefaultKopConfig(unitSppg = null) {
+    const setting = unitSppg?.setting_kop_dokumen || unitSppg?.settingKopDokumen || null;
+    const nama1 = setting?.nama_instansi_1 
+        || (unitSppg?.nama ? String(unitSppg.nama).toUpperCase() : 'SPPG BULELENG SUKASADA TEGALLINGGAH');
+    const nama2 = setting?.nama_instansi_2 
+        || (unitSppg?.nama_yayasan ? String(unitSppg.nama_yayasan).toUpperCase() : 'YAYASAN PESANTREN MIFTAHUL ULUM');
+    const alamat = setting?.alamat_lengkap 
+        || unitSppg?.alamat_lengkap 
+        || 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali';
+    const email = setting?.email 
+        || unitSppg?.email 
+        || 'sppgsukasadategallinggah@gmail.com';
+    const telepon = setting?.telepon || unitSppg?.telepon || '';
+    const whatsapp = setting?.whatsapp || unitSppg?.whatsapp || '';
+    const website = setting?.website || unitSppg?.website || '';
+    const logoKiri = setting?.logo_kiri_url || '/images/logo/BGN_LOGO_MAIN.png';
+    const logoKanan = setting?.logo_kanan_url || '/images/logo/Logo_Yayasan.png';
+
     return {
-        nama_instansi_1: 'SPPG BULELENG SUKASADA TEGALLINGGAH',
-        nama_instansi_2: 'YAYASAN PESANTREN MIFTAHUL ULUM',
+        nama_instansi_1: nama1,
+        nama_instansi_2: nama2,
         nama_unit: unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah',
         kode_unit: unitSppg?.kode_sppg || '51.08.05.2013.03',
         id_sppg: unitSppg?.id_sppg || 'QQCV0LUG',
-        alamat_lengkap: unitSppg?.alamat_lengkap || 'Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali',
+        alamat_lengkap: alamat,
         desa_kelurahan: unitSppg?.desa_kelurahan || 'Tegallinggah',
         kecamatan: unitSppg?.kecamatan || 'Sukasada',
         kabupaten: unitSppg?.kabupaten || 'Buleleng',
         provinsi: unitSppg?.provinsi || 'Bali',
-        kode_pos: '',
-        telepon: '',
-        whatsapp: '',
-        email: 'sppgsukasadategallinggah@gmail.com',
-        website: '',
-        logo_kiri_url: '/images/logo/BGN_LOGO_MAIN.png',
-        logo_kanan_url: '/images/logo/Logo_Yayasan.png',
-        layout_logo: 'dual', // 'dual' | 'kiri' | 'tengah'
-        gaya_garis: 'ganda_kedinasan', // 'ganda_kedinasan' | 'tunggal_tebal' | 'modern_aksen' | 'minimalis'
-        template_style: 'klasik_formal', // 'klasik_formal' (Times New Roman) | 'kedinasan_resmi' (Arial) | 'modern_sppg'
+        kode_pos: unitSppg?.kode_pos || '',
+        telepon: telepon,
+        whatsapp: whatsapp,
+        email: email,
+        website: website,
+        logo_kiri_url: logoKiri,
+        logo_kanan_url: logoKanan,
+        layout_logo: setting?.layout_logo || 'dual', // 'dual' | 'kiri' | 'tengah'
+        gaya_garis: setting?.gaya_garis || 'ganda_kedinasan', // 'ganda_kedinasan' | 'tunggal_tebal' | 'modern_aksen' | 'minimalis'
+        template_style: setting?.template_style || 'klasik_formal', // 'klasik_formal' (Times New Roman) | 'kedinasan_resmi' (Arial) | 'modern_sppg'
         is_aktif: true,
     };
 }
 
 /**
  * Mengambil Konfigurasi Kop Dokumen yang Aktif
- * Memprioritaskan data dari window.__KOP_CONFIG__, props server, atau localStorage
+ * Memprioritaskan data dari initialServerConfig, window.__KOP_CONFIG__, props server, atau localStorage
  */
 export function getActiveKopConfig(initialServerConfig = null) {
-    if (initialServerConfig && typeof initialServerConfig === 'object' && initialServerConfig.nama_instansi_1) {
-        saveKopConfigToLocal(initialServerConfig);
-        return initialServerConfig;
+    if (initialServerConfig && typeof initialServerConfig === 'object') {
+        if (initialServerConfig.nama_instansi_1) {
+            saveKopConfigToLocal(initialServerConfig);
+            return initialServerConfig;
+        }
+        if (initialServerConfig.nama || initialServerConfig.nama_yayasan || initialServerConfig.setting_kop_dokumen || initialServerConfig.settingKopDokumen) {
+            const conf = getDefaultKopConfig(initialServerConfig);
+            saveKopConfigToLocal(conf);
+            return conf;
+        }
     }
 
     if (typeof window !== 'undefined') {

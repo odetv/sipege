@@ -69,4 +69,12 @@ class UnitSppg extends Model
     {
         return $this->hasMany(Petugas::class, 'unit_sppg_id');
     }
+
+    /**
+     * Get all pengaturan API for the unit SPPG.
+     */
+    public function pengaturanApis(): HasMany
+    {
+        return $this->hasMany(PengaturanApi::class, 'unit_sppg_id');
+    }
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { Head } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
@@ -86,7 +86,7 @@ const normalizeTab = (tab) => {
     if (tab === "ringkasan" || tab === "anggaran") return "anggaran";
     if (tab === "transaksi" || tab === "arus_kas") return "transaksi";
     if (tab === "bku") return "bku";
-    if (tab === "bp-bank" || tab === "bp_bank") return "bp_bank";
+    if (tab === "bp-bank" || tab === "bp_bank" || tab === "bp-bbank") return "bp_bank";
     if (tab === "bp-petty-cash" || tab === "bp_petty_cash") return "bp_petty_cash";
     if (tab === "bp-bahan-baku" || tab === "bp_bahan_baku") return "bp_bahan_baku";
     if (tab === "bp-operasional" || tab === "bp_operasional") return "bp_operasional";
@@ -94,7 +94,10 @@ const normalizeTab = (tab) => {
     if (tab === "lpa") return "lpa";
     if (tab === "sptj") return "sptj";
     if (tab === "bapsd") return "bapsd";
-    if (tab === "survei-harga" || tab === "survei_harga" || tab === "survei") return "survei_harga";
+    if (tab === "stok") return "stok";
+    if (tab === "laporan-harian" || tab === "laporan_harian") return "laporan_harian";
+    if (tab === "laporan-periodik" || tab === "laporan_periodik") return "laporan_periodik";
+    if (tab === "survei-harga-pasar" || tab === "survei-harga" || tab === "survei_harga" || tab === "survei") return "survei_harga";
     return tab || "anggaran";
 };
 
@@ -427,6 +430,47 @@ function formatTanggalIndo(tgl) {
         return tgl;
     }
 }
+
+const pageTitle = computed(() => {
+    switch (activeTab.value) {
+        case "anggaran":
+            return "Anggaran - SIPEGE";
+        case "verifikasi_po":
+            return "Verifikasi PO - SIPEGE";
+        case "daftar_po":
+            return "Daftar PO - SIPEGE";
+        case "survei_harga":
+            return "Survei Harga Pasar - SIPEGE";
+        case "transaksi":
+            return "Transaksi - SIPEGE";
+        case "bku":
+            return "BKU - SIPEGE";
+        case "bp_bank":
+            return "BP Bank - SIPEGE";
+        case "bp_petty_cash":
+            return "BP Petty Cash - SIPEGE";
+        case "bp_bahan_baku":
+            return "BP Bahan Baku - SIPEGE";
+        case "bp_operasional":
+            return "BP Operasional - SIPEGE";
+        case "bp_fasilitas":
+            return "BP Fasilitas - SIPEGE";
+        case "lpa":
+            return "LPA - SIPEGE";
+        case "sptj":
+            return "SPTJ - SIPEGE";
+        case "bapsd":
+            return "BAPSD - SIPEGE";
+        case "stok":
+            return "Stok - SIPEGE";
+        case "laporan_harian":
+            return "Harian - SIPEGE";
+        case "laporan_periodik":
+            return "Periodik - SIPEGE";
+        default:
+            return "Keuangan - SIPEGE";
+    }
+});
 </script>
 
 <template>
@@ -435,7 +479,7 @@ function formatTanggalIndo(tgl) {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Keuangan" />
+        <Head :title="pageTitle" />
 
         <div class="space-y-6">
             <!-- 1. ANGGARAN & BIAYA PER PORSI -->

@@ -40,4 +40,9 @@ return [
         'client_secret' => env('FATSECRET_CLIENT_SECRET', 'd70a526703bc4e4f8bcb46e771a932b6'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+    ],
+
 ];

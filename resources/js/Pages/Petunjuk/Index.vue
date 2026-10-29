@@ -257,6 +257,19 @@ onUnmounted(() => {
     window.removeEventListener("keydown", handleKeydown);
     document.body.style.overflow = "";
 });
+
+const pageTitle = computed(() => {
+    switch (selectedType.value) {
+        case "sop":
+            return "SOP - SIPEGE";
+        case "juknis":
+            return "Juknis - SIPEGE";
+        case "pedoman":
+            return "Pedoman - SIPEGE";
+        default:
+            return "Petunjuk - SIPEGE";
+    }
+});
 </script>
 
 <template>
@@ -266,7 +279,7 @@ onUnmounted(() => {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Petunjuk (SOP, Juknis & Pedoman)" />
+        <Head :title="pageTitle" />
 
         <div class="space-y-6 pb-16">
             <!-- ─── HEADER & CTA ────────────────────────────────────────────── -->

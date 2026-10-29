@@ -87,29 +87,35 @@ function onApplyDateRange(newRange) {
 </script>
 
 <template>
-    <div class="space-y-3">
-        <!-- ─── Header Halaman (Style Persis Rekap Kehadiran) ─────────────── -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div class="space-y-4 sm:space-y-5">
+        <!-- ─── Header Halaman (Identik Pembayaran Gaji) ─────────────────────── -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-                <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <CalendarCheck class="h-6 w-6 text-emerald-600" />
-                    <span>Rekapitulasi Distribusi Penerima Manfaat</span>
-                </h1>
-                <p class="text-xs text-slate-500 mt-0.5">
-                    Monitoring alokasi porsi harian & matriks logistik pengiriman MBG Unit SPPG
-                    <span v-if="unitSppg" class="font-semibold text-slate-700"> • {{ unitSppg.nama_sppg || unitSppg.nama }}</span>
-                </p>
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs shrink-0">
+                        <CalendarCheck class="h-6 w-6" />
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                            Rekapitulasi Distribusi Penerima Manfaat
+                        </h1>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Monitoring alokasi porsi harian & matriks logistik pengiriman MBG Unit SPPG
+                            <span v-if="unitSppg" class="font-semibold text-slate-700"> • {{ unitSppg.nama_sppg || unitSppg.nama }}</span>
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- Tombol Aksi Kanan: Simpan Data & Ekspor Excel -->
-            <div class="flex items-center gap-2 self-stretch sm:self-auto flex-wrap justify-start sm:justify-end">
+            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto justify-between sm:justify-end">
                 <!-- Tombol Simpan Presensi/Distribusi (Identik Rekap Kehadiran) -->
                 <button
                     type="button"
                     @click="$emit('simpanDistribusi')"
                     :disabled="isSaving"
                     :class="[
-                        'inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50',
+                        'inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50',
                         isDirty
                             ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white ring-2 ring-emerald-400/50'
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200',
@@ -118,7 +124,7 @@ function onApplyDateRange(newRange) {
                 >
                     <RefreshCw v-if="isSaving" class="h-4 w-4 animate-spin text-white" />
                     <Save v-else class="h-4 w-4" :class="isDirty ? 'text-white' : 'text-slate-500'" />
-                    <span>{{ isSaving ? 'Menyimpan...' : (isDirty ? 'Simpan Rekap' : 'Tersimpan') }}</span>
+                    <span>{{ isSaving ? 'Menyimpan...' : (isDirty ? 'Simpan' : 'Tersimpan') }}</span>
                     <span v-if="isDirty" class="w-2 h-2 rounded-full bg-amber-400"></span>
                 </button>
 
@@ -127,7 +133,7 @@ function onApplyDateRange(newRange) {
                     <button
                         type="button"
                         @click="isToolsMenuOpen = !isToolsMenuOpen"
-                        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
                         title="Tindakan Cepat Matriks"
                     >
                         <Layers class="h-3.5 w-3.5 text-slate-500" />
@@ -173,12 +179,12 @@ function onApplyDateRange(newRange) {
                 </div>
 
                 <!-- Dropdown Menu Ekspor Excel & PDF (Identik Rekap Kehadiran) -->
-                <div class="relative inline-flex items-stretch rounded-lg shadow-xs">
+                <div class="relative inline-flex items-stretch rounded-xl shadow-xs">
                     <button
                         type="button"
                         @click="$emit('openExportModal', 'ttd_harian')"
                         :disabled="isExporting"
-                        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        class="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-l-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
                         title="Download Buku Tanda Terima Distribusi Harian / Rekap Excel"
                     >
                         <FileSpreadsheet class="h-4 w-4" />
@@ -189,7 +195,7 @@ function onApplyDateRange(newRange) {
                         type="button"
                         @click="isExportMenuOpen = !isExportMenuOpen"
                         :disabled="isExporting"
-                        class="inline-flex items-center px-1.5 sm:px-2 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer disabled:opacity-50"
+                        class="inline-flex items-center px-2 rounded-r-xl bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/60 text-xs transition-colors cursor-pointer disabled:opacity-50"
                         title="Opsi Pilihan Download"
                     >
                         <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': isExportMenuOpen }" />
@@ -205,7 +211,7 @@ function onApplyDateRange(newRange) {
                     <!-- Dropdown Menu Cepat (4 Opsi Identik Rekap Kehadiran) -->
                     <div
                         v-if="isExportMenuOpen"
-                        class="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+                        class="absolute right-0 top-full mt-1.5 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                     >
                         <div class="p-1">
                             <!-- Opsi 1: Buku Tanda Terima Distribusi Harian (Per Sheet DD-MM-YYYY) -->
@@ -290,18 +296,17 @@ function onApplyDateRange(newRange) {
         />
 
         <!-- ─── Secondary Filter Bar (Search & Filter Kategori / Status) ───────── -->
-        <div class="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
-
-            <!-- Baris 2: Search & Filter Kategori / Status -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
+        <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
+            <!-- Search & Filter Kategori / Status -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div class="relative">
-                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <input
                         :value="searchQuery"
                         @input="$emit('update:searchQuery', $event.target.value)"
                         type="text"
                         placeholder="Cari sekolah, posyandu, NPSN, PIC..."
-                        class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                        class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:ring-1 focus:ring-primary focus:border-primary bg-white outline-hidden"
                     />
                 </div>
 
@@ -309,7 +314,7 @@ function onApplyDateRange(newRange) {
                     <select
                         :value="selectedKategoriFilter"
                         @change="$emit('update:selectedKategoriFilter', $event.target.value)"
-                        class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden bg-white cursor-pointer"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer outline-hidden"
                     >
                         <option value="all">Semua Kategori</option>
                         <option value="Sekolah">Satuan Pendidikan / Sekolah</option>
@@ -325,7 +330,7 @@ function onApplyDateRange(newRange) {
                     <select
                         :value="selectedStatusFilter"
                         @change="$emit('update:selectedStatusFilter', $event.target.value)"
-                        class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden bg-white cursor-pointer"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer outline-hidden"
                     >
                         <option value="all">Semua Status Layanan</option>
                         <option value="Terkirim">Status Terkirim</option>

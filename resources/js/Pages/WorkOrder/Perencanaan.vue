@@ -2336,8 +2336,8 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
             keterangan_alergi: k.keterangan_alergi || [],
         })),
         status: isEditMode.value
-            ? props.editWorkOrder?.status || "Draft"
-            : "Draft",
+            ? (props.editWorkOrder?.status === "Draft" && metodeWo.value === "manual" ? "Siap Produksi" : (props.editWorkOrder?.status || (metodeWo.value === "manual" ? "Siap Produksi" : "Draft")))
+            : (metodeWo.value === "manual" ? "Siap Produksi" : "Draft"),
     };
 
     router.post(route("work-order.store"), payload, {
@@ -2539,9 +2539,7 @@ function handleSavePerencanaanManualComplete() {
             detail_alergi: k.keterangan_alergi || [],
             keterangan_alergi: k.keterangan_alergi || [],
         })),
-        status: isEditMode.value
-            ? props.editWorkOrder?.status || "Draft"
-            : "Draft",
+        status: "Siap Produksi",
     };
 
     router.post(route("work-order.store"), payload, {
@@ -3234,7 +3232,7 @@ onUnmounted(() => {
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Work Order - Buat WO" />
+        <Head title="Buat WO - SIPEGE" />
 
         <div class="space-y-6">
             <!-- Header Halaman Perencanaan Produksi -->

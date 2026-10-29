@@ -174,7 +174,7 @@ function doDelete() {
 
 <template>
     <AppLayout title="Periode" subtitle="Kelola Periode Operasional SPPG">
-        <Head title="Periode" />
+        <Head title="Periode - SIPEGE" />
 
         <!-- Flash -->
         <div

@@ -215,7 +215,10 @@ class WorkOrderController extends Controller
                 ]);
             }
 
-            $status = $validated['status'] ?? ($validated['metode_wo'] === 'manual' ? 'Siap Produksi' : 'Draft');
+            $status = $validated['status'] ?? null;
+            if (!$status || ($status === 'Draft' && ($validated['metode_wo'] ?? '') === 'manual')) {
+                $status = ($validated['metode_wo'] === 'manual') ? 'Siap Produksi' : 'Draft';
+            }
             $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
 
             $woData = [
@@ -447,6 +450,86 @@ class WorkOrderController extends Controller
         ]);
 
         return back()->with('success', "Work Order {$workOrder->nomor_wo} berhasil diajukan ke Keuangan.");
+    }
+
+    /**
+     * Perbarui Status Work Order (misal: Draft <-> Siap Produksi)
+     */
+    public function updateStatus(Request $request, $id): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->unitSppg;
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG belum terdaftar.');
+        }
+
+        $request->validate([
+            'status' => ['required', 'string', 'max:50'],
+        ]);
+
+        $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+            ->where(function ($query) use ($id) {
+                $idStr = (string) $id;
+                if (is_numeric($idStr)) {
+                    $query->where('id', (int) $idStr);
+                } elseif (\Illuminate\Support\Str::isUuid($idStr)) {
+                    $query->where('uuid', $idStr);
+                } else {
+                    $query->where('nomor_wo', $idStr);
+                }
+            })
+            ->firstOrFail();
+
+        $newStatus = $request->input('status');
+        $workOrder->update([
+            'status' => $newStatus,
+        ]);
+
+        return back()->with('success', "Status Work Order {$workOrder->nomor_wo} berhasil diubah menjadi {$newStatus}.");
+    }
+
+    /**
+     * Perbarui Status Banyak Work Order Sekaligus (Bulk Status Update)
+     */
+    public function bulkUpdateStatus(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->unitSppg;
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG belum terdaftar.');
+        }
+
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'status' => ['required', 'string', 'max:50'],
+        ]);
+
+        $ids = $request->input('ids', []);
+        $newStatus = $request->input('status');
+
+        $numericIds = array_values(array_filter($ids, 'is_numeric'));
+        $uuidList = array_values(array_filter($ids, fn($val) => !is_numeric($val) && is_string($val)));
+
+        $updatedCount = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+            ->where(function ($query) use ($numericIds, $uuidList) {
+                if (!empty($numericIds) && !empty($uuidList)) {
+                    $query->whereIn('id', $numericIds)
+                        ->orWhereIn('uuid', $uuidList);
+                } elseif (!empty($numericIds)) {
+                    $query->whereIn('id', $numericIds);
+                } elseif (!empty($uuidList)) {
+                    $query->whereIn('uuid', $uuidList);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->update([
+                'status' => $newStatus,
+            ]);
+
+        return back()->with('success', "{$updatedCount} Work Order berhasil diubah statusnya menjadi {$newStatus}.");
     }
 
     /**

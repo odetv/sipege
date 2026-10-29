@@ -206,7 +206,7 @@ function getJabatanBadgeClass(jabatan) {
 </script>
 
 <template>
-    <Head title="Rekap BPJS TK Petugas SPPG" />
+    <Head title="Rekap Asuransi - SIPEGE" />
 
     <AppLayout>
         <div class="space-y-4 max-w-full pb-16">
@@ -219,13 +219,13 @@ function getJabatanBadgeClass(jabatan) {
                         </div>
                         <div>
                             <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                                Rekap BPJS Ketenagakerjaan Petugas
+                                Rekap Asuransi Petugas
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
-                                    JKK & JKM
+                                    BPJS TK (JKK & JKM)
                                 </span>
                             </h1>
                             <p class="text-xs text-slate-500">
-                                Rekapitulasi status kepesertaan dan iuran jaminan sosial BPJS TK (Kecelakaan Kerja & Kematian).
+                                Rekapitulasi status kepesertaan dan iuran jaminan asuransi ketenagakerjaan (Kecelakaan Kerja & Kematian).
                             </p>
                         </div>
                     </div>
@@ -323,11 +323,10 @@ function getJabatanBadgeClass(jabatan) {
                     />
                 </div>
 
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <Filter class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <div class="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                     <select
                         v-model="filterJabatan"
-                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-48"
+                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-48 bg-white cursor-pointer"
                     >
                         <option value="all">Semua Divisi</option>
                         <option v-for="jab in props.daftarJabatan" :key="jab" :value="jab">
@@ -337,7 +336,7 @@ function getJabatanBadgeClass(jabatan) {
 
                     <select
                         v-model="filterBpjsStatus"
-                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-44"
+                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-44 bg-white cursor-pointer"
                     >
                         <option value="all">Status: Semua</option>
                         <option value="terdaftar">Terdaftar BPJS (> 0)</option>
@@ -348,8 +347,13 @@ function getJabatanBadgeClass(jabatan) {
 
             <!-- ─── TABEL REKAP BPJS TK ─── -->
             <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <!-- Mobile Swipe Hint -->
+                <div class="sm:hidden px-3.5 py-1.5 bg-sky-50/70 border-b border-sky-100 flex items-center justify-between text-[11px] text-sky-800 font-medium">
+                    <span>👉 Geser tabel ke kanan untuk melihat rincian iuran BPJS TK</span>
+                </div>
+
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
+                    <table class="w-full text-left border-collapse text-xs min-w-[950px]">
                         <thead>
                             <tr class="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-bold">
                                 <th class="py-2.5 px-3 text-center w-12 border-r border-slate-200">No</th>

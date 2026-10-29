@@ -419,12 +419,12 @@ function executeDelete() {
 
 <template>
     <AppLayout
-        title="Daftar Penerima Manfaat"
-        subtitle="Kelola Data Kelompok dan Rincian Penerima Manfaat SPPG"
+        title="Daftar KPM"
+        subtitle="Kelola Data Kelompok Penerima Manfaat (KPM) SPPG"
         :user="user"
         :unit-sppg="unitSppg"
     >
-        <Head title="Daftar Penerima Manfaat - SIPEGE" />
+        <Head title="Daftar KPM - SIPEGE" />
 
         <div class="space-y-6">
             <!-- Alert jika Unit SPPG belum dikonfigurasi -->

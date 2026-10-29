@@ -4,6 +4,7 @@ import {
     Building2,
     Phone,
     Printer,
+    Receipt,
     Coins,
     RefreshCw,
 } from "lucide-vue-next";
@@ -72,9 +73,9 @@ function getCategoryBadge(kategori) {
 </script>
 
 <template>
-    <div class="rounded-xl bg-white border border-slate-200 shadow-2xs overflow-hidden">
+    <div class="rounded-2xl bg-white border border-slate-200/90 shadow-2xs overflow-hidden">
         <!-- Toolbar Atas Tabel (Style Persis Pembayaran Gaji) -->
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <div class="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
             <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">
                     Daftar Penerima Insentif Tunai ({{ items.length }} Titik)
@@ -88,8 +89,13 @@ function getCategoryBadge(kategori) {
             </div>
         </div>
 
+        <!-- Mobile Swipe Hint -->
+        <div class="sm:hidden px-3.5 py-1.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-800 font-medium">
+            <span>👉 Geser tabel ke kanan untuk rincian skema insentif & kuitansi</span>
+        </div>
+
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse text-xs">
+            <table class="w-full text-left border-collapse text-xs min-w-[1050px]">
                 <thead>
                     <tr class="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
                         <th class="py-2.5 px-3 text-center w-10">
@@ -252,11 +258,11 @@ function getCategoryBadge(kategori) {
                             <button
                                 type="button"
                                 @click="$emit('openReceipt', item)"
-                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                                title="Buka kuitansi tanda terima kas tunai"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs whitespace-nowrap"
+                                title="Lihat & download kuitansi resmi untuk titik sasaran ini"
                             >
-                                <Printer class="h-3.5 w-3.5 text-slate-600" />
-                                <span>Kuitansi</span>
+                                <Receipt class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <span>Kwitansi</span>
                             </button>
                         </td>
                     </tr>

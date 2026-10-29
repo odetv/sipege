@@ -1,24 +1,51 @@
 <script setup>
+import { ref, computed, watch } from "vue";
 import {
     X,
-    Printer,
-    Coins,
-    CheckCircle2,
-    Building2,
+    FileText,
+    Download,
+    Check,
+    Settings2,
+    ChevronDown,
+    ChevronUp,
+    User,
     Calendar,
+    Building2,
+    DollarSign,
+    Sparkles,
+    RefreshCw,
+    Receipt,
 } from "lucide-vue-next";
+import jsPDF from "jspdf";
 import { formatTanggalIndo } from "@/Services/exportPetugasHelper";
+import { getActiveKopConfig, generateKopHtml } from "@/Services/kopDokumenHelper";
+import { LOGO_BGN_BASE64, LOGO_YAYASAN_BASE64 } from "@/Services/logoBase64Helper";
 
 const props = defineProps({
     show: { type: Boolean, default: false },
+    isOpen: { type: Boolean, default: false }, // Kompatibilitas dengan pemanggil lama
     item: { type: Object, default: null },
+    initialItem: { type: Object, default: null },
+    selectedRows: { type: Array, default: () => [] },
+    allRows: { type: Array, default: () => [] },
     unitSppg: { type: Object, default: null },
+    periodes: { type: Array, default: () => [] },
+    selectedPeriode: { type: Object, default: null },
     startDate: { type: String, default: "" },
     endDate: { type: String, default: "" },
+    tanggalMulai: { type: String, default: "" },
+    tanggalSelesai: { type: String, default: "" },
+    rentangHariCount: { type: Number, default: 0 },
+    defaultPengawasKeuangan: { type: String, default: "" },
 });
 
 const emit = defineEmits(["close"]);
 
+const isModalVisible = computed(() => Boolean(props.show || props.isOpen));
+const effectiveStartDate = computed(() => props.startDate || props.tanggalMulai || "");
+const effectiveEndDate = computed(() => props.endDate || props.tanggalSelesai || "");
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
 function formatRupiah(val) {
     if (val === null || val === undefined || isNaN(val)) return "Rp 0";
     return new Intl.NumberFormat("id-ID", {
@@ -28,188 +55,829 @@ function formatRupiah(val) {
     }).format(val);
 }
 
-function angkaKeTerbilang(nilai) {
-    const angka = Math.floor(Math.abs(Number(nilai) || 0));
-    const satuan = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
-    if (angka < 12) return satuan[angka];
-    if (angka < 20) return angkaKeTerbilang(angka - 10) + " Belas";
-    if (angka < 100) return angkaKeTerbilang(Math.floor(angka / 10)) + " Puluh " + satuan[angka % 10];
-    if (angka < 200) return "Seratus " + angkaKeTerbilang(angka - 100);
-    if (angka < 1000) return angkaKeTerbilang(Math.floor(angka / 100)) + " Ratus " + angkaKeTerbilang(angka % 100);
-    if (angka < 2000) return "Seribu " + angkaKeTerbilang(angka - 1000);
-    if (angka < 1000000) return angkaKeTerbilang(Math.floor(angka / 1000)) + " Ribu " + angkaKeTerbilang(angka % 1000);
-    if (angka < 1000000000) return angkaKeTerbilang(Math.floor(angka / 1000000)) + " Juta " + angkaKeTerbilang(angka % 1000000);
-    return angkaKeTerbilang(Math.floor(angka / 1000000000)) + " Miliar " + angkaKeTerbilang(angka % 1000000000);
+function formatRibuan(num) {
+    if (num === null || num === undefined || isNaN(num) || num === "") return "0";
+    return new Intl.NumberFormat("id-ID").format(num);
 }
 
-function printReceipt() {
-    window.print();
+// ─── Fungsi Terbilang Rupiah Resmi ───────────────────────────────────────────
+function angkaKeTerbilang(nilai) {
+    const angka = Math.floor(Math.abs(Number(nilai) || 0));
+    if (angka === 0) return "Nol";
+    const satuan = [
+        "",
+        "Satu",
+        "Dua",
+        "Tiga",
+        "Empat",
+        "Lima",
+        "Enam",
+        "Tujuh",
+        "Delapan",
+        "Sembilan",
+        "Sepuluh",
+        "Sebelas",
+    ];
+    if (angka < 12) return satuan[angka];
+    if (angka < 20) return angkaKeTerbilang(angka - 10) + " Belas";
+    if (angka < 100) {
+        const sisa = angka % 10;
+        return (
+            angkaKeTerbilang(Math.floor(angka / 10)) +
+            " Puluh" +
+            (sisa !== 0 ? " " + satuan[sisa] : "")
+        );
+    }
+    if (angka < 200) {
+        const sisa = angka - 100;
+        return "Seratus" + (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "");
+    }
+    if (angka < 1000) {
+        const sisa = angka % 100;
+        return (
+            angkaKeTerbilang(Math.floor(angka / 100)) +
+            " Ratus" +
+            (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "")
+        );
+    }
+    if (angka < 2000) {
+        const sisa = angka - 1000;
+        return "Seribu" + (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "");
+    }
+    if (angka < 1000000) {
+        const sisa = angka % 1000;
+        return (
+            angkaKeTerbilang(Math.floor(angka / 1000)) +
+            " Ribu" +
+            (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "")
+        );
+    }
+    if (angka < 1000000000) {
+        const sisa = angka % 1000000;
+        return (
+            angkaKeTerbilang(Math.floor(angka / 1000000)) +
+            " Juta" +
+            (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "")
+        );
+    }
+    const sisa = angka % 1000000000;
+    return (
+        angkaKeTerbilang(Math.floor(angka / 1000000000)) +
+        " Miliar" +
+        (sisa !== 0 ? " " + angkaKeTerbilang(sisa) : "")
+    );
+}
+
+// ─── Konversi Bulan Romawi ────────────────────────────────────────────────────
+const ROMAN_MONTHS = [
+    "I",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "VI",
+    "VII",
+    "VIII",
+    "IX",
+    "X",
+    "XI",
+    "XII",
+];
+
+function getRomanMonth(dateStr) {
+    if (!dateStr) return "X";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "X";
+        return ROMAN_MONTHS[d.getMonth()] || "X";
+    } catch {
+        return "X";
+    }
+}
+
+function getYearFromDate(dateStr) {
+    if (!dateStr) return "2026";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "2026";
+        return String(d.getFullYear());
+    } catch {
+        return "2026";
+    }
+}
+
+// ─── Generator Singkatan Nama SPPG (e.g. SPPG.BST untuk Nomor Kuitansi) ───────
+function generateSppgAbbreviation(namaSppg) {
+    if (!namaSppg) return "SPPG.BST";
+    const cleaned = namaSppg.replace(/^SPPG\s+/i, "").trim();
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    const initials = words.map((w) => w.charAt(0).toUpperCase()).join("");
+    return initials ? `SPPG.${initials}` : "SPPG.BST";
+}
+
+// ─── Nama Lengkap SPPG Tanpa Disingkat untuk Tanda Tangan ─────────────────────
+const fullSppgName = computed(() => {
+    const raw = props.unitSppg?.nama_sppg || props.unitSppg?.nama || "SPPG Buleleng Sukasada Tegallinggah";
+    return raw.toUpperCase().startsWith("SPPG") ? raw : `SPPG ${raw}`;
+});
+
+// ─── State Konfigurasi & Variabel Kuitansi ────────────────────────────────────
+const showSettings = ref(false);
+const isGeneratingPdf = ref(false);
+
+const startNoUrut = ref(1);
+// KUI.Ops = Operasional (termasuk insentif distribusi & gaji operasional)
+const jenisKuitansi = ref("KUI.Ops");
+const singkatanSppg = ref("SPPG.BST");
+const bulanRomawi = ref("X");
+const tahunKuitansi = ref("2026");
+const tanggalKuitansi = ref("");
+const lokasiKuitansi = ref("Buleleng");
+const namaPengawasKeuangan = ref("");
+
+// Mode Tampilan: 'all' (semua kuitansi terpilih) | 'single' (satu per orangan)
+const viewMode = ref("all");
+const singleItemId = ref(null);
+
+// Inisialisasi State Saat Modal Dibuka
+watch(
+    () => [isModalVisible.value, props.initialItem || props.item],
+    ([isOpen, activeItem]) => {
+        if (isOpen) {
+            const baseDate = effectiveEndDate.value || effectiveStartDate.value || new Date().toISOString().slice(0, 10);
+            tanggalKuitansi.value = baseDate;
+            bulanRomawi.value = getRomanMonth(baseDate);
+            tahunKuitansi.value = getYearFromDate(baseDate);
+
+            const sppgName = props.unitSppg?.nama_sppg || props.unitSppg?.nama || "SPPG Buleleng Sukasada Tegallinggah";
+            singkatanSppg.value = generateSppgAbbreviation(sppgName);
+            lokasiKuitansi.value = props.unitSppg?.kabupaten || props.unitSppg?.kecamatan || "Buleleng";
+
+            namaPengawasKeuangan.value =
+                props.defaultPengawasKeuangan ||
+                props.unitSppg?.nama_pengawas_keuangan ||
+                "I Gusti Ayu Made Padmi Swari";
+
+            if (activeItem && activeItem.id) {
+                viewMode.value = "single";
+                singleItemId.value = activeItem.id;
+            } else {
+                viewMode.value = "all";
+                const list = receiptList.value;
+                if (list.length > 0) {
+                    singleItemId.value = list[0].id;
+                }
+            }
+        }
+    },
+    { immediate: true }
+);
+
+watch(tanggalKuitansi, (newDate) => {
+    if (newDate) {
+        bulanRomawi.value = getRomanMonth(newDate);
+        tahunKuitansi.value = getYearFromDate(newDate);
+    }
+});
+
+// Daftar Titik Sasaran Terpilih untuk Kwitansi
+const receiptList = computed(() => {
+    if (props.selectedRows && props.selectedRows.length > 0) {
+        return props.selectedRows;
+    }
+    if (props.allRows && props.allRows.length > 0) {
+        return props.allRows;
+    }
+    const single = props.initialItem || props.item;
+    if (single) {
+        return [single];
+    }
+    return [];
+});
+
+// Personil / Titik Sasaran yang Ditampilkan Berdasarkan Mode
+const displayedReceipts = computed(() => {
+    const list = receiptList.value;
+    if (viewMode.value === "single") {
+        if (!singleItemId.value) return list.slice(0, 1);
+        const found = list.find(
+            (r) => String(r.id) === String(singleItemId.value)
+        );
+        return found ? [found] : list.slice(0, 1);
+    }
+    return list;
+});
+
+// Hitung nomor kuitansi untuk item tertentu
+function getFormattedNomorKuitansi(itemIndex) {
+    const no = String(Number(startNoUrut.value || 1) + itemIndex).padStart(3, "0");
+    const jenis = jenisKuitansi.value || "KUI.Ops";
+    const sppg = singkatanSppg.value || "SPPG.BST";
+    const bln = bulanRomawi.value || "X";
+    const thn = tahunKuitansi.value || "2026";
+    return `${no}/${jenis}/${sppg}/${bln}/${thn}`;
+}
+
+// Keterangan Pembayaran Otomatis (Tanpa kata loncat-loncat)
+function getKeteranganPembayaran(row) {
+    let periodeStr = "";
+    if (props.selectedPeriode) {
+        periodeStr = `Periode ${props.selectedPeriode.nomor_periode} (${formatTanggalIndo(effectiveStartDate.value)} s/d ${formatTanggalIndo(effectiveEndDate.value)})`;
+    } else if (effectiveStartDate.value && effectiveEndDate.value) {
+        periodeStr = `${formatTanggalIndo(effectiveStartDate.value)} s/d ${formatTanggalIndo(effectiveEndDate.value)}`;
+    } else {
+        periodeStr = `Operasional MBG`;
+    }
+
+    const hari = row.hari_operasional || props.rentangHariCount || 1;
+    const sasaran = row.total_penerima || 0;
+    const pic = row.nama_pic || row.nama_kelompok || "Penerima Manfaat";
+    const kelompok = row.nama_kelompok ? ` (${row.nama_kelompok})` : "";
+    const kat = row.kategori ? ` - ${row.kategori}` : "";
+
+    return `Pembayaran Insentif Fasilitas Mitra / Penanggung Jawab Distribusi MBG ${periodeStr} an. ${pic}${kelompok}${kat} untuk ${sasaran} Sasaran Penerima Manfaat sejumlah ${hari} Hari Operasional.`;
+}
+
+// Kop Dokumen HTML Terpusat
+const kopConfig = computed(() => {
+    return getActiveKopConfig(props.unitSppg?.setting_kop_dokumen);
+});
+
+// ─── Download PDF Kuitansi Langsung (jsPDF Vector Crisp, 1 Kuitansi per Hal) ───
+async function downloadPdfKwitansi() {
+    if (displayedReceipts.value.length === 0) return;
+    isGeneratingPdf.value = true;
+
+    try {
+        const doc = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+        });
+
+        const items = displayedReceipts.value;
+
+        items.forEach((row, idx) => {
+            if (idx > 0) {
+                doc.addPage();
+            }
+
+            const itemIdx =
+                viewMode.value === "all"
+                    ? idx
+                    : receiptList.value.findIndex((r) => r.id === row.id);
+            const nomorKuitansi = getFormattedNomorKuitansi(itemIdx >= 0 ? itemIdx : idx);
+
+            // 1. Kop Dokumen Resmi
+            try {
+                if (LOGO_BGN_BASE64) {
+                    doc.addImage(LOGO_BGN_BASE64, "PNG", 18, 14, 18, 18);
+                }
+            } catch (e) {}
+
+            try {
+                if (LOGO_YAYASAN_BASE64) {
+                    doc.addImage(LOGO_YAYASAN_BASE64, "PNG", 174, 14, 18, 18);
+                }
+            } catch (e) {}
+
+            doc.setFont("times", "bold");
+            doc.setFontSize(11.5);
+            doc.setTextColor(0, 0, 0);
+            doc.text(
+                (kopConfig.value?.nama_instansi_1 || "SPPG BULELENG SUKASADA TEGALLINGGAH").toUpperCase(),
+                105,
+                18.5,
+                { align: "center" }
+            );
+
+            doc.setFontSize(10.5);
+            doc.text(
+                (kopConfig.value?.nama_instansi_2 || "YAYASAN PESANTREN MIFTAHUL ULUM").toUpperCase(),
+                105,
+                23.5,
+                { align: "center" }
+            );
+
+            doc.setFont("times", "normal");
+            doc.setFontSize(8.5);
+            doc.setTextColor(30, 41, 59);
+            doc.text(
+                kopConfig.value?.alamat_lengkap ||
+                    "Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali",
+                105,
+                28,
+                { align: "center" }
+            );
+
+            const emailStr = kopConfig.value?.email ? `E-mail: ${kopConfig.value.email}` : "";
+            if (emailStr) {
+                doc.text(emailStr, 105, 32, { align: "center" });
+            }
+
+            // Garis Ganda Pembatas Kop
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.6);
+            doc.line(18, 36, 192, 36);
+            doc.setLineWidth(0.2);
+            doc.line(18, 37, 192, 37);
+
+            // 2. Judul K U I T A N S I & Nomor
+            doc.setFont("times", "bold");
+            doc.setFontSize(15);
+            doc.setTextColor(0, 0, 0);
+            doc.text("K U I T A N S I", 105, 47, { align: "center" });
+
+            doc.setLineWidth(0.4);
+            doc.line(82, 48.5, 128, 48.5);
+
+            doc.setFont("times", "normal");
+            doc.setFontSize(10.5);
+            doc.setTextColor(30, 41, 59);
+            doc.text(nomorKuitansi, 105, 54, { align: "center" });
+
+            // 3. Rincian Badan Kuitansi
+            let curY = 66;
+            doc.setFont("times", "normal");
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+
+            // Baris 1: Sudah Terima dari
+            doc.text("Sudah Terima dari", 20, curY);
+            doc.text(":", 58, curY);
+            doc.text(`Staf Pengawas Keuangan ${fullSppgName.value}`, 62, curY);
+
+            curY += 5.5;
+            doc.setFont("times", "normal");
+            doc.text("ID SPPG : ", 62, curY);
+            const idW = doc.getTextWidth("ID SPPG : ");
+            doc.setFont("times", "bold");
+            doc.text(props.unitSppg?.id_sppg || "QQCV0LUG", 62 + idW, curY);
+
+            // Baris 2: Uang Sejumlah
+            curY += 10.5;
+            doc.setFont("times", "normal");
+            doc.text("Uang Sejumlah", 20, curY);
+            doc.text(":", 58, curY);
+
+            doc.setFont("times", "italic");
+            doc.setFontSize(10.5);
+            const terbilangText = `# ${angkaKeTerbilang(row.amount)} Rupiah #`;
+            const terbilangLines = doc.splitTextToSize(terbilangText, 122);
+            const boxH = Math.max(9, terbilangLines.length * 4.8 + 4.5);
+
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.25);
+            doc.roundedRect(62, curY - 5, 128, boxH, 1.5, 1.5, "FD");
+
+            doc.setTextColor(15, 23, 42);
+            doc.text(terbilangLines, 65, curY);
+
+            // Nominal Rp
+            curY += boxH + 4.5;
+            doc.setFont("times", "bold");
+            doc.setFontSize(13);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Rp. ${formatRibuan(row.amount)},-`, 62, curY);
+
+            // Baris 3: Untuk Pembayaran
+            curY += 10.5;
+            doc.setFont("times", "normal");
+            doc.setFontSize(11);
+            doc.text("Untuk Pembayaran", 20, curY);
+            doc.text(":", 58, curY);
+
+            const ketText = getKeteranganPembayaran(row);
+            const ketLines = doc.splitTextToSize(ketText, 128);
+            doc.text(ketLines, 62, curY);
+
+            // 4. Tanda Tangan 2 Kolom (Nama SPPG Lengkap & Tanpa Embel-embel Dibawah Nama)
+            const sigY = Math.max(curY + ketLines.length * 5.2 + 20, 205);
+
+            // Tanggal di atas kolom kanan
+            doc.setFont("times", "normal");
+            doc.setFontSize(11);
+            doc.text(
+                `${lokasiKuitansi.value}, ${formatTanggalIndo(tanggalKuitansi.value)}`,
+                152,
+                sigY,
+                { align: "center" }
+            );
+
+            // Kolom Kiri: Staf Pengawas Keuangan SPPG ... (Nama SPPG TIDAK Disingkat)
+            doc.text("Staf Pengawas Keuangan", 58, sigY + 6, { align: "center" });
+            doc.text(fullSppgName.value, 58, sigY + 11.5, { align: "center" });
+
+            // Tanda Tangan Kiri (Cukup Nama Saja Tanpa Embel-embel)
+            doc.setFont("times", "bold");
+            const namaKiri = `( ${namaPengawasKeuangan.value} )`;
+            doc.text(namaKiri, 58, sigY + 45, { align: "center" });
+            const namaKiriW = doc.getTextWidth(namaKiri);
+            doc.setLineWidth(0.3);
+            doc.line(58 - namaKiriW / 2, sigY + 46, 58 + namaKiriW / 2, sigY + 46);
+
+            // Kolom Kanan: Yang Menerima
+            doc.setFont("times", "normal");
+            doc.text("Yang Menerima,", 152, sigY + 6, { align: "center" });
+
+            // Tanda Tangan Kanan (Cukup Nama Saja Tanpa Embel-embel)
+            doc.setFont("times", "bold");
+            const penerimaNama = row.nama_pic || row.nama_kelompok || "Penerima Manfaat";
+            const namaKanan = `( ${penerimaNama} )`;
+            doc.text(namaKanan, 152, sigY + 45, { align: "center" });
+            const namaKananW = doc.getTextWidth(namaKanan);
+            doc.setLineWidth(0.3);
+            doc.line(152 - namaKananW / 2, sigY + 46, 152 + namaKananW / 2, sigY + 46);
+        });
+
+        const timeStamp = new Date().toISOString().slice(0, 10);
+        const fileName =
+            viewMode.value === "single" && displayedReceipts.value.length === 1
+                ? `Kwitansi_Insentif_${displayedReceipts.value[0].nama_pic || displayedReceipts.value[0].nama_kelompok}_${timeStamp}.pdf`.replace(/\s+/g, "_")
+                : `Kwitansi_Insentif_SPPG_${timeStamp}.pdf`;
+
+        doc.save(fileName);
+    } catch (e) {
+        console.error("Gagal men-generate PDF kuitansi insentif:", e);
+        alert("Gagal mengunduh PDF kuitansi: " + e.message);
+    } finally {
+        isGeneratingPdf.value = false;
+    }
 }
 </script>
 
 <template>
-    <div
-        v-if="show && item"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
-    >
-        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <!-- Modal Header (Non-Printable) -->
-            <div class="px-6 py-4 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between shrink-0 print:hidden">
-                <div class="flex items-center gap-2.5">
-                    <Coins class="h-5 w-5 text-emerald-300" />
-                    <div>
-                        <h3 class="text-base font-bold">Kuitansi Tanda Terima Kas Tunai</h3>
-                        <p class="text-xs text-emerald-100/90">Bukti resmi pengeluaran kas insentif operasional MBG</p>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    @click="$emit('close')"
-                    class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-                >
-                    <X class="h-5 w-5" />
-                </button>
-            </div>
+    <Teleport to="body">
+        <div
+            v-if="isModalVisible"
+            class="fixed inset-0 z-[99999] overflow-y-auto"
+        >
+            <!-- Full-Screen Backdrop Overlay (100% Layar Penuh termasuk Sidebar & Header) -->
+            <div
+                class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                @click="$emit('close')"
+            ></div>
 
-            <!-- Receipt Content (Printable Area) -->
-            <div id="receipt-print-area" class="p-8 space-y-6 overflow-y-auto font-serif text-slate-900 bg-white">
-                <!-- Kop Dokumen Resmi -->
-                <div class="text-center border-b-2 border-slate-900 pb-3">
-                    <p class="text-xs tracking-widest font-sans font-bold uppercase text-slate-600">Badan Gizi Nasional (BGN) Republik Indonesia</p>
-                    <h2 class="text-base font-sans font-black uppercase text-slate-900 mt-0.5 tracking-tight">
-                        {{ unitSppg?.nama_sppg || 'SPPG BULELENG SUKASADA TEGALLINGGAH' }}
-                    </h2>
-                    <p class="text-[11px] font-sans text-slate-600 mt-0.5">
-                        Alamat: Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali
-                    </p>
-                </div>
+            <!-- Centering Container -->
+            <div class="fixed inset-0 z-10 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+                <div class="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh] pointer-events-auto">
+                    <!-- ─── Modal Header ─── -->
+                    <div class="px-5 sm:px-6 py-3.5 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-xl bg-white/10 text-emerald-200">
+                                <FileText class="h-5 w-5" />
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm sm:text-base font-bold">Download Kuitansi Insentif Penerima Manfaat</h3>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
+                                        Format PDF Resmi (1 Hal / Kuitansi)
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-emerald-100/80">
+                                    Format kedinasan SPPG BGN lengkap dengan kop resmi dan langsung diunduh sebagai file PDF
+                                </p>
+                            </div>
+                        </div>
 
-                <!-- Judul & No Kuitansi -->
-                <div class="flex items-center justify-between font-sans border-b border-dashed border-slate-300 pb-2 text-xs">
-                    <div>
-                        <span class="text-slate-500">No. Bukti Kas: </span>
-                        <span class="font-mono font-bold text-slate-800">BKK-PM/SPPG/{{ item.id }}/{{ new Date().getFullYear() }}</span>
-                    </div>
-                    <div>
-                        <span class="text-slate-500">Metode: </span>
-                        <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">TUNAI LANGSUNG</span>
-                    </div>
-                </div>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                @click="showSettings = !showSettings"
+                                :class="[
+                                    'p-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                                    showSettings ? 'bg-white text-emerald-900 shadow-sm' : 'bg-white/10 hover:bg-white/20 text-white'
+                                ]"
+                                title="Atur parameter nomor & variabel kuitansi"
+                            >
+                                <Settings2 class="h-4 w-4" />
+                                <span class="hidden sm:inline">Pengaturan Kuitansi</span>
+                                <ChevronUp v-if="showSettings" class="h-3 w-3 hidden sm:inline" />
+                                <ChevronDown v-else class="h-3 w-3 hidden sm:inline" />
+                            </button>
 
-                <!-- Rincian Kuitansi -->
-                <div class="space-y-3.5 text-xs font-sans">
-                    <div class="grid grid-cols-12 gap-2">
-                        <div class="col-span-3 text-slate-500 font-semibold">Telah Diterima Dari</div>
-                        <div class="col-span-9 font-bold text-slate-900">: Bendahara {{ unitSppg?.nama_sppg || 'SPPG Buleleng Sukasada Tegallinggah' }}</div>
-                    </div>
-
-                    <div class="grid grid-cols-12 gap-2">
-                        <div class="col-span-3 text-slate-500 font-semibold">Penerima / PIC</div>
-                        <div class="col-span-9 font-bold text-slate-900">: {{ item.nama_pic }} ({{ item.nama_kelompok }})</div>
-                    </div>
-
-                    <div class="grid grid-cols-12 gap-2">
-                        <div class="col-span-3 text-slate-500 font-semibold">Uang Sejumlah</div>
-                        <div class="col-span-9 font-black text-emerald-800 text-sm">: {{ formatRupiah(item.amount) }}</div>
-                    </div>
-
-                    <div class="grid grid-cols-12 gap-2">
-                        <div class="col-span-3 text-slate-500 font-semibold">Terbilang</div>
-                        <div class="col-span-9 italic font-serif bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-800 leading-relaxed">
-                            "{{ angkaKeTerbilang(item.amount) }} Rupiah"
+                            <button
+                                type="button"
+                                @click="$emit('close')"
+                                class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                            >
+                                <X class="h-5 w-5" />
+                            </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-12 gap-2">
-                        <div class="col-span-3 text-slate-500 font-semibold">Untuk Pembayaran</div>
-                        <div class="col-span-9 text-slate-800 leading-relaxed">
-                            : Insentif Penanggung Jawab Distribusi MBG Periode {{ formatTanggalIndo(startDate) }} s/d {{ formatTanggalIndo(endDate) }} ({{ item.hari_operasional }} Hari Operasional).
+                    <!-- ─── Sub-Bar Filter: Mode Semua vs Per Orangan ─── -->
+                    <div class="px-5 sm:px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0 text-xs">
+                        <!-- Mode View Selector -->
+                        <div class="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                            <button
+                                type="button"
+                                @click="viewMode = 'all'"
+                                :class="[
+                                    'px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                    viewMode === 'all'
+                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                ]"
+                            >
+                                <span>Semua Terpilih</span>
+                                <span
+                                    :class="[
+                                        'px-1.5 py-0.2 rounded-full text-[10px]',
+                                        viewMode === 'all' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'
+                                    ]"
+                                >
+                                    {{ receiptList.length }}
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click="viewMode = 'single'"
+                                :class="[
+                                    'px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5',
+                                    viewMode === 'single'
+                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                ]"
+                            >
+                                <User class="h-3.5 w-3.5" />
+                                <span>Per Orangan / Titik</span>
+                            </button>
+                        </div>
+
+                        <!-- Selector Personil Spesifik (Saat mode Per Orangan) -->
+                        <div v-if="viewMode === 'single'" class="flex items-center gap-2 flex-1 sm:max-w-md">
+                            <label class="text-slate-500 font-semibold shrink-0">Pilih Sasaran:</label>
+                            <select
+                                v-model="singleItemId"
+                                class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                            >
+                                <option
+                                    v-for="(r, idx) in receiptList"
+                                    :key="r.id"
+                                    :value="r.id"
+                                >
+                                    {{ String(idx + 1).padStart(2, '0') }}. {{ r.nama_pic || r.nama_kelompok }} ({{ r.nama_kelompok }}) — {{ formatRupiah(r.amount) }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Info Status -->
+                        <div class="flex items-center gap-2 text-slate-500 text-[11px] self-end sm:self-auto">
+                            <span>Akan diunduh: <b>{{ displayedReceipts.length }} kuitansi</b> (1 kuitansi per halaman A4)</span>
                         </div>
                     </div>
 
-                    <!-- Kotak Formula Perhitungan -->
-                    <div class="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/80 text-[11px] space-y-1">
-                        <div class="font-bold text-emerald-950">Rincian Perhitungan Resmi BGN:</div>
-                        <div class="text-emerald-900 font-mono">
-                            • Sasaran PM: {{ item.total_penerima }} PM ({{ item.skema_tier }})<br>
-                            • Tarif Harian: {{ item.deskripsi_tarif }} × {{ item.hari_operasional }} Hari Operasional = <b>{{ formatRupiah(item.amount) }}</b>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tanda Tangan 3 Kolom -->
-                <div class="pt-4 grid grid-cols-3 gap-4 text-center font-sans text-xs">
-                    <div>
-                        <p class="text-slate-500">Mengetahui,</p>
-                        <p class="font-bold text-slate-800 mt-0.5">Kepala Unit SPPG</p>
-                        <div class="h-16"></div>
-                        <p class="font-bold text-slate-900 border-t border-slate-300 pt-1">
-                            ( {{ unitSppg?.nama_kepala || 'Kepala SPPG' }} )
-                        </p>
-                    </div>
-
-                    <div>
-                        <p class="text-slate-500">Diserahkan Oleh,</p>
-                        <p class="font-bold text-slate-800 mt-0.5">Bendahara SPPG</p>
-                        <div class="h-16"></div>
-                        <p class="font-bold text-slate-900 border-t border-slate-300 pt-1">
-                            ( {{ unitSppg?.nama_bendahara || 'Bendahara SPPG' }} )
-                        </p>
-                    </div>
-
-                    <div>
-                        <p class="text-slate-500">Diterima Oleh,</p>
-                        <p class="font-bold text-slate-800 mt-0.5">Penerima Manfaat / PIC</p>
-                        <div class="h-16"></div>
-                        <p class="font-bold text-slate-900 border-t border-slate-300 pt-1">
-                            ( {{ item.nama_pic }} )
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer (Non-Printable) -->
-            <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 print:hidden">
-                <div class="text-[11px] text-slate-500">
-                    Kuitansi sah tanda terima kas tunai SPPG.
-                </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        type="button"
-                        @click="$emit('close')"
-                        class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-300 transition-colors cursor-pointer"
+                    <!-- ─── Drawer Pengaturan Variabel Kuitansi ─── -->
+                    <div
+                        v-if="showSettings"
+                        class="px-5 sm:px-6 py-3.5 bg-emerald-50/70 border-b border-emerald-200 text-xs space-y-3 shrink-0 animate-in slide-in-from-top-2 duration-200"
                     >
-                        Tutup
-                    </button>
-                    <button
-                        type="button"
-                        @click="printReceipt"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
-                    >
-                        <Printer class="h-4 w-4" />
-                        <span>Cetak Kuitansi</span>
-                    </button>
+                        <div class="flex items-center justify-between pb-1 border-b border-emerald-200/60">
+                            <div class="flex items-center gap-1.5 font-bold text-emerald-950">
+                                <Sparkles class="h-4 w-4 text-emerald-600" />
+                                <span>Pengaturan Parameter & Variabel Nomor Kuitansi</span>
+                            </div>
+                            <span class="text-[10px] text-emerald-700 font-mono">
+                                Format: [No Urut]/[Jenis]/[Singkatan SPPG]/[Bulan Romawi]/[Tahun]
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">No Urut Awal:</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    v-model.number="startNoUrut"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Jenis Kuitansi:</label>
+                                <select
+                                    v-model="jenisKuitansi"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                                >
+                                    <option value="KUI.Ops">KUI.Ops (Operasional / Insentif)</option>
+                                    <option value="KUI.IF">KUI.IF (Insentif Fasilitas)</option>
+                                    <option value="KUI.BanPer">KUI.BanPer (Bantuan Pem.)</option>
+                                    <option value="KUI.BB">KUI.BB (Bahan Baku)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Singkatan SPPG:</label>
+                                <input
+                                    type="text"
+                                    v-model="singkatanSppg"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Bulan Romawi:</label>
+                                <input
+                                    type="text"
+                                    v-model="bulanRomawi"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Tahun:</label>
+                                <input
+                                    type="text"
+                                    v-model="tahunKuitansi"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold bg-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Tanggal Kuitansi:</label>
+                                <input
+                                    type="date"
+                                    v-model="tanggalKuitansi"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-emerald-200/50">
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Lokasi Kuitansi:</label>
+                                <input
+                                    type="text"
+                                    v-model="lokasiKuitansi"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                                />
+                            </div>
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600 block mb-1">Nama Staf Pengawas Keuangan:</label>
+                                <input
+                                    type="text"
+                                    v-model="namaPengawasKeuangan"
+                                    placeholder="Nama Pengawas Keuangan"
+                                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ─── Preview Dokumen Kuitansi (A4 Mockup Scrollable) ─── -->
+                    <div class="p-4 sm:p-6 overflow-y-auto bg-slate-100/80 flex-1 space-y-6">
+                        <div
+                            v-for="(row, idx) in displayedReceipts"
+                            :key="row.id"
+                            class="max-w-[760px] mx-auto bg-white rounded-xl shadow-md border border-slate-300 p-6 sm:p-10 text-slate-900 font-serif relative"
+                        >
+                            <!-- Badge Nomor Urut -->
+                            <div class="absolute right-4 top-4 font-sans text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                                Kuitansi #{{ idx + 1 }} dari {{ displayedReceipts.length }}
+                            </div>
+
+                            <!-- Kop Dokumen Resmi -->
+                            <div class="border-b-2 border-slate-900 pb-3 mb-5">
+                                <div class="flex items-center justify-between gap-4">
+                                    <img
+                                        v-if="LOGO_BGN_BASE64"
+                                        :src="LOGO_BGN_BASE64"
+                                        alt="Logo BGN"
+                                        class="h-14 w-14 object-contain shrink-0"
+                                    />
+                                    <div class="text-center flex-1">
+                                        <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 leading-tight">
+                                            {{ kopConfig?.nama_instansi_1 || "SPPG BULELENG SUKASADA TEGALLINGGAH" }}
+                                        </h2>
+                                        <h3 class="text-xs sm:text-[13px] font-bold uppercase tracking-wide text-slate-800 leading-tight mt-0.5">
+                                            {{ kopConfig?.nama_instansi_2 || "YAYASAN PESANTREN MIFTAHUL ULUM" }}
+                                        </h3>
+                                        <p class="text-[10px] text-slate-600 mt-1 leading-snug">
+                                            {{ kopConfig?.alamat_lengkap || "Jl. Raya Angling Darma, Desa Tegallinggah, Kec. Sukasada, Kab. Buleleng, Bali" }}
+                                        </p>
+                                        <p v-if="kopConfig?.email" class="text-[9.5px] text-slate-500">
+                                            E-mail: {{ kopConfig.email }}
+                                        </p>
+                                    </div>
+                                    <img
+                                        v-if="LOGO_YAYASAN_BASE64"
+                                        :src="LOGO_YAYASAN_BASE64"
+                                        alt="Logo Yayasan"
+                                        class="h-14 w-14 object-contain shrink-0"
+                                    />
+                                </div>
+                                <div class="border-b border-black mt-2"></div>
+                            </div>
+
+                            <!-- Judul & Nomor Kuitansi -->
+                            <div class="text-center my-4">
+                                <h1 class="text-base sm:text-lg font-bold tracking-[0.2em] uppercase text-black inline-block border-b-2 border-black pb-0.5">
+                                    K U I T A N S I
+                                </h1>
+                                <p class="text-xs sm:text-sm text-slate-700 font-mono mt-1 font-semibold">
+                                    {{ getFormattedNomorKuitansi(viewMode === 'all' ? idx : (receiptList.findIndex(r => r.id === row.id) >= 0 ? receiptList.findIndex(r => r.id === row.id) : idx)) }}
+                                </p>
+                            </div>
+
+                            <!-- Badan Kuitansi -->
+                            <div class="space-y-4 text-xs sm:text-sm mt-6">
+                                <div class="grid grid-cols-12 gap-1 items-start">
+                                    <div class="col-span-3 sm:col-span-3 text-slate-700 font-normal">Sudah Terima dari</div>
+                                    <div class="col-span-1 text-center">:</div>
+                                    <div class="col-span-8 sm:col-span-8 text-black font-normal">
+                                        Staf Pengawas Keuangan {{ fullSppgName }}
+                                        <div class="text-xs font-mono text-slate-600 font-normal mt-0.5">
+                                            ID SPPG : <span class="font-bold text-slate-800">{{ unitSppg?.id_sppg || 'QQCV0LUG' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-12 gap-1 items-start">
+                                    <div class="col-span-3 sm:col-span-3 text-slate-700 font-normal">Uang Sejumlah</div>
+                                    <div class="col-span-1 text-center">:</div>
+                                    <div class="col-span-8 sm:col-span-8">
+                                        <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs sm:text-sm italic text-slate-900 leading-relaxed font-serif">
+                                            # {{ angkaKeTerbilang(row.amount) }} Rupiah #
+                                        </div>
+                                        <div class="text-base sm:text-lg font-bold text-black mt-2 font-serif">
+                                            Rp. {{ formatRibuan(row.amount) }},-
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-12 gap-1 items-start">
+                                    <div class="col-span-3 sm:col-span-3 text-slate-700 font-normal">Untuk Pembayaran</div>
+                                    <div class="col-span-1 text-center">:</div>
+                                    <div class="col-span-8 sm:col-span-8 text-black leading-relaxed text-justify">
+                                        {{ getKeteranganPembayaran(row) }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tanda Tangan 2 Kolom (Nama SPPG Lengkap & Tanpa Embel-embel) -->
+                            <div class="mt-14 pt-4 grid grid-cols-2 gap-8 text-center text-xs sm:text-sm">
+                                <!-- Kolom Kiri: Staf Pengawas Keuangan (Nama SPPG Lengkap) -->
+                                <div>
+                                    <p class="text-slate-800">Staf Pengawas Keuangan</p>
+                                    <p class="text-slate-900 font-medium">{{ fullSppgName }}</p>
+                                    <div class="h-20 sm:h-24"></div>
+                                    <p class="font-bold text-black underline inline-block">
+                                        ( {{ namaPengawasKeuangan }} )
+                                    </p>
+                                </div>
+
+                                <!-- Kolom Kanan: Tanggal & Penerima -->
+                                <div>
+                                    <p class="text-slate-800">
+                                        {{ lokasiKuitansi }}, {{ formatTanggalIndo(tanggalKuitansi) }}
+                                    </p>
+                                    <p class="text-slate-900">Yang Menerima,</p>
+                                    <div class="h-20 sm:h-24"></div>
+                                    <p class="font-bold text-black underline inline-block">
+                                        ( {{ row.nama_pic || row.nama_kelompok }} )
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ─── Modal Footer ─── -->
+                    <div class="px-5 sm:px-6 py-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0 text-xs">
+                        <div class="flex items-center gap-2 text-slate-500">
+                            <Check class="h-4 w-4 text-emerald-600" />
+                            <span>
+                                Siap mengunduh <b>{{ displayedReceipts.length }}</b> lembar kuitansi resmi (A4 PDF).
+                            </span>
+                        </div>
+
+                        <div class="flex items-center gap-2 justify-end">
+                            <button
+                                type="button"
+                                @click="$emit('close')"
+                                class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                                Tutup
+                            </button>
+
+                            <!-- Tombol Download Langsung PDF (Bukan Print) -->
+                            <button
+                                type="button"
+                                @click="downloadPdfKwitansi"
+                                :disabled="isGeneratingPdf"
+                                class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                title="Langsung unduh kuitansi resmi dalam format file PDF (1 lembar per halaman A4)"
+                            >
+                                <RefreshCw v-if="isGeneratingPdf" class="h-4 w-4 animate-spin" />
+                                <Download v-else class="h-4 w-4" />
+                                <span>{{ isGeneratingPdf ? "Menyiapkan PDF..." : "Download PDF Kuitansi" }}</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </Teleport>
 </template>
-
-<style>
-@media print {
-    body * {
-        visibility: hidden;
-    }
-    #receipt-print-area, #receipt-print-area * {
-        visibility: visible;
-    }
-    #receipt-print-area {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 20px;
-    }
-}
-</style>

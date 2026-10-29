@@ -817,6 +817,7 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
     matrixDetailMap = {},
     woByDateMap = {},
     dateList = [],
+    dateColumns = [],
     startDate = null,
     endDate = null,
     unitSppg = null,
@@ -848,10 +849,48 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
     }
 
     const items = Array.isArray(distribusiList) ? distribusiList : [];
-    let targetDates = Array.isArray(dateList) && dateList.length > 0 ? dateList : [];
-    if (targetDates.length === 0 && startDate) {
-        const startStr = String(startDate).substring(0, 10);
-        targetDates = [{ dateStr: startStr, dayNum: startStr.substring(8, 10), label: '1' }];
+    let targetDates = (Array.isArray(dateColumns) && dateColumns.length > 0)
+        ? [...dateColumns]
+        : (Array.isArray(dateList) && dateList.length > 0 ? [...dateList] : []);
+
+    const actualStartStr = startDate || (targetDates[0]?.dateStr);
+    const actualEndStr = endDate || (targetDates[targetDates.length - 1]?.dateStr) || actualStartStr;
+
+    // Pastikan targetDates mencakup seluruh rentang startDate s/d endDate yang difilter
+    if (
+        actualStartStr && actualEndStr &&
+        (targetDates.length === 0 ||
+         (startDate && targetDates[0]?.dateStr !== startDate) ||
+         (endDate && targetDates[targetDates.length - 1]?.dateStr !== endDate))
+    ) {
+        targetDates = [];
+        try {
+            let cur = new Date(actualStartStr + 'T00:00:00');
+            const end = new Date(actualEndStr + 'T00:00:00');
+            const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+            let count = 0;
+            while (cur <= end && count < 60) {
+                const y = cur.getFullYear();
+                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                const d = String(cur.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${d}`;
+                const dayIdx = cur.getDay();
+                targetDates.push({
+                    dateStr,
+                    dayNum: d,
+                    monthNum: m,
+                    dayName: dayNames[dayIdx],
+                    isWeekend: dayIdx === 0 || dayIdx === 6,
+                    isSunday: dayIdx === 0,
+                    index: count + 1,
+                    label: `${d}/${m}`,
+                });
+                cur.setDate(cur.getDate() + 1);
+                count++;
+            }
+        } catch (e) {
+            console.warn('Gagal generate targetDates:', e);
+        }
     }
 
     const dayNameMap = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];

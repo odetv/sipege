@@ -754,10 +754,10 @@ function showToast(msg) {
 </script>
 
 <template>
-    <Head title="Rekap Distribusi Penerima Manfaat - SIPEGE" />
+    <Head title="Rekap Distribusi - SIPEGE" />
 
     <AppLayout>
-        <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto space-y-4">
+        <div class="space-y-6 pb-16">
             <!-- ─── Toast Notification (Teleport to body identical to Rekap Kehadiran) ─── -->
             <Teleport to="body">
                 <transition
