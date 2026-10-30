@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AbsensiPetugas;
 use App\Models\Periode;
 use App\Models\Petugas;
+use App\Models\ShiftingPetugas;
 use App\Models\UnitSppg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,8 +68,143 @@ class PetugasController extends Controller
     }
 
     /**
-     * Menampilkan halaman Rekap Kehadiran Petugas SPPG.
+     * Menampilkan halaman Shifting (Tabel Bantu Konfigurasi Hari Kerja Petugas SPPG).
      */
+    public function shifting(Request $request): Response
+    {
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+
+        $petugas = [];
+        $summary = [
+            'total_petugas' => 0,
+            'total_aktif' => 0,
+            'total_nonaktif' => 0,
+        ];
+        $daftarJabatan = [];
+        $periodes = [];
+        $shiftingMap = [];
+
+        // Mode: 'bulanan' (28 hari) atau 'periodik' (14 hari) atau 'custom'
+        $mode = $request->input('mode', 'bulanan');
+        $tglMulai = $request->input('tanggal_mulai');
+        $tglSelesai = $request->input('tanggal_selesai');
+        $periodeId = $request->input('periode_id');
+
+        // Tentukan rentang tanggal
+        if ($tglMulai && $tglSelesai) {
+            $startDate = Carbon::parse($tglMulai)->startOfDay();
+            $endDate = Carbon::parse($tglSelesai)->startOfDay();
+        } elseif ($periodeId && $periodeId !== 'all') {
+            $p = Periode::find($periodeId);
+            if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
+                $startDate = $p->tanggal_mulai->copy()->startOfDay();
+                $endDate = $p->tanggal_selesai->copy()->startOfDay();
+            } else {
+                $startDate = Carbon::today();
+                $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+            }
+        } else {
+            $latestPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
+            $today = Carbon::today();
+
+            $targetPeriode = null;
+            if (
+                $latestPeriode &&
+                $latestPeriode->tanggal_mulai &&
+                $latestPeriode->tanggal_selesai &&
+                $today->between($latestPeriode->tanggal_mulai->copy()->startOfDay(), $latestPeriode->tanggal_selesai->copy()->startOfDay())
+            ) {
+                $targetPeriode = $latestPeriode;
+            } else {
+                $activePeriodeDb = Periode::whereDate('tanggal_mulai', '<=', $today->format('Y-m-d'))
+                    ->whereDate('tanggal_selesai', '>=', $today->format('Y-m-d'))
+                    ->orderBy('nomor_periode', 'desc')
+                    ->first();
+                if ($activePeriodeDb) {
+                    $targetPeriode = $activePeriodeDb;
+                }
+            }
+
+            if ($targetPeriode) {
+                $startDate = $targetPeriode->tanggal_mulai->copy()->startOfDay();
+                $endDate = $targetPeriode->tanggal_selesai->copy()->startOfDay();
+                $periodeId = (string) $targetPeriode->id;
+                $diffDays = $startDate->diffInDays($endDate) + 1;
+                $mode = $diffDays <= 14 ? 'periodik' : ($diffDays <= 28 ? 'bulanan' : 'custom');
+            } else {
+                $startDate = Carbon::today();
+                if ($mode === 'periodik') {
+                    $endDate = $startDate->copy()->addDays(13);
+                } else {
+                    $endDate = $startDate->copy()->addDays(27);
+                }
+            }
+        }
+
+        if ($endDate->lt($startDate)) {
+            $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
+        }
+
+        if (!$periodeId || $periodeId === 'all') {
+            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
+                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
+                ->first();
+            if ($matchedPeriode) {
+                $periodeId = (string) $matchedPeriode->id;
+            }
+        }
+
+        if ($unitSppg) {
+            $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $summary['total_petugas'] = $petugas->count();
+            $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
+            $summary['total_nonaktif'] = $petugas->where('status', 'Nonaktif')->count();
+
+            $daftarJabatan = $this->extractDaftarJabatan($petugas);
+
+            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+                $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
+                $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
+                return [
+                    'id' => $p->id,
+                    'nomor_periode' => $p->nomor_periode,
+                    'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'status' => $p->status,
+                    'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
+                ];
+            });
+
+            $petugasIds = $petugas->pluck('id')->all();
+            $shiftingRecords = ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
+                ->whereIn('petugas_id', $petugasIds)
+                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->get();
+
+            foreach ($shiftingRecords as $rec) {
+                $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
+                $shiftingMap[$rec->petugas_id][$tglStr] = $rec->status;
+            }
+        }
+
+        return Inertia::render('Petugas/Shifting', [
+            'petugas' => $petugas,
+            'summary' => $summary,
+            'daftarJabatan' => $daftarJabatan,
+            'periodes' => $periodes,
+            'unitSppg' => $unitSppg,
+            'initialMode' => $mode,
+            'initialTanggalMulai' => $startDate->format('Y-m-d'),
+            'initialTanggalSelesai' => $endDate->format('Y-m-d'),
+            'initialPeriodeId' => $periodeId ?? 'all',
+            'initialShiftingMap' => $shiftingMap,
+        ]);
+    }
+
     /**
      * Menampilkan halaman Rekap Kehadiran Petugas SPPG.
      */
@@ -621,6 +757,94 @@ class PetugasController extends Controller
     public function simpanAbsensi(Request $request): RedirectResponse
     {
         return $this->simpanPresensi($request);
+    }
+
+    /**
+     * Menyimpan konfigurasi jadwal shifting petugas ke database (tabel shifting_petugas, terpisah dari absensi_petugas).
+     */
+    public function simpanShifting(Request $request): RedirectResponse
+    {
+        $user = $request->user()->load('unitSppg');
+        $unitSppg = $user->unitSppg;
+
+        if (! $unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        $matrix = [];
+        if ($request->filled('json_data')) {
+            $matrix = json_decode($request->input('json_data'), true) ?? [];
+        } elseif ($request->has('items') && is_array($request->input('items'))) {
+            foreach ($request->input('items') as $it) {
+                if (isset($it['petugas_id'], $it['tanggal'], $it['status'])) {
+                    $matrix[$it['petugas_id']][$it['tanggal']] = $it['status'];
+                }
+            }
+        }
+
+        if (empty($matrix)) {
+            return back()->with('error', 'Tidak ada data shifting yang dikirim.');
+        }
+
+        $allowedStatuses = ['H', 'H2', 'L', 'I', 'S', 'TK'];
+        $now = Carbon::now();
+        $records = [];
+        $deleteByPetugas = [];
+
+        foreach ($matrix as $petugasId => $dates) {
+            if (! is_array($dates)) {
+                continue;
+            }
+
+            foreach ($dates as $tgl => $status) {
+                if (in_array($status, $allowedStatuses)) {
+                    $records[] = [
+                        'unit_sppg_id' => $unitSppg->id,
+                        'petugas_id' => (int) $petugasId,
+                        'tanggal' => $tgl,
+                        'status' => $status,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                } elseif ($status === '' || $status === null || $status === '-') {
+                    $deleteByPetugas[(int) $petugasId][] = $tgl;
+                }
+            }
+        }
+
+        DB::transaction(function () use ($records, $deleteByPetugas, $unitSppg) {
+            if (! empty($records)) {
+                foreach (array_chunk($records, 500) as $chunk) {
+                    ShiftingPetugas::upsert(
+                        $chunk,
+                        ['unit_sppg_id', 'petugas_id', 'tanggal'],
+                        ['status', 'updated_at']
+                    );
+                }
+            }
+
+            if (! empty($deleteByPetugas)) {
+                foreach ($deleteByPetugas as $pId => $tglList) {
+                    ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
+                        ->where('petugas_id', $pId)
+                        ->whereIn('tanggal', $tglList)
+                        ->delete();
+                }
+            }
+        });
+
+        $mode = $request->input('mode', 'bulanan');
+        $tglMulai = $request->input('tanggal_mulai');
+        $tglSelesai = $request->input('tanggal_selesai');
+        $periodeId = $request->input('periode_id', 'all');
+
+        $redirectParams = ['mode' => $mode];
+        if ($tglMulai) $redirectParams['tanggal_mulai'] = $tglMulai;
+        if ($tglSelesai) $redirectParams['tanggal_selesai'] = $tglSelesai;
+        if ($periodeId && $periodeId !== 'all') $redirectParams['periode_id'] = $periodeId;
+
+        return redirect()->route('petugas.shifting', $redirectParams)
+            ->with('success', 'Konfigurasi jadwal shifting petugas berhasil disimpan.');
     }
 
     /**

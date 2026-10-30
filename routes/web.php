@@ -157,6 +157,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Petugas SPPG (Daftar Petugas, Rekap Kehadiran, Rekap Bonus, Rekap Asuransi & Pembayaran Gaji BNI Direct)
     Route::get('/petugas/daftar-petugas', fn() => redirect()->route('petugas.index'))->name('petugas.daftar-petugas');
+    Route::get('/petugas/shifting', [PetugasController::class, 'shifting'])->name('petugas.shifting');
+    Route::post('/petugas/shifting/simpan', [PetugasController::class, 'simpanShifting'])->name('petugas.shifting.simpan');
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
     Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');

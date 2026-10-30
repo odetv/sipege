@@ -596,6 +596,7 @@ function logout() {
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
                                 (route().current('petugas.index') || route().current('petugas.*')) &&
+                                !route().current('petugas.shifting*') &&
                                 !route().current('petugas.rekap-kehadiran') &&
                                 !route().current('petugas.kehadiran') &&
                                 !route().current('petugas.rekap-bonus') &&
@@ -610,7 +611,21 @@ function logout() {
                             <span class="truncate">Daftar Petugas</span>
                         </Link>
 
-                        <!-- Sub-menu 2: Rekap Kehadiran -->
+                        <!-- Sub-menu 2: Shifting (Konfigurasi Hari Kerja Petugas) -->
+                        <Link
+                            :href="route('petugas.shifting')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('petugas.shifting*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CalendarRange class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Shifting</span>
+                        </Link>
+
+                        <!-- Sub-menu 3: Rekap Kehadiran -->
                         <Link
                             :href="route('petugas.rekap-kehadiran')"
                             :class="[
