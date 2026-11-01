@@ -53,11 +53,12 @@ function onConfirmClick() {
 </script>
 
 <template>
-    <div
-        v-if="isModalVisible"
-        class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
-        style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
-    >
+    <Teleport to="body">
+        <div
+            v-if="isModalVisible"
+            class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+            style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+        >
         <div class="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
             <!-- Modal Header -->
             <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
@@ -272,5 +273,6 @@ function onConfirmClick() {
                 </button>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

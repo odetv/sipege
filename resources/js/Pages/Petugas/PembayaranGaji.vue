@@ -2331,12 +2331,12 @@ function copyRowRekening(id, text) {
                 class="fixed inset-0 z-[99999] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
             >
                 <div
-                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity cursor-pointer"
                     @click="closePreviewModal"
                 ></div>
 
                 <div
-                    class="relative z-10 w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-300 my-8 overflow-hidden animate-in zoom-in-95 duration-150"
+                    class="relative z-10 w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 my-8 overflow-hidden animate-in zoom-in-95 duration-200"
                 >
                     <!-- Header Modal -->
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">

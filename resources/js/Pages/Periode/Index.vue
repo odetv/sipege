@@ -357,9 +357,9 @@ function doDelete() {
 
         <!-- ═══════════════════ MODAL TAMBAH ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="showTambah" class="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
-                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="showTambah = false" />
-                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            <div v-if="showTambah" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4">
+                <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity" @click="showTambah = false" />
+                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
                     <!-- Header -->
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
                         <div class="flex items-center gap-3">
@@ -442,9 +442,9 @@ function doDelete() {
 
         <!-- ═══════════════════ MODAL EDIT ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="editTarget" class="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
-                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="editTarget = null" />
-                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            <div v-if="editTarget" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4">
+                <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity" @click="editTarget = null" />
+                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
                     <!-- Header -->
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
                         <div class="flex items-center gap-3">
@@ -528,9 +528,9 @@ function doDelete() {
 
         <!-- ═══════════════════ MODAL HAPUS ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="deleteTarget" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" @click="deleteTarget = null" />
-                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div v-if="deleteTarget" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity" @click="deleteTarget = null" />
+                <div class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div class="p-6 text-center">
                         <div class="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
                             <AlertTriangle class="h-6 w-6" />

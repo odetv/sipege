@@ -25,10 +25,12 @@ function formatNumber(num) {
 </script>
 
 <template>
-    <div
-        v-if="show && item"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
-    >
+    <Teleport to="body">
+        <div
+            v-if="show && item"
+            class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+            style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+        >
         <div class="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
             <!-- Modal Header -->
             <div class="px-6 py-4 bg-gradient-to-r from-emerald-700 to-teal-800 text-white flex items-center justify-between">
@@ -125,5 +127,6 @@ function formatNumber(num) {
                 </button>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

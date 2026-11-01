@@ -52,6 +52,7 @@ import {
     FileImage,
     Trash2,
     KeyRound,
+    Server,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -1913,18 +1914,18 @@ function logout() {
                             <span class="truncate">Backup & Restore</span>
                         </Link>
 
-                        <!-- Sub-menu 3: Kunci API -->
+                        <!-- Sub-menu 3: Layanan -->
                         <Link
-                            :href="route('pengaturan.api-key.index')"
+                            :href="route('pengaturan.layanan.index')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('pengaturan.api-key.*') || route().current('pengaturan.kunci-api.*')
+                                route().current('pengaturan.layanan.*') || route().current('pengaturan.api-key.*') || route().current('pengaturan.kunci-api.*')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
-                            <KeyRound class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Kunci API</span>
+                            <Server class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Layanan</span>
                         </Link>
                     </div>
                 </div>

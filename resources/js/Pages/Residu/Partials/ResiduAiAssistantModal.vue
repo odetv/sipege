@@ -345,15 +345,18 @@ function closeModal() {
 </script>
 
 <template>
-    <div
-        v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 overflow-y-auto"
-    >
-        <!-- Backdrop -->
+    <Teleport to="body">
         <div
-            class="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity"
-            @click="closeModal"
-        ></div>
+            v-if="modelValue"
+            class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto flex items-center justify-center p-2 sm:p-5"
+            style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+        >
+            <!-- Backdrop -->
+            <div
+                class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity"
+                style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+                @click="closeModal"
+            ></div>
 
         <!-- Modal Dialog: Proporsional (max-w-2xl) saat input, Melebar Luas (max-w-7xl) saat preview tabel -->
         <div
@@ -1110,5 +1113,6 @@ function closeModal() {
                 </div>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

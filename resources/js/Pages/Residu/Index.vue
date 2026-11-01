@@ -1146,7 +1146,7 @@ function formatNumber(val) {
         <Teleport to="body">
             <div
                 v-if="isFormModalOpen"
-                class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div
                     @click.stop
@@ -1371,7 +1371,7 @@ function formatNumber(val) {
         <Teleport to="body">
             <div
                 v-if="isDeleteModalOpen"
-                class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div @click.stop class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-5 sm:p-6 animate-in zoom-in-95 duration-150 my-auto">
                     <div class="flex items-center gap-3 text-rose-600 mb-3">
@@ -1417,7 +1417,7 @@ function formatNumber(val) {
         <Teleport to="body">
             <div
                 v-if="isBulkDeleteModalOpen"
-                class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div @click.stop class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-5 sm:p-6 animate-in zoom-in-95 duration-150 my-auto">
                     <div class="flex items-center gap-3 text-rose-600 mb-3">

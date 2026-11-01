@@ -23,6 +23,7 @@ class Petugas extends Model
         return [
             'tanggal_lahir' => 'date',
             'gaji_harian_bgn' => 'integer',
+            'gaji_harian_shifting' => 'integer',
             'bonus_harian_mitra' => 'integer',
             'iuran_bpjs_tk' => 'integer',
         ];

@@ -983,10 +983,10 @@ function submitDelete() {
         <Teleport to="body">
             <div
                 v-if="isModalOpen"
-                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div
-                    class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-3xl overflow-hidden my-8 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-150"
+                    class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden my-8 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-150"
                 >
                     <!-- Modal Header -->
                     <div
@@ -1480,10 +1480,10 @@ function submitDelete() {
         <Teleport to="body">
             <div
                 v-if="isDeleteModalOpen"
-                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div
-                    class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md p-6 animate-in zoom-in-95 duration-150"
+                    class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 animate-in zoom-in-95 duration-150"
                 >
                     <div
                         class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-100"

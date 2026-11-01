@@ -6501,7 +6501,7 @@ async function startPrintDirect() {
         <Teleport to="body">
             <div
                 v-if="showWaktuDownloadModal"
-                class="fixed inset-0 z-[99998] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+                class="fixed inset-0 z-[99998] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
             >
                 <div
                     class="bg-white rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95"
@@ -6619,7 +6619,7 @@ async function startPrintDirect() {
         <Teleport to="body">
             <div
                 v-if="isDownloading"
-                class="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+                class="fixed inset-0 z-[99999] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
             >
                 <div
                     class="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 text-center space-y-4 animate-in zoom-in-95"

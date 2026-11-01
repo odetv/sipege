@@ -626,7 +626,7 @@ function gunakanResepDiRancangMenu(resep) {
         <Teleport to="body">
             <div
                 v-if="showDetailModal && activeModalResep"
-                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
             <div
                 class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
@@ -823,7 +823,7 @@ function gunakanResepDiRancangMenu(resep) {
         <Teleport to="body">
             <div
                 v-if="showDeleteConfirmModal && recipeToDelete"
-                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+                class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200" style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
             >
                 <div
                     class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-200"

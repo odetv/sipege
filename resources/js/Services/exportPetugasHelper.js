@@ -60,7 +60,7 @@ export function colToLetter(n) {
 /**
  * Helper untuk menerapkan Kop Surat Resmi SPPG di Excel
  */
-function applyKopSurat(sheet, maxCols, logoBgnId, logoYayasanId, unitSppg = null) {
+export function applyKopSurat(sheet, maxCols, logoBgnId, logoYayasanId, unitSppg = null) {
     const kopConfig = getActiveKopConfig(unitSppg);
     const lastColLetter = colToLetter(maxCols);
 

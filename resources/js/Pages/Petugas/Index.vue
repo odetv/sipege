@@ -1348,12 +1348,12 @@ watch(
             >
                 <!-- Backdrop Gelap Pekat (Dim Seluruh Layar Termasuk Sidebar) -->
                 <div
-                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity cursor-pointer"
                     @click="closeFormModal"
                 ></div>
 
                 <div
-                    class="relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-300 my-8 overflow-hidden animate-in zoom-in-95 duration-150"
+                    class="relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 my-8 overflow-hidden animate-in zoom-in-95 duration-200"
                 >
                     <!-- Modal Header -->
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
@@ -2056,12 +2056,12 @@ watch(
             >
                 <!-- Backdrop Gelap Pekat (Dim Seluruh Layar Termasuk Sidebar) -->
                 <div
-                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity cursor-pointer"
                     @click="closeDetailModal"
                 ></div>
 
                 <div
-                    class="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-300 my-8 overflow-hidden animate-in zoom-in-95 duration-150"
+                    class="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 my-8 overflow-hidden animate-in zoom-in-95 duration-200"
                 >
                     <!-- Header Card Detail (Solid Emerald Background & High Contrast) -->
                     <div
@@ -2269,11 +2269,11 @@ watch(
             >
                 <!-- Backdrop Gelap Pekat (Dim Seluruh Layar Termasuk Sidebar) -->
                 <div
-                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                    class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity cursor-pointer"
                     @click="closeDeleteModal"
                 ></div>
 
-                <div class="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-300 p-6 space-y-4 animate-in zoom-in-95 duration-150">
+                <div class="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in zoom-in-95 duration-200">
                     <div class="flex items-center gap-3">
                         <div class="p-2.5 rounded-full bg-rose-100 text-rose-700 shrink-0">
                             <AlertTriangle class="h-6 w-6" />

@@ -983,77 +983,80 @@ function handleMockAction(pesan) {
             <!-- ════════════════════════════════════════════════════════════ -->
             <!-- MODAL: KONFIRMASI PEMULIHAN (RESTORE MODAL) -->
             <!-- ════════════════════════════════════════════════════════════ -->
-            <div
-                v-if="isRestoreModalOpen"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
-            >
-                <div class="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl p-5 space-y-4">
-                    <div class="flex items-start justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-2.5 text-rose-600">
-                            <div class="p-2 rounded-xl bg-rose-100">
-                                <AlertTriangle class="h-5 w-5 text-rose-600" />
+            <Teleport to="body">
+                <div
+                    v-if="isRestoreModalOpen"
+                    class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+                    style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+                >
+                    <div class="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl p-5 space-y-4 my-auto">
+                        <div class="flex items-start justify-between border-b border-slate-100 pb-3">
+                            <div class="flex items-center gap-2.5 text-rose-600">
+                                <div class="p-2 rounded-xl bg-rose-100">
+                                    <AlertTriangle class="h-5 w-5 text-rose-600" />
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900">Konfirmasi Pemulihan Database</h3>
+                                    <p class="text-xs text-slate-500">Tindakan ini akan menimpa data aktif saat ini.</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900">Konfirmasi Pemulihan Database</h3>
-                                <p class="text-xs text-slate-500">Tindakan ini akan menimpa data aktif saat ini.</p>
+                            <button
+                                type="button"
+                                @click="closeRestoreModal"
+                                class="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                            >
+                                <X class="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono space-y-1">
+                                <p class="font-bold text-slate-800">Berkas yang akan dipulihkan:</p>
+                                <p class="text-indigo-700 font-bold truncate">{{ selectedBackupForRestore?.filename }}</p>
+                                <p class="text-slate-500 text-[11px]">Ukuran: {{ selectedBackupForRestore?.ukuran }} • Dibuat: {{ selectedBackupForRestore?.created_at }}</p>
+                            </div>
+
+                            <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs">
+                                <p class="font-bold">Perhatian Khusus:</p>
+                                <p class="mt-0.5 text-rose-800/90 leading-relaxed">
+                                    Pastikan Anda memahami bahwa seluruh data transaksi setelah tanggal berkas ini dibuat akan digantikan. Ketik kata <strong>PULIHKAN</strong> di bawah untuk membuka tombol konfirmasi.
+                                </p>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="block font-bold text-slate-800">
+                                    Ketik "PULIHKAN" untuk konfirmasi:
+                                </label>
+                                <input
+                                    type="text"
+                                    v-model="restoreConfirmationInput"
+                                    placeholder="Ketik PULIHKAN..."
+                                    class="w-full text-xs font-mono font-bold p-2.5 rounded-lg border border-slate-300 uppercase focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                                />
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            @click="closeRestoreModal"
-                            class="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-                        >
-                            <X class="h-5 w-5" />
-                        </button>
-                    </div>
 
-                    <div class="space-y-3 text-xs">
-                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono space-y-1">
-                            <p class="font-bold text-slate-800">Berkas yang akan dipulihkan:</p>
-                            <p class="text-indigo-700 font-bold truncate">{{ selectedBackupForRestore?.filename }}</p>
-                            <p class="text-slate-500 text-[11px]">Ukuran: {{ selectedBackupForRestore?.ukuran }} • Dibuat: {{ selectedBackupForRestore?.created_at }}</p>
+                        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                            <button
+                                type="button"
+                                @click="closeRestoreModal"
+                                class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                :disabled="restoreConfirmationInput.trim().toUpperCase() !== 'PULIHKAN'"
+                                @click="handleMockAction(`Menjalankan simulasi pemulihan dari berkas: ${selectedBackupForRestore?.filename}`); closeRestoreModal();"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-2xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                                <RotateCcw class="h-3.5 w-3.5" />
+                                <span>Mulai Pulihkan Data</span>
+                            </button>
                         </div>
-
-                        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs">
-                            <p class="font-bold">Perhatian Khusus:</p>
-                            <p class="mt-0.5 text-rose-800/90 leading-relaxed">
-                                Pastikan Anda memahami bahwa seluruh data transaksi setelah tanggal berkas ini dibuat akan digantikan. Ketik kata <strong>PULIHKAN</strong> di bawah untuk membuka tombol konfirmasi.
-                            </p>
-                        </div>
-
-                        <div class="space-y-1">
-                            <label class="block font-bold text-slate-800">
-                                Ketik "PULIHKAN" untuk konfirmasi:
-                            </label>
-                            <input
-                                type="text"
-                                v-model="restoreConfirmationInput"
-                                placeholder="Ketik PULIHKAN..."
-                                class="w-full text-xs font-mono font-bold p-2.5 rounded-lg border border-slate-300 uppercase focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                            />
-                        </div>
-                    </div>
-
-                    <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                        <button
-                            type="button"
-                            @click="closeRestoreModal"
-                            class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
-                        >
-                            Batal
-                        </button>
-                        <button
-                            type="button"
-                            :disabled="restoreConfirmationInput.trim().toUpperCase() !== 'PULIHKAN'"
-                            @click="handleMockAction(`Menjalankan simulasi pemulihan dari berkas: ${selectedBackupForRestore?.filename}`); closeRestoreModal();"
-                            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-2xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                            <RotateCcw class="h-3.5 w-3.5" />
-                            <span>Mulai Pulihkan Data</span>
-                        </button>
                     </div>
                 </div>
-            </div>
+            </Teleport>
         </div>
     </AppLayout>
 </template>

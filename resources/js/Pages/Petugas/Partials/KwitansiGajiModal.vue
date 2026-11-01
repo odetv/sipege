@@ -507,7 +507,7 @@ async function downloadPdfKwitansi() {
         >
             <!-- Full-Screen Backdrop Overlay (100% Layar Penuh termasuk Sidebar & Header) -->
             <div
-                class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity cursor-pointer"
+                class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity cursor-pointer"
                 @click="$emit('close')"
             ></div>
 

@@ -185,9 +185,19 @@ class PetugasController extends Controller
                 ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->get();
 
+            $initialTarifMap = [];
+            foreach ($petugas as $p) {
+                if ($p->gaji_harian_shifting !== null) {
+                    $initialTarifMap[$p->id] = (int) $p->gaji_harian_shifting;
+                }
+            }
+
             foreach ($shiftingRecords as $rec) {
                 $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
                 $shiftingMap[$rec->petugas_id][$tglStr] = $rec->status;
+                if ($rec->tarif_harian !== null && !isset($initialTarifMap[$rec->petugas_id])) {
+                    $initialTarifMap[$rec->petugas_id] = (int) $rec->tarif_harian;
+                }
             }
         }
 
@@ -202,6 +212,7 @@ class PetugasController extends Controller
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
             'initialShiftingMap' => $shiftingMap,
+            'initialTarifMap' => $initialTarifMap ?? [],
         ]);
     }
 
@@ -786,6 +797,26 @@ class PetugasController extends Controller
             return back()->with('error', 'Tidak ada data shifting yang dikirim.');
         }
 
+        // Simpan penyesuaian tarif harian khusus shifting jika dikirim
+        $customTarifMap = [];
+        if ($request->has('custom_tarif')) {
+            $rawTarif = $request->input('custom_tarif');
+            if (is_string($rawTarif)) {
+                $rawTarif = json_decode($rawTarif, true) ?? [];
+            }
+            if (is_array($rawTarif)) {
+                foreach ($rawTarif as $pId => $val) {
+                    $valInt = ($val !== null && $val !== '' && (int) $val >= 0) ? (int) $val : null;
+                    $customTarifMap[(int) $pId] = $valInt;
+                    Petugas::where('id', (int) $pId)
+                        ->where('unit_sppg_id', $unitSppg->id)
+                        ->update([
+                            'gaji_harian_shifting' => $valInt,
+                        ]);
+                }
+            }
+        }
+
         $allowedStatuses = ['H', 'H2', 'L', 'I', 'S', 'TK'];
         $now = Carbon::now();
         $records = [];
@@ -798,11 +829,13 @@ class PetugasController extends Controller
 
             foreach ($dates as $tgl => $status) {
                 if (in_array($status, $allowedStatuses)) {
+                    $tarifVal = $customTarifMap[(int) $petugasId] ?? null;
                     $records[] = [
                         'unit_sppg_id' => $unitSppg->id,
                         'petugas_id' => (int) $petugasId,
                         'tanggal' => $tgl,
                         'status' => $status,
+                        'tarif_harian' => $tarifVal,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
@@ -818,7 +851,7 @@ class PetugasController extends Controller
                     ShiftingPetugas::upsert(
                         $chunk,
                         ['unit_sppg_id', 'petugas_id', 'tanggal'],
-                        ['status', 'updated_at']
+                        ['status', 'tarif_harian', 'updated_at']
                     );
                 }
             }
@@ -845,6 +878,51 @@ class PetugasController extends Controller
 
         return redirect()->route('petugas.shifting', $redirectParams)
             ->with('success', 'Konfigurasi jadwal shifting petugas berhasil disimpan.');
+    }
+
+    /**
+     * Memperbarui tarif harian khusus shifting untuk personil tertentu.
+     * Hanya berlaku untuk shifting, tidak mengubah gaji_harian_bgn (master).
+     */
+    public function updateTarifShifting(Request $request): RedirectResponse
+    {
+        $user = $request->user()->load('unitSppg');
+        $unitSppg = $user->unitSppg;
+
+        if (! $unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        $request->validate([
+            'petugas_id' => ['required', 'integer'],
+            'tarif_harian' => ['nullable', 'numeric', 'min:0'],
+            'is_reset' => ['nullable', 'boolean'],
+        ]);
+
+        $petugasId = (int) $request->input('petugas_id');
+        $isReset = $request->boolean('is_reset');
+        $newTarif = $isReset ? null : ($request->filled('tarif_harian') ? (int) $request->input('tarif_harian') : null);
+
+        Petugas::where('id', $petugasId)
+            ->where('unit_sppg_id', $unitSppg->id)
+            ->update([
+                'gaji_harian_shifting' => $newTarif,
+            ]);
+
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('petugas_id', $petugasId)
+                ->whereBetween('tanggal', [$request->input('tanggal_mulai'), $request->input('tanggal_selesai')])
+                ->update(['tarif_harian' => $newTarif]);
+        }
+
+        $p = Petugas::find($petugasId);
+        $nama = $p?->nama ?? 'Personil';
+        $msg = $isReset
+            ? "Tarif shifting {$nama} dikembalikan ke tarif master utama BGN."
+            : "Tarif shifting {$nama} berhasil diatur ke Rp " . number_format($newTarif ?? 0, 0, ',', '.') . " / hari (tidak mengubah gaji master utama).";
+
+        return back()->with('success', $msg);
     }
 
     /**

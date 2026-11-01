@@ -98,11 +98,13 @@ function getDistStatusBadge(status) {
 </script>
 
 <template>
-    <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-all"
-        @click.self="$emit('close')"
-    >
+    <Teleport to="body">
+        <div
+            v-if="isOpen"
+            class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 transition-all"
+            style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
+            @click.self="$emit('close')"
+        >
         <div
             class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         >
@@ -634,5 +636,6 @@ function getDistStatusBadge(status) {
                 </button>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

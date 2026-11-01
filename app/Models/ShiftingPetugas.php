@@ -16,6 +16,7 @@ class ShiftingPetugas extends Model
 
     protected $casts = [
         'tanggal' => 'date',
+        'tarif_harian' => 'integer',
     ];
 
     public function petugas(): BelongsTo

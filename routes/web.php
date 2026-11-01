@@ -159,6 +159,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/petugas/daftar-petugas', fn() => redirect()->route('petugas.index'))->name('petugas.daftar-petugas');
     Route::get('/petugas/shifting', [PetugasController::class, 'shifting'])->name('petugas.shifting');
     Route::post('/petugas/shifting/simpan', [PetugasController::class, 'simpanShifting'])->name('petugas.shifting.simpan');
+    Route::post('/petugas/shifting/update-tarif', [PetugasController::class, 'updateTarifShifting'])->name('petugas.shifting.update-tarif');
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
     Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');
@@ -214,24 +215,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/backup-restore', [BackupRestoreController::class, 'index'])->name('pengaturan.backup-restore.index');
 
-        // API Key Platform AI (Dapat diakses via /pengaturan/api-key maupun /pengaturan/kunci-api)
+        // Layanan Terpadu (Database, Storage, Mail, AI)
+        Route::prefix('layanan')->name('pengaturan.layanan.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\LayananController::class, 'index'])->name('index');
+            Route::post('/storage', [\App\Http\Controllers\LayananController::class, 'updateStorage'])->name('update-storage');
+            Route::post('/mail', [\App\Http\Controllers\LayananController::class, 'updateMail'])->name('update-mail');
+            Route::post('/ai',  [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update-ai');
+            Route::post('/ai/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi-ai');
+            Route::post('/test-database', [\App\Http\Controllers\LayananController::class, 'testDatabase'])->name('test-database');
+            Route::post('/test-storage', [\App\Http\Controllers\LayananController::class, 'testStorage'])->name('test-storage');
+            Route::post('/test-mail', [\App\Http\Controllers\LayananController::class, 'testMail'])->name('test-mail');
+        });
+
+        // Dukungan kompatibilitas rute lama (api-key & kunci-api diarahkan ke Layanan)
         Route::prefix('api-key')->name('pengaturan.api-key.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\ApiKeyController::class, 'index'])->name('index');
-            Route::post('/', [\App\Http\Controllers\ApiKeyController::class, 'update'])->name('update');
-            Route::post('/test-koneksi', [\App\Http\Controllers\ApiKeyController::class, 'testKoneksi'])->name('test-koneksi');
+            Route::get('/', function () {
+                return redirect()->route('pengaturan.layanan.index', ['tab' => 'ai']);
+            })->name('index');
+            Route::post('/', [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update');
+            Route::post('/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi');
         });
 
         Route::prefix('kunci-api')->name('pengaturan.kunci-api.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\ApiKeyController::class, 'index'])->name('index');
-            Route::post('/', [\App\Http\Controllers\ApiKeyController::class, 'update'])->name('update');
-            Route::post('/test-koneksi', [\App\Http\Controllers\ApiKeyController::class, 'testKoneksi'])->name('test-koneksi');
+            Route::get('/', function () {
+                return redirect()->route('pengaturan.layanan.index', ['tab' => 'ai']);
+            })->name('index');
+            Route::post('/', [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update');
+            Route::post('/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi');
         });
 
-        Route::redirect('/kunci-api', '/pengaturan/kunci-api');
     });
 
-    // Redirect dari /periode ke /pengaturan/periode
+    // Redirect alias global ke /pengaturan/...
     Route::redirect('/periode', '/pengaturan/periode');
+    Route::redirect('/layanan', '/pengaturan/layanan');
+    Route::redirect('/kunci-api', '/pengaturan/layanan');
+    Route::redirect('/api-key', '/pengaturan/layanan');
 
     // Menu Petunjuk (SOP, Juknis & Pedoman) SPPG
     Route::prefix('petunjuk')->name('petunjuk.')->group(function () {
@@ -268,3 +287,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__ . '/auth.php';
+
