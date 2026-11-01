@@ -2,18 +2,36 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Notifications\CustomVerifyEmailNotification;
+use App\Notifications\CustomResetPasswordNotification;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Kirim notifikasi verifikasi email dengan template kustom SIPEGE.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new CustomVerifyEmailNotification());
+    }
+
+    /**
+     * Kirim notifikasi reset password dengan template kustom SIPEGE.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new CustomResetPasswordNotification($token));
+    }
 
     /**
      * The attributes that aren't mass assignable.

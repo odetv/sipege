@@ -227,6 +227,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/test-database', [\App\Http\Controllers\LayananController::class, 'testDatabase'])->name('test-database');
             Route::post('/test-storage', [\App\Http\Controllers\LayananController::class, 'testStorage'])->name('test-storage');
             Route::post('/test-mail', [\App\Http\Controllers\LayananController::class, 'testMail'])->name('test-mail');
+            Route::post('/test-mail-template', [\App\Http\Controllers\LayananController::class, 'testMailTemplate'])->name('test-mail-template');
         });
 
         // Dukungan kompatibilitas rute lama (api-key & kunci-api diarahkan ke Layanan)

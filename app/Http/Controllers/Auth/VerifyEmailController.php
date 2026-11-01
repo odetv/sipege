@@ -3,25 +3,46 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Auth\Events\Verified;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class VerifyEmailController extends Controller
 {
     /**
-     * Mark the authenticated user's email address as verified.
+     * Tandai alamat email pengguna sebagai terverifikasi.
+     * Dapat diakses baik pengguna sudah login maupun baru mengklik tautan dari inbox email.
      */
-    public function __invoke(EmailVerificationRequest $request): RedirectResponse
+    public function __invoke(Request $request): RedirectResponse
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended(route('dashboard', absolute: false).'?verified=1');
+        $user = User::find($request->route('id'));
+
+        if (!$user) {
+            return redirect()->route('login')->with('error', 'Pengguna tidak ditemukan.');
         }
 
-        if ($request->user()->markEmailAsVerified()) {
-            event(new Verified($request->user()));
+        if (!hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
+            return redirect()->route('login')->with('error', 'Tautan verifikasi tidak valid atau telah kedaluwarsa.');
         }
 
-        return redirect()->intended(route('dashboard', absolute: false).'?verified=1');
+        if ($user->hasVerifiedEmail()) {
+            if (Auth::check()) {
+                return redirect()->intended(route('dashboard', absolute: false) . '?verified=1');
+            }
+            return redirect()->route('login')->with('status', 'Email Anda sudah terverifikasi sebelumnya. Silakan masuk.');
+        }
+
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        // Jika belum login, otomatis login pengguna tersebut
+        if (!Auth::check()) {
+            Auth::login($user);
+        }
+
+        return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')->with('verified', true);
     }
 }

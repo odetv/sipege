@@ -44,6 +44,9 @@ import {
     MailCheck,
     UploadCloud,
     ShieldAlert,
+    RotateCcw,
+    Palette,
+    FileText,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -196,6 +199,27 @@ function submitFormStorage() {
 // ═══════════════════════════════════════════════════════════════════════════
 // TAB 3: MAIL STATE, FORM & TESTING (Google SMTP vs Local Log)
 // ═══════════════════════════════════════════════════════════════════════════
+const defaultEmailTemplates = {
+    verification: {
+        subject: "Verifikasi Alamat Email Akun SIPEGE Anda",
+        heading: "Verifikasi Alamat Email",
+        subheading: "Sistem Pengelolaan SPPG - Badan Gizi Nasional",
+        greeting: "Halo {nama},",
+        body: "Terima kasih telah mendaftar di SIPEGE. Untuk mengaktifkan akun dan mulai mengakses layanan operasional SPPG, silakan verifikasi alamat email Anda dengan menekan tombol di bawah ini:",
+        button_text: "Verifikasi Email Sekarang",
+        footer_note: "Tautan verifikasi ini berlaku selama {waktu_kedaluwarsa}. Jika Anda tidak merasa mendaftar di SIPEGE, abaikan email ini dengan aman.",
+    },
+    reset_password: {
+        subject: "Permintaan Atur Ulang Kata Sandi SIPEGE",
+        heading: "Atur Ulang Kata Sandi",
+        subheading: "Sistem Pengelolaan SPPG - Badan Gizi Nasional",
+        greeting: "Halo {nama},",
+        body: "Kami menerima permintaan untuk mengatur ulang kata sandi akun SIPEGE Anda. Silakan klik tombol di bawah ini untuk membuat kata sandi baru akun Anda:",
+        button_text: "Atur Ulang Kata Sandi",
+        footer_note: "Tautan ini akan kedaluwarsa dalam waktu {waktu_kedaluwarsa}. Jika Anda tidak meminta pengaturan ulang kata sandi, abaikan email ini.",
+    },
+};
+
 const formMail = useForm({
     driver: props.mailInfo.active_driver || "log", // 'smtp' | 'log'
     host: props.mailInfo.smtp_config?.host || "smtp.gmail.com",
@@ -208,6 +232,9 @@ const formMail = useForm({
     send_real_email: false,
     status_koneksi: props.mailInfo.status_koneksi || "belum_dites",
     pesan_koneksi: props.mailInfo.pesan_koneksi || "",
+    templates: props.mailInfo.templates
+        ? JSON.parse(JSON.stringify(props.mailInfo.templates))
+        : JSON.parse(JSON.stringify(defaultEmailTemplates)),
 });
 
 const showMailPassword = ref(false);
@@ -221,6 +248,56 @@ const mailTestResult = ref(
           }
         : null
 );
+
+// State Pengaturan Template Email Pengguna
+const activeTemplateTab = ref("verification"); // 'verification' | 'reset_password'
+const previewTargetEmail = ref(
+    formMail.username || usePage().props.auth?.user?.email || ""
+);
+const isSendingTemplatePreview = ref(false);
+const templatePreviewResult = ref(null);
+
+async function runSendTemplatePreview() {
+    if (!previewTargetEmail.value) {
+        templatePreviewResult.value = {
+            success: false,
+            message: "Silakan masukkan alamat email tujuan uji pratinjau.",
+        };
+        return;
+    }
+    isSendingTemplatePreview.value = true;
+    templatePreviewResult.value = null;
+    try {
+        const payload = {
+            type: activeTemplateTab.value,
+            target_email: previewTargetEmail.value,
+            template: formMail.templates[activeTemplateTab.value],
+        };
+        const res = await axios.post(
+            route("pengaturan.layanan.test-mail-template"),
+            payload
+        );
+        templatePreviewResult.value = res.data;
+    } catch (err) {
+        templatePreviewResult.value = {
+            success: false,
+            message:
+                err.response?.data?.message ||
+                err.message ||
+                "Gagal mengirim email uji pratinjau.",
+        };
+    } finally {
+        isSendingTemplatePreview.value = false;
+    }
+}
+
+function resetTemplateToDefault(type) {
+    if (defaultEmailTemplates[type]) {
+        formMail.templates[type] = JSON.parse(
+            JSON.stringify(defaultEmailTemplates[type])
+        );
+    }
+}
 
 async function runTestMail() {
     isMailTesting.value = true;
@@ -1511,6 +1588,276 @@ onMounted(() => {
                             <Save v-else class="h-3.5 w-3.5" />
                             <span>Simpan & Aktifkan Mode Simulasi Log</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- ── KONTEN KUSTOMISASI TEMPLATE & PESAN EMAIL PENGGUNA ── -->
+                <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4 w-full">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-9 w-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
+                                <Palette class="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-900 flex items-center gap-1.5">
+                                    <span>Kustomisasi Format & Isi Pesan Email Pengguna</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-indigo-100 text-indigo-700">HTML Modern</span>
+                                </h3>
+                                <p class="text-[11px] text-slate-500">
+                                    Atur subjek, teks pembuka, tombol, dan gaya pesan email resmi yang diterima pengguna saat mendaftar atau lupa sandi.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Segmented Switch Tab Template -->
+                        <div class="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold">
+                            <button
+                                type="button"
+                                @click="activeTemplateTab = 'verification'"
+                                :class="[
+                                    'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer',
+                                    activeTemplateTab === 'verification'
+                                        ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                                        : 'text-slate-600 hover:text-slate-900',
+                                ]"
+                            >
+                                <MailCheck class="h-3.5 w-3.5" />
+                                <span>Verifikasi Pendaftaran</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="activeTemplateTab = 'reset_password'"
+                                :class="[
+                                    'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer',
+                                    activeTemplateTab === 'reset_password'
+                                        ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                                        : 'text-slate-600 hover:text-slate-900',
+                                ]"
+                            >
+                                <KeyRound class="h-3.5 w-3.5" />
+                                <span>Atur Ulang Kata Sandi</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Layout 2 Kolom: Kiri Editor Form, Kanan Live Pratinjau Tampilan Email -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                        <!-- Kolom Kiri: Form Editor Pesan (7 Kolom) -->
+                        <div class="lg:col-span-7 space-y-3.5">
+                            <!-- Info Tag Variabel -->
+                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-xs space-y-1.5">
+                                <span class="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
+                                    <Sparkles class="h-3.5 w-3.5 text-amber-500" />
+                                    <span>Variabel Tag Dinamis (Otomatis Diisi Sistem):</span>
+                                </span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10.5px] font-mono font-bold text-indigo-600 select-all">{nama}</span>
+                                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10.5px] font-mono font-bold text-indigo-600 select-all">{email}</span>
+                                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10.5px] font-mono font-bold text-indigo-600 select-all">{link_aksi}</span>
+                                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10.5px] font-mono font-bold text-indigo-600 select-all">{nama_aplikasi}</span>
+                                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10.5px] font-mono font-bold text-indigo-600 select-all">{waktu_kedaluwarsa}</span>
+                                </div>
+                            </div>
+
+                            <!-- Subjek Email -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">Subjek Email (Email Subject)</label>
+                                <input
+                                    v-model="formMail.templates[activeTemplateTab].subject"
+                                    type="text"
+                                    class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-semibold text-slate-800"
+                                />
+                            </div>
+
+                            <!-- Judul Header Kartu -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="block text-[11px] font-bold text-slate-700">Judul Header Email</label>
+                                    <input
+                                        v-model="formMail.templates[activeTemplateTab].heading"
+                                        type="text"
+                                        class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-semibold text-slate-800"
+                                    />
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-[11px] font-bold text-slate-700">Sub-Judul Instansi / Banner</label>
+                                    <input
+                                        v-model="formMail.templates[activeTemplateTab].subheading"
+                                        type="text"
+                                        class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-medium text-slate-800"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Salam Pembuka -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">Salam Pembuka</label>
+                                <input
+                                    v-model="formMail.templates[activeTemplateTab].greeting"
+                                    type="text"
+                                    class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-semibold text-slate-800"
+                                />
+                            </div>
+
+                            <!-- Isi Pesan Utama -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">Isi Pesan Utama</label>
+                                <textarea
+                                    v-model="formMail.templates[activeTemplateTab].body"
+                                    rows="3"
+                                    class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-normal text-slate-800 leading-relaxed resize-y"
+                                ></textarea>
+                            </div>
+
+                            <!-- Teks Tombol Aksi (CTA) -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">Teks Tombol Aksi (Tombol Verifikasi / Reset)</label>
+                                <input
+                                    v-model="formMail.templates[activeTemplateTab].button_text"
+                                    type="text"
+                                    class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs font-bold text-indigo-700"
+                                />
+                            </div>
+
+                            <!-- Catatan Keamanan / Kadaluwarsa -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">Catatan Keamanan & Masa Berlaku Tautan</label>
+                                <textarea
+                                    v-model="formMail.templates[activeTemplateTab].footer_note"
+                                    rows="2"
+                                    class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs text-amber-900 bg-amber-50/40 leading-relaxed resize-y"
+                                ></textarea>
+                            </div>
+
+                            <div class="pt-2 flex items-center justify-between">
+                                <button
+                                    type="button"
+                                    @click="resetTemplateToDefault(activeTemplateTab)"
+                                    class="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                                >
+                                    <RotateCcw class="h-3.5 w-3.5" />
+                                    <span>Kembalikan Teks ke Standar</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    @click="submitFormMail"
+                                    :disabled="formMail.processing"
+                                    class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                                >
+                                    <Loader2 v-if="formMail.processing" class="h-3.5 w-3.5 animate-spin" />
+                                    <Save v-else class="h-3.5 w-3.5" />
+                                    <span>Simpan Format Template Ini</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Kolom Kanan: Pratinjau Tampilan Email Nyata (5 Kolom) -->
+                        <div class="lg:col-span-5 space-y-3.5 sticky top-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <Eye class="h-3.5 w-3.5 text-indigo-600" />
+                                    <span>Pratinjau Tampilan Email Pengguna:</span>
+                                </span>
+                                <span class="text-[10px] text-slate-400 font-mono">Live HTML Preview</span>
+                            </div>
+
+                            <!-- Simulated Real HTML Email Card -->
+                            <div class="rounded-2xl border border-slate-200 shadow-md overflow-hidden bg-slate-50 text-slate-800 text-xs">
+                                <!-- Email Top Info Header (Subject & Sender) -->
+                                <div class="bg-slate-100 p-2.5 border-b border-slate-200 text-[10.5px] space-y-0.5 font-mono">
+                                    <div class="text-slate-500 truncate"><strong>Dari:</strong> {{ formMail.from_name || 'SIPEGE SPPG' }} &lt;{{ formMail.from_address || formMail.username || 'admin@sppg.id' }}&gt;</div>
+                                    <div class="text-slate-800 font-bold truncate"><strong>Subjek:</strong> {{ formMail.templates[activeTemplateTab].subject }}</div>
+                                </div>
+
+                                <!-- Email Body Container -->
+                                <div class="p-3 bg-slate-100/60">
+                                    <div class="rounded-xl overflow-hidden bg-white border border-slate-200/90 shadow-2xs">
+                                        <!-- Header Gradient -->
+                                        <div class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 p-4 text-center text-white">
+                                            <div class="inline-block px-3 py-1 rounded-xl bg-white/20 border border-white/30 text-xs font-black tracking-wider uppercase mb-1">
+                                                SIPEGE
+                                            </div>
+                                            <div class="text-[10px] text-indigo-100 font-medium">
+                                                {{ formMail.templates[activeTemplateTab].subheading }}
+                                            </div>
+                                            <div class="text-sm font-bold mt-1 text-white">
+                                                {{ formMail.templates[activeTemplateTab].heading }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Content Body -->
+                                        <div class="p-4 space-y-3">
+                                            <div class="font-bold text-slate-900 text-xs">
+                                                {{ formMail.templates[activeTemplateTab].greeting.replace('{nama}', $page.props.auth?.user?.nama || 'Budi Santoso') }}
+                                            </div>
+                                            <p class="text-[11.5px] text-slate-600 leading-relaxed whitespace-pre-line">
+                                                {{ formMail.templates[activeTemplateTab].body }}
+                                            </p>
+
+                                            <!-- CTA Button -->
+                                            <div class="text-center py-2">
+                                                <span class="inline-block px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold text-xs shadow-md shadow-indigo-600/30 cursor-pointer">
+                                                    {{ formMail.templates[activeTemplateTab].button_text }}
+                                                </span>
+                                            </div>
+
+                                            <!-- Fallback Box -->
+                                            <div class="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[10px] text-slate-500 break-all leading-tight">
+                                                Tautan cadangan: <span class="text-indigo-600 underline cursor-pointer">https://dev.sipege.site/auth/link-sample</span>
+                                            </div>
+
+                                            <!-- Notice Box -->
+                                            <div class="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[10.5px] text-amber-900 leading-tight">
+                                                <strong>Catatan:</strong> {{ formMail.templates[activeTemplateTab].footer_note.replace('{waktu_kedaluwarsa}', '60 menit') }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Footer Note -->
+                                        <div class="p-3 bg-slate-50 border-t border-slate-100 text-center text-[9.5px] text-slate-400">
+                                            Email ini dikirim otomatis oleh <strong>SIPEGE</strong>.<br>
+                                            &copy; {{ new Date().getFullYear() }} Badan Gizi Nasional Republik Indonesia.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Box Uji Kirim Pratinjau Email Nyata ke Inbox Admin -->
+                            <div class="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-2">
+                                <span class="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                                    <Send class="h-3.5 w-3.5 text-indigo-600" />
+                                    <span>Uji Kirim Email Pratinjau Ini ke Inbox:</span>
+                                </span>
+                                <div class="flex gap-1.5">
+                                    <input
+                                        v-model="previewTargetEmail"
+                                        type="email"
+                                        placeholder="Ketik email penerima uji..."
+                                        class="flex-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="runSendTemplatePreview"
+                                        :disabled="isSendingTemplatePreview"
+                                        class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50 shrink-0"
+                                    >
+                                        <Loader2 v-if="isSendingTemplatePreview" class="h-3.5 w-3.5 animate-spin" />
+                                        <Send v-else class="h-3.5 w-3.5" />
+                                        <span>Kirim Uji</span>
+                                    </button>
+                                </div>
+
+                                <div
+                                    v-if="templatePreviewResult"
+                                    :class="[
+                                        'p-2 rounded-lg text-[11px] border',
+                                        templatePreviewResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200',
+                                    ]"
+                                >
+                                    {{ templatePreviewResult.message }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -189,6 +189,7 @@ class LayananController extends Controller
             'status_koneksi' => $dbMail?->status_koneksi ?? 'belum_dites',
             'pesan_koneksi' => $dbMail?->pesan_koneksi ?? null,
             'last_tested_at' => $dbMail?->last_tested_at?->format('d/m/Y H:i'),
+            'templates' => \App\Services\MailConfigService::getTemplates(),
             // Fallback config env
             'queue_connection' => config('queue.default', 'sync'),
         ];
@@ -428,6 +429,7 @@ class LayananController extends Controller
             'from_name' => ['nullable', 'string', 'max:150'],
             'status_koneksi' => ['nullable', 'string', 'max:30'],
             'pesan_koneksi' => ['nullable', 'string'],
+            'templates' => ['nullable', 'array'],
         ]);
 
         $driver = $validated['driver'];
@@ -439,6 +441,7 @@ class LayananController extends Controller
             'password' => trim((string) ($validated['password'] ?? '')),
             'from_address' => trim((string) ($validated['from_address'] ?? '')) ?: trim((string) ($validated['username'] ?? '')),
             'from_name' => trim((string) ($validated['from_name'] ?? 'SIPEGE SPPG')) ?: 'SIPEGE SPPG',
+            'templates' => $request->input('templates', \App\Services\MailConfigService::getDefaultTemplates()),
         ];
 
         $updateData = [
@@ -460,8 +463,72 @@ class LayananController extends Controller
             $updateData
         );
 
+        \App\Services\MailConfigService::applyConfig();
+
         $driverLabel = $driver === 'smtp' ? 'Google Mail (SMTP)' : 'Simulasi Local Log';
-        return back()->with('success', "Konfigurasi Layanan Mail ({$driverLabel}) berhasil disimpan ke database secara global.");
+        return back()->with('success', "Konfigurasi Layanan Mail ({$driverLabel}) dan template pesan berhasil disimpan ke database.");
+    }
+
+    /**
+     * Uji Kirim Email Pratinjau Template (Verifikasi Email atau Reset Password)
+     */
+    public function testMailTemplate(Request $request): JsonResponse
+    {
+        $type = $request->input('type', 'verification');
+        $targetEmail = trim((string) $request->input('target_email', ''));
+        $templateData = (array) $request->input('template', []);
+
+        if (empty($targetEmail)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Alamat email tujuan uji kirim template wajib diisi.',
+            ], 422);
+        }
+
+        try {
+            \App\Services\MailConfigService::applyConfig();
+
+            $variables = [
+                'nama' => auth()->user()?->nama_lengkap ?? (auth()->user()?->nama ?? 'Pengguna Uji SIPEGE'),
+                'email' => $targetEmail,
+                'link_aksi' => url('/'),
+                'link_verifikasi' => url('/verify-email/demo-sample-link'),
+                'link_reset' => url('/reset-password/demo-token?email=' . urlencode($targetEmail)),
+                'nama_aplikasi' => 'SIPEGE SPPG',
+                'waktu_kedaluwarsa' => '60 menit',
+            ];
+
+            $subject = \App\Services\MailConfigService::interpolate($templateData['subject'] ?? 'Pratinjau Template Email SIPEGE', $variables);
+            $heading = \App\Services\MailConfigService::interpolate($templateData['heading'] ?? 'Uji Tampilan Email SIPEGE', $variables);
+            $subheading = \App\Services\MailConfigService::interpolate($templateData['subheading'] ?? 'Sistem Pengelolaan SPPG - Badan Gizi Nasional', $variables);
+            $greeting = \App\Services\MailConfigService::interpolate($templateData['greeting'] ?? 'Halo {nama},', $variables);
+            $body = \App\Services\MailConfigService::interpolate($templateData['body'] ?? 'Ini adalah contoh isi pesan email yang telah dipoles.', $variables);
+            $buttonText = \App\Services\MailConfigService::interpolate($templateData['button_text'] ?? 'Tombol Aksi Uji', $variables);
+            $footerNote = \App\Services\MailConfigService::interpolate($templateData['footer_note'] ?? 'Catatan keamanan uji.', $variables);
+
+            \Illuminate\Support\Facades\Mail::send('emails.auth_notification', [
+                'heading' => $heading,
+                'subheading' => $subheading,
+                'greeting' => $greeting,
+                'body' => $body,
+                'actionUrl' => $variables['link_aksi'],
+                'buttonText' => $buttonText,
+                'footerNote' => $footerNote,
+            ], function ($m) use ($targetEmail, $subject) {
+                $m->to($targetEmail)->subject('[UJI TEMPLATE] ' . $subject);
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => "Email uji template ({$type}) berhasil dikirimkan ke {$targetEmail}. Silakan cek kotak masuk email Anda!",
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Gagal mengirim email uji template: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => "Gagal mengirim email: " . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
