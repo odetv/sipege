@@ -3,6 +3,7 @@ import { ref, nextTick } from "vue";
 import Sidebar from "./Partials/Sidebar.vue";
 import Header from "./Partials/Header.vue";
 import Footer from "./Partials/Footer.vue";
+import PeriodeExpirationModal from "@/Components/PeriodeExpirationModal.vue";
 
 const props = defineProps({
     title: {
@@ -112,5 +113,8 @@ defineExpose({
                 </slot>
             </div>
         </div>
+
+        <!-- Global Pop Up Modal Periode Mau Habis & Belum Ada Periode Baru -->
+        <PeriodeExpirationModal />
     </div>
 </template>

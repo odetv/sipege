@@ -8,6 +8,7 @@ import GiziDatabasePanganTab from "@/Pages/Gizi/Partials/GiziDatabasePanganTab.v
 import GiziAnalisaPmTab from "@/Pages/Gizi/Partials/GiziAnalisaPmTab.vue";
 import GiziDaftarMenuTab from "@/Pages/Gizi/Partials/GiziDaftarMenuTab.vue";
 import GiziRancangMenuTab from "@/Pages/Gizi/Partials/GiziRancangMenuTab.vue";
+import GiziRancangMenuManualTab from "@/Pages/Gizi/Partials/GiziRancangMenuManualTab.vue";
 import GiziKalenderMenuTab from "@/Pages/Gizi/Partials/GiziKalenderMenuTab.vue";
 import GiziResepTab from "@/Pages/Gizi/Partials/GiziResepTab.vue";
 
@@ -152,8 +153,11 @@ const pageTitle = computed(() => {
         case "daftar-menu":
             return "Daftar Menu - SIPEGE";
         case "rancang-menu":
+        case "rancang-menu-otomatis":
         case "buat-menu":
-            return "Rancang Menu - SIPEGE";
+            return "Rancang Menu Otomatis - SIPEGE";
+        case "rancang-menu-manual":
+            return "Rancang Menu Manual - SIPEGE";
         case "kalender-menu":
             return "Kalender Menu - SIPEGE";
         case "resep":
@@ -201,10 +205,11 @@ const pageTitle = computed(() => {
                 @open-rancang-menu="selectSubMenu('rancang-menu')"
             />
 
-            <!-- 4. SUB MENU 4: RANCANG MENU (PERENCANAAN PRODUKSI, FORMULA GIZI, PEMBELIAN BAHAN) -->
+            <!-- 4. SUB MENU 4: RANCANG MENU OTOMATIS (PERENCANAAN PRODUKSI, FORMULA GIZI, PEMBELIAN BAHAN) -->
             <GiziRancangMenuTab
                 v-if="
                     activeSubMenu === 'rancang-menu' ||
+                    activeSubMenu === 'rancang-menu-otomatis' ||
                     activeSubMenu === 'buat-menu'
                 "
                 :user="user"
@@ -225,7 +230,21 @@ const pageTitle = computed(() => {
                 @update-fta="handleFtaFileChange"
             />
 
-            <!-- 5. SUB MENU 5: KALENDER MENU -->
+            <!-- 5. SUB MENU 5: RANCANG MENU MANUAL (FORMULASI MENU & GIZI MANDIRI PER WORK ORDER) -->
+            <GiziRancangMenuManualTab
+                v-if="activeSubMenu === 'rancang-menu-manual'"
+                :user="user"
+                :unit-sppg="unitSppg"
+                :kelompok-list="kelompokList"
+                :work-orders-list="workOrdersList"
+                :active-work-order="activeWorkOrder"
+                :tkpi-list="activeTkpiList"
+                :tkpi-datasets="tkpiDatasets"
+                :periodes="periodes"
+                :reseps-list="resepsList"
+            />
+
+            <!-- 6. SUB MENU 6: KALENDER MENU -->
             <GiziKalenderMenuTab
                 v-if="activeSubMenu === 'kalender-menu'"
                 :work-orders-list="workOrdersList"

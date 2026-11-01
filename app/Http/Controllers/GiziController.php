@@ -26,7 +26,10 @@ class GiziController extends Controller
     public function index(Request $request): Response|RedirectResponse
     {
         $tab = $request->query('tab');
-        if ($tab === 'rancang-menu' || $tab === 'buat-menu') {
+        if ($tab === 'rancang-menu-manual') {
+            return $this->rancangMenuManual($request);
+        }
+        if ($tab === 'rancang-menu' || $tab === 'rancang-menu-otomatis' || $tab === 'buat-menu') {
             return $this->rancangMenu($request);
         }
         if ($tab === 'daftar-menu') {
@@ -125,6 +128,56 @@ class GiziController extends Controller
         }
 
         return $this->renderGiziView($request, 'rancang-menu', $request->query('step'));
+    }
+
+    /**
+     * Sub-menu 4a: Rancang Menu Otomatis.
+     */
+    public function rancangMenuOtomatis(Request $request): Response|RedirectResponse
+    {
+        return $this->rancangMenu($request);
+    }
+
+    /**
+     * Sub-menu 4b: Rancang Menu Manual (Formulasi Gizi & Menu Secara Mandiri per Work Order).
+     */
+    public function rancangMenuManual(Request $request): Response|RedirectResponse
+    {
+        $rawTarget = $request->query('id') ?: ($request->query('uuid') ?: $request->query('wo_id'));
+
+        if ($rawTarget || $request->has('tanggal')) {
+            $user = $request->user();
+            $unitSppg = $user?->getCachedUnitSppg();
+            if ($unitSppg) {
+                $query = WorkOrder::where('unit_sppg_id', $unitSppg->id);
+                if ($rawTarget) {
+                    $rawTargetStr = (string) $rawTarget;
+                    $query->where(function ($q) use ($rawTargetStr) {
+                        if (is_numeric($rawTargetStr)) {
+                            $q->where('id', (int) $rawTargetStr);
+                        } elseif (\Illuminate\Support\Str::isUuid($rawTargetStr)) {
+                            $q->where('uuid', $rawTargetStr);
+                        } else {
+                            $q->where('nomor_wo', $rawTargetStr);
+                        }
+                    });
+                } elseif ($request->has('tanggal')) {
+                    $query->where('tanggal_distribusi', $request->query('tanggal'));
+                }
+                $targetWo = $query->first();
+                if ($targetWo) {
+                    if (empty($targetWo->uuid)) {
+                        $targetWo->uuid = (string) \Illuminate\Support\Str::uuid();
+                        $targetWo->saveQuietly();
+                    }
+                    if ($request->query('id') !== $targetWo->uuid) {
+                        return redirect()->route('gizi.rancang-menu-manual', ['id' => $targetWo->uuid]);
+                    }
+                }
+            }
+        }
+
+        return $this->renderGiziView($request, 'rancang-menu-manual');
     }
 
     /**
@@ -793,6 +846,13 @@ class GiziController extends Controller
                 ->with(['items', 'kelompoks', 'purchaseOrder'])
                 ->orderBy('tanggal_distribusi', 'desc')
                 ->get();
+
+            foreach ($workOrders as $wo) {
+                if (empty($wo->uuid)) {
+                    $wo->uuid = (string) \Illuminate\Support\Str::uuid();
+                    $wo->saveQuietly();
+                }
+            }
 
             // Load active work order if requested via query (support id, uuid, wo_id, or tanggal)
             $woQuery = $request->query('id') ?: ($request->query('uuid') ?: $request->query('wo_id'));

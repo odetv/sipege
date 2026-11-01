@@ -90,6 +90,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/tkpi', [GiziController::class, 'databasePangan'])->name('tkpi');
         Route::get('/analisa-pm', [GiziController::class, 'analisaPm'])->name('analisa-pm');
         Route::get('/daftar-menu', [GiziController::class, 'daftarMenu'])->name('daftar-menu');
+        Route::get('/rancang-menu-otomatis', [GiziController::class, 'rancangMenuOtomatis'])->name('rancang-menu-otomatis');
+        Route::get('/rancang-menu-manual', [GiziController::class, 'rancangMenuManual'])->name('rancang-menu-manual');
         Route::get('/rancang-menu', [GiziController::class, 'rancangMenu'])->name('rancang-menu');
         Route::get('/buat-menu', [GiziController::class, 'rancangMenu'])->name('buat-menu');
         Route::get('/kalender-menu', [GiziController::class, 'kalenderMenu'])->name('kalender-menu');

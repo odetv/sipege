@@ -863,10 +863,6 @@ const totalManual = computed(
                                     </span>
                                 </div>
 
-                                <h5 class="text-sm font-black text-slate-800 leading-snug line-clamp-2">
-                                    {{ wo.nama_menu }}
-                                </h5>
-
                                 <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1 border-t border-slate-100">
                                     <div>
                                         <span>📅 Tanggal:</span>
@@ -1001,7 +997,6 @@ const totalManual = computed(
                     </p>
                     <div v-if="woToDelete" class="p-2.5 bg-white rounded-xl border border-rose-200 text-slate-800 space-y-1">
                         <div class="font-extrabold text-rose-900 text-xs">{{ woToDelete.nomor_wo }}</div>
-                        <div class="text-[11px] font-semibold text-slate-600">{{ woToDelete.nama_menu || 'Belum ada nama menu' }}</div>
                         <div class="text-[10px] text-slate-400">Tanggal: {{ woToDelete.tanggal_distribusi }} &bull; Metode: {{ woToDelete.metode_wo === 'manual' ? 'Manual' : 'Sistem' }}</div>
                     </div>
                     <p class="text-slate-600 text-[11.5px]">
@@ -1093,7 +1088,6 @@ const totalManual = computed(
                                             {{ woItem.metode_wo === 'manual' ? 'Manual' : 'Sistem' }}
                                         </span>
                                     </div>
-                                    <span class="text-slate-600 font-semibold block text-[10.5px] truncate max-w-xs">{{ woItem.nama_menu }}</span>
                                 </div>
                                 <span class="text-[10px] font-bold text-slate-500 whitespace-nowrap">{{ formatTanggalIndo(woItem.tanggal_distribusi) }}</span>
                             </div>

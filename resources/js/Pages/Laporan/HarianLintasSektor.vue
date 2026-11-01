@@ -784,12 +784,13 @@ const porsiTambahanData = computed(() => {
     if (!raw) {
         const kpmCount = kelompokMenerima.value.length || 0;
         const organoleptik = kpmCount * 1;
-        const sampel = 4;
+        const sampel = 2;
+        const buffer = 12;
         return {
             organoleptik,
             sampel,
-            buffer: 0,
-            total: organoleptik + sampel,
+            buffer,
+            total: organoleptik + sampel + buffer,
         };
     }
     const pt = typeof raw === "string" ? JSON.parse(raw) : raw;

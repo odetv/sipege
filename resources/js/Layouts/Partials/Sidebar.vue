@@ -53,6 +53,7 @@ import {
     Trash2,
     KeyRound,
     Server,
+    Sparkles,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -114,6 +115,31 @@ const isGiziActive = computed(() => {
         return false;
     }
 });
+
+const isRancangMenuActive = computed(() => {
+    try {
+        const tab = page.props.activeTab;
+        return (
+            route().current("gizi.rancang-menu*") ||
+            route().current("gizi.buat-menu") ||
+            (route().current("gizi.*") &&
+                [
+                    "rancang-menu",
+                    "rancang-menu-otomatis",
+                    "rancang-menu-manual",
+                    "buat-menu",
+                ].includes(tab))
+        );
+    } catch {
+        return false;
+    }
+});
+
+const isRancangMenuOpen = ref(isRancangMenuActive.value);
+
+function toggleRancangMenu() {
+    isRancangMenuOpen.value = !isRancangMenuOpen.value;
+}
 
 const isKeuanganActive = computed(() => {
     try {
@@ -317,6 +343,10 @@ watch(
             activeKeuanganSubMenu.value = "laporan";
         } else {
             activeKeuanganSubMenu.value = null;
+        }
+
+        if (isRancangMenuActive.value) {
+            isRancangMenuOpen.value = true;
         }
     },
 );
@@ -1000,25 +1030,76 @@ function logout() {
                             <span class="truncate">Daftar Menu</span>
                         </Link>
 
-                        <!-- Sub-menu 4: Rancang Menu -->
-                        <Link
-                            :href="route('gizi.rancang-menu')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('gizi.rancang-menu') ||
-                                route().current('gizi.buat-menu') ||
-                                (route().current('gizi.index') &&
-                                    (page.props.activeTab === 'rancang-menu' ||
-                                        page.props.activeTab === 'buat-menu'))
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Utensils class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Rancang Menu</span>
-                        </Link>
+                        <!-- Sub-menu 4: Rancang Menu (Collapsible Parent) -->
+                        <div class="space-y-0.5">
+                            <button
+                                type="button"
+                                @click="toggleRancangMenu"
+                                :class="[
+                                    'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                    isRancangMenuActive
+                                        ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                ]"
+                            >
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <UtensilsCrossed class="h-3.5 w-3.5 shrink-0" />
+                                    <span class="truncate">Rancang Menu</span>
+                                </div>
+                                <ChevronDown
+                                    :class="[
+                                        'h-3 w-3 shrink-0 transition-transform duration-200 text-slate-400',
+                                        isRancangMenuOpen
+                                            ? 'rotate-180 text-primary'
+                                            : '',
+                                    ]"
+                                />
+                            </button>
 
-                        <!-- Sub-menu 5: Kalender Menu -->
+                            <!-- Anak dari Rancang Menu: Otomatis & Manual -->
+                            <div
+                                v-if="isRancangMenuOpen"
+                                class="pl-2 space-y-0.5 border-l-2 border-slate-200/80 ml-3.5 my-0.5 animate-in fade-in duration-150"
+                            >
+                                <!-- Anak 1: Rancang Menu Otomatis -->
+                                <Link
+                                    :href="route('gizi.rancang-menu-otomatis')"
+                                    :class="[
+                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
+                                        route().current('gizi.rancang-menu-otomatis') ||
+                                        route().current('gizi.rancang-menu') ||
+                                        route().current('gizi.buat-menu') ||
+                                        (route().current('gizi.index') &&
+                                            (page.props.activeTab === 'rancang-menu-otomatis' ||
+                                                page.props.activeTab === 'rancang-menu' ||
+                                                page.props.activeTab === 'buat-menu'))
+                                            ? 'bg-primary/10 text-primary font-bold'
+                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                    ]"
+                                >
+                                    <Sparkles class="h-3 w-3 shrink-0 text-amber-500" />
+                                    <span class="truncate">Otomatis</span>
+                                </Link>
+
+                                <!-- Anak 2: Rancang Menu Manual -->
+                                <Link
+                                    :href="route('gizi.rancang-menu-manual')"
+                                    :class="[
+                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
+                                        route().current('gizi.rancang-menu-manual') ||
+                                        (route().current('gizi.index') &&
+                                            page.props.activeTab === 'rancang-menu-manual')
+                                            ? 'bg-primary/10 text-primary font-bold'
+                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                    ]"
+                                >
+                                    <Utensils class="h-3 w-3 shrink-0 text-blue-600" />
+                                    <span class="truncate">Manual</span>
+                                </Link>
+                            </div>
+                        </div>
+
+                        <!-- Sub-menu 6: Kalender Menu -->
                         <Link
                             :href="route('gizi.kalender-menu')"
                             :class="[

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { router } from "@inertiajs/vue3";
+import { router, usePage } from "@inertiajs/vue3";
 import Card from "@/Components/ui/Card.vue";
 import CardHeader from "@/Components/ui/CardHeader.vue";
 import CardTitle from "@/Components/ui/CardTitle.vue";
@@ -634,12 +634,92 @@ const hasActiveSistemWo = computed(() => {
     return props.activeWorkOrder.metode_wo === "sistem" || !props.activeWorkOrder.metode_wo;
 });
 
+function getInitialPeriodDateFilter(periodesList) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const today = `${y}-${m}-${d}`;
+
+    let list = Array.isArray(periodesList) && periodesList.length > 0 ? periodesList : [];
+    if (list.length === 0) {
+        try {
+            const pagePeriodes = usePage()?.props?.periodes;
+            if (Array.isArray(pagePeriodes) && pagePeriodes.length > 0) {
+                list = pagePeriodes;
+            }
+        } catch {
+            // ignore
+        }
+    }
+
+    const activePeriode = list.find((p) => {
+        if (!p || !p.tanggal_mulai || !p.tanggal_selesai) return false;
+        const s = String(p.tanggal_mulai).substring(0, 10);
+        const e = String(p.tanggal_selesai).substring(0, 10);
+        return today >= s && today <= e;
+    });
+
+    if (activePeriode) {
+        return {
+            mode: "periode",
+            periodeId: String(activePeriode.id),
+            startDate: String(activePeriode.tanggal_mulai).substring(0, 10),
+            endDate: String(activePeriode.tanggal_selesai).substring(0, 10),
+            isAllTime: false,
+        };
+    }
+
+    return {
+        mode: "hari_ini",
+        periodeId: "all",
+        startDate: today,
+        endDate: today,
+        isAllTime: false,
+    };
+}
+
+function cleanInitialMenuName(namaMenu, nomorWo) {
+    if (!namaMenu) return "";
+    const trimmed = String(namaMenu).trim();
+    if (nomorWo && trimmed.toLowerCase() === String(nomorWo).trim().toLowerCase()) {
+        return "";
+    }
+    if (/^WO-[A-Z0-9-]+$/i.test(trimmed)) {
+        return "";
+    }
+    return trimmed;
+}
+
+function getDisplayMenuTitle(wo) {
+    if (!wo) return "Perencanaan Menu";
+    const cleaned = cleanInitialMenuName(wo.nama_menu, wo.nomor_wo);
+    return cleaned || "Belum Ditentukan (Perlu Dirancang)";
+}
+
+const initFilter = getInitialPeriodDateFilter(props.periodes);
 const woPickerSearch = ref("");
-const woPickerStartDate = ref("");
-const woPickerEndDate = ref("");
-const woPickerMode = ref("hari_ini");
-const woPickerPeriodeId = ref("all");
+const woPickerStartDate = ref(initFilter.startDate);
+const woPickerEndDate = ref(initFilter.endDate);
+const woPickerMode = ref(initFilter.mode);
+const woPickerPeriodeId = ref(initFilter.periodeId);
 const isWoPickerAllTime = ref(false);
+
+watch(
+    () => props.periodes,
+    (newList) => {
+        if (newList && newList.length > 0) {
+            const recheck = getInitialPeriodDateFilter(newList);
+            if (recheck.mode === "periode" && woPickerMode.value === "hari_ini") {
+                woPickerMode.value = recheck.mode;
+                woPickerPeriodeId.value = recheck.periodeId;
+                woPickerStartDate.value = recheck.startDate;
+                woPickerEndDate.value = recheck.endDate;
+            }
+        }
+    },
+    { immediate: true }
+);
 
 const sistemWorkOrdersList = computed(() => {
     return (props.workOrdersList || []).filter((w) => {
@@ -6040,9 +6120,9 @@ const totalPM = computed(() => {
 
 // ─── PORSI TAMBAHAN PRODUKSI (UJI ORGANOLEPTIK, SAMPEL, BUFFER) ────────────
 const porsiTambahan = ref({
-    organoleptik: { pk: "", pb: "" },
-    sampel: { pk: "", pb: "" },
-    buffer: { pk: "", pb: "" },
+    organoleptik: { pk: 0, pb: "" },
+    sampel: { pk: 2, pb: 0 },
+    buffer: { pk: 6, pb: 6 },
 });
 const organoleptikIsManuallyEdited = ref(false);
 
@@ -6051,8 +6131,14 @@ watch(
     () => kelompokMenerimaAktif.value.length,
     (count) => {
         if (!organoleptikIsManuallyEdited.value) {
-            porsiTambahan.value.organoleptik.pb = count > 0 ? count * 1 : "";
-            porsiTambahan.value.organoleptik.pk = "";
+            porsiTambahan.value.organoleptik.pb = count > 0 ? count * 1 : 0;
+            porsiTambahan.value.organoleptik.pk = 0;
+            if (porsiTambahan.value.sampel.pk === "" && porsiTambahan.value.sampel.pb === "") {
+                porsiTambahan.value.sampel = { pk: 2, pb: 0 };
+            }
+            if (porsiTambahan.value.buffer.pk === "" && porsiTambahan.value.buffer.pb === "") {
+                porsiTambahan.value.buffer = { pk: 6, pb: 6 };
+            }
         }
     },
     { immediate: true },
@@ -6156,8 +6242,8 @@ function applyContohPorsiTambahan() {
     organoleptikIsManuallyEdited.value = true;
     porsiTambahan.value = {
         organoleptik: { pk: 0, pb: kelompokMenerimaAktif.value.length * 1 },
-        sampel: { pk: 2, pb: 2 },
-        buffer: { pk: 10, pb: 10 },
+        sampel: { pk: 2, pb: 0 },
+        buffer: { pk: 6, pb: 6 },
     };
     [
         "porsiTambahan",
@@ -6174,9 +6260,9 @@ function applyContohPorsiTambahan() {
 function resetPorsiTambahan() {
     organoleptikIsManuallyEdited.value = false;
     porsiTambahan.value = {
-        organoleptik: { pk: "", pb: kelompokMenerimaAktif.value.length * 1 },
-        sampel: { pk: "", pb: "" },
-        buffer: { pk: "", pb: "" },
+        organoleptik: { pk: 0, pb: kelompokMenerimaAktif.value.length * 1 },
+        sampel: { pk: 2, pb: 0 },
+        buffer: { pk: 6, pb: 6 },
     };
     [
         "porsiTambahan",
@@ -7883,7 +7969,7 @@ watch(
                 typeof wo.tanggal_distribusi === "string"
                     ? wo.tanggal_distribusi.substring(0, 10)
                     : wo.tanggal_distribusi || tanggalRencana.value;
-            namaMenuAktif.value = wo.nama_menu || namaMenuAktif.value;
+            namaMenuAktif.value = cleanInitialMenuName(wo.nama_menu, wo.nomor_wo);
             statusPengajuanWo.value = wo.status || "Draft";
             if (
                 Array.isArray(wo.sub_menus) &&
@@ -8401,7 +8487,7 @@ watch(
                             </div>
 
                             <h4 class="text-sm font-black text-slate-900 leading-snug line-clamp-2">
-                                {{ wo.nama_menu }}
+                                {{ getDisplayMenuTitle(wo) }}
                             </h4>
 
                             <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-2 border-t border-slate-100">
@@ -8475,7 +8561,7 @@ watch(
                         </span>
                     </div>
                     <h4 class="text-xs sm:text-sm font-black text-slate-900 mt-1">
-                        {{ activeWorkOrder.nama_menu }}
+                        {{ namaMenuAktif || getDisplayMenuTitle(activeWorkOrder) }}
                         <span class="font-normal text-slate-500 text-xs ml-1.5">• Distribusi: {{ formatTanggalIndo(activeWorkOrder.tanggal_distribusi) }}</span>
                     </h4>
                 </div>

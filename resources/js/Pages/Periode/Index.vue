@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { Head, useForm, router, usePage } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import PeriodeCalendarPicker from "@/Components/PeriodeCalendarPicker.vue";
@@ -102,6 +102,15 @@ function openTambah() {
     calendarRangeTambah.value = { start: "", end: "" };
     showTambah.value = true;
 }
+
+onMounted(() => {
+    if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("action") === "tambah") {
+            openTambah();
+        }
+    }
+});
 
 function onRangeTambahChange(val) {
     formTambah.tanggal_mulai = val.start;

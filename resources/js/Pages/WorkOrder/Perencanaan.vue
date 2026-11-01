@@ -1767,9 +1767,9 @@ const totalPBAlergi = computed(() => {
 
 // ─── PORSI TAMBAHAN PRODUKSI (UJI ORGANOLEPTIK, SAMPEL, BUFFER) ────────────
 const porsiTambahan = ref({
-    organoleptik: { pk: "", pb: "" },
-    sampel: { pk: "", pb: "" },
-    buffer: { pk: "", pb: "" },
+    organoleptik: { pk: 0, pb: "" },
+    sampel: { pk: 2, pb: 0 },
+    buffer: { pk: 6, pb: 6 },
 });
 const organoleptikIsManuallyEdited = ref(false);
 
@@ -1778,8 +1778,14 @@ watch(
     () => kelompokMenerimaAktif.value.length,
     (count) => {
         if (!organoleptikIsManuallyEdited.value && !isEditMode.value) {
-            porsiTambahan.value.organoleptik.pb = count > 0 ? count * 1 : "";
-            porsiTambahan.value.organoleptik.pk = "";
+            porsiTambahan.value.organoleptik.pb = count > 0 ? count * 1 : 0;
+            porsiTambahan.value.organoleptik.pk = 0;
+            if (porsiTambahan.value.sampel.pk === "" && porsiTambahan.value.sampel.pb === "") {
+                porsiTambahan.value.sampel = { pk: 2, pb: 0 };
+            }
+            if (porsiTambahan.value.buffer.pk === "" && porsiTambahan.value.buffer.pb === "") {
+                porsiTambahan.value.buffer = { pk: 6, pb: 6 };
+            }
         }
     },
     { immediate: true },
@@ -1883,8 +1889,8 @@ function applyContohPorsiTambahan() {
     organoleptikIsManuallyEdited.value = true;
     porsiTambahan.value = {
         organoleptik: { pk: 0, pb: kelompokMenerimaAktif.value.length * 1 },
-        sampel: { pk: 2, pb: 2 },
-        buffer: { pk: 10, pb: 10 },
+        sampel: { pk: 2, pb: 0 },
+        buffer: { pk: 6, pb: 6 },
     };
     [
         "porsiTambahan",
@@ -1901,9 +1907,9 @@ function applyContohPorsiTambahan() {
 function resetPorsiTambahan() {
     organoleptikIsManuallyEdited.value = false;
     porsiTambahan.value = {
-        organoleptik: { pk: "", pb: kelompokMenerimaAktif.value.length * 1 },
-        sampel: { pk: "", pb: "" },
-        buffer: { pk: "", pb: "" },
+        organoleptik: { pk: 0, pb: kelompokMenerimaAktif.value.length * 1 },
+        sampel: { pk: 2, pb: 0 },
+        buffer: { pk: 6, pb: 6 },
     };
     [
         "porsiTambahan",
@@ -2125,52 +2131,17 @@ function scrollToFirstError() {
 function validateStep1() {
     const errs = {};
     if (!isMetodeWoSelected.value) {
-        errs.metodeWo =
-            "Opsi tab mode (Sistem atau Manual) wajib diklik terlebih dahulu untuk menentukan alur kerja Work Order.";
+        errs.metodeWo = "Silakan tentukan metode rancang: Sistem atau Manual.";
     }
     if (!tanggalRencana.value) {
         errs.tanggalRencana = "Tanggal rencana masak & distribusi wajib diisi.";
     } else {
         const duplicateDateWo = getTakenWoInfo(tanggalRencana.value);
         if (duplicateDateWo) {
-            errs.tanggalRencana = `Tanggal ${formatTanggalIndo(tanggalRencana.value)} sudah memiliki Work Order: "${duplicateDateWo.nama_menu}" (${duplicateDateWo.nomor_wo} • Status: ${duplicateDateWo.status}). Hanya diperbolehkan 1 Work Order per tanggal (termasuk status Draft).`;
+            errs.tanggalRencana = `Tanggal ${formatTanggalIndo(tanggalRencana.value)} sudah memiliki Work Order (${duplicateDateWo.nomor_wo} • Status: ${duplicateDateWo.status}). Hanya diperbolehkan 1 Work Order per tanggal (termasuk status Draft).`;
             triggerSubmitError(errs.tanggalRencana);
         }
     }
-    if (!namaMenuAktif.value || !namaMenuAktif.value.trim()) {
-        errs.namaMenuAktif = "Nama menu wajib diisi.";
-    }
-
-    // Validasi setiap Sub Menu yang aktif
-    subMenuKeys.value.forEach((subKey, idx) => {
-        const val = subMenuKomponen.value[subKey];
-        if (!val || !val.trim()) {
-            errs[subKey] = `Sub Menu ${idx + 1} wajib diisi.`;
-        }
-    });
-
-    // Validasi menu pengganti alergi
-    subMenuKeys.value.forEach((subKey, idx) => {
-        const list = subMenuAlergi.value[subKey];
-        if (Array.isArray(list) && list.length > 0) {
-            list.forEach((item, itemIdx) => {
-                const subLabel = `Sub Menu ${idx + 1}`;
-                const jAlergi = extractCleanAlergi(item?.jenis_alergi);
-                const mPengganti =
-                    typeof item?.menu_pengganti === "string"
-                        ? item.menu_pengganti.trim()
-                        : "";
-                if (!jAlergi) {
-                    errs[`alergi_${subKey}_${itemIdx}_jenis`] =
-                        `Pilih jenis alergi untuk ${subLabel}.`;
-                }
-                if (!mPengganti) {
-                    errs[`alergi_${subKey}_${itemIdx}_menu`] =
-                        `Menu pengganti ${subLabel} wajib diisi.`;
-                }
-            });
-        }
-    });
 
     if (kelompokMenerimaAktif.value.length === 0) {
         errs.kelompok =
@@ -2188,26 +2159,6 @@ function validateStep1() {
         }
     }
 
-    // Validasi Waktu Kegiatan Operasional (Wajib diisi seluruhnya untuk tahapan yang aktif)
-    let emptyJadwalFound = false;
-    Object.keys(activeJadwalList.value).forEach((kKey) => {
-        const item = jadwalOperasional.value?.[kKey];
-        const isMulaiEmpty = !item || !item.mulai || !String(item.mulai).trim();
-        const isSelesaiEmpty =
-            !item || !item.selesai || !String(item.selesai).trim();
-        if (isMulaiEmpty) {
-            errs["jadwal_" + kKey + "_mulai"] = "Jam mulai wajib diisi.";
-            emptyJadwalFound = true;
-        }
-        if (isSelesaiEmpty) {
-            errs["jadwal_" + kKey + "_selesai"] = "Jam selesai wajib diisi.";
-            emptyJadwalFound = true;
-        }
-        if (isMulaiEmpty || isSelesaiEmpty) {
-            errs["jadwal_" + kKey] =
-                `Waktu ${activeJadwalList.value[kKey].nama} belum lengkap. Jam mulai & jam selesai wajib diisi.`;
-        }
-    });
     // Validasi Porsi Tambahan (Wajib diisi seluruhnya, tidak boleh kosong, minimal 0)
     let porsiTambahanEmptyFound = false;
     const ptFields = [
@@ -2279,45 +2230,20 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
 
     isSubmitting.value = true;
 
-    const cleanSubMenus = subMenuKeys.value.map((k) =>
-        (subMenuKomponen.value[k] || "").trim(),
-    );
-
     const payload = {
         id: isEditMode.value ? editingWoId.value : null,
         uuid: isEditMode.value ? editingWoUuid.value : null,
         nomor_wo: woNo.value,
         tanggal_distribusi: tanggalRencana.value,
         siklus_ke: 1,
-        metode_wo: metodeWo.value,
+        metode_wo: metodeWo.value || "sistem",
         database_pangan: "tkpi2020",
-        nama_menu: namaMenuAktif.value.trim(),
-        sub_menus: cleanSubMenus,
-        sub_menu_1: cleanSubMenus[0] || null,
-        sub_menu_2: cleanSubMenus[1] || null,
-        sub_menu_3: cleanSubMenus[2] || null,
-        sub_menu_4: cleanSubMenus[3] || null,
-        sub_menu_5: cleanSubMenus[4] || null,
-        sub_menu_alergi: subMenuAlergi.value,
+        nama_menu: woNo.value,
         total_pm: totalPM.value,
         total_pk: totalPK.value,
         total_pb: totalPB.value,
         total_alergi: totalPKAlergi.value + totalPBAlergi.value,
         total_kelompok: kelompokMenerimaAktif.value.length,
-        jadwal_operasional: payloadJadwalOperasional.value,
-        lanjut_ke_rancang_menu:
-            metodeWo.value === "manual" ? false : lanjutKeRancangMenu,
-        step: lanjutKeRancangMenu ? "formula" : null,
-        tetap_di_halaman: false,
-        tab_tujuan: activeManualTab.value,
-        akg_pk: akgPk.value,
-        akg_pb: akgPb.value,
-        akg_alergi: filteredAkgAlergiPayload.value,
-        catatan: {
-            ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
-            jadwal_operasional: payloadJadwalOperasional.value,
-            sub_menu_kategori: subMenuKategori.value,
-        },
         porsi_tambahan: porsiTambahanPayload.value,
         kelompoks: woKelompokList.value.map((k) => ({
             kelompok_id: k.id,
@@ -2336,8 +2262,8 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
             keterangan_alergi: k.keterangan_alergi || [],
         })),
         status: isEditMode.value
-            ? (props.editWorkOrder?.status === "Draft" && metodeWo.value === "manual" ? "Siap Produksi" : (props.editWorkOrder?.status || (metodeWo.value === "manual" ? "Siap Produksi" : "Draft")))
-            : (metodeWo.value === "manual" ? "Siap Produksi" : "Draft"),
+            ? (props.editWorkOrder?.status || "Draft")
+            : "Draft",
     };
 
     router.post(route("work-order.store"), payload, {
@@ -2345,17 +2271,10 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         onSuccess: () => {
             isSubmitting.value = false;
             isNavigationConfirmed.value = true;
-            nextTick(() => {
-                initialFormSnapshot.value = takeFormSnapshot();
-            });
-            triggerSubmitSuccess(
-                metodeWo.value === "manual"
-                    ? "Perencanaan Produksi WO Manual berhasil disimpan!"
-                    : "Perencanaan Produksi Work Order berhasil disimpan!",
-            );
-            if (metodeWo.value !== "manual" && !lanjutKeRancangMenu) {
-                currentTab.value = "daftar";
-            }
+            triggerSubmitSuccess("Perencanaan Produksi Work Order berhasil disimpan!");
+            setTimeout(() => {
+                router.visit(route("work-order.daftar"));
+            }, 600);
         },
         onError: (err) => {
             isSubmitting.value = false;
@@ -3321,73 +3240,20 @@ onUnmounted(() => {
                 </button>
             </div>
 
-            <!-- Tab Navigasi Mode Manual: Perencanaan Produksi & Formula Makanan -->
-            <div
-                v-if="metodeWo === 'manual'"
-                class="flex items-center gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 w-fit"
-            >
-                <button
-                    type="button"
-                    @click="activeManualTab = 'perencanaan'"
-                    :class="[
-                        'px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs',
-                        activeManualTab === 'perencanaan'
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/70',
-                    ]"
-                >
-                    <FileText class="h-4 w-4 shrink-0" />
-                    <span>Perencanaan Produksi</span>
-                </button>
-                <button
-                    type="button"
-                    @click="handleSwitchToFormulaTab"
-                    :class="[
-                        'px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs',
-                        activeManualTab === 'formula'
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/70',
-                    ]"
-                >
-                    <Package class="h-4 w-4 shrink-0" />
-                    <span>Formula Makanan</span>
-                </button>
-            </div>
-
             <!-- FORM PERENCANAAN PRODUKSI -->
-            <div
-                v-show="
-                    metodeWo === 'sistem' || activeManualTab === 'perencanaan'
-                "
-                class="space-y-6"
-            >
-                <Card
-                    className="bg-white border-slate-200 shadow-xs overflow-hidden"
-                >
-                    <CardHeader
-                        className="p-4 sm:p-5 border-b border-slate-100 bg-white"
-                    >
-                        <div
-                            class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-                        >
+            <div class="space-y-6">
+                <Card className="bg-white border-slate-200 shadow-xs overflow-hidden">
+                    <CardHeader className="p-4 sm:p-5 border-b border-slate-100 bg-white">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                             <div>
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <CardTitle
-                                        class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
-                                    >
-                                        <FileSpreadsheet
-                                            class="h-5 w-5 text-primary"
-                                        />
-                                        <span
-                                            >Menyusun Perencanaan Produksi</span
-                                        >
+                                    <CardTitle class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                                        <FileSpreadsheet class="h-5 w-5 text-primary" />
+                                        <span>Perencanaan Produksi (Work Order)</span>
                                     </CardTitle>
                                 </div>
-                                <CardDescription
-                                    class="text-xs sm:text-sm mt-0.5"
-                                >
-                                    Penetapan jadwal distribusi menu, penamaan
-                                    menu, dan menentukan Penerima Manfaat (PM).
+                                <CardDescription class="text-xs sm:text-sm mt-0.5">
+                                    Penetapan nomor perencanaan produksi, tanggal distribusi, sasaran Penerima Manfaat (PM), dan porsi tambahan produksi.
                                 </CardDescription>
                             </div>
 
@@ -3423,7 +3289,7 @@ onUnmounted(() => {
                                         :title="
                                             isEditMode
                                                 ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
-                                                : 'Pilih Mode Sistem'
+                                                : 'Pilih Mode Sistem (Rancang Otomatis)'
                                         "
                                     >
                                         <Check v-if="isMetodeWoSelected && metodeWo === 'sistem'" class="h-3.5 w-3.5 text-white" />
@@ -3445,7 +3311,7 @@ onUnmounted(() => {
                                         :title="
                                             isEditMode
                                                 ? 'Metode Work Order terkunci dan tidak dapat diubah pada Mode Edit'
-                                                : 'Pilih Mode Manual'
+                                                : 'Pilih Mode Manual (Rancang Manual)'
                                         "
                                     >
                                         <Check v-if="isMetodeWoSelected && metodeWo === 'manual'" class="h-3.5 w-3.5 text-white" />
@@ -3491,8 +3357,8 @@ onUnmounted(() => {
                         </p>
                     </CardHeader>
                     <CardContent className="p-5 sm:p-6 space-y-6">
-                        <!-- Form Identitas Perencanaan Produksi (1 Baris Bagi 3) -->
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <!-- Form Identitas Perencanaan Produksi (2 Kolom: No. WO & Tanggal Distribusi) -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <!-- Kolom 1: No. Perencanaan Produksi -->
                             <div class="space-y-1.5">
                                 <div
@@ -3863,1145 +3729,6 @@ onUnmounted(() => {
                                 </p>
                             </div>
 
-                            <!-- Kolom 3: Nama Menu Produksi MBG -->
-                            <div class="space-y-1.5">
-                                <div
-                                    class="flex items-center justify-between gap-1 min-h-[22px]"
-                                >
-                                    <label
-                                        class="text-xs font-bold text-slate-700 truncate"
-                                    >
-                                        Nama Menu Produksi
-                                        <span class="text-rose-500">*</span>
-                                    </label>
-                                    <button
-                                        type="button"
-                                        @click="handleGunakanContoh"
-                                        class="text-[10.5px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 truncate max-w-[150px]"
-                                        title="Gunakan Contoh"
-                                    >
-                                        <Sparkles
-                                            class="h-3 w-3 shrink-0 text-amber-500"
-                                        />
-                                        <span class="truncate"
-                                            >Gunakan Contoh</span
-                                        >
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    v-model="namaMenuAktif"
-                                    @input="clearError('namaMenuAktif')"
-                                    required
-                                    placeholder="Contoh: Mujair Nyat-Nyat Kintamani"
-                                    :class="[
-                                        'w-full h-11 text-xs font-bold text-slate-900 rounded-xl border px-3.5 bg-white shadow-2xs transition-all',
-                                        validationErrors.namaMenuAktif
-                                            ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                            : 'border-slate-300 focus:ring-primary focus:border-primary',
-                                    ]"
-                                />
-                                <p
-                                    v-if="validationErrors.namaMenuAktif"
-                                    class="text-[11px] text-rose-600 font-semibold mt-1 flex items-center gap-1"
-                                >
-                                    <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                    <span>{{
-                                        validationErrors.namaMenuAktif
-                                    }}</span>
-                                </p>
-                                <!-- Real-time Warning Alergi pada Nama Menu Utama -->
-                                <div
-                                    v-if="detectedAllergensMenuUtama.length > 0"
-                                    class="flex flex-wrap items-center gap-1.5 pt-1"
-                                >
-                                    <span
-                                        class="text-[10.5px] font-extrabold text-slate-700 flex items-center gap-1"
-                                    >
-                                        <AlertTriangle
-                                            class="h-3.5 w-3.5 text-amber-600 shrink-0"
-                                        />
-                                        <span>Alergen PM Terdeteksi:</span>
-                                    </span>
-                                    <span
-                                        v-for="al in detectedAllergensMenuUtama"
-                                        :key="al.jenis"
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/90 text-slate-800 border border-amber-300 text-[10.5px] font-bold shadow-2xs"
-                                    >
-                                        ⚠️ {{ al.jenis }} ({{ al.total_pm }} PM)
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Rincian Sub Menu Komponen Gizi (Sub Menu 1 s.d. Sub Menu 5) -->
-                        <div
-                            class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3"
-                        >
-                            <div
-                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 sm:pb-0"
-                            >
-                                <div class="flex items-center gap-2">
-                                    <div
-                                        class="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0"
-                                    >
-                                        ✦
-                                    </div>
-                                    <div>
-                                        <h4
-                                            class="text-xs font-black text-slate-900"
-                                        >
-                                            Rincian Sub Menu
-                                        </h4>
-                                        <p class="text-[10.5px] text-slate-500">
-                                            Input rincian untuk masing-masing
-                                            Sub Menu (minimal 5 Sub Menu).
-                                        </p>
-                                    </div>
-                                </div>
-                                <div
-                                    class="flex items-center gap-2 w-full sm:w-auto"
-                                >
-                                    <button
-                                        type="button"
-                                        @click="handleQuickPasteButtonClick"
-                                        class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-2xs border border-slate-200 hover:border-slate-300 whitespace-nowrap shrink-0"
-                                        title="Tempel list dari Excel, Word, Notepad, atau teks lainnya"
-                                    >
-                                        <ClipboardPaste
-                                            class="h-3.5 w-3.5 text-primary shrink-0"
-                                        />
-                                        <span>Tempel List</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        @click="addSubMenu"
-                                        class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-black transition-all cursor-pointer shadow-2xs border border-primary/20 whitespace-nowrap shrink-0"
-                                        title="Tambah Sub Menu Baru"
-                                    >
-                                        <Plus class="h-3.5 w-3.5 shrink-0" />
-                                        <span>Tambah Sub Menu</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Banner Real-time Deteksi Alergi PM -->
-                            <div
-                                v-if="realTimeAllergyAlerts.length > 0"
-                                class="p-3 sm:p-3.5 rounded-xl bg-white border border-slate-200 text-slate-800 space-y-2.5 text-xs shadow-2xs transition-all duration-300"
-                            >
-                                <div
-                                    class="flex items-center justify-between flex-wrap gap-2"
-                                >
-                                    <div
-                                        class="flex items-center gap-1.5 font-black text-slate-800 text-xs"
-                                    >
-                                        <ShieldAlert
-                                            class="h-4 w-4 text-amber-600 shrink-0"
-                                        />
-                                        <span
-                                            >Peringatan: Terdeteksi
-                                            {{ realTimeAllergyAlerts.length }}
-                                            Sub Menu Mengandung Bahan Alergi
-                                            PM</span
-                                        >
-                                    </div>
-                                    <span
-                                        class="text-[10px] font-bold text-slate-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 shrink-0"
-                                    >
-                                        ⚡ Realtime Deteksi Alergi
-                                    </span>
-                                </div>
-                                <div class="space-y-2">
-                                    <div
-                                        v-for="(
-                                            al, alIdx
-                                        ) in realTimeAllergyAlerts"
-                                        :key="alIdx"
-                                        class="p-2.5 sm:px-3 sm:py-2 rounded-xl border bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all"
-                                        :class="
-                                            al.hasReplacement
-                                                ? 'border-emerald-300 bg-emerald-50/20'
-                                                : 'border-rose-300 bg-rose-50/20'
-                                        "
-                                    >
-                                        <!-- Bagian Kiri/Atas: Sub Menu & Menu & Alergi -->
-                                        <div
-                                            class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] min-w-0"
-                                        >
-                                            <span
-                                                class="font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-[10px] shrink-0"
-                                            >
-                                                {{ al.subLabel }}
-                                            </span>
-                                            <span
-                                                class="font-extrabold text-slate-800 text-xs truncate max-w-[150px] sm:max-w-none"
-                                            >
-                                                "{{ al.menuName }}"
-                                            </span>
-                                            <span
-                                                class="text-slate-400 font-bold shrink-0"
-                                                >➔</span
-                                            >
-                                            <span
-                                                class="font-extrabold text-rose-700 bg-rose-100/70 border border-rose-200 px-2 py-0.5 rounded-md text-[10.5px] shrink-0"
-                                            >
-                                                {{
-                                                    formatAllergenDisplay(
-                                                        al.allergen,
-                                                    )
-                                                }}
-                                                ({{ al.totalPm }} PM)
-                                            </span>
-                                        </div>
-
-                                        <!-- Bagian Kanan/Bawah: Menu Pengganti -->
-                                        <div
-                                            class="flex items-center justify-end shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-100"
-                                        >
-                                            <span
-                                                v-if="al.hasReplacement"
-                                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-emerald-800 font-extrabold text-[10.5px] bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 shadow-2xs"
-                                            >
-                                                <Check
-                                                    class="h-3 w-3 text-emerald-600 shrink-0"
-                                                />
-                                                <span
-                                                    >Pengganti:
-                                                    <strong>{{
-                                                        al.replacementName
-                                                    }}</strong></span
-                                                >
-                                            </span>
-                                            <button
-                                                v-else
-                                                type="button"
-                                                @click="
-                                                    addPenggantiAlergiWithPreset(
-                                                        al.subKey,
-                                                        al.allergen,
-                                                    )
-                                                "
-                                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1 text-rose-700 hover:text-white font-extrabold text-[11px] bg-white hover:bg-rose-600 px-3 py-1.5 rounded-lg border border-rose-300 hover:border-rose-600 shadow-2xs cursor-pointer transition-colors"
-                                                title="Tambahkan menu pengganti sekarang"
-                                            >
-                                                <Plus
-                                                    class="h-3.5 w-3.5 shrink-0"
-                                                />
-                                                <span
-                                                    >Tambah Menu Pengganti</span
-                                                >
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex flex-wrap gap-3 items-start">
-                                <div
-                                    v-for="(subKey, sIdx) in subMenuKeys"
-                                    :key="subKey"
-                                    class="space-y-2 bg-white p-2.5 rounded-xl border shadow-2xs flex flex-col h-fit transition-all flex-1 min-w-[200px] basis-[200px]"
-                                    :class="
-                                        validationErrors[subKey]
-                                            ? 'border-rose-400 bg-rose-50/20'
-                                            : 'border-slate-200'
-                                    "
-                                >
-                                    <div class="space-y-1">
-                                        <div
-                                            class="flex items-center justify-between"
-                                        >
-                                            <label
-                                                class="text-[11px] font-black text-slate-800 flex items-center gap-1.5"
-                                            >
-                                                <span
-                                                    class="h-2 w-2 rounded-full"
-                                                    :class="
-                                                        sIdx < 5
-                                                            ? 'bg-slate-700'
-                                                            : 'bg-primary'
-                                                    "
-                                                ></span>
-                                                <span
-                                                    >Sub Menu {{ sIdx + 1 }}
-                                                    <strong
-                                                        class="text-rose-500"
-                                                        >*</strong
-                                                    ></span
-                                                >
-                                            </label>
-
-                                            <!-- Tombol Hapus jika lebih dari 5 sub menu -->
-                                            <button
-                                                v-if="subMenuKeys.length > 5"
-                                                type="button"
-                                                @click="removeSubMenu(sIdx)"
-                                                class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                                                :title="`Hapus Sub Menu ${sIdx + 1}`"
-                                            >
-                                                <Trash2 class="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-
-                                        <!-- Dropdown Kategori Sub Menu -->
-                                        <div>
-                                            <select
-                                                v-model="subMenuKategori[subKey]"
-                                                class="w-full text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50/80 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary text-slate-700 transition cursor-pointer"
-                                            >
-                                                <option
-                                                    v-for="kat in KATEGORI_SUB_MENU_OPTIONS"
-                                                    :key="kat"
-                                                    :value="kat"
-                                                >
-                                                    {{ kat }}
-                                                </option>
-                                            </select>
-                                        </div>
-
-                                        <input
-                                            type="text"
-                                            v-model="subMenuKomponen[subKey]"
-                                            @input="clearError(subKey)"
-                                            @paste="
-                                                handlePasteSubMenu($event, sIdx)
-                                            "
-                                            :placeholder="
-                                                getSubMenuDefaultPlaceholder(
-                                                    sIdx,
-                                                    subMenuKategori[subKey],
-                                                )
-                                            "
-                                            :class="[
-                                                'w-full text-xs font-semibold rounded-lg border p-2',
-                                                validationErrors[subKey]
-                                                    ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
-                                                    : 'border-slate-200 focus:ring-primary focus:border-primary bg-white',
-                                            ]"
-                                        />
-                                        <p
-                                            v-if="validationErrors[subKey]"
-                                            class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-0.5"
-                                        >
-                                            <AlertCircle
-                                                class="h-3 w-3 shrink-0"
-                                            />
-                                            <span>{{
-                                                validationErrors[subKey]
-                                            }}</span>
-                                        </p>
-
-                                        <!-- Warning Realtime Alergi Sub Menu -->
-                                        <div
-                                            v-if="
-                                                detectedAllergensPerSubMenu[
-                                                    subKey
-                                                ] &&
-                                                detectedAllergensPerSubMenu[
-                                                    subKey
-                                                ].length > 0
-                                            "
-                                            class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 space-y-1 text-[10px]"
-                                        >
-                                            <div
-                                                class="flex items-center gap-1 font-extrabold text-slate-800"
-                                            >
-                                                <AlertTriangle
-                                                    class="h-3 w-3 text-amber-600 shrink-0"
-                                                />
-                                                <span
-                                                    >Alergi PM Terdeteksi:</span
-                                                >
-                                            </div>
-                                            <div
-                                                v-for="al in detectedAllergensPerSubMenu[
-                                                    subKey
-                                                ]"
-                                                :key="al.jenis"
-                                                class="flex items-center justify-between gap-1 text-[9.5px] leading-tight text-slate-800"
-                                            >
-                                                <span
-                                                    >⚠️
-                                                    <strong
-                                                        >{{
-                                                            al.total_pm
-                                                        }}
-                                                        PM</strong
-                                                    >
-                                                    alergi
-                                                    <strong>{{
-                                                        al.jenis
-                                                    }}</strong></span
-                                                >
-                                                <button
-                                                    type="button"
-                                                    @click="
-                                                        addPenggantiAlergiWithPreset(
-                                                            subKey,
-                                                            al.jenis,
-                                                        )
-                                                    "
-                                                    class="text-slate-700 font-bold hover:underline cursor-pointer shrink-0"
-                                                    title="Tambah opsi pengganti untuk alergi ini"
-                                                >
-                                                    + Tambah
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Opsi Menu Pengganti Alergi -->
-                                    <div
-                                        class="pt-2 border-t border-slate-100 space-y-1.5"
-                                    >
-                                        <div
-                                            class="flex items-center justify-between"
-                                        >
-                                            <span
-                                                class="text-[10px] font-bold text-slate-500 flex items-center gap-1"
-                                            >
-                                                <span>🛡️ Alergi:</span>
-                                                <span
-                                                    v-if="
-                                                        subMenuAlergi[subKey] &&
-                                                        subMenuAlergi[subKey]
-                                                            .length > 0
-                                                    "
-                                                    class="text-rose-600 font-extrabold"
-                                                    >({{
-                                                        subMenuAlergi[subKey]
-                                                            .length
-                                                    }})</span
-                                                >
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="
-                                                    addPenggantiAlergi(subKey)
-                                                "
-                                                class="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                                title="Tambah menu pengganti jika ada PM alergi"
-                                            >
-                                                <Plus class="h-3 w-3" />
-                                                <span>Pengganti</span>
-                                            </button>
-                                        </div>
-
-                                        <div
-                                            v-for="(
-                                                alItem, alIdx
-                                            ) in subMenuAlergi[subKey]"
-                                            :key="alIdx"
-                                            class="p-1.5 rounded-lg border space-y-1 transition-all"
-                                            :class="
-                                                validationErrors[
-                                                    'alergi_' +
-                                                        subKey +
-                                                        '_' +
-                                                        alIdx +
-                                                        '_jenis'
-                                                ] ||
-                                                validationErrors[
-                                                    'alergi_' +
-                                                        subKey +
-                                                        '_' +
-                                                        alIdx +
-                                                        '_menu'
-                                                ]
-                                                    ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-300'
-                                                    : 'bg-white border-slate-200'
-                                            "
-                                        >
-                                            <div
-                                                class="flex items-center gap-1"
-                                            >
-                                                <select
-                                                    v-model="
-                                                        alItem.jenis_alergi
-                                                    "
-                                                    @change="
-                                                        clearError(
-                                                            'alergi_' +
-                                                                subKey +
-                                                                '_' +
-                                                                alIdx +
-                                                                '_jenis',
-                                                        )
-                                                    "
-                                                    :class="[
-                                                        'w-full text-[10.5px] font-bold rounded py-0.5 px-1.5 focus:ring-1 bg-white',
-                                                        validationErrors[
-                                                            'alergi_' +
-                                                                subKey +
-                                                                '_' +
-                                                                alIdx +
-                                                                '_jenis'
-                                                        ]
-                                                            ? 'border border-rose-400 text-rose-900 focus:ring-rose-400'
-                                                            : 'border border-slate-200 text-slate-900 focus:ring-primary focus:border-primary',
-                                                    ]"
-                                                >
-                                                    <option value="" disabled>
-                                                        -- Pilih Jenis Alergi
-                                                        (Wajib) --
-                                                    </option>
-                                                    <option
-                                                        v-for="opt in masterAlergenOptions"
-                                                        :key="opt.value"
-                                                        :value="opt.value"
-                                                    >
-                                                        {{ opt.label }}
-                                                    </option>
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    @click="
-                                                        removePenggantiAlergi(
-                                                            subKey,
-                                                            alIdx,
-                                                        )
-                                                    "
-                                                    class="h-5 w-5 shrink-0 rounded bg-white hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer"
-                                                    title="Hapus opsi ini"
-                                                >
-                                                    <Trash2
-                                                        class="h-2.5 w-2.5"
-                                                    />
-                                                </button>
-                                            </div>
-                                            <p
-                                                v-if="
-                                                    validationErrors[
-                                                        'alergi_' +
-                                                            subKey +
-                                                            '_' +
-                                                            alIdx +
-                                                            '_jenis'
-                                                    ]
-                                                "
-                                                class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
-                                            >
-                                                <AlertCircle
-                                                    class="h-2.5 w-2.5 shrink-0"
-                                                />
-                                                <span>{{
-                                                    validationErrors[
-                                                        "alergi_" +
-                                                            subKey +
-                                                            "_" +
-                                                            alIdx +
-                                                            "_jenis"
-                                                    ]
-                                                }}</span>
-                                            </p>
-
-                                            <input
-                                                type="text"
-                                                v-model="alItem.menu_pengganti"
-                                                @input="
-                                                    clearError(
-                                                        'alergi_' +
-                                                            subKey +
-                                                            '_' +
-                                                            alIdx +
-                                                            '_menu',
-                                                    )
-                                                "
-                                                placeholder="Menu pengganti (wajib)..."
-                                                :class="[
-                                                    'w-full text-[10.5px] font-medium text-slate-800 bg-white rounded py-0.5 px-1.5 focus:ring-1 placeholder:text-slate-400',
-                                                    validationErrors[
-                                                        'alergi_' +
-                                                            subKey +
-                                                            '_' +
-                                                            alIdx +
-                                                            '_menu'
-                                                    ]
-                                                        ? 'border border-rose-400 focus:ring-rose-400'
-                                                        : 'border border-slate-200 focus:ring-primary focus:border-primary',
-                                                ]"
-                                            />
-                                            <p
-                                                v-if="
-                                                    validationErrors[
-                                                        'alergi_' +
-                                                            subKey +
-                                                            '_' +
-                                                            alIdx +
-                                                            '_menu'
-                                                    ]
-                                                "
-                                                class="text-[9.5px] text-rose-600 font-bold flex items-center gap-0.5"
-                                            >
-                                                <AlertCircle
-                                                    class="h-2.5 w-2.5 shrink-0"
-                                                />
-                                                <span>{{
-                                                    validationErrors[
-                                                        "alergi_" +
-                                                            subKey +
-                                                            "_" +
-                                                            alIdx +
-                                                            "_menu"
-                                                    ]
-                                                }}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Waktu Kegiatan Operasional SPPG -->
-                        <div
-                            id="section-jadwal-operasional"
-                            class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 space-y-4"
-                        >
-                            <div
-                                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100"
-                            >
-                                <div class="flex items-center gap-2.5">
-                                    <div
-                                        class="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs"
-                                    >
-                                        <Clock class="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <div class="flex items-center gap-2">
-                                            <h4
-                                                class="text-xs sm:text-sm font-black text-slate-900"
-                                            >
-                                                Waktu Kegiatan Operasional
-                                            </h4>
-                                        </div>
-                                        <p
-                                            class="text-[11px] text-slate-500 mt-0.5"
-                                        >
-                                            Tentukan jam pelaksanaan tahapan operasional. Seluruh tahapan aktif wajib diisi sebelum lanjut.
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2 shrink-0">
-                                    <!-- Status Badge Real-time -->
-                                    <span
-                                        v-if="totalJadwalTerisi === totalJadwalTarget"
-                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs"
-                                    >
-                                        <CheckCircle2
-                                            class="h-3.5 w-3.5 text-emerald-600"
-                                        />
-                                        <span>Terisi Lengkap ({{ totalJadwalTarget }}/{{ totalJadwalTarget }})</span>
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
-                                    >
-                                        <AlertTriangle
-                                            class="h-3.5 w-3.5 text-amber-600"
-                                        />
-                                        <span
-                                            >{{ totalJadwalTerisi }}/{{ totalJadwalTarget }}
-                                            Terisi</span
-                                        >
-                                    </span>
-
-                                    <!-- Tombol Set Jam Default -->
-                                    <button
-                                        type="button"
-                                        @click="resetJadwalOperasionalToDefault"
-                                        class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 transition-colors shadow-2xs cursor-pointer shrink-0"
-                                        title="Isi seluruh jam kegiatan dengan jadwal standar operasional secara otomatis"
-                                    >
-                                        <Sparkles
-                                            class="h-3.5 w-3.5 text-amber-500"
-                                        />
-                                        <span>Gunakan Jam Default</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Pengaturan Jumlah Sesi Operasional (Fleksibel) -->
-                            <div class="p-3.5 bg-gradient-to-r from-indigo-50/80 via-white to-indigo-50/50 rounded-xl border border-indigo-100 shadow-2xs space-y-2.5 text-xs">
-                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                    <div class="flex items-center gap-2">
-                                        <Layers class="h-4 w-4 text-indigo-600 shrink-0" />
-                                        <span class="font-bold text-slate-900">Pengaturan Jumlah Sesi:</span>
-                                        <span class="text-[11px] text-slate-500 hidden md:inline">Tambah atau kurangi sesi sesuai kebutuhan SPPG (1 sesi, 2 sesi, 3 sesi, dst).</span>
-                                    </div>
-                                    <span class="text-[11px] text-indigo-700 font-bold bg-indigo-100/70 px-2 py-0.5 rounded-full shrink-0">
-                                        Total {{ totalJadwalTarget }} Tahapan Operasional
-                                    </span>
-                                </div>
-
-                                <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
-                                    <!-- Pengolahan -->
-                                    <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
-                                        <span class="font-bold text-slate-800">Pengolahan:</span>
-                                        <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
-                                            <button
-                                                type="button"
-                                                @click="hapusSesiTerakhir('pengolahan')"
-                                                :disabled="sesiCount.pengolahan <= 1"
-                                                class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Kurangi 1 Sesi Pengolahan"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
-                                                {{ sesiCount.pengolahan }} Sesi
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="tambahSesi('pengolahan')"
-                                                class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Tambah Sesi Pengolahan"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Pemorsian -->
-                                    <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
-                                        <span class="font-bold text-slate-800">Pemorsian:</span>
-                                        <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
-                                            <button
-                                                type="button"
-                                                @click="hapusSesiTerakhir('pemorsian')"
-                                                :disabled="sesiCount.pemorsian <= 1"
-                                                class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Kurangi 1 Sesi Pemorsian"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
-                                                {{ sesiCount.pemorsian }} Sesi
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="tambahSesi('pemorsian')"
-                                                class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Tambah Sesi Pemorsian"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Distribusi -->
-                                    <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
-                                        <span class="font-bold text-slate-800">Distribusi:</span>
-                                        <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
-                                            <button
-                                                type="button"
-                                                @click="hapusSesiTerakhir('distribusi')"
-                                                :disabled="sesiCount.distribusi <= 1"
-                                                class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Kurangi 1 Sesi Pendistribusian"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
-                                                {{ sesiCount.distribusi }} Sesi
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="tambahSesi('distribusi')"
-                                                class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Tambah Sesi Pendistribusian"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Pengambilan Ompreng -->
-                                    <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
-                                        <span class="font-bold text-slate-800">Pengambilan:</span>
-                                        <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
-                                            <button
-                                                type="button"
-                                                @click="hapusSesiTerakhir('pengambilan_ompreng')"
-                                                :disabled="sesiCount.pengambilan_ompreng <= 1"
-                                                class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Kurangi 1 Sesi Pengambilan"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
-                                                {{ sesiCount.pengambilan_ompreng }} Sesi
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="tambahSesi('pengambilan_ompreng')"
-                                                class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Tambah Sesi Pengambilan"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Pencucian Ompreng -->
-                                    <div class="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/90 shadow-2xs">
-                                        <span class="font-bold text-slate-800">Pencucian:</span>
-                                        <div class="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-md">
-                                            <button
-                                                type="button"
-                                                @click="hapusSesiTerakhir('pencucian_ompreng')"
-                                                :disabled="sesiCount.pencucian_ompreng <= 1"
-                                                class="h-5 w-5 rounded bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Kurangi 1 Sesi Pencucian"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="text-xs font-black text-indigo-900 px-1 min-w-[3.2rem] text-center select-none">
-                                                {{ sesiCount.pencucian_ompreng }} Sesi
-                                            </span>
-                                            <button
-                                                type="button"
-                                                @click="tambahSesi('pencucian_ompreng')"
-                                                class="h-5 w-5 rounded bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 flex items-center justify-center font-black text-xs shadow-2xs transition-colors cursor-pointer"
-                                                title="Tambah Sesi Pencucian"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Grid Kegiatan Operasional -->
-                            <div
-                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5"
-                            >
-                                <div
-                                    v-for="(
-                                        kegiatan, kKey
-                                    ) in jadwalOperasionalList"
-                                    :key="kKey"
-                                    class="p-3.5 rounded-xl border transition-all duration-200"
-                                    :class="[
-                                        validationErrors['jadwal_' + kKey] ||
-                                        validationErrors[
-                                            'jadwal_' + kKey + '_mulai'
-                                        ] ||
-                                        validationErrors[
-                                            'jadwal_' + kKey + '_selesai'
-                                        ]
-                                            ? 'border-rose-400 bg-rose-50/20 ring-1 ring-rose-300'
-                                            : jadwalOperasional[kKey]?.mulai &&
-                                                jadwalOperasional[kKey]?.selesai
-                                              ? 'border-emerald-200/80 bg-white hover:bg-slate-50/60'
-                                              : 'border-slate-200/90 bg-slate-50/60 hover:bg-slate-50/90',
-                                    ]"
-                                >
-                                    <div
-                                        class="flex items-center justify-between mb-1.5"
-                                    >
-                                        <div class="flex items-center gap-1.5 min-w-0">
-                                            <span
-                                                class="h-5 w-5 rounded-lg text-[10.5px] font-black flex items-center justify-center shrink-0"
-                                                :class="[
-                                                    jadwalOperasional[kKey]
-                                                        ?.mulai &&
-                                                    jadwalOperasional[kKey]
-                                                        ?.selesai
-                                                        ? 'bg-emerald-100 text-emerald-800'
-                                                        : 'bg-indigo-100/90 text-indigo-700',
-                                                ]"
-                                            >
-                                                {{ kegiatan.no }}
-                                            </span>
-                                            <span
-                                                class="text-xs font-black text-slate-800 truncate"
-                                                :title="kegiatan.nama"
-                                            >
-                                                {{ kegiatan.nama }}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center gap-1 shrink-0">
-                                            <button
-                                                v-if="kegiatan.isSesi && kegiatan.totalSesi > 1 && kegiatan.sesiNum > 1"
-                                                type="button"
-                                                @click="hapusSesi(kegiatan.sesiKey, kegiatan.sesiNum)"
-                                                class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition-colors cursor-pointer"
-                                                title="Hapus sesi ini"
-                                            >
-                                                <Trash2 class="h-3.5 w-3.5" />
-                                            </button>
-                                            <span
-                                                v-if="
-                                                    jadwalOperasional[kKey]
-                                                        ?.mulai &&
-                                                    jadwalOperasional[kKey]?.selesai
-                                                "
-                                                class="text-[10px] font-bold font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 flex items-center gap-1"
-                                            >
-                                                <Check
-                                                    class="h-2.5 w-2.5 text-emerald-600"
-                                                />
-                                                {{ jadwalOperasional[kKey].mulai }}
-                                                s.d
-                                            {{
-                                                jadwalOperasional[kKey].selesai
-                                            }}
-                                        </span>
-                                        <span
-                                            v-else-if="
-                                                validationErrors[
-                                                    'jadwal_' + kKey
-                                                ] ||
-                                                validationErrors[
-                                                    'jadwal_' + kKey + '_mulai'
-                                                ] ||
-                                                validationErrors[
-                                                    'jadwal_' +
-                                                        kKey +
-                                                        '_selesai'
-                                                ]
-                                            "
-                                            class="text-[10px] font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/70 flex items-center gap-1"
-                                        >
-                                            <AlertCircle
-                                                class="h-2.5 w-2.5 text-rose-600"
-                                            />
-                                            Wajib Diisi
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="text-[10px] font-bold font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
-                                        >
-                                            --:-- s.d --:--
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p
-                                        class="text-[10px] text-slate-500 leading-tight mb-2.5"
-                                    >
-                                        {{ kegiatan.deskripsi }}
-                                    </p>
-
-                                    <div class="flex items-start gap-2">
-                                        <!-- Jam Mulai -->
-                                        <div class="flex-1">
-                                            <div
-                                                class="flex items-center justify-between mb-1"
-                                            >
-                                                <label
-                                                    class="block text-[9.5px] font-bold text-slate-600 uppercase tracking-wider"
-                                                >
-                                                    Jam Mulai
-                                                    <span class="text-rose-500"
-                                                        >*</span
-                                                    >
-                                                </label>
-                                                <span
-                                                    v-if="
-                                                        validationErrors[
-                                                            'jadwal_' +
-                                                                kKey +
-                                                                '_mulai'
-                                                        ] ||
-                                                        (!jadwalOperasional[
-                                                            kKey
-                                                        ]?.mulai &&
-                                                            validationErrors.jadwal_operasional)
-                                                    "
-                                                    class="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200"
-                                                >
-                                                    Wajib
-                                                </span>
-                                            </div>
-                                            <input
-                                                :id="
-                                                    'input-jadwal-' +
-                                                    kKey +
-                                                    '-mulai'
-                                                "
-                                                type="time"
-                                                v-model="
-                                                    jadwalOperasional[kKey]
-                                                        .mulai
-                                                "
-                                                @input="
-                                                    clearError(
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_mulai',
-                                                    );
-                                                    clearError(
-                                                        'jadwal_' + kKey,
-                                                    );
-                                                    clearError(
-                                                        'jadwal_operasional',
-                                                    );
-                                                "
-                                                required
-                                                :class="[
-                                                    'w-full text-xs font-bold rounded-lg border p-2 transition-colors shadow-2xs',
-                                                    validationErrors[
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_mulai'
-                                                    ] ||
-                                                    (!jadwalOperasional[kKey]
-                                                        ?.mulai &&
-                                                        validationErrors.jadwal_operasional)
-                                                        ? 'border-rose-400 bg-rose-50/40 text-rose-950 ring-2 ring-rose-200 focus:border-rose-500 focus:ring-rose-400'
-                                                        : 'border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
-                                                ]"
-                                            />
-                                            <p
-                                                v-if="
-                                                    validationErrors[
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_mulai'
-                                                    ] ||
-                                                    (!jadwalOperasional[kKey]
-                                                        ?.mulai &&
-                                                        validationErrors.jadwal_operasional)
-                                                "
-                                                class="text-[9.5px] text-rose-600 font-bold mt-1 flex items-center gap-0.5"
-                                            >
-                                                <AlertCircle
-                                                    class="h-2.5 w-2.5 shrink-0"
-                                                />
-                                                <span
-                                                    >Jam mulai wajib diisi</span
-                                                >
-                                            </p>
-                                        </div>
-
-                                        <span
-                                            class="text-xs font-bold text-slate-400 mt-6 shrink-0"
-                                        >
-                                            s.d
-                                        </span>
-
-                                        <!-- Jam Selesai -->
-                                        <div class="flex-1">
-                                            <div
-                                                class="flex items-center justify-between mb-1"
-                                            >
-                                                <label
-                                                    class="block text-[9.5px] font-bold text-slate-600 uppercase tracking-wider"
-                                                >
-                                                    Jam Selesai
-                                                    <span class="text-rose-500"
-                                                        >*</span
-                                                    >
-                                                </label>
-                                                <span
-                                                    v-if="
-                                                        validationErrors[
-                                                            'jadwal_' +
-                                                                kKey +
-                                                                '_selesai'
-                                                        ] ||
-                                                        (!jadwalOperasional[
-                                                            kKey
-                                                        ]?.selesai &&
-                                                            validationErrors.jadwal_operasional)
-                                                    "
-                                                    class="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-200"
-                                                >
-                                                    Wajib
-                                                </span>
-                                            </div>
-                                            <input
-                                                :id="
-                                                    'input-jadwal-' +
-                                                    kKey +
-                                                    '-selesai'
-                                                "
-                                                type="time"
-                                                v-model="
-                                                    jadwalOperasional[kKey]
-                                                        .selesai
-                                                "
-                                                @input="
-                                                    clearError(
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_selesai',
-                                                    );
-                                                    clearError(
-                                                        'jadwal_' + kKey,
-                                                    );
-                                                    clearError(
-                                                        'jadwal_operasional',
-                                                    );
-                                                "
-                                                required
-                                                :class="[
-                                                    'w-full text-xs font-bold rounded-lg border p-2 transition-colors shadow-2xs',
-                                                    validationErrors[
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_selesai'
-                                                    ] ||
-                                                    (!jadwalOperasional[kKey]
-                                                        ?.selesai &&
-                                                        validationErrors.jadwal_operasional)
-                                                        ? 'border-rose-400 bg-rose-50/40 text-rose-950 ring-2 ring-rose-200 focus:border-rose-500 focus:ring-rose-400'
-                                                        : 'border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
-                                                ]"
-                                            />
-                                            <p
-                                                v-if="
-                                                    validationErrors[
-                                                        'jadwal_' +
-                                                            kKey +
-                                                            '_selesai'
-                                                    ] ||
-                                                    (!jadwalOperasional[kKey]
-                                                        ?.selesai &&
-                                                        validationErrors.jadwal_operasional)
-                                                "
-                                                class="text-[9.5px] text-rose-600 font-bold mt-1 flex items-center gap-0.5"
-                                            >
-                                                <AlertCircle
-                                                    class="h-2.5 w-2.5 shrink-0"
-                                                />
-                                                <span
-                                                    >Jam selesai wajib
-                                                    diisi</span
-                                                >
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Alert Error Global Jadwal jika ada -->
-                            <div
-                                v-if="validationErrors.jadwal_operasional"
-                                class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-                            >
-                                <div class="flex items-center gap-2">
-                                    <AlertCircle
-                                        class="h-4 w-4 shrink-0 text-rose-600"
-                                    />
-                                    <span>{{
-                                        validationErrors.jadwal_operasional
-                                    }}</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    @click="resetJadwalOperasionalToDefault"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-rose-100 text-xs font-extrabold text-indigo-700 border border-indigo-200 rounded-lg shrink-0 cursor-pointer shadow-2xs"
-                                >
-                                    <Sparkles class="h-3 w-3 text-amber-500" />
-                                    <span
-                                        >Klik untuk Isi Jam Default
-                                        Otomatis</span
-                                    >
-                                </button>
-                            </div>
                         </div>
 
                         <!-- Ringkasan Kuota PM Fix Berdasarkan Tanggal Work Order -->
@@ -6004,9 +4731,8 @@ onUnmounted(() => {
                                             class="h-3.5 w-3.5 text-amber-700 shrink-0 mt-0.5"
                                         />
                                         <span>
-                                            Default: <strong>0 porsi</strong>.
-                                            Contoh: 4 porsi (PK: 2, PB: 2) untuk
-                                            arsip dingin.
+                                            Default: <strong>2 porsi</strong> (PK: 2, PB: 0) untuk
+                                            arsip dingin & uji lab.
                                         </span>
                                     </div>
 
@@ -6170,9 +4896,8 @@ onUnmounted(() => {
                                             class="h-3.5 w-3.5 text-indigo-700 shrink-0 mt-0.5"
                                         />
                                         <span>
-                                            Default: <strong>0 porsi</strong>.
-                                            Contoh: 20 porsi (PK: 10, PB: 10)
-                                            cadangan pemorsian.
+                                            Default: <strong>12 porsi</strong> (PK: 6, PB: 6)
+                                            cadangan pemorsian / penyusutan.
                                         </span>
                                     </div>
 
@@ -6349,62 +5074,19 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Bottom Action Button -->
-                        <div
-                            class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5"
-                        >
+                        <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5">
                             <div class="text-xs text-slate-500">
-                                <span
-                                    v-if="metodeWo === 'manual'"
-                                    class="text-amber-800 font-semibold"
-                                >
-                                    ✍️ Mode Manual: Klik
-                                    <strong>Simpan Draft</strong>
-                                    untuk simpan saja, atau
-                                    <strong>Lanjut ke Formula Makanan</strong>
-                                    untuk melengkapi data gizi.
-                                </span>
-                                <span v-else>
-                                    Pastikan tanggal, nama menu, dan status
-                                    penerima sasaran sudah sesuai sebelum
-                                    melanjutkan.
-                                </span>
+                                Pastikan tanggal distribusi, kuota sasaran penerima manfaat, dan porsi tambahan produksi telah sesuai sebelum menyimpan.
                             </div>
-                            <div
-                                class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
-                            >
+                            <div class="flex items-center gap-2 w-full sm:w-auto">
                                 <Button
                                     type="button"
                                     @click="handleSavePerencanaan(false)"
                                     :disabled="isSubmitting"
-                                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
-                                >
-                                    <FileText class="h-4 w-4" />
-                                    <span>Simpan Draft</span>
-                                </Button>
-
-                                <Button
-                                    v-if="metodeWo === 'sistem'"
-                                    type="button"
-                                    @click="handleSavePerencanaan(true)"
-                                    :disabled="isSubmitting"
                                     className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
                                 >
-                                    <span>Simpan & Lanjut ke Rancang Menu</span>
-                                    <ArrowRight class="h-4 w-4 shrink-0" />
-                                </Button>
-
-                                <Button
-                                    v-else
-                                    type="button"
-                                    @click="
-                                        handleSavePerencanaanManualAndOpenFormula
-                                    "
-                                    :disabled="isSubmitting"
-                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
-                                >
-                                    <Package class="h-4 w-4 shrink-0" />
-                                    <span>Lanjut ke Formula Makanan</span>
-                                    <ArrowRight class="h-4 w-4 shrink-0" />
+                                    <Save class="h-4 w-4 shrink-0" />
+                                    <span>{{ isEditMode ? 'Perbarui Perencanaan Produksi' : 'Simpan Perencanaan Produksi' }}</span>
                                 </Button>
                             </div>
                         </div>
@@ -6850,1135 +5532,97 @@ onUnmounted(() => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- TAB 2: FORMULA MAKANAN (HANYA MUNCUL DI MODE MANUAL TAB FORMULA)          -->
+            <!-- MODAL KONFIRMASI TINGGALKAN HALAMAN (PERUBAHAN BELUM DISIMPAN)            -->
             <!-- ========================================================================= -->
-            <div
-                v-if="metodeWo === 'manual' && activeManualTab === 'formula'"
-                class="space-y-6"
+            <Modal
+                :show="showLeaveConfirmModal"
+                @close="handleCancelLeave"
+                max-width="md"
             >
-                <Card
-                    className="bg-white border-slate-200 shadow-xs overflow-hidden"
-                >
-                    <CardHeader
-                        className="p-4 sm:p-5 border-b border-slate-100 bg-white"
-                    >
+                <div class="p-5 sm:p-6 space-y-4">
+                    <!-- Icon & Header -->
+                    <div class="flex items-start gap-3.5">
                         <div
-                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                            class="h-11 w-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs"
                         >
-                            <div>
-                                <CardTitle
-                                    class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2"
-                                >
-                                    <Package class="h-5 w-5 text-blue-600" />
-                                    <span
-                                        >Formula Makanan & Kandungan Gizi
-                                        (AKG)</span
-                                    >
-                                </CardTitle>
-                                <CardDescription
-                                    class="text-xs sm:text-sm mt-0.5 text-slate-500"
-                                >
-                                    Input total kandungan gizi per porsi untuk
-                                    porsi standar (PK & PB) serta varian menu
-                                    pengganti alergi <strong>{{ woNo }}</strong
-                                    >.
-                                </CardDescription>
-                            </div>
-
-                            <!-- Sub-tab Selector: Gizi Normal vs Alergi -->
-                            <div
-                                class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold self-start sm:self-auto"
-                            >
-                                <button
-                                    type="button"
-                                    @click="activeTabGiziFormula = 'normal'"
-                                    :class="[
-                                        'px-4 py-1.5 rounded-lg transition-all cursor-pointer text-center',
-                                        activeTabGiziFormula === 'normal'
-                                            ? 'bg-white text-blue-700 shadow-2xs font-black'
-                                            : 'text-slate-600 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <span>Normal</span>
-                                </button>
-                                <button
-                                    v-if="configuredAllergiesList.length > 0"
-                                    type="button"
-                                    @click="activeTabGiziFormula = 'alergi'"
-                                    :class="[
-                                        'px-4 py-1.5 rounded-lg transition-all cursor-pointer text-center',
-                                        activeTabGiziFormula === 'alergi'
-                                            ? 'bg-amber-600 text-white shadow-2xs font-black'
-                                            : 'text-amber-800 hover:text-amber-950',
-                                    ]"
-                                >
-                                    <span>Alergi</span>
-                                </button>
-                            </div>
+                            <AlertTriangle class="h-6 w-6 stroke-[2.2]" />
                         </div>
-                    </CardHeader>
-
-                    <CardContent className="p-4 sm:p-6 space-y-6">
-                        <!-- 1. TAB GIZI PORSI NORMAL -->
-                        <div
-                            v-if="activeTabGiziFormula === 'normal'"
-                            class="grid grid-cols-1 md:grid-cols-2 gap-4"
-                        >
-                            <!-- Porsi Kecil (PK) Normal -->
-                            <div
-                                class="p-4 sm:p-5 bg-blue-50/70 rounded-2xl border border-blue-200/90 space-y-3.5 shadow-2xs"
+                        <div class="space-y-1">
+                            <h3
+                                class="text-base font-black text-slate-900 leading-snug"
                             >
-                                <div
-                                    class="flex items-center justify-between gap-2"
-                                >
-                                    <div>
-                                        <h4
-                                            class="text-sm font-black text-blue-950 flex items-center gap-1.5"
-                                        >
-                                            <Sparkles
-                                                class="h-4 w-4 text-blue-600"
-                                            />
-                                            <span
-                                                >Porsi Kecil (PK) - Normal</span
-                                            >
-                                        </h4>
-                                        <span
-                                            class="text-[11px] text-slate-500 font-medium block mt-0.5"
-                                        >
-                                            Sasaran: PAUD, TK, SD Kelas 1-3
-                                            (Standar: 500 - 600 kkal)
-                                        </span>
-                                    </div>
-                                    <div
-                                        class="flex items-center gap-2 shrink-0"
-                                    >
-                                        <button
-                                            type="button"
-                                            @click="
-                                                handleQuickPasteGizi(
-                                                    akgPk,
-                                                    'Porsi Kecil (PK) Normal',
-                                                )
-                                            "
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-blue-100/80 text-blue-700 text-[11px] font-extrabold border border-blue-200/90 transition-all cursor-pointer shadow-2xs"
-                                            title="Tempel data gizi dari Excel atau teks"
-                                        >
-                                            <ClipboardPaste
-                                                class="h-3.5 w-3.5 shrink-0"
-                                            />
-                                            <span>Tempel Gizi</span>
-                                        </button>
-                                        <span
-                                            class="text-xs font-black text-blue-800 bg-blue-100 px-2.5 py-1 rounded-full border border-blue-300 shadow-2xs shrink-0"
-                                        >
-                                            {{ totalPK }} Porsi PK
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div class="space-y-2 pt-1">
-                                    <!-- Energi -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-blue-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🔥</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 500 - 600
-                                                    kkal</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPk.energi"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPk,
-                                                        'energi',
-                                                        'Porsi Kecil (PK) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >kkal</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Protein -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-blue-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥩</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 15 - 20 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPk.protein"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPk,
-                                                        'protein',
-                                                        'Porsi Kecil (PK) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Lemak -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-blue-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥑</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 15 - 20 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPk.lemak"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPk,
-                                                        'lemak',
-                                                        'Porsi Kecil (PK) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Karbohidrat -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-blue-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🍚</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 65 - 85 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="
-                                                    akgPk.karbohidrat
-                                                "
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPk,
-                                                        'karbohidrat',
-                                                        'Porsi Kecil (PK) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Serat -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-blue-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥦</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 5 - 8 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPk.serat"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPk,
-                                                        'serat',
-                                                        'Porsi Kecil (PK) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Porsi Besar (PB) Normal -->
-                            <div
-                                class="p-4 sm:p-5 bg-emerald-50/70 rounded-2xl border border-emerald-200/90 space-y-3.5 shadow-2xs"
-                            >
-                                <div
-                                    class="flex items-center justify-between gap-2"
-                                >
-                                    <div>
-                                        <h4
-                                            class="text-sm font-black text-emerald-950 flex items-center gap-1.5"
-                                        >
-                                            <Sparkles
-                                                class="h-4 w-4 text-emerald-600"
-                                            />
-                                            <span
-                                                >Porsi Besar (PB) - Normal</span
-                                            >
-                                        </h4>
-                                        <span
-                                            class="text-[11px] text-slate-500 font-medium block mt-0.5"
-                                        >
-                                            Sasaran: SD Kelas 4-6, SMP, SMA,
-                                            Bumil/Busui (Standar: 700 - 800
-                                            kkal)
-                                        </span>
-                                    </div>
-                                    <div
-                                        class="flex items-center gap-2 shrink-0"
-                                    >
-                                        <button
-                                            type="button"
-                                            @click="
-                                                handleQuickPasteGizi(
-                                                    akgPb,
-                                                    'Porsi Besar (PB) Normal',
-                                                )
-                                            "
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100/80 text-emerald-700 text-[11px] font-extrabold border border-emerald-200/90 transition-all cursor-pointer shadow-2xs"
-                                            title="Tempel data gizi dari Excel atau teks"
-                                        >
-                                            <ClipboardPaste
-                                                class="h-3.5 w-3.5 shrink-0"
-                                            />
-                                            <span>Tempel Gizi</span>
-                                        </button>
-                                        <span
-                                            class="text-xs font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300 shadow-2xs shrink-0"
-                                        >
-                                            {{ totalPB }} Porsi PB
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div class="space-y-2 pt-1">
-                                    <!-- Energi -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-emerald-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-emerald-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🔥</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Energi</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 700 - 800
-                                                    kkal</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPb.energi"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPb,
-                                                        'energi',
-                                                        'Porsi Besar (PB) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >kkal</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Protein -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-emerald-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-emerald-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥩</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Protein</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 20 - 25 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPb.protein"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPb,
-                                                        'protein',
-                                                        'Porsi Besar (PB) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Lemak -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-emerald-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-emerald-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥑</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Lemak</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 20 - 25 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPb.lemak"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPb,
-                                                        'lemak',
-                                                        'Porsi Besar (PB) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Karbohidrat -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-emerald-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-emerald-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🍚</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Karbohidrat</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 90 - 110 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="
-                                                    akgPb.karbohidrat
-                                                "
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPb,
-                                                        'karbohidrat',
-                                                        'Porsi Besar (PB) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-
-                                    <!-- Serat -->
-                                    <div
-                                        class="p-2.5 bg-white rounded-xl border border-emerald-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-emerald-300 transition-all"
-                                    >
-                                        <div
-                                            class="flex items-center gap-2.5 min-w-0"
-                                        >
-                                            <span class="text-base shrink-0"
-                                                >🥦</span
-                                            >
-                                            <div class="min-w-0">
-                                                <span
-                                                    class="text-xs font-bold text-slate-800 block truncate"
-                                                    >Serat</span
-                                                >
-                                                <span
-                                                    class="text-[10px] text-slate-400 block truncate"
-                                                    >Standar: 7 - 10 g</span
-                                                >
-                                            </div>
-                                        </div>
-                                        <div class="relative w-32 shrink-0">
-                                            <input
-                                                v-model.number="akgPb.serat"
-                                                @paste="
-                                                    onPasteGiziInput(
-                                                        $event,
-                                                        akgPb,
-                                                        'serat',
-                                                        'Porsi Besar (PB) Normal',
-                                                    )
-                                                "
-                                                type="number"
-                                                step="0.1"
-                                                placeholder="0"
-                                                class="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            />
-                                            <span
-                                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none"
-                                                >g</span
-                                            >
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                Perubahan Belum Disimpan
+                            </h3>
+                            <p class="text-xs font-semibold text-slate-500">
+                                Konfirmasi Meninggalkan Halaman Perencanaan Work
+                                Order
+                            </p>
                         </div>
-
-                        <!-- 2. TAB GIZI VARIAN ALERGI -->
-                        <div
-                            v-else-if="activeTabGiziFormula === 'alergi'"
-                            class="space-y-4"
-                        >
-                            <!-- Navigasi Jenis Alergi -->
-                            <div
-                                class="flex items-center gap-2 overflow-x-auto pb-1"
-                            >
-                                <button
-                                    v-for="al in configuredAllergiesList"
-                                    :key="al.uniqueKey"
-                                    type="button"
-                                    @click="selectedAlergiFormulaTab = al.jenis"
-                                    :class="[
-                                        'px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap shrink-0 border',
-                                        selectedAlergiFormulaTab === al.jenis
-                                            ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                                            : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200',
-                                    ]"
-                                >
-                                    <ShieldAlert class="h-3.5 w-3.5" />
-                                    <span>Alergi: {{ al.jenis }}</span>
-                                    <span
-                                        class="text-[10px] opacity-80 font-normal"
-                                        >({{ al.pengganti }})</span
-                                    >
-                                </button>
-                            </div>
-
-                            <!-- Input Gizi untuk Alergi yang Dipilih -->
-                            <div
-                                v-if="
-                                    selectedAlergiFormulaTab &&
-                                    akgAlergi[selectedAlergiFormulaTab]
-                                "
-                                class="grid grid-cols-1 md:grid-cols-2 gap-4"
-                            >
-                                <!-- PK Alergi -->
-                                <div
-                                    class="p-4 sm:p-5 bg-white rounded-2xl border border-amber-200 shadow-2xs space-y-3.5"
-                                >
-                                    <div
-                                        class="flex items-center justify-between pb-2 border-b border-amber-100 gap-2"
-                                    >
-                                        <div>
-                                            <h5
-                                                class="text-xs font-black text-amber-950 flex items-center gap-1.5"
-                                            >
-                                                <Sparkles
-                                                    class="h-3.5 w-3.5 text-amber-600"
-                                                />
-                                                <span
-                                                    >Porsi Kecil (PK) Alergi:
-                                                    {{
-                                                        selectedAlergiFormulaTab
-                                                    }}</span
-                                                >
-                                            </h5>
-                                            <span
-                                                class="text-[10.5px] text-slate-500 mt-0.5 block"
-                                                >Menu Pengganti Khusus PM
-                                                Alergi</span
-                                            >
-                                        </div>
-                                        <button
-                                            type="button"
-                                            @click="
-                                                handleQuickPasteGizi(
-                                                    akgAlergi[
-                                                        selectedAlergiFormulaTab
-                                                    ].pk,
-                                                    `PK Alergi (${selectedAlergiFormulaTab})`,
-                                                )
-                                            "
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100/90 text-amber-900 text-[11px] font-extrabold border border-amber-300 transition-all cursor-pointer shadow-2xs shrink-0"
-                                            title="Tempel data gizi dari Excel atau teks"
-                                        >
-                                            <ClipboardPaste
-                                                class="h-3.5 w-3.5 shrink-0"
-                                            />
-                                            <span>Tempel Gizi</span>
-                                        </button>
-                                    </div>
-
-                                    <div class="space-y-2">
-                                        <div
-                                            v-for="nutrisi in [
-                                                'energi',
-                                                'protein',
-                                                'lemak',
-                                                'karbohidrat',
-                                                'serat',
-                                            ]"
-                                            :key="nutrisi"
-                                            class="p-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2"
-                                        >
-                                            <span
-                                                class="text-xs font-bold text-slate-700 capitalize"
-                                                >{{ nutrisi }}</span
-                                            >
-                                            <div class="relative w-28 shrink-0">
-                                                <input
-                                                    v-model.number="
-                                                        akgAlergi[
-                                                            selectedAlergiFormulaTab
-                                                        ].pk[nutrisi]
-                                                    "
-                                                    @paste="
-                                                        onPasteGiziInput(
-                                                            $event,
-                                                            akgAlergi[
-                                                                selectedAlergiFormulaTab
-                                                            ].pk,
-                                                            nutrisi,
-                                                            `PK Alergi (${selectedAlergiFormulaTab})`,
-                                                        )
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    placeholder="0"
-                                                    class="w-full pl-2 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:ring-1 focus:ring-amber-500 outline-none"
-                                                />
-                                                <span
-                                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none"
-                                                    >{{
-                                                        nutrisi === "energi"
-                                                            ? "kkal"
-                                                            : "g"
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- PB Alergi -->
-                                <div
-                                    class="p-4 sm:p-5 bg-white rounded-2xl border border-amber-200 shadow-2xs space-y-3.5"
-                                >
-                                    <div
-                                        class="flex items-center justify-between pb-2 border-b border-amber-100 gap-2"
-                                    >
-                                        <div>
-                                            <h5
-                                                class="text-xs font-black text-amber-950 flex items-center gap-1.5"
-                                            >
-                                                <Sparkles
-                                                    class="h-3.5 w-3.5 text-amber-600"
-                                                />
-                                                <span
-                                                    >Porsi Besar (PB) Alergi:
-                                                    {{
-                                                        selectedAlergiFormulaTab
-                                                    }}</span
-                                                >
-                                            </h5>
-                                            <span
-                                                class="text-[10.5px] text-slate-500 mt-0.5 block"
-                                                >Menu Pengganti Khusus PM
-                                                Alergi</span
-                                            >
-                                        </div>
-                                        <button
-                                            type="button"
-                                            @click="
-                                                handleQuickPasteGizi(
-                                                    akgAlergi[
-                                                        selectedAlergiFormulaTab
-                                                    ].pb,
-                                                    `PB Alergi (${selectedAlergiFormulaTab})`,
-                                                )
-                                            "
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100/90 text-amber-900 text-[11px] font-extrabold border border-amber-300 transition-all cursor-pointer shadow-2xs shrink-0"
-                                            title="Tempel data gizi dari Excel atau teks"
-                                        >
-                                            <ClipboardPaste
-                                                class="h-3.5 w-3.5 shrink-0"
-                                            />
-                                            <span>Tempel Gizi</span>
-                                        </button>
-                                    </div>
-
-                                    <div class="space-y-2">
-                                        <div
-                                            v-for="nutrisi in [
-                                                'energi',
-                                                'protein',
-                                                'lemak',
-                                                'karbohidrat',
-                                                'serat',
-                                            ]"
-                                            :key="nutrisi"
-                                            class="p-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2"
-                                        >
-                                            <span
-                                                class="text-xs font-bold text-slate-700 capitalize"
-                                                >{{ nutrisi }}</span
-                                            >
-                                            <div class="relative w-28 shrink-0">
-                                                <input
-                                                    v-model.number="
-                                                        akgAlergi[
-                                                            selectedAlergiFormulaTab
-                                                        ].pb[nutrisi]
-                                                    "
-                                                    @paste="
-                                                        onPasteGiziInput(
-                                                            $event,
-                                                            akgAlergi[
-                                                                selectedAlergiFormulaTab
-                                                            ].pb,
-                                                            nutrisi,
-                                                            `PB Alergi (${selectedAlergiFormulaTab})`,
-                                                        )
-                                                    "
-                                                    type="number"
-                                                    step="0.1"
-                                                    placeholder="0"
-                                                    class="w-full pl-2 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs font-black text-right text-slate-900 focus:ring-1 focus:ring-amber-500 outline-none"
-                                                />
-                                                <span
-                                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 pointer-events-none"
-                                                    >{{
-                                                        nutrisi === "energi"
-                                                            ? "kkal"
-                                                            : "g"
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Footer Aksi Formula Makanan -->
-                        <div
-                            class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-slate-100"
-                        >
-                            <Button
-                                type="button"
-                                variant="outline"
-                                @click="activeManualTab = 'perencanaan'"
-                                className="border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold px-5 h-11 flex items-center justify-center gap-2 rounded-xl cursor-pointer w-full sm:w-auto text-center"
-                            >
-                                <ChevronLeft class="h-4 w-4" />
-                                <span>Kembali ke Perencanaan Produksi</span>
-                            </Button>
-
-                            <Button
-                                type="button"
-                                @click="handleSavePerencanaanManualComplete"
-                                :disabled="isSubmitting"
-                                className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
-                            >
-                                <Save class="h-4 w-4" />
-                                <span>Simpan Work Order</span>
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
-
-        <!-- ========================================================================= -->
-        <!-- MODAL KONFIRMASI TINGGALKAN HALAMAN (PERUBAHAN BELUM DISIMPAN)            -->
-        <!-- ========================================================================= -->
-        <Modal
-            :show="showLeaveConfirmModal"
-            @close="handleCancelLeave"
-            max-width="md"
-        >
-            <div class="p-5 sm:p-6 space-y-4">
-                <!-- Icon & Header -->
-                <div class="flex items-start gap-3.5">
-                    <div
-                        class="h-11 w-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs"
-                    >
-                        <AlertTriangle class="h-6 w-6 stroke-[2.2]" />
                     </div>
-                    <div class="space-y-1">
-                        <h3
-                            class="text-base font-black text-slate-900 leading-snug"
-                        >
-                            Perubahan Belum Disimpan
-                        </h3>
-                        <p class="text-xs font-semibold text-slate-500">
-                            Konfirmasi Meninggalkan Halaman Perencanaan Work
-                            Order
+
+                    <!-- Konten Penjelasan -->
+                    <div
+                        class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 space-y-2 text-xs text-amber-950 leading-relaxed shadow-2xs"
+                    >
+                        <p class="font-bold">
+                            Anda telah melakukan perubahan pada rancangan Work Order
+                            ini yang belum disimpan.
                         </p>
-                    </div>
-                </div>
-
-                <!-- Konten Penjelasan -->
-                <div
-                    class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 space-y-2 text-xs text-amber-950 leading-relaxed shadow-2xs"
-                >
-                    <p class="font-bold">
-                        Anda telah melakukan perubahan pada rancangan Work Order
-                        ini yang belum disimpan.
-                    </p>
-                    <p
-                        v-if="pendingNavigation?.type === 'reload'"
-                        class="text-slate-600 text-[11.5px]"
-                    >
-                        Anda akan
-                        <strong>memuat ulang (refresh)</strong> halaman ini.
-                        Seluruh data perubahan yang belum disimpan akan
-                        <strong>hilang secara permanen</strong>.
-                    </p>
-                    <p
-                        v-else-if="pendingNavigation?.type === 'history_back'"
-                        class="text-slate-600 text-[11.5px]"
-                    >
-                        Anda menekan tombol <strong>kembali (back)</strong> pada
-                        browser. Seluruh data perubahan yang belum disimpan akan
-                        <strong>hilang secara permanen</strong>.
-                    </p>
-                    <p v-else class="text-slate-600 text-[11.5px]">
-                        Jika Anda beralih ke halaman lain sekarang, seluruh data
-                        perencanaan produksi yang belum disimpan akan
-                        <strong>hilang secara permanen</strong>.
-                    </p>
-                </div>
-
-                <div
-                    class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2"
-                >
-                    <Lightbulb class="h-4 w-4 text-amber-500 shrink-0" />
-                    <span
-                        >Silakan simpan terlebih dahulu rancangan Work Order ini
-                        sebelum berpindah halaman.</span
-                    >
-                </div>
-
-                <!-- Footer Aksi -->
-                <div
-                    class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-slate-100"
-                >
-                    <button
-                        type="button"
-                        @click="handleCancelLeave"
-                        class="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer text-center"
-                    >
-                        Tetap di Halaman Ini
-                    </button>
-                    <button
-                        type="button"
-                        @click="handleConfirmLeave"
-                        class="w-full sm:w-auto px-4 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition cursor-pointer shadow-xs text-center"
-                    >
-                        Ya, Tinggalkan Halaman
-                    </button>
-                </div>
-            </div>
-        </Modal>
-
-        <!-- Modal Manual Edit (Gizi & Alergi) -->
-        <WorkOrderManualEditModal
-            :show="showManualModal"
-            :work-order="selectedManualWo"
-            :kelompok-list="kelompokList"
-            @close="closeManualEditor"
-            @saved="handleManualSaved"
-        />
-
-        <!-- ========================================================================= -->
-        <!-- MODAL TEMPEL (PASTE) LIST SUB MENU                                       -->
-        <!-- ========================================================================= -->
-        <Modal
-            :show="showModalPasteSubMenu"
-            @close="showModalPasteSubMenu = false"
-            max-width="md"
-        >
-            <div class="p-5 sm:p-6 space-y-4">
-                <div class="flex items-start gap-3.5">
-                    <div
-                        class="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20 shadow-2xs"
-                    >
-                        <ClipboardPaste class="h-6 w-6 stroke-[2.2]" />
-                    </div>
-                    <div class="space-y-1">
-                        <h3
-                            class="text-base font-black text-slate-900 leading-snug"
-                        >
-                            Tempel List Sub Menu
-                        </h3>
-                        <p class="text-xs font-semibold text-slate-500">
-                            Salin list dari Excel, Word, Notepad, atau WA dan
-                            tempel di sini.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-xs font-bold text-slate-700">
-                        Teks Daftar Menu (1 baris per sub menu):
-                    </label>
-                    <textarea
-                        v-model="pasteModalInputText"
-                        rows="6"
-                        placeholder="Contoh:&#10;1. Nasi Putih&#10;2. Ayam Goreng Lengkuas&#10;3. Tempe Bacem&#10;4. Sayur Sop Bening&#10;5. Buah Pisang Ambon&#10;6. Susu UHT"
-                        class="w-full text-xs font-medium rounded-xl border border-slate-300 p-3 text-slate-800 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none shadow-2xs font-mono"
-                    ></textarea>
-
-                    <div
-                        class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 space-y-1"
-                    >
                         <p
-                            class="font-bold text-slate-800 flex items-center gap-1.5"
+                            v-if="pendingNavigation?.type === 'reload'"
+                            class="text-slate-600 text-[11.5px]"
                         >
-                            <Lightbulb
-                                class="h-3.5 w-3.5 text-amber-500 shrink-0"
-                            />
-                            <span>Cara Kerja Cerdas:</span>
+                            Anda akan
+                            <strong>memuat ulang (refresh)</strong> halaman ini.
+                            Seluruh data perubahan yang belum disimpan akan
+                            <strong>hilang secara permanen</strong>.
                         </p>
-                        <ul
-                            class="list-disc list-inside space-y-0.5 text-slate-600 pl-1 text-[10.5px]"
+                        <p
+                            v-else-if="pendingNavigation?.type === 'history_back'"
+                            class="text-slate-600 text-[11.5px]"
                         >
-                            <li>
-                                Mendukung salin dari sel Excel (vertikal &
-                                horizontal).
-                            </li>
-                            <li>
-                                Nomor otomatis (1., 2.), strip (-), dan simbol
-                                bullet (•) akan dibersihkan.
-                            </li>
-                            <li>
-                                Sub menu tambahan otomatis bertambah jika list
-                                lebih dari 5 item.
-                            </li>
-                            <li>
-                                Anda juga bisa langsung
-                                <span class="font-bold text-slate-800"
-                                    >Ctrl + V</span
-                                >
-                                di input Sub Menu mana pun!
-                            </li>
-                        </ul>
+                            Anda menekan tombol <strong>kembali (back)</strong> pada
+                            browser. Seluruh data perubahan yang belum disimpan akan
+                            <strong>hilang secara permanen</strong>.
+                        </p>
+                        <p v-else class="text-slate-600 text-[11.5px]">
+                            Jika Anda beralih ke halaman lain sekarang, seluruh data
+                            perencanaan produksi yang belum disimpan akan
+                            <strong>hilang secara permanen</strong>.
+                        </p>
+                    </div>
+
+                    <div
+                        class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2"
+                    >
+                        <Lightbulb class="h-4 w-4 text-amber-500 shrink-0" />
+                        <span
+                            >Silakan simpan terlebih dahulu rancangan Work Order ini
+                            sebelum berpindah halaman.</span
+                        >
+                    </div>
+
+                    <!-- Footer Aksi -->
+                    <div
+                        class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-slate-100"
+                    >
+                        <button
+                            type="button"
+                            @click="handleCancelLeave"
+                            class="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer text-center"
+                        >
+                            Tetap di Halaman Ini
+                        </button>
+                        <button
+                            type="button"
+                            @click="handleConfirmLeave"
+                            class="w-full sm:w-auto px-4 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition cursor-pointer shadow-xs text-center"
+                        >
+                            Ya, Tinggalkan Halaman
+                        </button>
                     </div>
                 </div>
-
-                <div
-                    class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100"
-                >
-                    <button
-                        type="button"
-                        @click="showModalPasteSubMenu = false"
-                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                        Batal
-                    </button>
-                    <button
-                        type="button"
-                        @click="handleApplyPasteFromModal"
-                        :disabled="!pasteModalInputText.trim()"
-                        class="px-4 py-2.5 rounded-xl text-xs font-black bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                        <Check class="h-3.5 w-3.5" />
-                        <span>Terapkan ke Sub Menu</span>
-                    </button>
-                </div>
-            </div>
-        </Modal>
-
-        <!-- ========================================================================= -->
-        <!-- MODAL TEMPEL (PASTE) NILAI GIZI (AKG) REUSABLE                            -->
-        <!-- ========================================================================= -->
-        <GiziPasteModal
-            :show="showGiziPasteModal"
-            :target-title="giziPasteTargetTitle"
-            :initial-text="giziPasteInitialText"
-            @close="showGiziPasteModal = false"
-            @apply="handleApplyGiziFromModal"
-        />
-
-        <!-- Toast Floating Notifikasi Sukses Paste -->
-        <transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="transform translate-y-3 opacity-0"
-            enter-to-class="transform translate-y-0 opacity-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="transform translate-y-0 opacity-100"
-            leave-to-class="transform translate-y-3 opacity-0"
-        >
-            <div
-                v-if="pasteToastMessage"
-                class="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900/95 backdrop-blur text-white shadow-2xl border border-slate-700/80 text-xs font-black pointer-events-auto"
-            >
-                <div
-                    class="h-6 w-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0"
-                >
-                    <CheckCircle2 class="h-4 w-4" />
-                </div>
-                <span>{{ pasteToastMessage }}</span>
-            </div>
-        </transition>
+            </Modal>
+        </div>
     </AppLayout>
 </template>
