@@ -1235,7 +1235,7 @@ const dailyAnalysisGrandTotal = computed(() => {
 
 // ─── Modal Generator Pola Shifting ───────────────────────────────────────────
 const isGeneratorModalOpen = ref(false);
-const generatorPattern = ref("divisi_rotasi"); // 'divisi_rotasi' | 'rotasi_2_tim' | 'senin_jumat'
+const generatorPattern = ref("rotasi_mingguan"); // 'rotasi_mingguan' | 'divisi_rotasi' | 'rotasi_2_tim' | 'senin_jumat'
 const generatorBlokHari = ref(1); // 1 | 2 | 3 | 5
 const generatorDivisiRatio = ref("50"); // '50' | '67' | '1_orang' | 'kustom'
 const generatorTargetDivisi = ref("all");
@@ -1245,7 +1245,266 @@ const generatorExcludeWeekend = ref(true); // default: Sabtu dan Minggu Libur
 const generatorSingleStaffFullWork = ref(true); // Divisi dengan 1 personil (Kepala/Gizi) masuk penuh
 const generatorCustomDays = ref(10);
 
+// ─── Pola Rotasi Mingguan (Per Minggu Bergilir Orang) ─────────────────────────
+const generatorWeeklyType = ref("bagi_rata"); // 'bagi_rata' | 'bagi_minggu' | '1_orang'
+const generatorWeeklyWorkDays = ref("senin_jumat"); // 'senin_jumat' | 'senin_sabtu' | 'semua' | 'kustom'
+const generatorWeeklyCustomDays = ref([1, 2, 3, 4, 5]); // 1=Sen, 2=Sel, 3=Rab, 4=Kam, 5=Jum
+const generatorWeeklyGrouping = ref("blok_7"); // 'blok_7' | 'kalender'
+const previewDivisi = ref("");
+
+const daysOfWeekList = [
+    { num: 1, label: "Sen", fullName: "Senin" },
+    { num: 2, label: "Sel", fullName: "Selasa" },
+    { num: 3, label: "Rab", fullName: "Rabu" },
+    { num: 4, label: "Kam", fullName: "Kamis" },
+    { num: 5, label: "Jum", fullName: "Jumat" },
+    { num: 6, label: "Sab", fullName: "Sabtu" },
+    { num: 0, label: "Min", fullName: "Minggu" },
+];
+
+function toggleWeeklyCustomDay(dayNum) {
+    const idx = generatorWeeklyCustomDays.value.indexOf(dayNum);
+    if (idx >= 0) {
+        if (generatorWeeklyCustomDays.value.length > 1) {
+            generatorWeeklyCustomDays.value.splice(idx, 1);
+        }
+    } else {
+        generatorWeeklyCustomDays.value.push(dayNum);
+    }
+}
+
+function setWeeklyPresetDays(preset) {
+    generatorWeeklyWorkDays.value = preset;
+    if (preset === "senin_jumat") {
+        generatorWeeklyCustomDays.value = [1, 2, 3, 4, 5];
+    } else if (preset === "senin_sabtu") {
+        generatorWeeklyCustomDays.value = [1, 2, 3, 4, 5, 6];
+    } else if (preset === "semua") {
+        generatorWeeklyCustomDays.value = [1, 2, 3, 4, 5, 6, 0];
+    }
+}
+
+function formatTglSingkat(dateStr) {
+    if (!dateStr) return "-";
+    const parts = dateStr.split("-");
+    if (parts.length < 3) return dateStr;
+    const bulanPendek = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+    const bln = bulanPendek[parseInt(parts[1], 10) - 1] || parts[1];
+    return `${parts[2]} ${bln}`;
+}
+
+// Menghitung indeks personil aktif bergilir yang dibagi rata
+function getWeeklyActiveIndices(n, weekIdx, totalWeeks, weeklyType = "bagi_rata", startType = "tim_a_first", teamMethod = "ganjil_genap") {
+    if (n <= 1) return [0];
+
+    const offset = startType === "tim_b_first" ? 1 : 0;
+
+    if (weeklyType === "bagi_rata") {
+        // Bagi rata 50% seluruh personil menjadi 2 regu sama banyak
+        const reguA = [];
+        const reguB = [];
+
+        if (teamMethod === "separuh") {
+            const half = Math.ceil(n / 2);
+            for (let i = 0; i < n; i++) {
+                if (i < half) reguA.push(i);
+                else reguB.push(i);
+            }
+        } else {
+            // Default: selang-seling (ganjil-genap)
+            for (let i = 0; i < n; i++) {
+                if (i % 2 === 0) reguA.push(i);
+                else reguB.push(i);
+            }
+        }
+
+        const isReguATurn = ((weekIdx + offset) % 2) === 0;
+        return isReguATurn ? reguA : reguB;
+    } else if (weeklyType === "bagi_minggu") {
+        // Bagi rata seluruh personil sebanyak jumlah minggu dalam periode
+        const W = Math.max(1, totalWeeks);
+        const active = [];
+        for (let i = 0; i < n; i++) {
+            const assignedWeek = (i + offset) % W;
+            if (assignedWeek === (weekIdx % W)) {
+                active.push(i);
+            }
+        }
+        return active.length > 0 ? active : [0];
+    } else if (weeklyType === "1_orang") {
+        const turnIndex = (weekIdx + offset) % n;
+        return [turnIndex];
+    }
+
+    return [0];
+}
+
+const weekPeriods = computed(() => {
+    const cols = dateColumns.value;
+    if (!cols || cols.length === 0) return [];
+
+    const weeks = [];
+    if (generatorWeeklyGrouping.value === "kalender") {
+        let currentWeek = [];
+        let weekNum = 1;
+        cols.forEach((col, idx) => {
+            if (idx > 0 && col.dayOfWeek === 1) {
+                weeks.push({
+                    weekNum,
+                    label: `Minggu ${weekNum}`,
+                    dates: currentWeek,
+                    startDate: currentWeek[0]?.dateStr,
+                    endDate: currentWeek[currentWeek.length - 1]?.dateStr,
+                });
+                weekNum++;
+                currentWeek = [];
+            }
+            currentWeek.push(col);
+        });
+        if (currentWeek.length > 0) {
+            weeks.push({
+                weekNum,
+                label: `Minggu ${weekNum}`,
+                dates: currentWeek,
+                startDate: currentWeek[0]?.dateStr,
+                endDate: currentWeek[currentWeek.length - 1]?.dateStr,
+            });
+        }
+    } else {
+        // Blok 7 Hari (Hari 1-7, 8-14, dst)
+        const totalDates = cols.length;
+        const totalWeeks = Math.ceil(totalDates / 7);
+        for (let w = 1; w <= totalWeeks; w++) {
+            const startIdx = (w - 1) * 7;
+            const endIdx = Math.min(totalDates, w * 7);
+            const chunk = cols.slice(startIdx, endIdx);
+            if (chunk.length > 0) {
+                weeks.push({
+                    weekNum: w,
+                    label: `Minggu ${w}`,
+                    dates: chunk,
+                    startDate: chunk[0]?.dateStr,
+                    endDate: chunk[chunk.length - 1]?.dateStr,
+                });
+            }
+        }
+    }
+    return weeks;
+});
+
+// Ringkasan divisi shifting untuk preview simulasi bagi rata
+const shiftingDivisiSummary = computed(() => {
+    const activeStaff = (props.petugas || []).filter((p) => p.status !== "Nonaktif");
+    const wajibSet = new Set(wajibHadirStaffIds.value);
+    const shiftingStaff = activeStaff.filter((p) => !wajibSet.has(p.id));
+
+    const grouped = {};
+    shiftingStaff.forEach((p) => {
+        const j = p.jabatan || "Umum";
+        if (!grouped[j]) grouped[j] = [];
+        grouped[j].push(p);
+    });
+
+    return Object.keys(grouped).map((name) => ({
+        name,
+        count: grouped[name].length,
+        staff: grouped[name],
+    }));
+});
+
+watch(
+    () => shiftingDivisiSummary.value,
+    (list) => {
+        if (list.length > 0 && (!previewDivisi.value || !list.some((d) => d.name === previewDivisi.value))) {
+            const best = [...list].sort((a, b) => b.count - a.count)[0];
+            previewDivisi.value = best?.name || list[0].name;
+        }
+    },
+    { immediate: true, deep: true }
+);
+
+const weeklySimulationSummary = computed(() => {
+    if (generatorPattern.value !== "rotasi_mingguan") return [];
+    const weeks = weekPeriods.value;
+    if (weeks.length === 0) return [];
+
+    const activeStaff = (props.petugas || []).filter((p) => p.status !== "Nonaktif");
+    const wajibSet = new Set(wajibHadirStaffIds.value);
+    const shiftingStaff = activeStaff.filter((p) => !wajibSet.has(p.id));
+
+    let sampleStaff = [];
+    let currentDivisiName = "";
+
+    if (generatorTargetDivisi.value !== "all") {
+        currentDivisiName = generatorTargetDivisi.value;
+        sampleStaff = shiftingStaff.filter((p) => (p.jabatan || "Umum") === currentDivisiName);
+    } else {
+        currentDivisiName = previewDivisi.value || shiftingDivisiSummary.value[0]?.name || "Umum";
+        sampleStaff = shiftingStaff.filter((p) => (p.jabatan || "Umum") === currentDivisiName);
+        if (sampleStaff.length === 0 && shiftingStaff.length > 0) {
+            sampleStaff = shiftingStaff;
+        }
+    }
+
+    const n = sampleStaff.length;
+
+    return weeks.map((wk, wIdx) => {
+        let activeNames = [];
+        let offNames = [];
+
+        if (n === 0) {
+            activeNames = ["Personil Divisi Shifting"];
+            offNames = [];
+        } else if (n === 1 && generatorSingleStaffFullWork.value) {
+            activeNames = [sampleStaff[0].nama + " (Masuk Penuh)"];
+            offNames = [];
+        } else {
+            const activeIndices = getWeeklyActiveIndices(
+                n,
+                wIdx,
+                weeks.length,
+                generatorWeeklyType.value,
+                generatorStartType.value,
+                generatorTeamMethod.value
+            );
+
+            sampleStaff.forEach((s, idx) => {
+                if (activeIndices.includes(idx)) {
+                    activeNames.push(s.nama);
+                } else {
+                    offNames.push(s.nama);
+                }
+            });
+        }
+
+        return {
+            weekNum: wk.weekNum,
+            label: wk.label,
+            startDate: wk.startDate,
+            endDate: wk.endDate,
+            daysCount: wk.dates.length,
+            divisiName: currentDivisiName,
+            totalStaff: n,
+            activeCount: activeNames.length,
+            offCount: offNames.length,
+            activeNames,
+            offNames,
+        };
+    });
+});
+
 const totalWorkDaysCount = computed(() => {
+    if (generatorPattern.value === "rotasi_mingguan") {
+        if (generatorWeeklyWorkDays.value === "senin_jumat") {
+            return dateColumns.value.filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 5).length;
+        } else if (generatorWeeklyWorkDays.value === "senin_sabtu") {
+            return dateColumns.value.filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 6).length;
+        } else if (generatorWeeklyWorkDays.value === "semua") {
+            return dateColumns.value.length;
+        } else if (generatorWeeklyWorkDays.value === "kustom") {
+            return dateColumns.value.filter((d) => generatorWeeklyCustomDays.value.includes(d.dayOfWeek)).length;
+        }
+    }
     if (generatorExcludeWeekend.value) {
         return dateColumns.value.filter((d) => !d.isWeekend).length;
     }
@@ -1376,6 +1635,8 @@ function toggleRoleCategory(keywords) {
 const selectedWajibHadirCount = computed(() => wajibHadirStaffIds.value.length);
 
 function openGeneratorModal() {
+    generatorPattern.value = "rotasi_mingguan";
+    generatorWeeklyType.value = "bagi_rata";
     isGeneratorModalOpen.value = true;
 }
 
@@ -1564,6 +1825,83 @@ function applyGeneratorPattern() {
                         break;
                     }
                 }
+            });
+        });
+    } else if (generatorPattern.value === "rotasi_mingguan") {
+        // ─── POLA ROTASI BERGILIR MINGGUAN (PER MINGGU BERGANTIAN ORANG) ───
+        const weeks = weekPeriods.value;
+        if (weeks.length === 0) {
+            showToast("Rentang tanggal tidak mencukupi untuk pembagian mingguan.");
+            return;
+        }
+
+        const isDayActive = (col) => {
+            if (generatorWeeklyWorkDays.value === "senin_jumat") {
+                return col.dayOfWeek >= 1 && col.dayOfWeek <= 5;
+            } else if (generatorWeeklyWorkDays.value === "senin_sabtu") {
+                return col.dayOfWeek >= 1 && col.dayOfWeek <= 6;
+            } else if (generatorWeeklyWorkDays.value === "semua") {
+                return true;
+            } else if (generatorWeeklyWorkDays.value === "kustom") {
+                return generatorWeeklyCustomDays.value.includes(col.dayOfWeek);
+            }
+            return !col.isWeekend;
+        };
+
+        targetDivisiList.forEach((divisiName) => {
+            const members = shiftingStaff.filter((p) => (p.jabatan || "Umum") === divisiName);
+            const n = members.length;
+            if (n === 0) return;
+
+            // Jika hanya 1 orang di divisi dan opsi single staff aktif: masuk penuh pada seluruh hari kerja aktif
+            if (n === 1 && generatorSingleStaffFullWork.value) {
+                const singleP = members[0];
+                const isKeam = isStaffKeamanan(singleP);
+                allDates.forEach((col) => {
+                    if (isKeam && col.isWeekend) {
+                        matrixShifting.value[singleP.id][col.dateStr] = "H";
+                    } else if (isDayActive(col)) {
+                        matrixShifting.value[singleP.id][col.dateStr] = "H";
+                    } else {
+                        matrixShifting.value[singleP.id][col.dateStr] = "L";
+                    }
+                });
+                return;
+            }
+
+            // Jika 2 orang atau lebih: rotasi bergilir mingguan dibagi rata
+            weeks.forEach((wk, wIdx) => {
+                const activeIndices = getWeeklyActiveIndices(
+                    n,
+                    wIdx,
+                    weeks.length,
+                    generatorWeeklyType.value,
+                    generatorStartType.value,
+                    generatorTeamMethod.value
+                );
+
+                members.forEach((m, idx) => {
+                    const isTurnThisWeek = activeIndices.includes(idx);
+                    const isKeam = isStaffKeamanan(m);
+
+                    wk.dates.forEach((col) => {
+                        if (isTurnThisWeek) {
+                            if (isKeam && col.isWeekend) {
+                                matrixShifting.value[m.id][col.dateStr] = "H";
+                            } else if (isDayActive(col)) {
+                                matrixShifting.value[m.id][col.dateStr] = "H";
+                            } else {
+                                matrixShifting.value[m.id][col.dateStr] = "L";
+                            }
+                        } else {
+                            if (isKeam && col.isWeekend && !generatorExcludeWeekend.value) {
+                                matrixShifting.value[m.id][col.dateStr] = "H";
+                            } else {
+                                matrixShifting.value[m.id][col.dateStr] = "L";
+                            }
+                        }
+                    });
+                });
             });
         });
     }
@@ -3725,12 +4063,12 @@ function getTeamBorderClass(jabatan) {
                 >
                     <div
                         v-if="isGeneratorModalOpen"
-                        class="fixed inset-0 z-[99999] min-h-screen w-screen overflow-y-auto bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 lg:p-6"
+                        class="fixed inset-0 z-[99999] h-screen h-[100dvh] w-screen overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 lg:p-6"
                         style="top: 0; left: 0; right: 0; bottom: 0; margin: 0;"
                     >
-                        <div class="relative w-full max-w-lg lg:max-w-4xl xl:max-w-5xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 my-auto animate-in fade-in zoom-in-95 duration-200">
+                        <div class="relative w-full max-w-[96vw] xl:max-w-[1360px] 2xl:max-w-[1480px] rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96dvh] sm:max-h-[92vh] my-auto animate-in fade-in zoom-in-95 duration-200">
                             <!-- Modal Header -->
-                            <div class="p-4 sm:p-5 flex items-center justify-between bg-slate-50/80">
+                            <div class="p-3.5 sm:p-4.5 lg:p-5 flex items-center justify-between bg-slate-50/90 border-b border-slate-100 shrink-0">
                                 <div class="flex items-center gap-2.5">
                                     <div class="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
                                         <Sparkles class="h-5 w-5" />
@@ -3739,7 +4077,7 @@ function getTeamBorderClass(jabatan) {
                                         <h3 class="text-sm sm:text-base font-bold text-slate-900">
                                             Generator Pola Shifting Hari Kerja
                                         </h3>
-                                        <p class="text-xs text-slate-500">
+                                        <p class="text-[11px] sm:text-xs text-slate-500">
                                             Terapkan pola rotasi otomatis ke personil SPPG
                                         </p>
                                     </div>
@@ -3747,18 +4085,18 @@ function getTeamBorderClass(jabatan) {
                                 <button
                                     type="button"
                                     @click="closeGeneratorModal"
-                                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                                 >
                                     <X class="h-4 w-4" />
                                 </button>
                             </div>
 
                             <!-- Modal Body: 2 Kolom di Desktop (Memanfaatkan Sisi Lebar Layar), 1 Kolom Rapi di Mobile -->
-                            <div class="p-4 sm:p-6 text-xs max-h-[82vh] overflow-y-auto">
-                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                            <div class="p-3 sm:p-5 lg:p-6 text-xs overflow-y-auto flex-1 overscroll-contain">
+                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
                                     
                                     <!-- ─── Kolom Kiri (Desktop): Personil Wajib & Pengaturan Lingkup ─── -->
-                                    <div class="lg:col-span-5 space-y-4">
+                                    <div class="lg:col-span-4 xl:col-span-4 space-y-4">
                                         <!-- Bagian 1: Personil Wajib Selalu Hadir (Bebas Shifting) -->
                                         <div class="p-3 sm:p-3.5 rounded-xl border border-amber-200/90 bg-amber-50/50 space-y-2.5">
                                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -3895,14 +4233,365 @@ function getTeamBorderClass(jabatan) {
                                     </div>
 
                                     <!-- ─── Kolom Kanan (Desktop): Pilihan Pola Shifting ─── -->
-                                    <div class="lg:col-span-7 space-y-3">
+                                    <div class="lg:col-span-8 xl:col-span-8 space-y-4">
 
-                                <!-- Opsi Pola Rotasi -->
-                                <div class="space-y-1.5">
-                                    <label class="block font-bold text-slate-700">
-                                        Pilih Model Pola Shifting (Untuk Personil Lainnya):
-                                    </label>
-                                    <div class="grid grid-cols-1 gap-2.5">
+                                        <!-- Opsi Pola Rotasi -->
+                                        <div class="space-y-2">
+                                            <label class="block font-bold text-slate-800 text-xs">
+                                                Pilih Model Pola Shifting (Untuk Personil Lainnya):
+                                            </label>
+                                            <div class="grid grid-cols-1 gap-3">
+                                                <!-- Pola 0: Rotasi Bergilir Mingguan (Bagi Rata Personil per Tim) -->
+                                                <label
+                                                    :class="[
+                                                        'p-3.5 sm:p-4 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors',
+                                                        generatorPattern === 'rotasi_mingguan'
+                                                            ? 'bg-primary/5 border-primary ring-1 ring-primary/30 shadow-2xs'
+                                                            : 'border-slate-200 hover:bg-slate-50',
+                                                    ]"
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        v-model="generatorPattern"
+                                                        value="rotasi_mingguan"
+                                                        class="mt-1 text-primary focus:ring-primary h-4 w-4 shrink-0 cursor-pointer"
+                                                    />
+                                                    <div class="w-full space-y-3">
+                                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                                            <div class="flex items-center gap-2 flex-wrap">
+                                                                <p class="font-bold text-slate-900 text-xs sm:text-sm">
+                                                                    Rotasi Bergilir Mingguan (Bagi Rata Personil per Tim)
+                                                                </p>
+                                                                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-primary text-white shadow-2xs">
+                                                                    Rekomendasi
+                                                                </span>
+                                                            </div>
+                                                            <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 self-start sm:self-auto">
+                                                                Bagi Rata Mingguan
+                                                            </span>
+                                                        </div>
+                                                        <p class="text-slate-500 text-[11px] sm:text-xs leading-relaxed">
+                                                            Berapa pun jumlah personil di tiap divisi, seluruhnya dibagi rata menjadi 2 regu bergantian setiap minggu (misal: 6 orang ➜ 3 masuk & 3 libur di Minggu 1, lalu bertukar di Minggu 2). Hari kerja aktif mingguan dan status tiap hari tetap bebas disesuaikan.
+                                                        </p>
+
+                                                        <!-- Konfigurasi Khusus Rotasi Mingguan -->
+                                                        <div
+                                                            v-if="generatorPattern === 'rotasi_mingguan'"
+                                                            class="pt-3 border-t border-slate-200 space-y-3.5"
+                                                            @click.stop
+                                                        >
+                                                            <!-- 1. Model Giliran Mingguan (Bagi Rata Seluruh Personil) -->
+                                                            <div class="space-y-2">
+                                                                <div class="flex items-center justify-between gap-2">
+                                                                    <label class="block font-bold text-slate-800 text-xs">
+                                                                        Model Pembagian Giliran Mingguan:
+                                                                    </label>
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="generatorWeeklyType = generatorWeeklyType === '1_orang' ? 'bagi_rata' : '1_orang'"
+                                                                        class="text-[11px] text-primary hover:underline font-semibold cursor-pointer"
+                                                                    >
+                                                                        {{ generatorWeeklyType === '1_orang' ? 'Kembali ke Bagi Rata Tim' : 'Mode Khusus 1 Org Saja' }}
+                                                                    </button>
+                                                                </div>
+
+                                                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="generatorWeeklyType = 'bagi_rata'"
+                                                                        :class="[
+                                                                            'p-3 rounded-xl text-left border transition-all cursor-pointer flex items-center justify-between gap-2',
+                                                                            generatorWeeklyType === 'bagi_rata'
+                                                                                ? 'bg-primary text-white border-primary shadow-xs ring-2 ring-primary/20'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
+                                                                        ]"
+                                                                    >
+                                                                        <div>
+                                                                            <p class="font-bold text-xs sm:text-sm">Bagi Rata Personil (50% : 50%)</p>
+                                                                            <p :class="generatorWeeklyType === 'bagi_rata' ? 'text-white/85' : 'text-slate-500'" class="text-[11px] font-normal mt-0.5">
+                                                                                Jumlah personil tim dibagi rata sama banyak (Rekomendasi)
+                                                                            </p>
+                                                                        </div>
+                                                                        <div :class="generatorWeeklyType === 'bagi_rata' ? 'bg-white text-primary' : 'bg-slate-100 text-transparent'" class="p-1 rounded-full shrink-0">
+                                                                            <Check class="h-3.5 w-3.5" />
+                                                                        </div>
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="generatorWeeklyType = 'bagi_minggu'"
+                                                                        :class="[
+                                                                            'p-3 rounded-xl text-left border transition-all cursor-pointer flex items-center justify-between gap-2',
+                                                                            generatorWeeklyType === 'bagi_minggu'
+                                                                                ? 'bg-primary text-white border-primary shadow-xs ring-2 ring-primary/20'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
+                                                                        ]"
+                                                                    >
+                                                                        <div>
+                                                                            <p class="font-bold text-xs sm:text-sm">Bagi Rata ke Seluruh Minggu</p>
+                                                                            <p :class="generatorWeeklyType === 'bagi_minggu' ? 'text-white/85' : 'text-slate-500'" class="text-[11px] font-normal mt-0.5">
+                                                                                Dibagi rata ke {{ weekPeriods.length }} kelompok minggu
+                                                                            </p>
+                                                                        </div>
+                                                                        <div :class="generatorWeeklyType === 'bagi_minggu' ? 'bg-white text-primary' : 'bg-slate-100 text-transparent'" class="p-1 rounded-full shrink-0">
+                                                                            <Check class="h-3.5 w-3.5" />
+                                                                        </div>
+                                                                    </button>
+                                                                </div>
+
+                                                                <!-- Penjelasan Bagi Rata -->
+                                                                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs leading-relaxed flex items-start gap-2">
+                                                                    <Sparkles class="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                                                                    <div>
+                                                                        <strong class="font-bold">Sistem Bagi Rata Personil:</strong> Berapa pun jumlah personil di tim, seluruhnya dibagi rata menjadi 2 regu seimbang dan bergantian tiap minggu (misal: tim isi 8 orang ➜ 4 masuk & 4 libur di Minggu 1, lalu bertukar di Minggu 2; jika tim 6 orang ➜ 3 dan 3; jika tim 4 orang ➜ 2 dan 2; jika tim 2 orang ➜ 1 dan 1).
+                                                                    </div>
+                                                                </div>
+
+                                                                <!-- Sub-opsi Metode Regu jika Bagi Rata -->
+                                                                <div v-if="generatorWeeklyType === 'bagi_rata'" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                    <span class="text-xs text-slate-700 font-bold">Metode Pembagian Regu:</span>
+                                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                                        <button
+                                                                            type="button"
+                                                                            @click="generatorTeamMethod = 'ganjil_genap'"
+                                                                            :class="[
+                                                                                'px-3 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer',
+                                                                                generatorTeamMethod === 'ganjil_genap'
+                                                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100',
+                                                                            ]"
+                                                                        >
+                                                                            Selang-seling (Ganjil/Genap)
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            @click="generatorTeamMethod = 'separuh'"
+                                                                            :class="[
+                                                                                'px-3 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer',
+                                                                                generatorTeamMethod === 'separuh'
+                                                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100',
+                                                                            ]"
+                                                                        >
+                                                                            Separuh Tim (Depan/Belakang)
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 2. Hari Kerja Aktif dalam Seminggu (Kustom Hari) -->
+                                                            <div class="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                                                <div class="flex items-center justify-between gap-2">
+                                                                    <label class="block font-bold text-slate-800 text-xs">
+                                                                        Hari Kerja Aktif Mingguan (Kustom Hari):
+                                                                    </label>
+                                                                    <span class="text-[11px] font-bold text-primary px-2 py-0.5 rounded-md bg-primary/10">
+                                                                        {{ totalWorkDaysCount }} Hari Aktif per Periode
+                                                                    </span>
+                                                                </div>
+
+                                                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="setWeeklyPresetDays('senin_jumat')"
+                                                                        :class="[
+                                                                            'py-1.5 px-2 rounded-lg text-center text-xs font-bold border transition-colors cursor-pointer',
+                                                                            generatorWeeklyWorkDays === 'senin_jumat'
+                                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100',
+                                                                        ]"
+                                                                    >
+                                                                        Senin–Jumat (5 Hari)
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="setWeeklyPresetDays('senin_sabtu')"
+                                                                        :class="[
+                                                                            'py-1.5 px-2 rounded-lg text-center text-xs font-bold border transition-colors cursor-pointer',
+                                                                            generatorWeeklyWorkDays === 'senin_sabtu'
+                                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100',
+                                                                        ]"
+                                                                    >
+                                                                        Senin–Sabtu (6 Hari)
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="setWeeklyPresetDays('semua')"
+                                                                        :class="[
+                                                                            'py-1.5 px-2 rounded-lg text-center text-xs font-bold border transition-colors cursor-pointer',
+                                                                            generatorWeeklyWorkDays === 'semua'
+                                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100',
+                                                                        ]"
+                                                                    >
+                                                                        Semua Hari (7 Hari)
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="generatorWeeklyWorkDays = 'kustom'"
+                                                                        :class="[
+                                                                            'py-1.5 px-2 rounded-lg text-center text-xs font-bold border transition-colors cursor-pointer',
+                                                                            generatorWeeklyWorkDays === 'kustom'
+                                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100',
+                                                                        ]"
+                                                                    >
+                                                                        Pilih Manual
+                                                                    </button>
+                                                                </div>
+
+                                                                <!-- Checklist Hari Kustom jika dipilih Kustom -->
+                                                                <div
+                                                                    v-if="generatorWeeklyWorkDays === 'kustom'"
+                                                                    class="pt-2 border-t border-slate-200 flex items-center gap-1.5 flex-wrap"
+                                                                >
+                                                                    <span class="text-[11px] font-bold text-slate-600 mr-1">Centang Hari Aktif:</span>
+                                                                    <button
+                                                                        v-for="d in daysOfWeekList"
+                                                                        :key="d.num"
+                                                                        type="button"
+                                                                        @click="toggleWeeklyCustomDay(d.num)"
+                                                                        :class="[
+                                                                            'px-2.5 py-1 rounded-md text-xs font-bold border transition-colors cursor-pointer flex items-center gap-1',
+                                                                            generatorWeeklyCustomDays.includes(d.num)
+                                                                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                                                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100',
+                                                                        ]"
+                                                                    >
+                                                                        <Check v-if="generatorWeeklyCustomDays.includes(d.num)" class="h-3 w-3" />
+                                                                        <span>{{ d.label }}</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 3. Giliran Awal & Metode Pembagian Minggu -->
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                <div class="space-y-1">
+                                                                    <label class="block font-bold text-slate-700 text-xs">
+                                                                        Giliran Masuk Minggu 1:
+                                                                    </label>
+                                                                    <select
+                                                                        v-model="generatorStartType"
+                                                                        class="w-full py-2 px-3 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                                    >
+                                                                        <option value="tim_a_first">Regu A Mulai di Minggu 1 (Gantian M2)</option>
+                                                                        <option value="tim_b_first">Regu B Mulai di Minggu 1 (Gantian M2)</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div class="space-y-1">
+                                                                    <label class="block font-bold text-slate-700 text-xs">
+                                                                        Metode Hitung Minggu:
+                                                                    </label>
+                                                                    <select
+                                                                        v-model="generatorWeeklyGrouping"
+                                                                        class="w-full py-2 px-3 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                                    >
+                                                                        <option value="blok_7">Siklus 7 Hari (Hari 1-7 = M1, Hari 8-14 = M2)</option>
+                                                                        <option value="kalender">Kalender Mingguan (Senin s/d Minggu)</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 4. Pratinjau Simulasi Bagi Rata per Minggu -->
+                                                            <div class="space-y-2 pt-1">
+                                                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                    <label class="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                                                        <Sparkles class="h-4 w-4 text-primary" />
+                                                                        <span>Pratinjau Simulasi Bagi Rata per Minggu ({{ weekPeriods.length }} Minggu Terdeteksi):</span>
+                                                                    </label>
+                                                                    <div v-if="generatorTargetDivisi === 'all' && shiftingDivisiSummary.length > 1" class="flex items-center gap-1.5">
+                                                                        <span class="text-xs text-slate-500 font-medium">Lihat Divisi:</span>
+                                                                        <select
+                                                                            v-model="previewDivisi"
+                                                                            class="py-1 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+                                                                        >
+                                                                            <option v-for="d in shiftingDivisiSummary" :key="d.name" :value="d.name">
+                                                                                {{ d.name }} ({{ d.count }} Org)
+                                                                            </option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                <!-- Ringkasan chips rasio bagi rata semua divisi jika target all -->
+                                                                <div v-if="generatorTargetDivisi === 'all' && shiftingDivisiSummary.length > 0" class="flex items-center gap-1.5 flex-wrap p-2 rounded-xl bg-slate-50 border border-slate-200/80">
+                                                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Rasio Bagi Rata:</span>
+                                                                    <span
+                                                                        v-for="d in shiftingDivisiSummary"
+                                                                        :key="d.name"
+                                                                        class="px-2 py-0.5 rounded-lg text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs"
+                                                                    >
+                                                                        <strong>{{ d.name }}:</strong>
+                                                                        {{ d.count === 1 ? '1 Masuk Penuh' : `${Math.ceil(d.count / 2)} Masuk / ${Math.floor(d.count / 2)} Libur` }}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 sm:max-h-60 overflow-y-auto pr-1">
+                                                                    <div
+                                                                        v-for="wk in weeklySimulationSummary"
+                                                                        :key="wk.weekNum"
+                                                                        class="p-3 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2"
+                                                                    >
+                                                                        <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                                                            <div class="flex items-center gap-1.5">
+                                                                                <span class="font-bold text-slate-900 text-xs sm:text-sm">{{ wk.label }}</span>
+                                                                                <span class="text-[11px] text-slate-400 font-medium">({{ wk.divisiName }})</span>
+                                                                            </div>
+                                                                            <span class="text-[11px] text-slate-500 font-medium">
+                                                                                {{ formatTglSingkat(wk.startDate) }} – {{ formatTglSingkat(wk.endDate) }}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="space-y-2">
+                                                                            <div>
+                                                                                <div class="flex items-center gap-1.5 mb-1">
+                                                                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                                                                        Masuk: {{ wk.activeCount }} Personil
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div class="flex flex-wrap gap-1">
+                                                                                    <span
+                                                                                        v-for="name in wk.activeNames"
+                                                                                        :key="name"
+                                                                                        class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200"
+                                                                                    >
+                                                                                        {{ name }}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div v-if="wk.offNames.length > 0">
+                                                                                <div class="flex items-center gap-1.5 mb-1">
+                                                                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800">
+                                                                                        Libur: {{ wk.offCount }} Personil
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+                                                                                    <span
+                                                                                        v-for="name in wk.offNames"
+                                                                                        :key="name"
+                                                                                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                                                                                    >
+                                                                                        {{ name }}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 5. Banner Fleksibilitas Kustom Langsung -->
+                                                            <div class="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5">
+                                                                <Info class="h-4.5 w-4.5 shrink-0 text-blue-600 mt-0.5" />
+                                                                <div>
+                                                                    <span class="font-bold">Kustomisasi Bebas: </span>
+                                                                    <span>Setelah generator menerapkan jadwal mingguan ini, seluruh sel tanggal tetap dapat Anda klik dan ubah manual (H, L, I, S, C) di tabel matriks kapan saja sesuai kebutuhan.</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </label>
+
                                         <!-- Pola 1: Shifting Bergantian Antar Personil di Masing-masing Divisi / Tim (Rekomendasi SPPG) -->
                                         <label
                                             :class="[
@@ -4178,22 +4867,27 @@ function getTeamBorderClass(jabatan) {
                     </div>
 
                             <!-- Modal Footer -->
-                            <div class="p-4 sm:p-5 flex items-center justify-end gap-2 bg-slate-50/80">
-                                <button
-                                    type="button"
-                                    @click="closeGeneratorModal"
-                                    class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="applyGeneratorPattern"
-                                    class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold shadow-xs transition-colors cursor-pointer"
-                                >
-                                    <Sparkles class="h-4 w-4" />
-                                    <span>Terapkan Pola ke Matriks</span>
-                                </button>
+                            <div class="p-3.5 sm:p-4.5 flex flex-col sm:flex-row items-center justify-between sm:justify-end gap-2.5 bg-slate-50/90 border-t border-slate-100 shrink-0">
+                                <div class="text-[11px] text-slate-500 hidden sm:block mr-auto">
+                                    Pola yang dipilih akan mengisi otomatis jadwal rotasi pada matriks shifting.
+                                </div>
+                                <div class="flex items-center gap-2 w-full sm:w-auto">
+                                    <button
+                                        type="button"
+                                        @click="closeGeneratorModal"
+                                        class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-100 font-semibold text-xs sm:text-sm transition-colors cursor-pointer text-center"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="applyGeneratorPattern"
+                                        class="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs sm:text-sm shadow-xs transition-colors cursor-pointer text-center"
+                                    >
+                                        <Sparkles class="h-4 w-4" />
+                                        <span>Terapkan Pola ke Matriks</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
