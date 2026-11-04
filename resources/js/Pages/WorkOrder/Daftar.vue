@@ -85,7 +85,7 @@ function handleManualSaved() {
 function handleEditWo(wo) {
     const targetUuid = wo.uuid || wo.id;
     if (wo.metode_wo === "manual") {
-        router.visit(route("work-order.edit-manual", { id: targetUuid }));
+        router.visit(route("gizi.rancang-menu-manual", { id: targetUuid }));
     } else {
         router.visit(route("gizi.rancang-menu", { id: targetUuid, step: "work_order" }));
     }

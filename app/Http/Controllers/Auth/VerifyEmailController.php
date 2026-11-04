@@ -29,7 +29,13 @@ class VerifyEmailController extends Controller
 
         if ($user->hasVerifiedEmail()) {
             if (Auth::check()) {
-                return redirect()->intended(route('dashboard', absolute: false) . '?verified=1');
+                if (!$user->isPaymentVerified()) {
+                    return redirect()->route('paket-langganan.index');
+                }
+                if (!$user->isProfileCompleted()) {
+                    return redirect()->route('onboarding.index');
+                }
+                return redirect()->route('dashboard');
             }
             return redirect()->route('login')->with('status', 'Email Anda sudah terverifikasi sebelumnya. Silakan masuk.');
         }
@@ -43,6 +49,14 @@ class VerifyEmailController extends Controller
             Auth::login($user);
         }
 
-        return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')->with('verified', true);
+        if (!$user->isPaymentVerified()) {
+            return redirect()->route('paket-langganan.index')->with('success', 'Email berhasil diverifikasi! Silakan pilih paket langganan Anda.');
+        }
+
+        if (!$user->isProfileCompleted()) {
+            return redirect()->route('onboarding.index')->with('success', 'Email berhasil diverifikasi! Silakan lengkapi data profil dan Unit SPPG.');
+        }
+
+        return redirect()->route('dashboard')->with('verified', true);
     }
 }

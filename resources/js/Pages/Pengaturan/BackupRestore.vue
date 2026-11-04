@@ -125,9 +125,9 @@ function handleMockAction(pesan) {
 </script>
 
 <template>
-    <Head title="Backup & Restore - SIPEGE" />
+    <Head title="Backup & Restore - Admin SIPEGE" />
 
-    <AppLayout>
+    <AppLayout title="Backup & Restore - Admin SIPEGE">
         <div class="space-y-4 max-w-full pb-16">
             <!-- ─── BANNER NOTIFIKASI PRATINJAU LAYOUT UI ─── -->
             <div

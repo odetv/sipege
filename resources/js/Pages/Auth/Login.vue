@@ -35,7 +35,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Masuk ke Sistem" />
+    <Head title="Masuk" />
 
     <div
         class="min-h-screen bg-[#f8fafc] flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden select-none"

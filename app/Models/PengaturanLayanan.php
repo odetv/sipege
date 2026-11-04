@@ -35,4 +35,3 @@ class PengaturanLayanan extends Model
         return static::where('kategori', $kategori)->first();
     }
 }
-

@@ -7,6 +7,8 @@ use App\Models\Periode;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SurveiHargaPasar;
+use App\Models\WorkOrder;
+use App\Models\PurchaseOrderItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -481,6 +483,229 @@ class KeuanganController extends Controller
     /**
      * Helper render view Keuangan dengan data lengkap dan activeTab.
      */
+        /**
+     * Simpan / Terbitkan Purchase Order Baru (dari Work Order Otomatis atau Manual).
+     */
+    public function storePo(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        $source = $request->input('source', 'work_order'); // 'work_order' atau 'manual'
+
+        if ($source === 'work_order') {
+            $validated = $request->validate([
+                'work_order_id' => ['required', 'exists:work_orders,id'],
+                'nomor_po' => ['required', 'string', 'max:100'],
+                'tanggal' => ['required', 'date'],
+                'supplier_id' => ['nullable', 'exists:suppliers,id'],
+                'jenis_transaksi' => ['nullable', 'string', 'max:100'],
+                'status_bayar' => ['nullable', 'string', 'in:Belum Bayar,Lunas'],
+                'catatan' => ['nullable', 'string'],
+                'items' => ['nullable', 'array'],
+            ]);
+
+            $workOrder = WorkOrder::with('items')->where('unit_sppg_id', $unitSppg->id)->findOrFail($validated['work_order_id']);
+
+            if ($workOrder->metode_wo === 'manual') {
+                return back()->with('error', 'Work Order manual tidak memiliki rincian bahan baku. Gunakan opsi Tambah Manual PO untuk membuat PO.');
+            }
+
+            $existingPoWithNomor = PurchaseOrder::where('nomor_po', $validated['nomor_po'])
+                ->where('work_order_id', '!=', $workOrder->id)
+                ->first();
+            if ($existingPoWithNomor) {
+                return back()->with('error', 'Nomor PO ' . $validated['nomor_po'] . ' sudah digunakan oleh Purchase Order lain.');
+            }
+
+            DB::transaction(function () use ($unitSppg, $user, $workOrder, $validated) {
+                $vendorName = null;
+                if (!empty($validated['supplier_id'])) {
+                    $sup = Supplier::find($validated['supplier_id']);
+                    $vendorName = $sup?->nama_usaha;
+                }
+
+                $po = PurchaseOrder::updateOrCreate(
+                    ['work_order_id' => $workOrder->id],
+                    [
+                        'unit_sppg_id' => $unitSppg->id,
+                        'nomor_po' => $validated['nomor_po'],
+                        'nama_menu' => $workOrder->nama_menu,
+                        'tanggal' => $validated['tanggal'],
+                        'supplier_id' => $validated['supplier_id'] ?? null,
+                        'vendor' => $vendorName,
+                        'jenis_transaksi' => $validated['jenis_transaksi'] ?? 'Bahan Baku',
+                        'status_po' => 'Terverifikasi',
+                        'status_bayar' => $validated['status_bayar'] ?? 'Belum Bayar',
+                        'catatan' => $validated['catatan'] ?? ('Diterbitkan dari WO ' . $workOrder->nomor_wo . ' (' . $workOrder->nama_menu . ')'),
+                        'diverifikasi_oleh' => $user->id,
+                        'diverifikasi_pada' => now(),
+                    ]
+                );
+
+                if (!empty($validated['items'])) {
+                    $po->items()->delete();
+                    $totalMaster = 0;
+                    $totalAktual = 0;
+                    foreach ($validated['items'] as $it) {
+                        $gross = (float)($it['gross_kg'] ?? 0);
+                        $hargaMaster = (float)($it['harga_master'] ?? 0);
+                        $hargaAktual = (float)($it['harga_aktual'] ?? $hargaMaster);
+                        $subtotal = $gross * $hargaAktual;
+
+                        $totalMaster += ($gross * $hargaMaster);
+                        $totalAktual += $subtotal;
+
+                        PurchaseOrderItem::create([
+                            'purchase_order_id' => $po->id,
+                            'work_order_item_id' => $it['work_order_item_id'] ?? null,
+                            'nama' => $it['nama'],
+                            'kategori' => $it['kategori'] ?? 'Lainnya',
+                            'tipe' => $it['tipe'] ?? 'Normal',
+                            'satuan' => $it['satuan'] ?? 'Kg',
+                            'jenis' => $it['jenis'] ?? 'bahan_baku',
+                            'gross_kg' => $gross,
+                            'qty_beli_po_kg' => $gross,
+                            'sumber_pengadaan' => 'Beli PO',
+                            'harga_master' => $hargaMaster,
+                            'harga_aktual' => $hargaAktual,
+                            'subtotal_aktual' => $subtotal,
+                            'supplier_id' => $it['supplier_id'] ?? $validated['supplier_id'] ?? null,
+                            'jenis_transaksi' => $it['jenis_transaksi'] ?? $validated['jenis_transaksi'] ?? 'Bahan Baku',
+                            'keterangan' => $it['keterangan'] ?? null,
+                        ]);
+                    }
+                    $po->update([
+                        'items_count' => count($validated['items']),
+                        'total_nominal_master' => $totalMaster,
+                        'total_nominal_aktual' => $totalAktual,
+                    ]);
+                } else {
+                    self::ensurePoItemsConsolidated($po);
+                }
+
+                if (in_array($workOrder->status, ['Draft', 'Diajukan ke Keuangan'])) {
+                    $workOrder->update(['status' => 'Siap Produksi']);
+                }
+            });
+
+            return back()->with('success', 'Purchase Order ' . $validated['nomor_po'] . ' berhasil diterbitkan dari Work Order ' . $workOrder->nomor_wo . '.');
+        } else {
+            // Source === 'manual'
+            $validated = $request->validate([
+                'nomor_po' => ['required', 'string', 'max:100', 'unique:purchase_orders,nomor_po'],
+                'nama_menu' => ['required', 'string', 'max:255'],
+                'tanggal' => ['required', 'date'],
+                'supplier_id' => ['nullable', 'exists:suppliers,id'],
+                'jenis_transaksi' => ['nullable', 'string', 'max:100'],
+                'status_bayar' => ['nullable', 'string', 'in:Belum Bayar,Lunas'],
+                'catatan' => ['nullable', 'string'],
+                'items' => ['required', 'array', 'min:1'],
+                'items.*.nama' => ['required', 'string', 'max:255'],
+                'items.*.kategori' => ['nullable', 'string', 'max:100'],
+                'items.*.satuan' => ['nullable', 'string', 'max:50'],
+                'items.*.gross_kg' => ['required', 'numeric', 'min:0'],
+                'items.*.harga_aktual' => ['required', 'numeric', 'min:0'],
+                'items.*.supplier_id' => ['nullable', 'exists:suppliers,id'],
+                'items.*.jenis_transaksi' => ['nullable', 'string', 'max:100'],
+                'items.*.keterangan' => ['nullable', 'string'],
+            ], [
+                'nomor_po.unique' => 'Nomor PO ini sudah terdaftar.',
+                'nama_menu.required' => 'Nama Menu / Keterangan Belanja wajib diisi.',
+                'items.required' => 'Minimal satu baris bahan baku/belanja harus diinput.',
+                'items.*.nama.required' => 'Nama bahan baku wajib diisi pada setiap baris.',
+            ]);
+
+            DB::transaction(function () use ($unitSppg, $user, $validated) {
+                $totalNominal = 0;
+                foreach ($validated['items'] as $it) {
+                    $gross = (float)$it['gross_kg'];
+                    $harga = (float)$it['harga_aktual'];
+                    $totalNominal += ($gross * $harga);
+                }
+
+                $vendorName = null;
+                if (!empty($validated['supplier_id'])) {
+                    $sup = Supplier::find($validated['supplier_id']);
+                    $vendorName = $sup?->nama_usaha;
+                }
+
+                $po = PurchaseOrder::create([
+                    'unit_sppg_id' => $unitSppg->id,
+                    'work_order_id' => null,
+                    'nomor_po' => $validated['nomor_po'],
+                    'nama_menu' => $validated['nama_menu'],
+                    'tanggal' => $validated['tanggal'],
+                    'supplier_id' => $validated['supplier_id'] ?? null,
+                    'vendor' => $vendorName,
+                    'jenis_transaksi' => $validated['jenis_transaksi'] ?? 'Bahan Baku',
+                    'status_po' => 'Terverifikasi',
+                    'status_bayar' => $validated['status_bayar'] ?? 'Belum Bayar',
+                    'catatan' => $validated['catatan'] ?? 'Purchase Order Dibuat Manual',
+                    'diverifikasi_oleh' => $user->id,
+                    'diverifikasi_pada' => now(),
+                    'items_count' => count($validated['items']),
+                    'total_nominal_master' => $totalNominal,
+                    'total_nominal_aktual' => $totalNominal,
+                ]);
+
+                foreach ($validated['items'] as $it) {
+                    $gross = (float)$it['gross_kg'];
+                    $harga = (float)$it['harga_aktual'];
+                    $subtotal = $gross * $harga;
+
+                    PurchaseOrderItem::create([
+                        'purchase_order_id' => $po->id,
+                        'work_order_item_id' => null,
+                        'nama' => $it['nama'],
+                        'kategori' => $it['kategori'] ?? 'Lainnya',
+                        'tipe' => 'Normal',
+                        'satuan' => $it['satuan'] ?? 'Kg',
+                        'jenis' => 'bahan_baku',
+                        'gross_kg' => $gross,
+                        'qty_beli_po_kg' => $gross,
+                        'sumber_pengadaan' => 'Beli PO',
+                        'harga_master' => $harga,
+                        'harga_aktual' => $harga,
+                        'subtotal_aktual' => $subtotal,
+                        'supplier_id' => $it['supplier_id'] ?? $validated['supplier_id'] ?? null,
+                        'jenis_transaksi' => $it['jenis_transaksi'] ?? $validated['jenis_transaksi'] ?? 'Bahan Baku',
+                        'keterangan' => $it['keterangan'] ?? null,
+                    ]);
+                }
+            });
+
+            return back()->with('success', 'Purchase Order manual ' . $validated['nomor_po'] . ' berhasil diterbitkan ke Daftar PO resmi.');
+        }
+    }
+
+    /**
+     * Hapus Purchase Order dari Daftar PO resmi.
+     */
+    public function destroyPo(Request $request, $id): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $po = is_numeric($id)
+            ? PurchaseOrder::where('unit_sppg_id', $unitSppg->id)->find($id)
+            : PurchaseOrder::where('unit_sppg_id', $unitSppg->id)->where('nomor_po', $id)->first();
+
+        if (!$po) {
+            return back()->with('error', 'Purchase Order tidak ditemukan.');
+        }
+
+        $nomorPo = $po->nomor_po;
+        $po->items()->delete();
+        $po->delete();
+
+        return back()->with('success', 'Purchase Order ' . $nomorPo . ' berhasil dihapus.');
+    }
+
     private function renderKeuanganView(Request $request, string $activeTab): Response
     {
         $user = $request->user();
@@ -562,7 +787,8 @@ class KeuanganController extends Controller
                     'cost_pk' => $po->workOrder ? ($po->workOrder->food_cost_pk ?: $po->workOrder->cost_pk) : 0,
                     'cost_pb' => $po->workOrder ? ($po->workOrder->food_cost_pb ?: $po->workOrder->cost_pb) : 0,
                     'tanggal' => $po->tanggal ? $po->tanggal->format('Y-m-d') : now()->toDateString(),
-                    'menu' => $po->workOrder ? $po->workOrder->nama_menu : 'Menu MBG',
+                    'menu' => $po->workOrder ? $po->workOrder->nama_menu : ($po->nama_menu ?: 'PO Belanja Manual'),
+                    'is_manual_po' => $po->work_order_id === null,
                     'supplier_id' => $po->supplier_id,
                     'supplier' => $po->supplier ? [
                         'id' => $po->supplier->id,
@@ -732,6 +958,99 @@ class KeuanganController extends Controller
             })->map($mapPoItem)->values()->toArray();
 
             // 2. Daftar PO Resmi yang sudah Disetujui / Terverifikasi untuk Sub-menu Daftar PO
+                        // 3. Work Order Otomatis yang tersedia untuk dipilih di Daftar PO (hanya WO sistem ber-item)
+            $availableWorkOrders = WorkOrder::where('unit_sppg_id', $unitSppg->id)
+                ->where(function ($q) {
+                    $q->where('metode_wo', 'sistem')
+                      ->orWhereNull('metode_wo');
+                })
+                ->where('metode_wo', '!=', 'manual')
+                ->whereHas('items')
+                ->with(['items', 'purchaseOrder.items'])
+                ->orderBy('tanggal_distribusi', 'desc')
+                ->get()
+                ->map(function ($wo) {
+                    $grouped = [];
+                    foreach ($wo->items as $it) {
+                        $rawName = $it->nama_po ?: $it->nama;
+                        $normName = mb_strtolower(trim($rawName));
+                        $normSatuan = mb_strtolower(trim($it->satuan ?? 'kg'));
+                        $groupKey = $normName . '|' . $normSatuan;
+
+                        if (!isset($grouped[$groupKey])) {
+                            $grouped[$groupKey] = [
+                                'work_order_item_id' => $it->id,
+                                'nama' => $rawName,
+                                'kategori' => $it->kategori ?: 'Lainnya',
+                                'satuan' => $it->satuan ?: 'Kg',
+                                'tipe' => $it->tipe_porsi === 'alergi' ? 'Alergi' : 'Normal',
+                                'gross_kg' => 0,
+                                'harga_master' => (float)$it->harga_master,
+                                'harga_aktual' => (float)$it->harga_master,
+                                'subtotal' => 0,
+                                'supplier_id' => null,
+                                'jenis_transaksi' => 'Bahan Baku',
+                                'keterangan' => '',
+                                'keterangan_list' => [],
+                            ];
+                        }
+                        $grouped[$groupKey]['gross_kg'] += (float)$it->total_gross_kg;
+                        $grouped[$groupKey]['subtotal'] += ((float)$it->total_gross_kg * (float)$it->harga_master);
+
+                        $rawKet = trim($it->keterangan ?? '');
+                        if ($rawKet !== '' && $rawKet !== '-' && !in_array($rawKet, $grouped[$groupKey]['keterangan_list'])) {
+                            $grouped[$groupKey]['keterangan_list'][] = $rawKet;
+                        }
+                    }
+
+                    if ($wo->purchaseOrder && $wo->purchaseOrder->items) {
+                        foreach ($wo->purchaseOrder->items as $pItem) {
+                            $pNormName = mb_strtolower(trim($pItem->nama));
+                            $pNormSatuan = mb_strtolower(trim($pItem->satuan ?? 'kg'));
+                            $pKey = $pNormName . '|' . $pNormSatuan;
+                            if (isset($grouped[$pKey])) {
+                                $pKet = trim($pItem->keterangan ?? '');
+                                if ($pKet !== '' && $pKet !== '-' && !in_array($pKet, $grouped[$pKey]['keterangan_list'])) {
+                                    $grouped[$pKey]['keterangan_list'][] = $pKet;
+                                }
+                            }
+                        }
+                    }
+
+                    foreach ($grouped as &$g) {
+                        if (!empty($g['keterangan_list'])) {
+                            $g['keterangan'] = implode('; ', $g['keterangan_list']);
+                        }
+                        unset($g['keterangan_list']);
+                    }
+                    unset($g);
+                    $itemsList = array_values($grouped);
+                    $totalNominal = array_sum(array_column($itemsList, 'subtotal'));
+
+                    $hasOfficialPo = $wo->purchaseOrder && in_array($wo->purchaseOrder->status_po, ['Terverifikasi', 'Siap Produksi', 'Selesai']);
+
+                    return [
+                        'id' => $wo->id,
+                        'nomor_wo' => $wo->nomor_wo,
+                        'nama_menu' => $wo->nama_menu,
+                        'tanggal_distribusi' => $wo->tanggal_distribusi ? $wo->tanggal_distribusi->format('Y-m-d') : null,
+                        'status' => $wo->status,
+                        'metode_wo' => $wo->metode_wo ?: 'sistem',
+                        'total_pm' => $wo->total_pm ?: 0,
+                        'total_pk' => $wo->total_pk ?: 0,
+                        'total_pb' => $wo->total_pb ?: 0,
+                        'items_count' => count($itemsList),
+                        'total_nominal' => $totalNominal,
+                        'has_po' => $wo->purchaseOrder !== null,
+                        'has_official_po' => $hasOfficialPo,
+                        'po_nomor' => $wo->purchaseOrder ? $wo->purchaseOrder->nomor_po : null,
+                        'po_status' => $wo->purchaseOrder ? $wo->purchaseOrder->status_po : null,
+                        'items' => $itemsList,
+                    ];
+                })
+                ->values()
+                ->toArray();
+
             $poList = $allDbPo->filter(function ($po) {
                 return in_array($po->status_po, ['Terverifikasi', 'Siap Produksi', 'Selesai']);
             })->map($mapPoItem)->values()->toArray();
@@ -796,6 +1115,7 @@ class KeuanganController extends Controller
             'periodes' => $periodes,
             'verifikasiPoList' => $verifikasiPoList ?? [],
             'poList' => $poList,
+            'availableWorkOrders' => $availableWorkOrders ?? [],
             'suppliers' => $suppliers ?? [],
             'surveiHargaList' => $surveiHargaList,
             'defaultSurveiItems' => $defaultSurveiItems,

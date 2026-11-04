@@ -14,9 +14,15 @@ class DashboardController extends Controller
     /**
      * Show the application dashboard.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
+
+        // Jika data profil / Unit SPPG belum diinisialisasi, arahkan ke onboarding untuk melengkapi data
+        if (!$user->isProfileCompleted()) {
+            return redirect()->route('onboarding.index');
+        }
+
         $unitSppg = $user->getCachedUnitSppg();
 
         $kelompokList = [];
@@ -108,6 +114,7 @@ class DashboardController extends Controller
             'workOrders' => $workOrders,
             'pengawasGizi' => $pengawasGizi,
             'pengawasKeuangan' => $pengawasKeuangan,
+            'needs_onboarding' => !$user->isProfileCompleted(),
         ]);
     }
 

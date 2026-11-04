@@ -1552,16 +1552,18 @@ function setCustomPercent(pct) {
 
 // ─── Personil Wajib Selalu Hadir (Bebas Shifting) ──────────────────────────
 const defaultRoleCategories = [
-    { name: "Kepala SPPG", keywords: ["kepala sppg"] },
-    { name: "Pengawas Gizi", keywords: ["pengawas gizi", "ahli gizi", "gizi"] },
-    { name: "Pengawas Keuangan", keywords: ["pengawas keuangan", "keuangan", "akuntan"] },
-    { name: "Koordinator Lapangan", keywords: ["koordinator lapangan"] },
-    { name: "Koordinator", keywords: ["koordinator"] },
     { name: "Admin", keywords: ["admin"] },
+    { name: "Kepala SPPG", keywords: ["kepala sppg", "kepala_sppg"] },
+    { name: "Pengawas Gizi", keywords: ["pengawas gizi", "pengawas_gizi", "ahli gizi", "gizi"] },
+    { name: "Pengawas Keuangan", keywords: ["pengawas keuangan", "pengawas_keuangan", "keuangan", "akuntan"] },
+    { name: "Asisten Lapangan", keywords: ["asisten lapangan", "asisten_lapangan", "koordinator lapangan", "korlap"] },
+    { name: "Persiapan", keywords: ["persiapan"] },
+    { name: "Pengolahan", keywords: ["pengolahan", "masak", "chef"] },
+    { name: "Pemorsian", keywords: ["pemorsian"] },
+    { name: "Pengemudi", keywords: ["pengemudi", "driver", "sopir"] },
+    { name: "Cuci Ompreng", keywords: ["cuci ompreng", "cuci_ompreng", "cuci"] },
     { name: "Kebersihan", keywords: ["kebersihan", "cleaning"] },
     { name: "Keamanan", keywords: ["keamanan", "security", "satpam"] },
-    { name: "Chef", keywords: ["chef"] },
-    { name: "Pengemudi", keywords: ["pengemudi", "driver", "sopir"] },
 ];
 
 function isDefaultWajibHadir(jabatan) {

@@ -1,7 +1,7 @@
 <script setup>
-import { computed } from "vue";
-import { Head, Link, useForm, usePage } from "@inertiajs/vue3";
-import { MailCheck, Send, LogOut, CheckCircle2, ShieldCheck } from "lucide-vue-next";
+import { computed, ref } from "vue";
+import { Head, Link, useForm, usePage, router } from "@inertiajs/vue3";
+import { MailCheck, Send, LogOut, CheckCircle2, ShieldCheck, Sparkles } from "lucide-vue-next";
 
 const props = defineProps({
     status: {
@@ -14,9 +14,19 @@ const page = usePage();
 const userEmail = computed(() => page.props.auth?.user?.email || "email Anda");
 
 const form = useForm({});
+const simulating = ref(false);
 
 const submit = () => {
     form.post(route("verification.send"));
+};
+
+const simulateVerify = () => {
+    simulating.value = true;
+    router.post(route("verification.simulate"), {}, {
+        onFinish: () => {
+            simulating.value = false;
+        },
+    });
 };
 
 const verificationLinkSent = computed(
@@ -157,6 +167,20 @@ const verificationLinkSent = computed(
                         <span>Keluar / Ganti Akun</span>
                     </Link>
                 </form>
+
+                <!-- Tombol Simulasi Verifikasi Langsung (Mode Demo/Testing) -->
+                <div class="mt-4 pt-3 border-t border-slate-100">
+                    <form @submit.prevent="simulateVerify">
+                        <button
+                            type="submit"
+                            :disabled="simulating"
+                            class="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/90 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                            <Sparkles class="h-3.5 w-3.5 text-emerald-600" />
+                            <span>{{ simulating ? 'Memproses Verifikasi...' : 'Verifikasi Sekarang (Simulasi Demo)' }}</span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

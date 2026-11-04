@@ -48,6 +48,21 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:6,1')
         ->name('verification.send');
 
+    Route::post('email/simulate-verify', function (\Illuminate\Http\Request $request) {
+        $user = $request->user();
+        if ($user && !$user->hasVerifiedEmail()) {
+            $user->markEmailAsVerified();
+            event(new \Illuminate\Auth\Events\Verified($user));
+        }
+        if (!$user->isPaymentVerified()) {
+            return redirect()->route('paket-langganan.index')->with('success', 'Email berhasil diverifikasi! Silakan pilih paket langganan Anda.');
+        }
+        if (!$user->isProfileCompleted()) {
+            return redirect()->route('onboarding.index')->with('success', 'Email berhasil diverifikasi! Silakan lanjutkan inisialisasi data.');
+        }
+        return redirect()->route('dashboard');
+    })->name('verification.simulate');
+
     Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
         ->name('password.confirm');
 

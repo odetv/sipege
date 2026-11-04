@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, nextTick } from "vue";
-import { Head } from "@inertiajs/vue3";
+import { ref, computed, nextTick, onMounted, watch } from "vue";
+import { Head, usePage } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
 import DashboardHeroBanner from "@/Pages/Dashboard/Partials/DashboardHeroBanner.vue";
@@ -11,6 +11,7 @@ import DashboardUnitTab from "@/Pages/Dashboard/Partials/DashboardUnitTab.vue";
 import DashboardProfileTab from "@/Pages/Dashboard/Partials/DashboardProfileTab.vue";
 import DashboardPengawasTab from "@/Pages/Dashboard/Partials/DashboardPengawasTab.vue";
 import DashboardMapTab from "@/Pages/Dashboard/Partials/DashboardMapTab.vue";
+import DashboardSuccessModal from "@/Pages/Dashboard/Partials/DashboardSuccessModal.vue";
 
 import { formatNamaLengkap } from "@/Services/wilayah";
 
@@ -41,8 +42,31 @@ const props = defineProps({
     },
 });
 
+const page = usePage();
 const activeTab = ref("overview");
 const mapTabRef = ref(null);
+
+// Modal Selamat Inisialisasi Berhasil jika datang dari flash
+const showSuccessModal = ref(false);
+const successMessage = ref("Selamat! Data telah berhasil di inisialisasi dan siap untuk digunakan.");
+
+function checkSuccessFlash() {
+    const flash = page.props.flash || {};
+    if (flash.initialization_success || (flash.success && flash.success.toLowerCase().includes("inisialisasi"))) {
+        if (flash.success) {
+            successMessage.value = flash.success;
+        }
+        showSuccessModal.value = true;
+    }
+}
+
+onMounted(() => {
+    checkSuccessFlash();
+});
+
+watch(() => page.props.flash, () => {
+    checkSuccessFlash();
+}, { deep: true });
 
 // Computed Display
 const fullName = computed(() => {
@@ -224,6 +248,15 @@ function switchTab(tab) {
             :full-name="fullName"
             :domisili-full-address="domisiliFullAddress"
             :unit-full-address="unitFullAddress"
+        />
+
+        <!-- Modal Selamat Inisialisasi Berhasil -->
+        <DashboardSuccessModal
+            :show="showSuccessModal"
+            :user="user"
+            :unit-sppg="unitSppg"
+            :message="successMessage"
+            @close="showSuccessModal = false"
         />
     </AppLayout>
 </template>

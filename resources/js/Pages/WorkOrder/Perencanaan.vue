@@ -2238,7 +2238,17 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         siklus_ke: 1,
         metode_wo: metodeWo.value || "sistem",
         database_pangan: "tkpi2020",
-        nama_menu: woNo.value,
+        nama_menu: (isEditMode.value && props.editWorkOrder?.nama_menu && props.editWorkOrder.nama_menu !== woNo.value)
+            ? props.editWorkOrder.nama_menu
+            : (namaMenuAktif.value ? namaMenuAktif.value.trim() : woNo.value),
+        sub_menus: (props.editWorkOrder?.sub_menus && props.editWorkOrder.sub_menus.length > 0)
+            ? props.editWorkOrder.sub_menus
+            : (Array.isArray(subMenuKeys.value) ? subMenuKeys.value.map(k => (subMenuKomponen.value[k] || "").trim()).filter(Boolean) : []),
+        jadwal_operasional: props.editWorkOrder?.jadwal_operasional || payloadJadwalOperasional.value || null,
+        sub_menu_alergi: props.editWorkOrder?.sub_menu_alergi || subMenuAlergi.value || null,
+        akg_pk: props.editWorkOrder?.akg_pk || akgPk.value || null,
+        akg_pb: props.editWorkOrder?.akg_pb || akgPb.value || null,
+        akg_alergi: props.editWorkOrder?.akg_alergi || filteredAkgAlergiPayload.value || null,
         total_pm: totalPM.value,
         total_pk: totalPK.value,
         total_pb: totalPB.value,

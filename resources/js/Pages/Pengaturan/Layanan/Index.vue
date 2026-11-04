@@ -110,7 +110,7 @@ async function runTestDatabase() {
     isDbTesting.value = true;
     dbTestResult.value = null;
     try {
-        const res = await axios.post(route("pengaturan.layanan.test-database"));
+        const res = await axios.post(route("admin.pengaturan.layanan.test-database"));
         dbTestResult.value = res.data;
         if (res.data.latency_ms) {
             liveDbLatency.value = res.data.latency_ms;
@@ -167,7 +167,7 @@ async function runTestStorage() {
             endpoint: formStorage.endpoint,
             public_domain: formStorage.public_domain,
         };
-        const res = await axios.post(route("pengaturan.layanan.test-storage"), payload);
+        const res = await axios.post(route("admin.pengaturan.layanan.test-storage"), payload);
         storageTestResult.value = res.data;
         formStorage.status_koneksi = res.data.status;
         formStorage.pesan_koneksi = res.data.message;
@@ -188,7 +188,7 @@ async function runTestStorage() {
 }
 
 function submitFormStorage() {
-    formStorage.post(route("pengaturan.layanan.update-storage"), {
+    formStorage.post(route("admin.pengaturan.layanan.update-storage"), {
         preserveScroll: true,
         onSuccess: () => {
             // Berhasil disimpan
@@ -274,7 +274,7 @@ async function runSendTemplatePreview() {
             template: formMail.templates[activeTemplateTab.value],
         };
         const res = await axios.post(
-            route("pengaturan.layanan.test-mail-template"),
+            route("admin.pengaturan.layanan.test-mail-template"),
             payload
         );
         templatePreviewResult.value = res.data;
@@ -314,7 +314,7 @@ async function runTestMail() {
             from_name: formMail.from_name,
             send_real_email: formMail.send_real_email,
         };
-        const res = await axios.post(route("pengaturan.layanan.test-mail"), payload);
+        const res = await axios.post(route("admin.pengaturan.layanan.test-mail"), payload);
         mailTestResult.value = res.data;
         formMail.status_koneksi = res.data.status;
         formMail.pesan_koneksi = res.data.message;
@@ -332,7 +332,7 @@ async function runTestMail() {
 }
 
 function submitFormMail() {
-    formMail.post(route("pengaturan.layanan.update-mail"), {
+    formMail.post(route("admin.pengaturan.layanan.update-mail"), {
         preserveScroll: true,
         onSuccess: () => {
             // Berhasil disimpan
@@ -490,7 +490,7 @@ async function runTestAiConnection(isManual = true) {
 
     try {
         const response = await axios.post(
-            route("pengaturan.layanan.test-koneksi-ai"),
+            route("admin.pengaturan.layanan.test-koneksi-ai"),
             {
                 provider: formAi.provider,
                 api_key: formAi.api_key.trim(),
@@ -542,7 +542,7 @@ async function runTestAiConnection(isManual = true) {
 }
 
 function submitFormAi() {
-    formAi.post(route("pengaturan.layanan.update-ai"), {
+    formAi.post(route("admin.pengaturan.layanan.update-ai"), {
         preserveScroll: true,
         onSuccess: () => {
             // Berhasil disimpan
@@ -556,9 +556,9 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="Layanan Sistem & Integrasi - SIPEGE" />
+    <Head title="Layanan - Admin SIPEGE" />
 
-    <AppLayout>
+    <AppLayout title="Layanan - Admin SIPEGE">
         <!-- Kontainer Mengikuti Whitespace Penuh Sesuai Rekap Kehadiran -->
         <div class="space-y-3.5 sm:space-y-4 w-full">
             

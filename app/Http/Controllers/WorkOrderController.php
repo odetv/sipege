@@ -204,55 +204,6 @@ class WorkOrderController extends Controller
         }
 
         DB::transaction(function () use ($unitSppg, $validated, $targetId, &$workOrder) {
-            $subMenus = $validated['sub_menus'] ?? [];
-            if (empty($subMenus)) {
-                $subMenus = array_filter([
-                    $validated['sub_menu_1'] ?? null,
-                    $validated['sub_menu_2'] ?? null,
-                    $validated['sub_menu_3'] ?? null,
-                    $validated['sub_menu_4'] ?? null,
-                    $validated['sub_menu_5'] ?? null,
-                ]);
-            }
-
-            $status = $validated['status'] ?? null;
-            if (!$status || ($status === 'Draft' && ($validated['metode_wo'] ?? '') === 'manual')) {
-                $status = ($validated['metode_wo'] === 'manual') ? 'Siap Produksi' : 'Draft';
-            }
-            $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
-
-            $woData = [
-                'nomor_wo' => $validated['nomor_wo'],
-                'tanggal_distribusi' => $validated['tanggal_distribusi'],
-                'nama_menu' => !empty($validated['nama_menu']) ? $validated['nama_menu'] : $validated['nomor_wo'],
-                'siklus_ke' => $validated['siklus_ke'] ?? 1,
-                'status' => $status,
-                'metode_wo' => $validated['metode_wo'] ?? 'sistem',
-                'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
-                'current_step' => 1,
-                'sub_menus' => $subMenus,
-                'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? null,
-                'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? null,
-                'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? null,
-                'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? null,
-                'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? null,
-                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
-                'jadwal_operasional' => $jadwalOperasional,
-                'total_pm' => $validated['total_pm'],
-                'total_pk' => $validated['total_pk'],
-                'total_pb' => $validated['total_pb'],
-                'total_alergi' => $validated['total_alergi'] ?? 0,
-                'total_kelompok' => $validated['total_kelompok'] ?? 0,
-                'akg_pk' => $validated['akg_pk'] ?? null,
-                'akg_pb' => $validated['akg_pb'] ?? null,
-                'akg_alergi' => $validated['akg_alergi'] ?? null,
-                'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
-                'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
-                'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
-                'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
-                'catatan' => $validated['catatan'] ?? ($jadwalOperasional ? ['jadwal_operasional' => $jadwalOperasional] : null),
-            ];
-
             $workOrder = null;
             if (!empty($validated['id']) && is_numeric($validated['id'])) {
                 $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
@@ -288,6 +239,79 @@ class WorkOrderController extends Controller
                     ->where('nomor_wo', $validated['nomor_wo'])
                     ->first();
             }
+
+            $subMenus = $validated['sub_menus'] ?? [];
+            if (empty($subMenus)) {
+                $subMenus = array_values(array_filter([
+                    $validated['sub_menu_1'] ?? null,
+                    $validated['sub_menu_2'] ?? null,
+                    $validated['sub_menu_3'] ?? null,
+                    $validated['sub_menu_4'] ?? null,
+                    $validated['sub_menu_5'] ?? null,
+                ]));
+            }
+            if (empty($subMenus) && $workOrder && !empty($workOrder->sub_menus)) {
+                $subMenus = $workOrder->sub_menus;
+            }
+
+            $status = $validated['status'] ?? null;
+            if (!$status || ($status === 'Draft' && ($validated['metode_wo'] ?? '') === 'manual')) {
+                $status = ($validated['metode_wo'] === 'manual') ? 'Siap Produksi' : 'Draft';
+            }
+
+            $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
+            if (empty($jadwalOperasional) && $workOrder && !empty($workOrder->jadwal_operasional)) {
+                $jadwalOperasional = $workOrder->jadwal_operasional;
+            }
+
+            // Nama Menu: jika kosong atau sama dengan nomor WO tapi WO sudah punya nama menu asli, pertahankan nama lama
+            $inputNamaMenu = !empty($validated['nama_menu']) ? trim($validated['nama_menu']) : null;
+            if (($inputNamaMenu === null || $inputNamaMenu === '' || $inputNamaMenu === $validated['nomor_wo']) && $workOrder && !empty($workOrder->nama_menu) && $workOrder->nama_menu !== $workOrder->nomor_wo) {
+                $namaMenu = $workOrder->nama_menu;
+            } else {
+                $namaMenu = !empty($inputNamaMenu) ? $inputNamaMenu : $validated['nomor_wo'];
+            }
+
+            $catatan = $validated['catatan'] ?? ($workOrder ? $workOrder->catatan : null);
+            if ($jadwalOperasional) {
+                if (is_array($catatan)) {
+                    $catatan['jadwal_operasional'] = $jadwalOperasional;
+                } elseif (empty($catatan)) {
+                    $catatan = ['jadwal_operasional' => $jadwalOperasional];
+                }
+            }
+
+            $woData = [
+                'nomor_wo' => $validated['nomor_wo'],
+                'tanggal_distribusi' => $validated['tanggal_distribusi'],
+                'nama_menu' => $namaMenu,
+                'siklus_ke' => $validated['siklus_ke'] ?? ($workOrder ? $workOrder->siklus_ke : 1),
+                'status' => $status,
+                'metode_wo' => $validated['metode_wo'] ?? ($workOrder ? $workOrder->metode_wo : 'sistem'),
+                'database_pangan' => $validated['database_pangan'] ?? ($workOrder ? $workOrder->database_pangan : 'tkpi2020'),
+                'current_step' => 1,
+                'sub_menus' => $subMenus,
+                'sub_menu_1' => $subMenus[0] ?? ($workOrder ? $workOrder->sub_menu_1 : null),
+                'sub_menu_2' => $subMenus[1] ?? ($workOrder ? $workOrder->sub_menu_2 : null),
+                'sub_menu_3' => $subMenus[2] ?? ($workOrder ? $workOrder->sub_menu_3 : null),
+                'sub_menu_4' => $subMenus[3] ?? ($workOrder ? $workOrder->sub_menu_4 : null),
+                'sub_menu_5' => $subMenus[4] ?? ($workOrder ? $workOrder->sub_menu_5 : null),
+                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? ($workOrder ? $workOrder->sub_menu_alergi : null),
+                'jadwal_operasional' => $jadwalOperasional,
+                'total_pm' => $validated['total_pm'],
+                'total_pk' => $validated['total_pk'],
+                'total_pb' => $validated['total_pb'],
+                'total_alergi' => $validated['total_alergi'] ?? 0,
+                'total_kelompok' => $validated['total_kelompok'] ?? 0,
+                'akg_pk' => $validated['akg_pk'] ?? ($workOrder ? $workOrder->akg_pk : null),
+                'akg_pb' => $validated['akg_pb'] ?? ($workOrder ? $workOrder->akg_pb : null),
+                'akg_alergi' => $validated['akg_alergi'] ?? ($workOrder ? $workOrder->akg_alergi : null),
+                'food_cost_pk' => $validated['food_cost_pk'] ?? ($workOrder ? $workOrder->food_cost_pk : 0),
+                'food_cost_pb' => $validated['food_cost_pb'] ?? ($workOrder ? $workOrder->food_cost_pb : 0),
+                'total_anggaran_master' => $validated['total_anggaran_master'] ?? ($workOrder ? $workOrder->total_anggaran_master : 0),
+                'porsi_tambahan' => $validated['porsi_tambahan'] ?? ($workOrder ? $workOrder->porsi_tambahan : null),
+                'catatan' => $catatan,
+            ];
 
             if ($workOrder) {
                 $workOrder->update($woData);
@@ -363,6 +387,10 @@ class WorkOrderController extends Controller
 
         if ($request->boolean('tetap_di_halaman') || $request->input('tetap_di_halaman')) {
             $tab = $request->input('tab_tujuan', 'perencanaan');
+            if ($validated['metode_wo'] === 'manual' || str_contains($request->header('Referer', ''), 'rancang-menu-manual')) {
+                return redirect()->route('gizi.rancang-menu-manual', ['id' => $workOrder->uuid])
+                    ->with('success', 'Work Order (' . $workOrder->nomor_wo . ') berhasil disimpan.');
+            }
             return redirect()->route('work-order.buat', ['id' => $workOrder->uuid, 'tab' => $tab])
                 ->with('success', 'Work Order (' . $workOrder->nomor_wo . ') berhasil disimpan.');
         }
@@ -372,7 +400,7 @@ class WorkOrderController extends Controller
             : 'Perencanaan Produksi WO (' . $workOrder->nomor_wo . ') berhasil disimpan.';
 
         if ($validated['metode_wo'] === 'manual') {
-            return redirect()->route('work-order.daftar')->with('success', $msg);
+            return redirect()->route('gizi.rancang-menu-manual', ['id' => $workOrder->uuid])->with('success', $msg);
         }
 
         return redirect()->route('gizi.daftar-menu')->with('success', $msg);

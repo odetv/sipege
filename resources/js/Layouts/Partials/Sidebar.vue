@@ -238,12 +238,20 @@ const isAsetDigitalActive = computed(() => {
     }
 });
 
+const isPeriodeActive = computed(() => {
+    try {
+        return route().current("periode.*");
+    } catch {
+        return false;
+    }
+});
+
 const isPengaturanActive = computed(() => {
     try {
         return (
+            route().current("admin.pengaturan.*") ||
             (route().current("pengaturan.*") &&
-                !route().current("pengaturan.kategori-kpm.*")) ||
-            route().current("periode.*")
+                !route().current("pengaturan.kategori-kpm.*"))
         );
     } catch {
         return false;
@@ -460,6 +468,29 @@ const userInitials = computed(() => {
         return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
+});
+
+const isAdmin = computed(() => {
+    return (
+        currentUser.value?.role === "administrator" ||
+        currentUser.value?.role === "superadmin"
+    );
+});
+
+function formatRole(role) {
+    if (!role) return "Guest";
+    const r = String(role).toLowerCase();
+    if (r === "administrator" || r === "superadmin") return "Administrator";
+    if (r === "member") return "Member";
+    return "Guest";
+}
+
+const isPenggunaAdminActive = computed(() => {
+    try {
+        return route().current("admin.pengguna.*");
+    } catch {
+        return false;
+    }
 });
 
 function closeMobile() {
@@ -1678,6 +1709,39 @@ function logout() {
                     ></div>
                 </Link>
 
+                <!-- Menu Periode (Operasional) -->
+                <Link
+                    :href="route('periode.index')"
+                    :title="isCollapsed ? 'Periode' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        isPeriodeActive
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <CalendarRange class="h-4 w-4 shrink-0" :class="isPeriodeActive ? 'text-primary' : ''" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Periode</span
+                    >
+                    <div
+                        v-if="isPeriodeActive"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
                 <!-- SECTION: LAINNYA -->
                 <div :class="['pt-3', isCollapsed ? 'pt-2' : 'pt-4']">
                     <div
@@ -1926,88 +1990,125 @@ function logout() {
                     </div>
                 </div>
 
-                <!-- 9. Menu Pengaturan (Accordion with Submenu: Periode & Kategori KPM) -->
-                <div class="space-y-0.5">
-                    <!-- Parent Pengaturan Button -->
-                    <button
-                        type="button"
-                        @click="togglePengaturanMenu"
-                        :title="isCollapsed ? 'Pengaturan' : ''"
+                <!-- SECTION: ADMIN PANEL (Hanya Role Administrator & Superadmin) -->
+                <div v-if="isAdmin" :class="['pt-3', isCollapsed ? 'pt-2' : 'pt-4']">
+                    <div
+                        v-if="isCollapsed"
+                        class="hidden lg:block mx-auto my-1 w-6 border-t border-slate-200"
+                    ></div>
+                    <p
                         :class="[
-                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
-                            isPengaturanActive
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            'px-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-2 transition-opacity flex items-center justify-between',
+                            isCollapsed ? 'block lg:hidden' : 'block',
+                        ]"
+                    >
+                        <span>Admin Panel</span>
+                        <span class="text-[9px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-mono font-semibold">ADMIN</span>
+                    </p>
+
+                    <!-- Menu 1: Pengguna -->
+                    <Link
+                        :href="route('admin.pengguna.index')"
+                        :title="isCollapsed ? 'Pengguna' : ''"
+                        :class="[
+                            'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer mt-1',
+                            isPenggunaAdminActive
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs'
                                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             isCollapsed
                                 ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
                                 : 'px-3.5 py-2.5 gap-3',
                         ]"
                     >
-                        <Settings class="h-4 w-4 shrink-0" />
+                        <Users class="h-4 w-4 shrink-0" :class="isPenggunaAdminActive ? 'text-indigo-600' : ''" />
                         <span
                             :class="[
                                 'flex-1 truncate',
                                 isCollapsed ? 'inline lg:hidden' : 'inline',
                             ]"
-                            >Pengaturan</span
                         >
-                        <ChevronDown
+                            Pengguna
+                        </span>
+                        <div
+                            v-if="isPenggunaAdminActive"
                             :class="[
-                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
-                                isCollapsed ? 'hidden' : 'block',
-                                isPengaturanExpanded
-                                    ? 'rotate-180 text-primary'
-                                    : '',
+                                'h-2 w-2 rounded-full bg-indigo-600 animate-pulse shrink-0',
+                                isCollapsed
+                                    ? 'inline-block lg:hidden'
+                                    : 'inline-block',
                             ]"
-                        />
-                    </button>
+                        ></div>
+                    </Link>
 
-                    <!-- Sub-menu Items: Periode & Backup Restore -->
-                    <div
-                        v-if="!isCollapsed && isPengaturanExpanded"
-                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
-                    >
-                        <!-- Sub-menu 1: Periode -->
-                        <Link
-                            :href="route('periode.index')"
+                    <!-- Menu 2: Pengaturan (Accordion with Submenu: Backup & Restore, Layanan) -->
+                    <div class="space-y-0.5 mt-1">
+                        <!-- Parent Pengaturan Button -->
+                        <button
+                            type="button"
+                            @click="togglePengaturanMenu"
+                            :title="isCollapsed ? 'Pengaturan' : ''"
                             :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('periode.*')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                                isPengaturanActive
+                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                isCollapsed
+                                    ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                    : 'px-3.5 py-2.5 gap-3',
                             ]"
                         >
-                            <CalendarRange class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Periode</span>
-                        </Link>
+                            <Settings class="h-4 w-4 shrink-0" :class="isPengaturanActive ? 'text-indigo-600' : ''" />
+                            <span
+                                :class="[
+                                    'flex-1 truncate',
+                                    isCollapsed ? 'inline lg:hidden' : 'inline',
+                                ]"
+                                >Pengaturan</span
+                            >
+                            <ChevronDown
+                                :class="[
+                                    'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                    isCollapsed ? 'hidden' : 'block',
+                                    isPengaturanExpanded
+                                        ? 'rotate-180 text-indigo-600'
+                                        : '',
+                                ]"
+                            />
+                        </button>
 
-                        <!-- Sub-menu 2: Backup & Restore -->
-                        <Link
-                            :href="route('pengaturan.backup-restore.index')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('pengaturan.backup-restore.*')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
+                        <!-- Sub-menu Items: Backup & Restore, Layanan -->
+                        <div
+                            v-if="!isCollapsed && isPengaturanExpanded"
+                            class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                         >
-                            <DatabaseBackup class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Backup & Restore</span>
-                        </Link>
+                            <!-- Sub-menu 1: Backup & Restore -->
+                            <Link
+                                :href="route('admin.pengaturan.backup-restore.index')"
+                                :class="[
+                                    'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                    route().current('admin.pengaturan.backup-restore.*') || route().current('pengaturan.backup-restore.*')
+                                        ? 'bg-indigo-50 text-indigo-700 font-bold shadow-2xs'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                ]"
+                            >
+                                <DatabaseBackup class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">Backup & Restore</span>
+                            </Link>
 
-                        <!-- Sub-menu 3: Layanan -->
-                        <Link
-                            :href="route('pengaturan.layanan.index')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('pengaturan.layanan.*') || route().current('pengaturan.api-key.*') || route().current('pengaturan.kunci-api.*')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Server class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Layanan</span>
-                        </Link>
+                            <!-- Sub-menu 2: Layanan -->
+                            <Link
+                                :href="route('admin.pengaturan.layanan.index')"
+                                :class="[
+                                    'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                    route().current('admin.pengaturan.layanan.*') || route().current('pengaturan.layanan.*')
+                                        ? 'bg-indigo-50 text-indigo-700 font-bold shadow-2xs'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                ]"
+                            >
+                                <Server class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">Layanan</span>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2038,9 +2139,9 @@ function logout() {
                     </p>
                     <div class="mt-0.5">
                         <span
-                            class="inline-flex items-center px-1.5 py-0.2 text-[9.5px] sm:text-[10px] font-semibold uppercase tracking-wider rounded bg-slate-100 text-slate-600"
+                            class="inline-flex items-center px-1.5 py-0.2 text-[9.5px] sm:text-[10px] font-semibold tracking-wider rounded bg-slate-100 text-slate-700"
                         >
-                            {{ currentUser.role || "Guest" }}
+                            {{ formatRole(currentUser.role) }}
                         </span>
                     </div>
                 </div>

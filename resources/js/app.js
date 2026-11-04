@@ -11,8 +11,7 @@ const appName = import.meta.env.VITE_APP_NAME || "SIPEGE";
 createInertiaApp({
     title: (title) => {
         if (!title) return appName;
-        if (title.endsWith(` - ${appName}`)) return title;
-        if (title === appName) return appName;
+        if (title.includes(appName)) return title;
         return `${title} - ${appName}`;
     },
     resolve: (name) =>

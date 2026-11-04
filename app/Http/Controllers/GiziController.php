@@ -436,47 +436,6 @@ class GiziController extends Controller
         }
 
         DB::transaction(function () use ($unitSppg, $validated, $targetId) {
-            $subMenus = $validated['sub_menus'] ?? [];
-            if (empty($subMenus)) {
-                $subMenus = array_values(array_filter([
-                    $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
-                    $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
-                    $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
-                    $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
-                    $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
-                ]));
-            }
-
-            $woData = [
-                'nomor_wo' => $validated['nomor_wo'],
-                'tanggal_distribusi' => $validated['tanggal_distribusi'],
-                'nama_menu' => $validated['nama_menu'],
-                'siklus_ke' => $validated['siklus_ke'] ?? 1,
-                'status' => $validated['status'],
-                'database_pangan' => $validated['database_pangan'] ?? 'tkpi2020',
-                'current_step' => $validated['current_step'] ?? 1,
-                'sub_menus' => $subMenus,
-                'sub_menu_1' => $subMenus[0] ?? $validated['sub_menu_1'] ?? null,
-                'sub_menu_2' => $subMenus[1] ?? $validated['sub_menu_2'] ?? null,
-                'sub_menu_3' => $subMenus[2] ?? $validated['sub_menu_3'] ?? null,
-                'sub_menu_4' => $subMenus[3] ?? $validated['sub_menu_4'] ?? null,
-                'sub_menu_5' => $subMenus[4] ?? $validated['sub_menu_5'] ?? null,
-                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? null,
-                'total_pm' => $validated['total_pm'],
-                'total_pk' => $validated['total_pk'],
-                'total_pb' => $validated['total_pb'],
-                'total_alergi' => $validated['total_alergi'] ?? 0,
-                'total_kelompok' => $validated['total_kelompok'] ?? 0,
-                'akg_pk' => $validated['akg_pk'] ?? null,
-                'akg_pb' => $validated['akg_pb'] ?? null,
-                'food_cost_pk' => $validated['food_cost_pk'] ?? 0,
-                'food_cost_pb' => $validated['food_cost_pb'] ?? 0,
-                'total_anggaran_master' => $validated['total_anggaran_master'] ?? 0,
-                'catatan' => $validated['catatan'] ?? null,
-                'jadwal_operasional' => $validated['jadwal_operasional'] ?? null,
-                'porsi_tambahan' => $validated['porsi_tambahan'] ?? null,
-            ];
-
             $workOrder = null;
             if (!empty($validated['id']) && is_numeric($validated['id'])) {
                 $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
@@ -513,6 +472,71 @@ class GiziController extends Controller
                     ->first();
             }
 
+            $subMenus = $validated['sub_menus'] ?? [];
+            if (empty($subMenus)) {
+                $subMenus = array_values(array_filter([
+                    $validated['sub_menu_1'] ?? $validated['komponen_energi'] ?? null,
+                    $validated['sub_menu_2'] ?? $validated['komponen_protein'] ?? null,
+                    $validated['sub_menu_3'] ?? $validated['komponen_lemak'] ?? null,
+                    $validated['sub_menu_4'] ?? $validated['komponen_karbohidrat'] ?? null,
+                    $validated['sub_menu_5'] ?? $validated['komponen_serat'] ?? null,
+                ]));
+            }
+            if (empty($subMenus) && $workOrder && !empty($workOrder->sub_menus)) {
+                $subMenus = $workOrder->sub_menus;
+            }
+
+            $jadwalOperasional = $validated['jadwal_operasional'] ?? ($validated['catatan']['jadwal_operasional'] ?? null);
+            if (empty($jadwalOperasional) && $workOrder && !empty($workOrder->jadwal_operasional)) {
+                $jadwalOperasional = $workOrder->jadwal_operasional;
+            }
+
+            $inputNamaMenu = !empty($validated['nama_menu']) ? trim($validated['nama_menu']) : null;
+            if (($inputNamaMenu === null || $inputNamaMenu === '' || $inputNamaMenu === $validated['nomor_wo']) && $workOrder && !empty($workOrder->nama_menu) && $workOrder->nama_menu !== $workOrder->nomor_wo) {
+                $namaMenu = $workOrder->nama_menu;
+            } else {
+                $namaMenu = !empty($inputNamaMenu) ? $inputNamaMenu : $validated['nomor_wo'];
+            }
+
+            $catatan = $validated['catatan'] ?? ($workOrder ? $workOrder->catatan : null);
+            if ($jadwalOperasional) {
+                if (is_array($catatan)) {
+                    $catatan['jadwal_operasional'] = $jadwalOperasional;
+                } elseif (empty($catatan)) {
+                    $catatan = ['jadwal_operasional' => $jadwalOperasional];
+                }
+            }
+
+            $woData = [
+                'nomor_wo' => $validated['nomor_wo'],
+                'tanggal_distribusi' => $validated['tanggal_distribusi'],
+                'nama_menu' => $namaMenu,
+                'siklus_ke' => $validated['siklus_ke'] ?? ($workOrder ? $workOrder->siklus_ke : 1),
+                'status' => $validated['status'],
+                'database_pangan' => $validated['database_pangan'] ?? ($workOrder ? $workOrder->database_pangan : 'tkpi2020'),
+                'current_step' => $validated['current_step'] ?? ($workOrder ? $workOrder->current_step : 1),
+                'sub_menus' => $subMenus,
+                'sub_menu_1' => $subMenus[0] ?? ($workOrder ? $workOrder->sub_menu_1 : null),
+                'sub_menu_2' => $subMenus[1] ?? ($workOrder ? $workOrder->sub_menu_2 : null),
+                'sub_menu_3' => $subMenus[2] ?? ($workOrder ? $workOrder->sub_menu_3 : null),
+                'sub_menu_4' => $subMenus[3] ?? ($workOrder ? $workOrder->sub_menu_4 : null),
+                'sub_menu_5' => $subMenus[4] ?? ($workOrder ? $workOrder->sub_menu_5 : null),
+                'sub_menu_alergi' => $validated['sub_menu_alergi'] ?? ($workOrder ? $workOrder->sub_menu_alergi : null),
+                'total_pm' => $validated['total_pm'],
+                'total_pk' => $validated['total_pk'],
+                'total_pb' => $validated['total_pb'],
+                'total_alergi' => $validated['total_alergi'] ?? 0,
+                'total_kelompok' => $validated['total_kelompok'] ?? 0,
+                'akg_pk' => $validated['akg_pk'] ?? ($workOrder ? $workOrder->akg_pk : null),
+                'akg_pb' => $validated['akg_pb'] ?? ($workOrder ? $workOrder->akg_pb : null),
+                'food_cost_pk' => $validated['food_cost_pk'] ?? ($workOrder ? $workOrder->food_cost_pk : 0),
+                'food_cost_pb' => $validated['food_cost_pb'] ?? ($workOrder ? $workOrder->food_cost_pb : 0),
+                'total_anggaran_master' => $validated['total_anggaran_master'] ?? ($workOrder ? $workOrder->total_anggaran_master : 0),
+                'catatan' => $catatan,
+                'jadwal_operasional' => $jadwalOperasional,
+                'porsi_tambahan' => $validated['porsi_tambahan'] ?? ($workOrder ? $workOrder->porsi_tambahan : null),
+            ];
+
             if ($workOrder) {
                 $workOrder->update($woData);
             } else {
@@ -521,35 +545,37 @@ class GiziController extends Controller
                 ]));
             }
 
-            // Sync Items
-            $workOrder->items()->delete();
-            foreach ($validated['items'] ?? [] as $item) {
-                $workOrder->items()->create([
-                    'sub_menu_key' => $item['sub_menu_key'] ?? null,
-                    'sub_menu_block_id' => $item['sub_menu_block_id'] ?? null,
-                    'nama_sub_menu' => $item['nama_sub_menu'] ?? null,
-                    'tkpi_id' => $item['tkpi_id'] ?? $item['id'] ?? null,
-                    'nama' => $item['nama'] ?? 'Bahan',
-                    'nama_po' => $item['nama_po'] ?? $item['nama'] ?? 'Bahan',
-                    'kategori' => $item['kategori'] ?? 'Lainnya',
-                    'satuan' => $item['satuan'] ?? 'Kg',
-                    'jenis' => $item['jenis'] ?? 'bahan_baku',
-                    'tipe_porsi' => $item['tipe_porsi'] ?? 'normal',
-                    'jenis_alergi' => $item['jenis_alergi'] ?? null,
-                    'alergen' => $item['alergen'] ?? null,
-                    'gram_pk' => $item['gram_pk'] ?? 0,
-                    'gram_pb' => $item['gram_pb'] ?? 0,
-                    'bdd' => $item['bdd'] ?? 100,
-                    'buffer' => $item['buffer'] ?? 0,
-                    'gross_kg_pk' => $item['grossKgPK'] ?? 0,
-                    'gross_kg_pb' => $item['grossKgPB'] ?? 0,
-                    'total_gross_kg' => $item['totalGrossKg'] ?? 0,
-                    'harga_master' => $item['harga_master'] ?? 0,
-                    'subtotal_master' => $item['subtotalMaster'] ?? 0,
-                    'nutrisi_pk' => $item['nutrisiPK'] ?? null,
-                    'nutrisi_pb' => $item['nutrisiPB'] ?? null,
-                    'keterangan' => $item['keterangan'] ?? null,
-                ]);
+            // Sync Items jika disediakan di request
+            if (isset($validated['items'])) {
+                $workOrder->items()->delete();
+                foreach ($validated['items'] as $item) {
+                    $workOrder->items()->create([
+                        'sub_menu_key' => $item['sub_menu_key'] ?? null,
+                        'sub_menu_block_id' => $item['sub_menu_block_id'] ?? null,
+                        'nama_sub_menu' => $item['nama_sub_menu'] ?? null,
+                        'tkpi_id' => $item['tkpi_id'] ?? $item['id'] ?? null,
+                        'nama' => $item['nama'] ?? 'Bahan',
+                        'nama_po' => $item['nama_po'] ?? $item['nama'] ?? 'Bahan',
+                        'kategori' => $item['kategori'] ?? 'Lainnya',
+                        'satuan' => $item['satuan'] ?? 'Kg',
+                        'jenis' => $item['jenis'] ?? 'bahan_baku',
+                        'tipe_porsi' => $item['tipe_porsi'] ?? 'normal',
+                        'jenis_alergi' => $item['jenis_alergi'] ?? null,
+                        'alergen' => $item['alergen'] ?? null,
+                        'gram_pk' => $item['gram_pk'] ?? 0,
+                        'gram_pb' => $item['gram_pb'] ?? 0,
+                        'bdd' => $item['bdd'] ?? 100,
+                        'buffer' => $item['buffer'] ?? 0,
+                        'gross_kg_pk' => $item['grossKgPK'] ?? 0,
+                        'gross_kg_pb' => $item['grossKgPB'] ?? 0,
+                        'total_gross_kg' => $item['totalGrossKg'] ?? 0,
+                        'harga_master' => $item['harga_master'] ?? 0,
+                        'subtotal_master' => $item['subtotalMaster'] ?? 0,
+                        'nutrisi_pk' => $item['nutrisiPK'] ?? null,
+                        'nutrisi_pb' => $item['nutrisiPB'] ?? null,
+                        'keterangan' => $item['keterangan'] ?? null,
+                    ]);
+                }
             }
 
             // Sync Kelompoks snapshot
@@ -588,7 +614,7 @@ class GiziController extends Controller
                     'supplier_id' => $existingPo ? $existingPo->supplier_id : null,
                     'vendor' => $existingPo ? $existingPo->vendor : null,
                     'jenis_transaksi' => $existingPo ? $existingPo->jenis_transaksi : null,
-                    'items_count' => count($validated['items']),
+                    'items_count' => count($validated['items'] ?? []),
                     'total_nominal_master' => $validated['total_anggaran_master'] ?? 0,
                     'total_nominal_aktual' => $validated['total_anggaran_master'] ?? 0,
                     'status_po' => $poStatus,

@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\PenggunaController;
 use App\Http\Controllers\AsetDigitalController;
+use App\Http\Controllers\Auth\OnboardingController;
+use App\Http\Controllers\Auth\PaketLanggananController;
 use App\Http\Controllers\BackupRestoreController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiziController;
@@ -37,7 +40,30 @@ Route::prefix('api/wilayah')->group(function () {
     Route::get('/villages/{districtCode}', [WilayahController::class, 'villages']);
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// Alur Pendaftaran Bertahap: Paket Langganan & Onboarding Pengisian Data
+Route::middleware(['auth'])->group(function () {
+
+    // 1. Pilihan Paket Langganan Aplikasi
+    Route::get('/paket-langganan', [PaketLanggananController::class, 'index'])->name('paket-langganan.index');
+    Route::post('/paket-langganan/pilih', [PaketLanggananController::class, 'updatePaket'])->name('paket-langganan.update-paket');
+    Route::post('/paket-langganan/ajukan-free', [PaketLanggananController::class, 'ajukanFree'])->name('paket-langganan.ajukan-free');
+    Route::post('/paket-langganan/simulasi-bayar', [PaketLanggananController::class, 'simulasiBayar'])->name('paket-langganan.simulasi');
+    Route::post('/paket-langganan/konfirmasi', [PaketLanggananController::class, 'konfirmasi'])->name('paket-langganan.konfirmasi');
+
+    // Alias redirect URL lama /pembayaran-sewa -> /paket-langganan
+    Route::get('/pembayaran-sewa', fn () => redirect()->route('paket-langganan.index'))->name('pembayaran.index');
+    Route::post('/pembayaran-sewa/simulasi-bayar', [PaketLanggananController::class, 'simulasiBayar'])->name('pembayaran.simulasi');
+
+
+
+
+
+    // 2. Onboarding Lengkapi Data Profil Kepala SPPG & Data Unit SPPG (setelah paket langganan aktif)
+    Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding.index');
+    Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
+});
+
+Route::middleware(['auth', 'verified', 'subscription.active'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::put('/dashboard/user-profile', [DashboardController::class, 'updateUserProfile'])->name('dashboard.user.update');
     Route::put('/dashboard/unit-sppg', [DashboardController::class, 'updateUnitSppg'])->name('dashboard.unit.update');
@@ -67,9 +93,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [WorkOrderController::class, 'index'])->name('index');
         Route::get('/buat', [WorkOrderController::class, 'perencanaan'])->name('buat');
         Route::get('/buat-wo', [WorkOrderController::class, 'perencanaan'])->name('buat-wo');
-        Route::get('/edit-manual', [WorkOrderController::class, 'perencanaan'])->name('edit-manual');
+        Route::get('/edit-manual', function (\Illuminate\Http\Request $request) {
+            $id = $request->query('id') ?: ($request->query('uuid') ?: $request->query('edit_id'));
+            return redirect()->route('gizi.rancang-menu-manual', array_filter(['id' => $id]));
+        })->name('edit-manual');
         Route::get('/edit-manual/{id}', function (\Illuminate\Http\Request $request, $id) {
-            return redirect()->route('work-order.edit-manual', array_merge(['id' => $id], $request->query()));
+            return redirect()->route('gizi.rancang-menu-manual', array_merge(['id' => $id], $request->query()));
         });
         Route::get('/perencanaan', fn(\Illuminate\Http\Request $request) => redirect()->route('work-order.buat', $request->query()))->name('perencanaan');
         Route::get('/daftar', [WorkOrderController::class, 'daftar'])->name('daftar');
@@ -149,6 +178,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/survei-harga/{id}', [KeuanganController::class, 'destroySurveiHarga'])->name('survei-harga.destroy');
 
         // PO Actions
+        Route::post('/po', [KeuanganController::class, 'storePo'])->name('po.store');
+        Route::delete('/po/{id}', [KeuanganController::class, 'destroyPo'])->name('po.destroy');
         Route::post('/po/{id}/verifikasi', [KeuanganController::class, 'verifikasiPo'])->name('po.verifikasi');
         Route::put('/po/{id}/supplier', [KeuanganController::class, 'updatePoSupplier'])->name('po.update-supplier');
         Route::post('/po/{id}/supplier', [KeuanganController::class, 'updatePoSupplier'])->name('po.update-supplier-post');
@@ -201,59 +232,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/harian-lintas-sektor', [LaporanController::class, 'harianLintasSektor'])->name('harian-lintas-sektor');
     });
 
-    // Menu Pengaturan SPPG (Periode & Kategori KPM)
-    Route::prefix('pengaturan')->group(function () {
-        Route::resource('periode', PeriodeController::class)
-            ->names('periode')
-            ->only(['index', 'store', 'update', 'destroy']);
+    // Periode Operasional SPPG
+    Route::resource('periode', PeriodeController::class)
+        ->names('periode')
+        ->only(['index', 'store', 'update', 'destroy']);
 
-        Route::prefix('kategori-kpm')->name('pengaturan.kategori-kpm.')->group(function () {
-            Route::get('/', [KategoriKpmController::class, 'index'])->name('index');
-            Route::post('/', [KategoriKpmController::class, 'store'])->name('store');
-            Route::put('/{id}', [KategoriKpmController::class, 'update'])->name('update');
-            Route::delete('/{id}', [KategoriKpmController::class, 'destroy'])->name('destroy');
-            Route::post('/reset', [KategoriKpmController::class, 'resetDefaults'])->name('reset');
-        });
-
-        Route::get('/backup-restore', [BackupRestoreController::class, 'index'])->name('pengaturan.backup-restore.index');
-
-        // Layanan Terpadu (Database, Storage, Mail, AI)
-        Route::prefix('layanan')->name('pengaturan.layanan.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\LayananController::class, 'index'])->name('index');
-            Route::post('/storage', [\App\Http\Controllers\LayananController::class, 'updateStorage'])->name('update-storage');
-            Route::post('/mail', [\App\Http\Controllers\LayananController::class, 'updateMail'])->name('update-mail');
-            Route::post('/ai',  [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update-ai');
-            Route::post('/ai/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi-ai');
-            Route::post('/test-database', [\App\Http\Controllers\LayananController::class, 'testDatabase'])->name('test-database');
-            Route::post('/test-storage', [\App\Http\Controllers\LayananController::class, 'testStorage'])->name('test-storage');
-            Route::post('/test-mail', [\App\Http\Controllers\LayananController::class, 'testMail'])->name('test-mail');
-            Route::post('/test-mail-template', [\App\Http\Controllers\LayananController::class, 'testMailTemplate'])->name('test-mail-template');
-        });
-
-        // Dukungan kompatibilitas rute lama (api-key & kunci-api diarahkan ke Layanan)
-        Route::prefix('api-key')->name('pengaturan.api-key.')->group(function () {
-            Route::get('/', function () {
-                return redirect()->route('pengaturan.layanan.index', ['tab' => 'ai']);
-            })->name('index');
-            Route::post('/', [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update');
-            Route::post('/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi');
-        });
-
-        Route::prefix('kunci-api')->name('pengaturan.kunci-api.')->group(function () {
-            Route::get('/', function () {
-                return redirect()->route('pengaturan.layanan.index', ['tab' => 'ai']);
-            })->name('index');
-            Route::post('/', [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update');
-            Route::post('/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi');
-        });
-
-    });
-
-    // Redirect alias global ke /pengaturan/...
-    Route::redirect('/periode', '/pengaturan/periode');
-    Route::redirect('/layanan', '/pengaturan/layanan');
-    Route::redirect('/kunci-api', '/pengaturan/layanan');
-    Route::redirect('/api-key', '/pengaturan/layanan');
+    // Redirect kompatibilitas URL lama periode
+    Route::redirect('/pengaturan/periode', '/periode');
 
     // Menu Petunjuk (SOP, Juknis & Pedoman) SPPG
     Route::prefix('petunjuk')->name('petunjuk.')->group(function () {
@@ -288,6 +273,43 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/download/{filename}', fn($filename) => redirect()->route('petunjuk.download', ['type' => 'sop', 'filename' => $filename]))->name('download');
     });
 });
+
+// Admin Panel: Khusus Administrator & Superadmin
+// Admin Panel: Khusus Administrator & Superadmin
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // 1. Monitoring & Manajemen Pengguna
+    Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
+    Route::put('/pengguna/{user}/role', [PenggunaController::class, 'updateRole'])->name('pengguna.update-role');
+    Route::post('/pengguna/{user}/verify-email', [PenggunaController::class, 'verifyEmailManual'])->name('pengguna.verify-email');
+    Route::delete('/pengguna/{user}', [PenggunaController::class, 'destroy'])->name('pengguna.destroy');
+
+    // 2. Pengaturan Sistem & Layanan Admin Panel
+    Route::prefix('pengaturan')->name('pengaturan.')->group(function () {
+        // Backup & Restore Database
+        Route::get('/backup-restore', [BackupRestoreController::class, 'index'])->name('backup-restore.index');
+
+        // Layanan Terpadu (Database, Storage, Mail, AI)
+        Route::prefix('layanan')->name('layanan.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\LayananController::class, 'index'])->name('index');
+            Route::post('/storage', [\App\Http\Controllers\LayananController::class, 'updateStorage'])->name('update-storage');
+            Route::post('/mail', [\App\Http\Controllers\LayananController::class, 'updateMail'])->name('update-mail');
+            Route::post('/ai',  [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update-ai');
+            Route::post('/ai/test-koneksi', [\App\Http\Controllers\LayananController::class, 'testKoneksiAi'])->name('test-koneksi-ai');
+            Route::post('/test-database', [\App\Http\Controllers\LayananController::class, 'testDatabase'])->name('test-database');
+            Route::post('/test-storage', [\App\Http\Controllers\LayananController::class, 'testStorage'])->name('test-storage');
+            Route::post('/test-mail', [\App\Http\Controllers\LayananController::class, 'testMail'])->name('test-mail');
+            Route::post('/test-mail-template', [\App\Http\Controllers\LayananController::class, 'testMailTemplate'])->name('test-mail-template');
+        });
+    });
+});
+
+// Redirect kompatibilitas URL lama Pengaturan ke /admin/pengaturan/...
+Route::redirect('/pengaturan/backup-restore', '/admin/pengaturan/backup-restore');
+Route::redirect('/pengaturan/layanan', '/admin/pengaturan/layanan');
+Route::redirect('/pengaturan', '/admin/pengaturan/layanan');
+Route::redirect('/layanan', '/admin/pengaturan/layanan');
+Route::redirect('/kunci-api', '/admin/pengaturan/layanan?tab=ai');
+Route::redirect('/api-key', '/admin/pengaturan/layanan?tab=ai');
 
 require __DIR__ . '/auth.php';
 

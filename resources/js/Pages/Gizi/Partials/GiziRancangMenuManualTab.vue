@@ -2582,7 +2582,7 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         lanjut_ke_rancang_menu:
             metodeWo.value === "manual" ? false : lanjutKeRancangMenu,
         step: lanjutKeRancangMenu ? "formula" : null,
-        tetap_di_halaman: false,
+        tetap_di_halaman: true,
         tab_tujuan: activeManualTab.value,
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
@@ -2786,7 +2786,7 @@ function handleSavePerencanaanManualComplete() {
         total_kelompok: kelompokMenerimaAktif.value.length,
         jadwal_operasional: payloadJadwalOperasional.value,
         lanjut_ke_rancang_menu: false,
-        tetap_di_halaman: false,
+        tetap_di_halaman: true,
         tab_tujuan: "formula",
         akg_pk: akgPk.value,
         akg_pb: akgPb.value,
@@ -2843,7 +2843,8 @@ function initForm(targetWo = null) {
         metodeWo.value = targetWo.metode_wo || "sistem";
         isMetodeWoSelected.value = true; // Mode edit: mode sudah ada dan terkunci
         tanggalRencana.value = targetWo.tanggal_distribusi;
-        namaMenuAktif.value = cleanInitialMenuName(targetWo.nama_menu, targetWo.nomor_wo);
+        const cleanedName = cleanInitialMenuName(targetWo.nama_menu, targetWo.nomor_wo);
+        namaMenuAktif.value = cleanedName || (targetWo.nama_menu && targetWo.nama_menu !== targetWo.nomor_wo ? targetWo.nama_menu : "");
 
         let rawList = [];
         if (
@@ -2853,14 +2854,25 @@ function initForm(targetWo = null) {
             rawList = targetWo.sub_menus.map((s) =>
                 typeof s === "string" ? s : s?.nama || "",
             );
-        } else {
-            rawList = [
+        } else if (typeof targetWo.sub_menus === "string" && targetWo.sub_menus.trim()) {
+            try {
+                const parsed = JSON.parse(targetWo.sub_menus);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    rawList = parsed.map((s) => (typeof s === "string" ? s : s?.nama || ""));
+                }
+            } catch (e) {}
+        }
+        if (rawList.length === 0 || rawList.every((v) => !v)) {
+            const fallbackList = [
                 targetWo.sub_menu_1 || "",
                 targetWo.sub_menu_2 || "",
                 targetWo.sub_menu_3 || "",
                 targetWo.sub_menu_4 || "",
                 targetWo.sub_menu_5 || "",
             ];
+            if (fallbackList.some((v) => v)) {
+                rawList = fallbackList;
+            }
         }
         while (rawList.length < 5) {
             rawList.push("");
@@ -2894,11 +2906,16 @@ function initForm(targetWo = null) {
         });
         subMenuKategori.value = newKategori;
 
-        const rawAlergi =
+        let rawAlergi =
             targetWo.sub_menu_alergi &&
             typeof targetWo.sub_menu_alergi === "object"
                 ? targetWo.sub_menu_alergi
                 : {};
+        if (typeof targetWo.sub_menu_alergi === "string" && targetWo.sub_menu_alergi.trim()) {
+            try {
+                rawAlergi = JSON.parse(targetWo.sub_menu_alergi);
+            } catch (e) {}
+        }
         const parsedAlergi = {};
         newKeys.forEach((k) => {
             parsedAlergi[k] = Array.isArray(rawAlergi[k]) ? rawAlergi[k] : [];
@@ -2911,6 +2928,10 @@ function initForm(targetWo = null) {
             typeof targetWo.jadwal_operasional === "object"
         ) {
             savedJadwal = targetWo.jadwal_operasional;
+        } else if (typeof targetWo.jadwal_operasional === "string" && targetWo.jadwal_operasional.trim()) {
+            try {
+                savedJadwal = JSON.parse(targetWo.jadwal_operasional);
+            } catch (e) {}
         } else if (targetWo.catatan && typeof targetWo.catatan === "object") {
             savedJadwal = targetWo.catatan.jadwal_operasional;
         } else if (typeof targetWo.catatan === "string") {
@@ -3461,7 +3482,8 @@ watch(
         if (newWo) {
             syncActiveWo(newWo);
         }
-    }
+    },
+    { immediate: true, deep: true }
 );
 
 onMounted(() => {
@@ -3479,11 +3501,12 @@ onMounted(() => {
 
     let target = props.activeWorkOrder || props.editWorkOrder;
     if (!target && paramId && props.workOrdersList?.length > 0) {
+        const cleanParamId = String(paramId).trim().toLowerCase();
         target = props.workOrdersList.find(
             (w) =>
-                String(w.id) === String(paramId) ||
-                w.uuid === paramId ||
-                w.nomor_wo === paramId
+                String(w.id) === cleanParamId ||
+                (w.uuid && w.uuid.toLowerCase() === cleanParamId) ||
+                (w.nomor_wo && w.nomor_wo.toLowerCase() === cleanParamId)
         );
     }
 

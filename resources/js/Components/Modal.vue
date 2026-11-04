@@ -27,12 +27,16 @@ watch(
             document.body.style.overflow = 'hidden';
             showSlot.value = true;
 
-            dialog.value?.showModal();
+            if (dialog.value && !dialog.value.open) {
+                dialog.value.showModal();
+            }
         } else {
             document.body.style.overflow = '';
 
             setTimeout(() => {
-                dialog.value?.close();
+                if (dialog.value && dialog.value.open) {
+                    dialog.value.close();
+                }
                 showSlot.value = false;
             }, 200);
         }

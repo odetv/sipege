@@ -39,6 +39,13 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user,
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'info' => fn () => $request->session()->get('info'),
+                'initialization_success' => fn () => $request->session()->get('initialization_success'),
+            ],
             'unitSppg' => $user?->unitSppg,
             'periodes' => fn () => $user ? \App\Models\Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
                 return [

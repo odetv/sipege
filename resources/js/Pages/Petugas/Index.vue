@@ -123,18 +123,16 @@ const presetJamDivisi = {
 
 // Preset Jabatan Options Dropdown
 const listOpsiJabatan = [
+    "Admin",
     "Kepala SPPG",
     "Pengawas Gizi",
     "Pengawas Keuangan",
-    "Koordinator Lapangan",
-    "Chef",
-    "Pengolahan",
+    "Asisten Lapangan",
     "Persiapan",
+    "Pengolahan",
     "Pemorsian",
     "Pengemudi",
     "Cuci Ompreng",
-    "Koordinator",
-    "Admin",
     "Kebersihan",
     "Keamanan",
 ];

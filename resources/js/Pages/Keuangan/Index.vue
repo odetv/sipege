@@ -51,6 +51,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    availableWorkOrders: {
+        type: Array,
+        default: () => [],
+    },
     suppliers: {
         type: Array,
         default: () => [],
@@ -505,6 +509,7 @@ const pageTitle = computed(() => {
                 v-if="activeTab === 'daftar_po'"
                 :po-list="poList"
                 :suppliers="suppliers"
+                :available-work-orders="availableWorkOrders || []"
                 :periodes="props.periodes || []"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
@@ -614,6 +619,7 @@ const pageTitle = computed(() => {
                 :user="user"
                 :unit-sppg="unitSppg"
                 :suppliers="suppliers"
+                :available-work-orders="availableWorkOrders || []"
                 :survei-harga-list="surveiHargaList"
                 :default-survei-items="defaultSurveiItems"
                 :format-rupiah="formatRupiah"

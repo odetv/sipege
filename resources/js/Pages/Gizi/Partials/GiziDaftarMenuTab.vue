@@ -587,10 +587,10 @@ function handleEditWo(m) {
         );
         return;
     }
-    // Jika Work Order bertipe manual, arahkan ke tampilan edit-manual
+    // Jika Work Order bertipe manual, arahkan ke tampilan rancang-menu-manual
     if (m.metode_wo === "manual" || m.raw?.metode_wo === "manual") {
         const targetId = m.uuid || m.raw?.uuid || m.db_id || m.raw?.id;
-        router.visit(route("work-order.edit-manual", { id: targetId }));
+        router.visit(route("gizi.rancang-menu-manual", { id: targetId }));
         return;
     }
     if (m.uuid || m.db_id) {

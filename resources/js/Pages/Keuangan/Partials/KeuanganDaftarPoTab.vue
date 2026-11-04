@@ -10,11 +10,7 @@ import Badge from "@/Components/ui/Badge.vue";
 import Button from "@/Components/ui/Button.vue";
 import Modal from "@/Components/Modal.vue";
 import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
-import {
-    exportPoExcel,
-    exportPoWord,
-    exportPoPdf,
-} from "@/Services/exportDocHelper";
+import { exportPoExcel } from "@/Services/exportDocHelper";
 import {
     Receipt,
     CheckCircle2,
@@ -49,6 +45,10 @@ import {
     Sparkles,
     AlertTriangle,
     Plus,
+    Trash2,
+    Utensils,
+    ShoppingBag,
+    Layers,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -57,6 +57,10 @@ const props = defineProps({
         default: () => [],
     },
     suppliers: {
+        type: Array,
+        default: () => [],
+    },
+    availableWorkOrders: {
         type: Array,
         default: () => [],
     },
@@ -258,6 +262,7 @@ function openEditPoModal(po) {
             subtotal_aktual: subtotal,
             supplier_id: it.supplier_id || null,
             jenis_transaksi: it.jenis_transaksi || "",
+            keterangan: it.keterangan || "",
         };
     });
 
@@ -423,28 +428,263 @@ const jenisSupplierBadgeClasses = {
     Lainnya: "bg-slate-50 text-slate-700 border-slate-200",
 };
 
-const showExportPoModal = ref(false);
+// ─── Modal Tambah / Buat PO Baru (Dari WO Otomatis atau Manual) ────────
+const showCreatePoModal = ref(false);
+const activeCreateMode = ref("work_order"); // 'work_order' | 'manual'
+const selectedWoId = ref("");
+const bulkSupplierWo = ref("");
+const bulkJenisTransaksiWo = ref("Bahan Baku");
+const bulkSupplierManual = ref("");
+const bulkJenisTransaksiManual = ref("Bahan Baku");
 
-function handleExportToolbarExcel() {
-    if (!filteredPoList.value || filteredPoList.value.length === 0) {
-        alert("Tidak ada data Purchase Order (PO) yang tersedia untuk diunduh.");
+const formWoPo = useForm({
+    source: "work_order",
+    work_order_id: "",
+    nomor_po: "",
+    tanggal: "",
+    status_bayar: "Belum Bayar",
+    supplier_id: "",
+    jenis_transaksi: "Bahan Baku",
+    catatan: "",
+    items: [],
+});
+
+const formManualPo = useForm({
+    source: "manual",
+    nomor_po: "",
+    nama_menu: "",
+    tanggal: new Date().toISOString().substring(0, 10),
+    status_bayar: "Belum Bayar",
+    supplier_id: "",
+    jenis_transaksi: "Bahan Baku",
+    catatan: "",
+    items: [],
+});
+
+const selectedWoData = computed(() => {
+    if (!selectedWoId.value || !Array.isArray(props.availableWorkOrders)) return null;
+    return (
+        props.availableWorkOrders.find(
+            (w) => String(w.id) === String(selectedWoId.value)
+        ) || null
+    );
+});
+
+function openCreatePoModal() {
+    try {
+        bulkSupplierWo.value = "";
+        bulkJenisTransaksiWo.value = "Bahan Baku";
+        bulkSupplierManual.value = "";
+        bulkJenisTransaksiManual.value = "Bahan Baku";
+
+        if (Array.isArray(props.availableWorkOrders) && props.availableWorkOrders.length > 0) {
+            activeCreateMode.value = "work_order";
+            const firstWo = props.availableWorkOrders[0];
+            selectedWoId.value = firstWo.id;
+            loadSelectedWoIntoForm(firstWo);
+        } else {
+            selectedWoId.value = "";
+            activeCreateMode.value = "manual";
+        }
+
+        initManualPoForm();
+    } catch (err) {
+        console.error("Error opening Create PO modal:", err);
+        activeCreateMode.value = "manual";
+        initManualPoForm();
+    } finally {
+        showCreatePoModal.value = true;
+    }
+}
+
+function closeCreatePoModal() {
+    showCreatePoModal.value = false;
+    formWoPo.reset();
+    formManualPo.reset();
+}
+
+function loadSelectedWoIntoForm(targetWo = null) {
+    const wo = targetWo || selectedWoData.value;
+    if (!wo) return;
+    const tgl =
+        wo.tanggal_distribusi || new Date().toISOString().substring(0, 10);
+    const suggestedNo =
+        wo.po_nomor ||
+        generateSuggestedPoNumber(tgl, String(wo.id).padStart(3, "0"));
+
+    formWoPo.work_order_id = wo.id;
+    formWoPo.nomor_po = suggestedNo;
+    formWoPo.tanggal = tgl;
+    formWoPo.status_bayar = "Belum Bayar";
+    formWoPo.supplier_id = "";
+    formWoPo.jenis_transaksi = "Bahan Baku";
+    formWoPo.catatan = `Diterbitkan dari WO ${wo.nomor_wo} (${wo.nama_menu})`;
+
+    formWoPo.items = (wo.items || []).map((it) => ({
+        work_order_item_id: it.work_order_item_id || null,
+        nama: it.nama,
+        kategori: it.kategori || "Lainnya",
+        satuan: it.satuan || "Kg",
+        tipe: it.tipe || "Normal",
+        gross_kg: Number(it.gross_kg) || 0,
+        harga_master: Number(it.harga_master) || 0,
+        harga_aktual: Number(it.harga_aktual || it.harga_master) || 0,
+        subtotal:
+            (Number(it.gross_kg) || 0) *
+            (Number(it.harga_aktual || it.harga_master) || 0),
+        supplier_id: it.supplier_id || "",
+        jenis_transaksi: it.jenis_transaksi || "Bahan Baku",
+        keterangan: it.keterangan || "",
+    }));
+}
+
+function onSelectWoChange() {
+    loadSelectedWoIntoForm();
+}
+
+function applyBulkSupplierWo() {
+    if (!bulkSupplierWo.value) return;
+    formWoPo.items.forEach((it) => {
+        it.supplier_id = bulkSupplierWo.value;
+    });
+    formWoPo.supplier_id = bulkSupplierWo.value;
+}
+
+function applyBulkJenisTransaksiWo() {
+    if (!bulkJenisTransaksiWo.value) return;
+    formWoPo.items.forEach((it) => {
+        it.jenis_transaksi = bulkJenisTransaksiWo.value;
+    });
+    formWoPo.jenis_transaksi = bulkJenisTransaksiWo.value;
+}
+
+const totalNominalWoPo = computed(() => {
+    return formWoPo.items.reduce(
+        (acc, it) =>
+            acc + (Number(it.gross_kg) || 0) * (Number(it.harga_aktual) || 0),
+        0
+    );
+});
+
+function submitWoPo() {
+    formWoPo.post(route("keuangan.po.store"), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeCreatePoModal();
+        },
+    });
+}
+
+function initManualPoForm() {
+    const today = new Date().toISOString().substring(0, 10);
+    const rnd = Math.floor(100 + Math.random() * 900);
+    formManualPo.nomor_po = generateSuggestedPoNumber(today, `M${rnd}`);
+    formManualPo.tanggal = today;
+    formManualPo.nama_menu = "";
+    formManualPo.status_bayar = "Belum Bayar";
+    formManualPo.supplier_id = "";
+    formManualPo.jenis_transaksi = "Bahan Baku";
+    formManualPo.catatan = "";
+    formManualPo.items = [
+        {
+            nama: "",
+            kategori: "Karbohidrat",
+            satuan: "Kg",
+            gross_kg: 1,
+            harga_aktual: 0,
+            subtotal: 0,
+            supplier_id: "",
+            jenis_transaksi: "Bahan Baku",
+            keterangan: "",
+        },
+    ];
+}
+
+function addManualItemRow() {
+    formManualPo.items.push({
+        nama: "",
+        kategori: "Karbohidrat",
+        satuan: "Kg",
+        gross_kg: 1,
+        harga_aktual: 0,
+        subtotal: 0,
+        supplier_id: bulkSupplierManual.value || formManualPo.supplier_id || "",
+        jenis_transaksi:
+            bulkJenisTransaksiManual.value ||
+            formManualPo.jenis_transaksi ||
+            "Bahan Baku",
+        keterangan: "",
+    });
+}
+
+function removeManualItemRow(idx) {
+    if (formManualPo.items.length <= 1) {
+        alert("Minimal harus ada 1 baris bahan baku.");
         return;
     }
-    if (filteredPoList.value.length === 1) {
-        exportPoExcel(filteredPoList.value[0]);
-    } else {
-        showExportPoModal.value = true;
-    }
+    formManualPo.items.splice(idx, 1);
 }
 
-async function exportAllPosExcel() {
-    if (!filteredPoList.value || filteredPoList.value.length === 0) return;
-    for (const po of filteredPoList.value) {
-        await exportPoExcel(po);
-        await new Promise((r) => setTimeout(r, 600));
-    }
-    showExportPoModal.value = false;
+function applyBulkSupplierManual() {
+    if (!bulkSupplierManual.value) return;
+    formManualPo.items.forEach((it) => {
+        it.supplier_id = bulkSupplierManual.value;
+    });
+    formManualPo.supplier_id = bulkSupplierManual.value;
 }
+
+function applyBulkJenisTransaksiManual() {
+    if (!bulkJenisTransaksiManual.value) return;
+    formManualPo.items.forEach((it) => {
+        it.jenis_transaksi = bulkJenisTransaksiManual.value;
+    });
+    formManualPo.jenis_transaksi = bulkJenisTransaksiManual.value;
+}
+
+const totalNominalManualPo = computed(() => {
+    return formManualPo.items.reduce(
+        (acc, it) =>
+            acc + (Number(it.gross_kg) || 0) * (Number(it.harga_aktual) || 0),
+        0
+    );
+});
+
+function submitManualPo() {
+    formManualPo.post(route("keuangan.po.store"), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeCreatePoModal();
+        },
+    });
+}
+
+// ─── Modal Hapus PO ───────────────────────────────────────────────────
+const showDeletePoModal = ref(false);
+const poToDelete = ref(null);
+
+function openDeletePoModal(po) {
+    poToDelete.value = po;
+    showDeletePoModal.value = true;
+}
+
+function closeDeletePoModal() {
+    poToDelete.value = null;
+    showDeletePoModal.value = false;
+}
+
+function confirmDeletePo() {
+    if (!poToDelete.value) return;
+    router.delete(
+        route("keuangan.po.destroy", poToDelete.value.db_id || poToDelete.value.id),
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeDeletePoModal();
+            },
+        }
+    );
+}
+
 </script>
 
 <template>
@@ -471,7 +711,7 @@ async function exportAllPosExcel() {
                     v-model="searchQuery"
                     type="text"
                     placeholder="Cari No. PO, Menu, Supplier/Vendor..."
-                    class="w-full pl-10 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-slate-400"
+                    class="w-full h-9 pl-10 pr-4 text-xs rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-slate-400"
                 />
                 <button
                     v-if="searchQuery"
@@ -491,7 +731,7 @@ async function exportAllPosExcel() {
                     >
                     <select
                         v-model="filterJenisTransaksi"
-                        class="text-xs sm:text-sm font-medium rounded-xl border border-slate-200 bg-slate-50/50 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700"
+                        class="h-9 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/50 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700 cursor-pointer"
                     >
                         <option value="all">Semua Transaksi</option>
                         <option value="Bahan Baku">Bahan Baku</option>
@@ -510,7 +750,7 @@ async function exportAllPosExcel() {
                     >
                     <select
                         v-model="filterSupplier"
-                        class="text-xs sm:text-sm font-medium rounded-xl border border-slate-200 bg-slate-50/50 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700 max-w-[170px] truncate"
+                        class="h-9 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/50 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-700 max-w-[170px] truncate cursor-pointer"
                     >
                         <option value="all">Semua Supplier</option>
                         <option
@@ -523,25 +763,25 @@ async function exportAllPosExcel() {
                     </select>
                 </div>
 
-                <!-- Link ke Master Supplier -->
+                <!-- Link ke Master Supplier (Tinggi Seragam h-9) -->
                 <Link
                     :href="route('supplier.index')"
-                    class="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                    class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
                     title="Buka Data Master Supplier"
                 >
                     <Store class="w-3.5 h-3.5 text-primary" />
                     <span>Master Supplier</span>
                 </Link>
 
-                <!-- Tombol Download Laporan Excel PO -->
+                <!-- Tombol Tambah PO Baru (Tinggi Seragam h-9) -->
                 <button
                     type="button"
-                    @click="handleExportToolbarExcel"
-                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                    title="Download Laporan PO dalam Format Excel (.xlsx)"
+                    @click="openCreatePoModal"
+                    class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer shrink-0"
+                    title="Buat PO Baru dari Work Order (Otomatis) atau Tambah PO Manual"
                 >
-                    <FileSpreadsheet class="w-3.5 h-3.5" />
-                    <span>Download Excel PO</span>
+                    <Plus class="w-3.5 h-3.5" />
+                    <span>Tambah PO</span>
                 </button>
             </div>
         </div>
@@ -826,34 +1066,24 @@ async function exportAllPosExcel() {
                                         <Pencil class="h-4 w-4" />
                                     </button>
 
-                                    <!-- 2. Export Excel (Emerald) -->
+                                    <!-- 2. Export Excel (Per Baris Transaksi) -->
                                     <button
                                         type="button"
                                         @click="exportPoExcel(po)"
                                         class="h-8 w-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Download Laporan Excel Nota PO (.xlsx)"
+                                        title="Download Laporan Excel PO (.xlsx)"
                                     >
                                         <FileSpreadsheet class="h-4 w-4" />
                                     </button>
 
-                                    <!-- 3. Export Word (Indigo) -->
+                                    <!-- 3. Hapus PO (Rose) -->
                                     <button
                                         type="button"
-                                        @click="exportPoWord(po)"
-                                        class="h-8 w-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Download Dokumen Word (.doc)"
+                                        @click="openDeletePoModal(po)"
+                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                                        title="Hapus Purchase Order Ini"
                                     >
-                                        <FilePenLine class="h-4 w-4" />
-                                    </button>
-
-                                    <!-- 4. Export PDF (Rose) -->
-                                    <button
-                                        type="button"
-                                        @click="exportPoPdf(po)"
-                                        class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
-                                        title="Download / Cetak PDF"
-                                    >
-                                        <FileText class="h-4 w-4" />
+                                        <Trash2 class="h-4 w-4" />
                                     </button>
                                 </div>
                             </td>
@@ -885,6 +1115,14 @@ async function exportAllPosExcel() {
                                         Gizi dan menerbitkannya ke Daftar PO
                                         resmi ini.
                                     </p>
+                                    <button
+                                        type="button"
+                                        @click="openCreatePoModal()"
+                                        class="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                                    >
+                                        <Plus class="w-3.5 h-3.5" />
+                                        <span>Buat PO Baru Sekarang</span>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -1184,6 +1422,12 @@ async function exportAllPosExcel() {
                                             >
                                                 Alergi: {{ item.jenis_alergi }}
                                             </span>
+                                            <div
+                                                v-if="item.keterangan && item.keterangan !== '-'"
+                                                class="text-[10px] text-amber-800 font-medium italic mt-1 bg-amber-50/80 border border-amber-200/70 rounded px-1.5 py-0.5 leading-snug"
+                                            >
+                                                Catatan: {{ item.keterangan }}
+                                            </div>
                                         </td>
 
                                         <!-- 3. Peruntukan / Sub Menu -->
@@ -1369,22 +1613,6 @@ async function exportAllPosExcel() {
                             <FileSpreadsheet class="h-4 w-4" />
                             <span>Export Excel (.xlsx)</span>
                         </button>
-                        <button
-                            type="button"
-                            @click="exportPoWord(editingPo)"
-                            class="px-3 py-2 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                            <FilePenLine class="h-4 w-4" />
-                            <span>Export Word</span>
-                        </button>
-                        <button
-                            type="button"
-                            @click="exportPoPdf(editingPo)"
-                            class="px-3 py-2 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                            <FileText class="h-4 w-4" />
-                            <span>Cetak PDF</span>
-                        </button>
                     </div>
 
                     <div
@@ -1431,92 +1659,668 @@ async function exportAllPosExcel() {
             </div>
         </Modal>
 
-        <!-- ─── MODAL PILIH EXPORT EXCEL PO ─────────────────────────────────── -->
+        
+        <!-- ─── MODAL BUAT PO BARU (DARI WO OTOMATIS MAUPUN TAMBAH MANUAL) ──────── -->
         <Modal
-            :show="showExportPoModal"
-            @close="showExportPoModal = false"
-            max-width="2xl"
+            :show="showCreatePoModal"
+            @close="closeCreatePoModal"
+            maxWidth="landscape"
         >
-            <div class="p-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-2xs">
-                            <FileSpreadsheet class="w-5 h-5" />
+            <div class="flex flex-col max-h-[92vh] bg-white rounded-2xl overflow-hidden shadow-2xl">
+                <!-- Modal Header -->
+                <div class="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 sm:p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            <Plus class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="font-bold text-sm text-slate-800">
-                                Download Laporan Excel Nota PO
+                            <h3 class="font-bold text-sm sm:text-base text-slate-900 leading-tight">
+                                Buat Purchase Order (PO) Resmi
                             </h3>
-                            <p class="text-xs text-slate-500">
-                                Pilih dokumen PO yang ingin diunduh dalam format multi-sheet Excel (.xlsx)
+                            <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                                Pilih dari Work Order otomatis yang telah merancang bahan baku, atau tambah PO secara manual.
                             </p>
                         </div>
                     </div>
                     <button
                         type="button"
-                        @click="showExportPoModal = false"
+                        @click="closeCreatePoModal"
                         class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                     >
-                        <X class="w-4 h-4" />
+                        <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <div class="max-h-[55vh] overflow-y-auto space-y-2.5 pr-1">
-                    <div
-                        v-for="po in filteredPoList"
-                        :key="po.id"
-                        class="p-3.5 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/20 transition-all flex items-center justify-between gap-3"
+                <!-- Tab Mode Switcher -->
+                <div class="px-5 pt-4 pb-2 border-b border-slate-100 bg-white shrink-0 flex items-center gap-2">
+                    <button
+                        type="button"
+                        @click="activeCreateMode = 'work_order'"
+                        :class="[
+                            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer',
+                            activeCreateMode === 'work_order'
+                                ? 'bg-primary text-white shadow-xs'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ]"
                     >
-                        <div class="space-y-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <span class="font-bold text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">
-                                    {{ po.id }}
-                                </span>
-                                <span class="text-xs font-semibold text-slate-700 truncate">
-                                    {{ po.menu }}
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-3 text-[11px] text-slate-500">
-                                <span class="flex items-center gap-1">
-                                    <Calendar class="w-3 h-3 text-slate-400" />
-                                    {{ formatTanggalIndo(po.tanggal) }}
-                                </span>
-                                <span>•</span>
-                                <span class="font-semibold text-emerald-700">
-                                    {{ formatRupiah(po.total_nominal) }}
-                                </span>
-                                <span>•</span>
-                                <span>{{ po.items_count || (po.items ? po.items.length : 0) }} Bahan</span>
+                        <Sparkles class="w-4 h-4" />
+                        <span>Dari Work Order Otomatis</span>
+                        <span
+                            :class="[
+                                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                                activeCreateMode === 'work_order'
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-slate-200 text-slate-700'
+                            ]"
+                        >
+                            {{ availableWorkOrders.length }}
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="activeCreateMode = 'manual'"
+                        :class="[
+                            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer',
+                            activeCreateMode === 'manual'
+                                ? 'bg-primary text-white shadow-xs'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ]"
+                    >
+                        <FilePenLine class="w-4 h-4" />
+                        <span>Tambah Manual PO</span>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 text-xs sm:text-sm">
+                    <!-- ══════════ MODE 1: DARI WORK ORDER OTOMATIS ══════════ -->
+                    <div v-if="activeCreateMode === 'work_order'" class="space-y-4">
+                        <!-- Banner info: Hanya WO Otomatis/Sistem ber-bahan baku -->
+                        <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-indigo-900 flex items-start gap-2.5 text-xs">
+                            <Sparkles class="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                            <div class="leading-relaxed">
+                                <span class="font-bold">Otomatisasi Bahan Baku:</span>
+                                Sistem hanya menampilkan <strong>Work Order Otomatis (Sistem)</strong> yang telah memiliki kalkulasi kebutuhan bahan baku dari rancangan menu database pangan. Work Order manual tidak disertakan karena belum memiliki rincian bahan belanja.
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            @click="exportPoExcel(po); showExportPoModal = false;"
-                            class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                        <!-- Jika tidak ada WO otomatis yang tersedia -->
+                        <div
+                            v-if="availableWorkOrders.length === 0"
+                            class="p-8 text-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 space-y-2.5"
                         >
-                            <FileSpreadsheet class="w-3.5 h-3.5" />
-                            <span>Unduh Excel</span>
-                        </button>
+                            <Package class="w-10 h-10 text-slate-300 mx-auto" />
+                            <h4 class="font-bold text-slate-700">Belum Ada Work Order Otomatis</h4>
+                            <p class="text-xs text-slate-500 max-w-md mx-auto">
+                                Belum ada Work Order sistem yang memiliki rancangan bahan baku. Silakan buat atau lengkapi menu di modul Work Order & Gizi, atau buat Purchase Order secara manual.
+                            </p>
+                            <button
+                                type="button"
+                                @click="activeCreateMode = 'manual'"
+                                class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                <span>Beralih ke Tambah Manual PO</span>
+                            </button>
+                        </div>
+
+                        <!-- Form WO Otomatis -->
+                        <div v-else class="space-y-4">
+                            <!-- Pilihan Work Order Dropdown -->
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
+                                    Pilih Work Order (WO) Otomatis: <span class="text-rose-500">*</span>
+                                </label>
+                                <select
+                                    v-model="selectedWoId"
+                                    @change="onSelectWoChange"
+                                    class="w-full text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 bg-white py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 shadow-2xs cursor-pointer"
+                                >
+                                    <option
+                                        v-for="wo in availableWorkOrders"
+                                        :key="wo.id"
+                                        :value="wo.id"
+                                    >
+                                        {{ wo.nomor_wo }} — {{ wo.nama_menu }} | Tgl: {{ formatTanggalIndo(wo.tanggal_distribusi) }} ({{ wo.items_count }} Bahan • {{ wo.total_pm }} PM{{ wo.has_official_po ? ' • Sudah Ada PO Resmi' : '' }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Preview Ringkasan WO yang Dipilih -->
+                            <div
+                                v-if="selectedWoData"
+                                class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs"
+                            >
+                                <div>
+                                    <span class="text-slate-400 block text-[10.5px]">Nomor WO:</span>
+                                    <span class="font-bold text-primary">{{ selectedWoData.nomor_wo }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10.5px]">Nama Menu:</span>
+                                    <span class="font-bold text-slate-800 truncate block">{{ selectedWoData.nama_menu }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10.5px]">Tgl Distribusi:</span>
+                                    <span class="font-bold text-slate-800">{{ formatTanggalIndo(selectedWoData.tanggal_distribusi) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10.5px]">Total Sasaran PM:</span>
+                                    <span class="font-bold text-slate-800">{{ selectedWoData.total_pm }} Porsi ({{ selectedWoData.items_count }} Bahan)</span>
+                                </div>
+                            </div>
+
+                            <!-- Pengaturan Header Dokumen PO -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">
+                                        Nomor PO Resmi: <span class="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        v-model="formWoPo.nomor_po"
+                                        type="text"
+                                        class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                        placeholder="e.g. PO-20261104-001"
+                                    />
+                                    <p v-if="formWoPo.errors.nomor_po" class="text-[11px] text-rose-500 mt-0.5">
+                                        {{ formWoPo.errors.nomor_po }}
+                                    </p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">
+                                        Tanggal Dokumen PO: <span class="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        v-model="formWoPo.tanggal"
+                                        type="date"
+                                        class="w-full text-xs font-medium rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">
+                                        Status Pembayaran:
+                                    </label>
+                                    <select
+                                        v-model="formWoPo.status_bayar"
+                                        class="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 cursor-pointer"
+                                    >
+                                        <option value="Belum Bayar">Belum Bayar</option>
+                                        <option value="Lunas">Lunas</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Toolbar Terapkan Cepat Supplier & Jenis Transaksi -->
+                            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                <div class="flex items-center gap-2 text-slate-700 font-bold">
+                                    <Sparkles class="w-4 h-4 text-primary shrink-0" />
+                                    <span>Terapkan Cepat ke Semua Bahan:</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <select
+                                        v-model="bulkSupplierWo"
+                                        class="text-xs font-medium rounded-lg border border-slate-200 bg-white py-1.5 px-2.5 max-w-[170px]"
+                                    >
+                                        <option value="">-- Pilih Supplier --</option>
+                                        <option v-for="s in suppliers" :key="s.id" :value="s.id">
+                                            {{ s.nama_usaha }}
+                                        </option>
+                                    </select>
+                                    <button
+                                        type="button"
+                                        @click="applyBulkSupplierWo"
+                                        class="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer"
+                                    >
+                                        Terapkan Supplier
+                                    </button>
+
+                                    <select
+                                        v-model="bulkJenisTransaksiWo"
+                                        class="text-xs font-medium rounded-lg border border-slate-200 bg-white py-1.5 px-2.5"
+                                    >
+                                        <option value="Bahan Baku">Bahan Baku</option>
+                                        <option value="Operasional">Operasional</option>
+                                    </select>
+                                    <button
+                                        type="button"
+                                        @click="applyBulkJenisTransaksiWo"
+                                        class="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer"
+                                    >
+                                        Terapkan Jenis
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tabel Daftar Bahan Baku WO -->
+                            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+                                <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
+                                    <span>Rincian Bahan Baku Otomatis ({{ formWoPo.items.length }} Bahan)</span>
+                                    <span class="text-primary font-bold">Total: {{ formatRupiah(totalNominalWoPo) }}</span>
+                                </div>
+                                <div class="overflow-x-auto max-h-[360px]">
+                                    <table class="w-full min-w-[960px] text-left text-xs border-collapse">
+                                        <thead class="bg-slate-100/80 sticky top-0 z-10 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                                            <tr>
+                                                <th class="py-2 px-3 text-center w-10">No</th>
+                                                <th class="py-2 px-3 min-w-[170px]">Bahan Baku</th>
+                                                <th class="py-2 px-3 text-right w-24">Kebutuhan</th>
+                                                <th class="py-2 px-3 text-right w-28">Harga Satuan (Rp)</th>
+                                                <th class="py-2 px-3 text-right w-28">Subtotal</th>
+                                                <th class="py-2 px-3 min-w-[170px]">Catatan / Keterangan</th>
+                                                <th class="py-2 px-3 min-w-[150px]">Supplier Rekanan</th>
+                                                <th class="py-2 px-3 min-w-[110px]">Jenis Transaksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 text-slate-800">
+                                            <tr
+                                                v-for="(it, idx) in formWoPo.items"
+                                                :key="idx"
+                                                class="hover:bg-slate-50/70"
+                                            >
+                                                <td class="py-2.5 px-3 text-center font-bold text-slate-400">
+                                                    {{ idx + 1 }}
+                                                </td>
+                                                <td class="py-2.5 px-3">
+                                                    <span class="font-bold text-slate-800 block">{{ it.nama }}</span>
+                                                    <span class="text-[10.5px] text-slate-400 block">{{ it.kategori }}</span>
+                                                </td>
+                                                <td class="py-2.5 px-3 text-right font-mono font-semibold">
+                                                    {{ formatGrossWeight(it.gross_kg) }}
+                                                </td>
+                                                <td class="py-2.5 px-3 text-right">
+                                                    <input
+                                                        v-model.number="it.harga_aktual"
+                                                        type="number"
+                                                        min="0"
+                                                        step="100"
+                                                        class="w-28 text-right font-mono text-xs rounded-lg border border-slate-200 py-1 px-2 focus:ring-1 focus:ring-primary focus:border-primary"
+                                                    />
+                                                </td>
+                                                <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                                                    {{ formatRupiah((Number(it.gross_kg) || 0) * (Number(it.harga_aktual) || 0)) }}
+                                                </td>
+                                                <td class="py-2.5 px-3">
+                                                    <textarea
+                                                        v-model="it.keterangan"
+                                                        rows="2"
+                                                        placeholder="Catatan bahan..."
+                                                        class="w-full text-xs rounded-lg border border-slate-200 py-1 px-2 focus:ring-1 focus:ring-primary focus:border-primary resize-y min-h-[38px] leading-snug"
+                                                    ></textarea>
+                                                </td>
+                                                <td class="py-2.5 px-3">
+                                                    <select
+                                                        v-model="it.supplier_id"
+                                                        class="w-full text-xs font-medium rounded-lg border border-slate-200 bg-white py-1 px-2 focus:ring-1 focus:ring-primary cursor-pointer"
+                                                    >
+                                                        <option value="">-- Tanpa Supplier --</option>
+                                                        <option v-for="s in suppliers" :key="s.id" :value="s.id">
+                                                            {{ s.nama_usaha }}
+                                                        </option>
+                                                    </select>
+                                                </td>
+                                                <td class="py-2.5 px-3">
+                                                    <select
+                                                        v-model="it.jenis_transaksi"
+                                                        class="w-full text-xs font-semibold rounded-lg border border-slate-200 bg-white py-1 px-1.5 focus:ring-1 focus:ring-primary cursor-pointer"
+                                                    >
+                                                        <option value="Bahan Baku">Bahan Baku</option>
+                                                        <option value="Operasional">Operasional</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ══════════ MODE 2: TAMBAH MANUAL PO ══════════ -->
+                    <div v-if="activeCreateMode === 'manual'" class="space-y-4">
+                        <!-- Banner info Manual -->
+                        <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 flex items-start gap-2.5 text-xs">
+                            <FilePenLine class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <div class="leading-relaxed">
+                                <span class="font-bold">Purchase Order Manual:</span>
+                                Masukkan rincian dokumen PO dan tambahkan baris bahan baku/belanja secara mandiri tanpa terhubung ke Work Order sistem.
+                            </div>
+                        </div>
+
+                        <!-- Form Header Manual -->
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">
+                                    Nomor PO: <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="formManualPo.nomor_po"
+                                    type="text"
+                                    class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                    placeholder="e.g. PO-20261104-M01"
+                                />
+                                <p v-if="formManualPo.errors.nomor_po" class="text-[11px] text-rose-500 mt-0.5">
+                                    {{ formManualPo.errors.nomor_po }}
+                                </p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">
+                                    Tanggal PO: <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="formManualPo.tanggal"
+                                    type="date"
+                                    class="w-full text-xs font-medium rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                />
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">
+                                    Nama Menu / Keterangan Belanja: <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="formManualPo.nama_menu"
+                                    type="text"
+                                    class="w-full text-xs font-bold rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                    placeholder="e.g. Belanja Sembako Mingguan & Bumbu Dapur"
+                                />
+                                <p v-if="formManualPo.errors.nama_menu" class="text-[11px] text-rose-500 mt-0.5">
+                                    {{ formManualPo.errors.nama_menu }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Pengaturan Tambahan Manual -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">
+                                    Status Pembayaran:
+                                </label>
+                                <select
+                                    v-model="formManualPo.status_bayar"
+                                    class="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 cursor-pointer"
+                                >
+                                    <option value="Belum Bayar">Belum Bayar</option>
+                                    <option value="Lunas">Lunas</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">
+                                    Catatan Tambahan (Opsional):
+                                </label>
+                                <input
+                                    v-model="formManualPo.catatan"
+                                    type="text"
+                                    class="w-full text-xs rounded-xl border border-slate-200 bg-white py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800"
+                                    placeholder="Catatan belanja, nota rujukan, dll."
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Toolbar Terapkan Cepat Manual -->
+                        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div class="flex items-center gap-2 text-slate-700 font-bold">
+                                <Sparkles class="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Terapkan Cepat ke Semua Baris:</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select
+                                    v-model="bulkSupplierManual"
+                                    class="text-xs font-medium rounded-lg border border-slate-200 bg-white py-1.5 px-2.5 max-w-[170px]"
+                                >
+                                    <option value="">-- Pilih Supplier --</option>
+                                    <option v-for="s in suppliers" :key="s.id" :value="s.id">
+                                        {{ s.nama_usaha }}
+                                    </option>
+                                </select>
+                                <button
+                                    type="button"
+                                    @click="applyBulkSupplierManual"
+                                    class="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer"
+                                >
+                                    Terapkan Supplier
+                                </button>
+
+                                <select
+                                    v-model="bulkJenisTransaksiManual"
+                                    class="text-xs font-medium rounded-lg border border-slate-200 bg-white py-1.5 px-2.5"
+                                >
+                                    <option value="Bahan Baku">Bahan Baku</option>
+                                    <option value="Operasional">Operasional</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    @click="applyBulkJenisTransaksiManual"
+                                    class="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer"
+                                >
+                                    Terapkan Jenis
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Input Item Manual -->
+                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+                            <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
+                                <div class="flex items-center gap-2">
+                                    <span>Baris Bahan Belanja ({{ formManualPo.items.length }} Item)</span>
+                                    <button
+                                        type="button"
+                                        @click="addManualItemRow"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
+                                    >
+                                        <Plus class="w-3.5 h-3.5" />
+                                        <span>Tambah Baris</span>
+                                    </button>
+                                </div>
+                                <span class="text-emerald-700 font-bold">Total Belanja: {{ formatRupiah(totalNominalManualPo) }}</span>
+                            </div>
+                            <div class="overflow-x-auto max-h-[360px]">
+                                <table class="w-full min-w-[1040px] text-left text-xs border-collapse">
+                                    <thead class="bg-slate-100/80 sticky top-0 z-10 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                                        <tr>
+                                            <th class="py-2 px-2.5 text-center w-10">No</th>
+                                            <th class="py-2 px-2.5 min-w-[150px]">Nama Bahan / Item <span class="text-rose-500">*</span></th>
+                                            <th class="py-2 px-2.5 w-26">Kategori</th>
+                                            <th class="py-2 px-2.5 w-20">Satuan</th>
+                                            <th class="py-2 px-2.5 text-right w-24">Qty / Volume</th>
+                                            <th class="py-2 px-2.5 text-right w-26">Harga (Rp)</th>
+                                            <th class="py-2 px-2.5 text-right w-26">Subtotal</th>
+                                            <th class="py-2 px-2.5 min-w-[170px]">Catatan / Keterangan</th>
+                                            <th class="py-2 px-2.5 min-w-[140px]">Supplier</th>
+                                            <th class="py-2 px-2.5 min-w-[110px]">Jenis</th>
+                                            <th class="py-2 px-2 text-center w-10">Hapus</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-slate-800">
+                                        <tr
+                                            v-for="(it, idx) in formManualPo.items"
+                                            :key="idx"
+                                            class="hover:bg-slate-50/70"
+                                        >
+                                            <td class="py-2 px-2.5 text-center font-bold text-slate-400">
+                                                {{ idx + 1 }}
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <input
+                                                    v-model="it.nama"
+                                                    type="text"
+                                                    class="w-full text-xs font-semibold rounded-lg border border-slate-200 py-1 px-2 focus:ring-1 focus:ring-primary focus:border-primary"
+                                                    placeholder="Nama bahan..."
+                                                    required
+                                                />
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <select
+                                                    v-model="it.kategori"
+                                                    class="w-full text-xs font-medium rounded-lg border border-slate-200 bg-white py-1 px-1.5 focus:ring-1 focus:ring-primary"
+                                                >
+                                                    <option value="Karbohidrat">Karbohidrat</option>
+                                                    <option value="Hewani">Hewani</option>
+                                                    <option value="Nabati">Nabati</option>
+                                                    <option value="Sayur">Sayur</option>
+                                                    <option value="Buah">Buah</option>
+                                                    <option value="Bumbu/Minyak">Bumbu/Minyak</option>
+                                                    <option value="Lainnya">Lainnya</option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <select
+                                                    v-model="it.satuan"
+                                                    class="w-full text-xs font-medium rounded-lg border border-slate-200 bg-white py-1 px-1.5 focus:ring-1 focus:ring-primary"
+                                                >
+                                                    <option value="Kg">Kg</option>
+                                                    <option value="Gram">Gram</option>
+                                                    <option value="Liter">Liter</option>
+                                                    <option value="Butir">Butir</option>
+                                                    <option value="Pcs">Pcs</option>
+                                                    <option value="Ikat">Ikat</option>
+                                                    <option value="Pack">Pack</option>
+                                                    <option value="Karung">Karung</option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2 px-2.5 text-right">
+                                                <input
+                                                    v-model.number="it.gross_kg"
+                                                    type="number"
+                                                    min="0.01"
+                                                    step="0.01"
+                                                    class="w-20 text-right font-mono text-xs rounded-lg border border-slate-200 py-1 px-2 focus:ring-1 focus:ring-primary"
+                                                />
+                                            </td>
+                                            <td class="py-2 px-2.5 text-right">
+                                                <input
+                                                    v-model.number="it.harga_aktual"
+                                                    type="number"
+                                                    min="0"
+                                                    step="500"
+                                                    class="w-24 text-right font-mono text-xs rounded-lg border border-slate-200 py-1 px-2 focus:ring-1 focus:ring-primary"
+                                                />
+                                            </td>
+                                            <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-900">
+                                                {{ formatRupiah((Number(it.gross_kg) || 0) * (Number(it.harga_aktual) || 0)) }}
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <textarea
+                                                    v-model="it.keterangan"
+                                                    rows="2"
+                                                    placeholder="Catatan item..."
+                                                    class="w-full text-xs rounded-lg border border-slate-200 py-1.5 px-2 focus:ring-1 focus:ring-primary focus:border-primary resize-y min-h-[38px] leading-snug"
+                                                ></textarea>
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <select
+                                                    v-model="it.supplier_id"
+                                                    class="w-full text-xs font-medium rounded-lg border border-slate-200 bg-white py-1 px-2 focus:ring-1 focus:ring-primary"
+                                                >
+                                                    <option value="">-- Tanpa Supplier --</option>
+                                                    <option v-for="s in suppliers" :key="s.id" :value="s.id">
+                                                        {{ s.nama_usaha }}
+                                                    </option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2 px-2.5">
+                                                <select
+                                                    v-model="it.jenis_transaksi"
+                                                    class="w-full text-xs font-semibold rounded-lg border border-slate-200 bg-white py-1 px-1.5 focus:ring-1 focus:ring-primary"
+                                                >
+                                                    <option value="Bahan Baku">Bahan Baku</option>
+                                                    <option value="Operasional">Operasional</option>
+                                                </select>
+                                            </td>
+                                            <td class="py-2 px-2 text-center">
+                                                <button
+                                                    type="button"
+                                                    @click="removeManualItemRow(idx)"
+                                                    class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                                    title="Hapus Baris"
+                                                >
+                                                    <X class="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between pt-4 mt-5 border-t border-slate-100">
+                <!-- Modal Footer -->
+                <div class="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3 shrink-0">
                     <button
                         type="button"
-                        @click="exportAllPosExcel"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer"
+                        @click="closeCreatePoModal"
+                        class="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer transition-colors"
                     >
-                        <FileSpreadsheet class="w-3.5 h-3.5" />
-                        <span>Unduh Semua PO ({{ filteredPoList.length }} File)</span>
+                        Batal
                     </button>
 
+                    <div class="flex items-center gap-2">
+                        <!-- Submit untuk WO Otomatis -->
+                        <button
+                            v-if="activeCreateMode === 'work_order'"
+                            type="button"
+                            @click="submitWoPo"
+                            :disabled="formWoPo.processing || availableWorkOrders.length === 0"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl shadow-xs cursor-pointer transition-colors"
+                        >
+                            <Sparkles class="w-4 h-4" />
+                            <span>{{ formWoPo.processing ? 'Menerbitkan PO...' : 'Terbitkan ke Daftar PO' }}</span>
+                        </button>
+
+                        <!-- Submit untuk Manual PO -->
+                        <button
+                            v-if="activeCreateMode === 'manual'"
+                            type="button"
+                            @click="submitManualPo"
+                            :disabled="formManualPo.processing || !formManualPo.nama_menu"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-xs cursor-pointer transition-colors"
+                        >
+                            <Check class="w-4 h-4" />
+                            <span>{{ formManualPo.processing ? 'Menyimpan PO...' : 'Simpan & Terbitkan PO Manual' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ─── MODAL KONFIRMASI HAPUS PO ────────────────────────────────────────── -->
+        <Modal
+            :show="showDeletePoModal"
+            @close="closeDeletePoModal"
+            maxWidth="md"
+        >
+            <div class="p-5 sm:p-6 space-y-4 bg-white rounded-2xl">
+                <div class="flex items-start gap-3">
+                    <div class="p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 shrink-0 mt-0.5">
+                        <Trash2 class="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm sm:text-base text-slate-900 leading-tight">
+                            Hapus Purchase Order?
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Apakah Anda yakin ingin menghapus Purchase Order <strong class="text-slate-800 font-mono">{{ poToDelete?.id }}</strong> ({{ poToDelete?.menu }})?
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-rose-50/60 border border-rose-200/80 text-[11.5px] text-rose-800 leading-relaxed">
+                    Dokumen PO ini beserta seluruh rincian item bahan belanjanya akan dihapus permanen dari sistem Daftar PO.
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
                     <button
                         type="button"
-                        @click="showExportPoModal = false"
+                        @click="closeDeletePoModal"
                         class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                     >
-                        Tutup
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="confirmDeletePo"
+                        class="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                        Ya, Hapus PO
                     </button>
                 </div>
             </div>
