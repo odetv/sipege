@@ -320,6 +320,8 @@ watch(
 
 // Set status satu sel
 function setCellStatus(petugasId, dateStr, newStatus) {
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (p && p.status === "Nonaktif") return;
     if (!matrixPresensi.value[petugasId]) {
         matrixPresensi.value[petugasId] = {};
     }
@@ -330,6 +332,8 @@ function setCellStatus(petugasId, dateStr, newStatus) {
 // Cycle status: "" -> H -> H2 (Hadir Setengah Hari) -> L (Libur) -> I (Izin) -> S (Sakit) -> TK (Tanpa Keterangan) -> ""
 function cycleStatus(petugasId, dateStr, isAktif = true) {
     if (!isAktif) return;
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (p && p.status === "Nonaktif") return;
     const current = matrixPresensi.value[petugasId]?.[dateStr] || "";
     let next = "H";
     if (!current || current === "") next = "H";
@@ -359,7 +363,7 @@ function setSemuaHadirPenuh() {
 }
 
 function kosongkanSemua() {
-    props.petugas.forEach((p) => {
+    props.petugas.filter((p) => p.status === "Aktif").forEach((p) => {
         if (!matrixPresensi.value[p.id]) matrixPresensi.value[p.id] = {};
         dateColumns.value.forEach((dt) => {
             matrixPresensi.value[p.id][dt.dateStr] = "";
@@ -1709,6 +1713,12 @@ const filteredDailyLogs = computed(() => {
                                             </div>
                                             <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                                                 <span
+                                                    v-if="p.status === 'Nonaktif'"
+                                                    class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
+                                                >
+                                                    Berhenti
+                                                </span>
+                                                <span
                                                     v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
                                                     :key="jab"
                                                     :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
@@ -1748,9 +1758,9 @@ const filteredDailyLogs = computed(() => {
                                             dt.dateStr === todayStr ? 'bg-emerald-50/40 ring-1 ring-emerald-300/40' : (dt.isWeekend ? 'bg-amber-50/20' : ''),
                                         ]"
                                     >
-                                        <!-- Tombol Badge Interaktif (Klik untuk switch status) -->
+                                        <!-- Tombol Badge Interaktif (Aktif) atau Display Only (Nonaktif) -->
                                         <button
-                                            v-if="p.status === 'Aktif' || matrixPresensi[p.id]?.[dt.dateStr]"
+                                            v-if="p.status === 'Aktif'"
                                             type="button"
                                             @click="cycleStatus(p.id, dt.dateStr, true)"
                                             :class="[
@@ -1761,7 +1771,14 @@ const filteredDailyLogs = computed(() => {
                                         >
                                             {{ getStatusLabel(matrixPresensi[p.id]?.[dt.dateStr] || '') }}
                                         </button>
-                                        <span v-else class="text-slate-300 text-[11px]">-</span>
+                                        <div
+                                            v-else
+                                            class="w-7 h-7 rounded-md text-[11px] font-bold flex items-center justify-center mx-auto select-none opacity-50 cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                                            :class="[matrixPresensi[p.id]?.[dt.dateStr] ? getStatusBadgeStyle(matrixPresensi[p.id][dt.dateStr]) : '']"
+                                            :title="`${p.nama} (Petugas Berhenti / Nonaktif - Hanya Tampilan)`"
+                                        >
+                                            {{ matrixPresensi[p.id]?.[dt.dateStr] ? getStatusLabel(matrixPresensi[p.id][dt.dateStr]) : '·' }}
+                                        </div>
                                     </td>
 
                                     <!-- Rekap Hadir Penuh (H) -->

@@ -241,6 +241,8 @@ function setCellStatus(petugasId, dateStr, newStatus) {
 // Cycle status: "" -> H -> H2 (Hadir ½ Hari) -> L -> I -> S -> TK -> ""
 function cycleStatus(petugasId, dateStr, isAktif = true) {
     if (!isAktif) return;
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (p && p.status === "Nonaktif") return;
     const current = matrixPresensi.value[petugasId]?.[dateStr] || "";
     let next = "H";
     if (!current || current === "") next = "H";
@@ -1498,7 +1500,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                         ]"
                                     >
                                         <button
-                                            v-if="p.status === 'Aktif' || matrixPresensi[p.id]?.[dt.dateStr]"
+                                            v-if="p.status === 'Aktif'"
                                             type="button"
                                             @click="cycleStatus(p.id, dt.dateStr, true)"
                                             :class="[
@@ -1509,7 +1511,14 @@ async function downloadSlipBonusSinglePetugas(p) {
                                         >
                                             {{ getStatusLabel(matrixPresensi[p.id]?.[dt.dateStr] || '') }}
                                         </button>
-                                        <span v-else class="text-slate-300 text-[11px]">-</span>
+                                        <div
+                                            v-else
+                                            class="w-7 h-7 rounded-md text-[11px] font-bold flex items-center justify-center mx-auto select-none opacity-50 cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                                            :class="[matrixPresensi[p.id]?.[dt.dateStr] ? getStatusBadgeStyle(matrixPresensi[p.id][dt.dateStr]) : '']"
+                                            :title="`${p.nama} (Petugas Berhenti / Nonaktif - Hanya Tampilan)`"
+                                        >
+                                            {{ matrixPresensi[p.id]?.[dt.dateStr] ? getStatusLabel(matrixPresensi[p.id][dt.dateStr]) : '·' }}
+                                        </div>
                                     </td>
 
                                     <!-- Rekap Hadir Penuh (H) -->

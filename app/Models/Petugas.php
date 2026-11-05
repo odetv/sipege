@@ -17,6 +17,9 @@ class Petugas extends Model
     public const JABATAN_PENGAWAS_GIZI = 'pengawas_gizi';
     public const JABATAN_PENGAWAS_KEUANGAN = 'pengawas_keuangan';
     public const JABATAN_ASISTEN_LAPANGAN = 'asisten_lapangan';
+    public const JABATAN_KOORDINATOR = 'koordinator';
+    public const JABATAN_KOORDINATOR_LAPANGAN = 'koordinator_lapangan';
+    public const JABATAN_CHEF = 'chef';
     public const JABATAN_PERSIAPAN = 'persiapan';
     public const JABATAN_PENGOLAHAN = 'pengolahan';
     public const JABATAN_PEMORSIAN = 'pemorsian';
@@ -30,6 +33,9 @@ class Petugas extends Model
         self::JABATAN_KEPALA_SPPG => 'Kepala SPPG',
         self::JABATAN_PENGAWAS_GIZI => 'Pengawas Gizi',
         self::JABATAN_PENGAWAS_KEUANGAN => 'Pengawas Keuangan',
+        self::JABATAN_KOORDINATOR => 'Koordinator',
+        self::JABATAN_KOORDINATOR_LAPANGAN => 'Koordinator Lapangan',
+        self::JABATAN_CHEF => 'Chef',
         self::JABATAN_ASISTEN_LAPANGAN => 'Asisten Lapangan',
         self::JABATAN_PERSIAPAN => 'Persiapan',
         self::JABATAN_PENGOLAHAN => 'Pengolahan',
@@ -49,6 +55,7 @@ class Petugas extends Model
     protected function casts(): array
     {
         return [
+            'urutan' => 'integer',
             'tanggal_lahir' => 'date',
             'gaji_harian_bgn' => 'integer',
             'gaji_harian_shifting' => 'integer',

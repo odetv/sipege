@@ -76,6 +76,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
         Route::post('/rekap-distribusi/simpan', [KelompokPenerimaManfaatController::class, 'simpanDistribusi'])->name('rekap-distribusi.simpan');
         Route::get('/pembayaran-insentif', [KelompokPenerimaManfaatController::class, 'pembayaranInsentif'])->name('pembayaran-insentif');
         Route::post('/pembayaran-insentif/generate-csv', [KelompokPenerimaManfaatController::class, 'generateInsentifCsv'])->name('pembayaran-insentif.generate-csv');
+        Route::post('/pembayaran-insentif/download-relawan-harian', [KelompokPenerimaManfaatController::class, 'downloadInsentifRelawanHarian'])->name('pembayaran-insentif.download-relawan-harian');
 
         // Kategori KPM
         Route::prefix('kategori-kpm')->name('kategori-kpm.')->group(function () {
@@ -204,6 +205,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
     Route::get('/petugas/pembayaran-gaji', [PetugasController::class, 'pembayaranGaji'])->name('petugas.pembayaran-gaji');
     Route::post('/petugas/pembayaran-gaji/generate-bni-csv', [PetugasController::class, 'generateBniDirectCsv'])->name('petugas.pembayaran-gaji.generate-csv');
     Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');
+    Route::post('/petugas/pembayaran-gaji/download-relawan-harian', [PetugasController::class, 'downloadDaftarRelawanHarian'])->name('petugas.pembayaran-gaji.download-relawan-harian');
     Route::resource('petugas', PetugasController::class);
 
     // Label SPPG (Menu Langsung)

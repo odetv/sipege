@@ -2238,17 +2238,23 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         siklus_ke: 1,
         metode_wo: metodeWo.value || "sistem",
         database_pangan: "tkpi2020",
-        nama_menu: (isEditMode.value && props.editWorkOrder?.nama_menu && props.editWorkOrder.nama_menu !== woNo.value)
-            ? props.editWorkOrder.nama_menu
-            : (namaMenuAktif.value ? namaMenuAktif.value.trim() : woNo.value),
-        sub_menus: (props.editWorkOrder?.sub_menus && props.editWorkOrder.sub_menus.length > 0)
-            ? props.editWorkOrder.sub_menus
-            : (Array.isArray(subMenuKeys.value) ? subMenuKeys.value.map(k => (subMenuKomponen.value[k] || "").trim()).filter(Boolean) : []),
-        jadwal_operasional: props.editWorkOrder?.jadwal_operasional || payloadJadwalOperasional.value || null,
-        sub_menu_alergi: props.editWorkOrder?.sub_menu_alergi || subMenuAlergi.value || null,
-        akg_pk: props.editWorkOrder?.akg_pk || akgPk.value || null,
-        akg_pb: props.editWorkOrder?.akg_pb || akgPb.value || null,
-        akg_alergi: props.editWorkOrder?.akg_alergi || filteredAkgAlergiPayload.value || null,
+        nama_menu: props.editWorkOrder?.nama_menu || woNo.value,
+        sub_menus: props.editWorkOrder?.sub_menus || [],
+        sub_menu_1: props.editWorkOrder?.sub_menu_1 || null,
+        sub_menu_2: props.editWorkOrder?.sub_menu_2 || null,
+        sub_menu_3: props.editWorkOrder?.sub_menu_3 || null,
+        sub_menu_4: props.editWorkOrder?.sub_menu_4 || null,
+        sub_menu_5: props.editWorkOrder?.sub_menu_5 || null,
+        sub_menu_kategori: props.editWorkOrder?.catatan?.sub_menu_kategori || null,
+        sub_menu_alergi: props.editWorkOrder?.sub_menu_alergi || null,
+        jadwal_operasional: props.editWorkOrder?.jadwal_operasional || null,
+        lanjut_ke_rancang_menu: lanjutKeRancangMenu,
+        step: lanjutKeRancangMenu ? "formula" : null,
+        tetap_di_halaman: false,
+        akg_pk: props.editWorkOrder?.akg_pk || null,
+        akg_pb: props.editWorkOrder?.akg_pb || null,
+        akg_alergi: props.editWorkOrder?.akg_alergi || null,
+        catatan: props.editWorkOrder?.catatan || null,
         total_pm: totalPM.value,
         total_pk: totalPK.value,
         total_pb: totalPB.value,
@@ -2272,8 +2278,8 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
             keterangan_alergi: k.keterangan_alergi || [],
         })),
         status: isEditMode.value
-            ? (props.editWorkOrder?.status || "Draft")
-            : "Draft",
+            ? (props.editWorkOrder?.status === "Draft" && metodeWo.value === "manual" ? "Siap Produksi" : (props.editWorkOrder?.status || (metodeWo.value === "manual" ? "Siap Produksi" : "Draft")))
+            : (metodeWo.value === "manual" ? "Siap Produksi" : "Draft"),
     };
 
     router.post(route("work-order.store"), payload, {
@@ -2281,10 +2287,16 @@ function handleSavePerencanaan(lanjutKeRancangMenu = false) {
         onSuccess: () => {
             isSubmitting.value = false;
             isNavigationConfirmed.value = true;
-            triggerSubmitSuccess("Perencanaan Produksi Work Order berhasil disimpan!");
-            setTimeout(() => {
-                router.visit(route("work-order.daftar"));
-            }, 600);
+            triggerSubmitSuccess(
+                metodeWo.value === "manual"
+                    ? "Work Order Manual berhasil disimpan!"
+                    : "Work Order berhasil disimpan!"
+            );
+            if (!lanjutKeRancangMenu) {
+                setTimeout(() => {
+                    router.visit(route("work-order.daftar"));
+                }, 600);
+            }
         },
         onError: (err) => {
             isSubmitting.value = false;
@@ -2490,6 +2502,18 @@ function handleSavePerencanaanManualComplete() {
 }
 
 // ─── INITIALIZATION / EDIT MODE ───────────────────────────────────────────
+function cleanInitialMenuName(namaMenu, nomorWo) {
+    if (!namaMenu) return "";
+    const trimmed = String(namaMenu).trim();
+    if (nomorWo && trimmed.toLowerCase() === String(nomorWo).trim().toLowerCase()) {
+        return "";
+    }
+    if (/^WO-[A-Z0-9-]+$/i.test(trimmed)) {
+        return "";
+    }
+    return trimmed;
+}
+
 function initForm(targetWo = null) {
     if (targetWo) {
         isEditMode.value = true;
@@ -2498,7 +2522,8 @@ function initForm(targetWo = null) {
         metodeWo.value = targetWo.metode_wo || "sistem";
         isMetodeWoSelected.value = true; // Mode edit: mode sudah ada dan terkunci
         tanggalRencana.value = targetWo.tanggal_distribusi;
-        namaMenuAktif.value = targetWo.nama_menu || "";
+        const cleanedName = cleanInitialMenuName(targetWo.nama_menu, targetWo.nomor_wo);
+        namaMenuAktif.value = cleanedName || (targetWo.nama_menu && targetWo.nama_menu !== targetWo.nomor_wo ? targetWo.nama_menu : "");
 
         let rawList = [];
         if (
@@ -3738,7 +3763,6 @@ onUnmounted(() => {
                                     }}</span>
                                 </p>
                             </div>
-
                         </div>
 
                         <!-- Ringkasan Kuota PM Fix Berdasarkan Tanggal Work Order -->
@@ -5086,17 +5110,54 @@ onUnmounted(() => {
                         <!-- Bottom Action Button -->
                         <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5">
                             <div class="text-xs text-slate-500">
-                                Pastikan tanggal distribusi, kuota sasaran penerima manfaat, dan porsi tambahan produksi telah sesuai sebelum menyimpan.
+                                <span
+                                    v-if="metodeWo === 'manual'"
+                                    class="text-amber-800 font-semibold"
+                                >
+                                    ✍️ Mode Manual: Klik
+                                    <strong>Simpan Draft</strong>
+                                    untuk simpan saja, atau
+                                    <strong>Simpan & Lanjut ke Rancang Menu Manual</strong>
+                                    untuk mulai merancang menu dan formulasi gizi.
+                                </span>
+                                <span v-else>
+                                    Pastikan tanggal distribusi dan sasaran penerima manfaat sudah sesuai sebelum melanjutkan.
+                                </span>
                             </div>
-                            <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <div
+                                class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto"
+                            >
                                 <Button
                                     type="button"
                                     @click="handleSavePerencanaan(false)"
                                     :disabled="isSubmitting"
+                                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold px-4 h-11 rounded-xl cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-2xs"
+                                >
+                                    <FileText class="h-4 w-4" />
+                                    <span>Simpan Draft</span>
+                                </Button>
+
+                                <Button
+                                    v-if="metodeWo === 'sistem'"
+                                    type="button"
+                                    @click="handleSavePerencanaan(true)"
+                                    :disabled="isSubmitting"
                                     className="bg-primary hover:bg-primary/90 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
                                 >
-                                    <Save class="h-4 w-4 shrink-0" />
-                                    <span>{{ isEditMode ? 'Perbarui Perencanaan Produksi' : 'Simpan Perencanaan Produksi' }}</span>
+                                    <span>Simpan & Lanjut ke Rancang Menu</span>
+                                    <ArrowRight class="h-4 w-4 shrink-0" />
+                                </Button>
+
+                                <Button
+                                    v-else
+                                    type="button"
+                                    @click="handleSavePerencanaan(true)"
+                                    :disabled="isSubmitting"
+                                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-6 h-11 flex items-center justify-center gap-2 rounded-xl shadow-xs cursor-pointer w-full sm:w-auto text-center"
+                                >
+                                    <Edit3 class="h-4 w-4 shrink-0" />
+                                    <span>Simpan & Lanjut ke Rancang Menu Manual</span>
+                                    <ArrowRight class="h-4 w-4 shrink-0" />
                                 </Button>
                             </div>
                         </div>

@@ -127,6 +127,9 @@ const listOpsiJabatan = [
     "Kepala SPPG",
     "Pengawas Gizi",
     "Pengawas Keuangan",
+    "Koordinator",
+    "Koordinator Lapangan",
+    "Chef",
     "Asisten Lapangan",
     "Persiapan",
     "Pengolahan",
@@ -263,7 +266,7 @@ const selectedJkFilter = ref("all");
 const selectedStatusFilter = ref("all"); // hanya all, Aktif, Nonaktif
 
 const filteredPetugas = computed(() => {
-    return props.petugas.filter((p) => {
+    const list = props.petugas.filter((p) => {
         // Search text
         if (searchQuery.value.trim()) {
             const q = searchQuery.value.toLowerCase().trim();
@@ -302,6 +305,16 @@ const filteredPetugas = computed(() => {
         }
 
         return true;
+    });
+
+    // Otomatis posisikan status Nonaktif di urutan paling bawah
+    return list.slice().sort((a, b) => {
+        const aNon = a.status === "Nonaktif" ? 1 : 0;
+        const bNon = b.status === "Nonaktif" ? 1 : 0;
+        if (aNon !== bNon) {
+            return aNon - bNon;
+        }
+        return (a.urutan ?? 0) - (b.urutan ?? 0) || (a.id ?? 0) - (b.id ?? 0);
     });
 });
 
@@ -527,20 +540,26 @@ function removeJabatan(jab) {
     syncSelectedJabatans();
 }
 
-// Handler Nomor HP (wajib diawali 62 dan hanya angka)
+// Handler Nomor HP (Prefix default +62 selalu aktif, input hanya menampilkan digit setelah 62, form.no_telp disimpan 628xxxxxxxx)
+const inputNoTelp = ref("");
+
 function handleNoTelpInput(e) {
     let val = e.target.value.replace(/\D/g, ""); // hanya angka
-    if (val.startsWith("0")) {
-        val = "62" + val.slice(1);
-    } else if (val.startsWith("8")) {
-        val = "62" + val;
-    } else if (!val.startsWith("62") && val.length > 0) {
-        val = "62" + val;
+    // Jika user copy-paste nomor yang masih ada awalan 62 atau 0, bersihkan awalan tersebut
+    if (val.startsWith("62")) {
+        val = val.slice(2);
+    } else if (val.startsWith("0")) {
+        val = val.slice(1);
     }
-    form.no_telp = val;
+    inputNoTelp.value = val;
+    form.no_telp = val ? "62" + val : "";
 
-    if (val.length < 10) {
-        clientErrors.value.no_telp = "Nomor HP harus diawali dengan 62 dan minimal 10 digit angka.";
+    if (!val) {
+        clientErrors.value.no_telp = "Nomor WhatsApp / HP wajib diisi.";
+    } else if (!val.startsWith("8")) {
+        clientErrors.value.no_telp = "Nomor HP Indonesia diawali angka 8 setelah +62 (contoh: 81234567890).";
+    } else if (val.length < 8 || val.length > 13) {
+        clientErrors.value.no_telp = "Panjang nomor HP tidak valid (antara 8-13 digit angka setelah +62).";
     } else {
         delete clientErrors.value.no_telp;
     }
@@ -611,7 +630,7 @@ function validateForm() {
     }
 
     if (!form.no_telp || !form.no_telp.startsWith("62") || form.no_telp.length < 10) {
-        errors.no_telp = "Nomor HP wajib diisi, diawali 62, dan minimal 10 digit (contoh: 6281234567890).";
+        errors.no_telp = "Nomor WhatsApp / HP wajib diisi lengkap diawali angka 8 (contoh: 81234567890).";
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -681,6 +700,8 @@ function openCreateModal() {
     form.reset();
     form.clearErrors();
     selectedJabatans.value = [];
+    inputNoTelp.value = "";
+    form.no_telp = "";
 
     form.jenis_kelamin = "L";
     form.status = "Aktif";
@@ -727,7 +748,17 @@ function openEditModal(p) {
     form.tempat_lahir = p.tempat_lahir || "";
     form.tanggal_lahir = tgl || "";
     form.alamat = p.alamat || "";
-    form.no_telp = p.no_telp || "";
+    
+    // Normalisasi input nomor telp (tampilkan angka setelah 62)
+    const rawNoTelp = (p.no_telp || "").replace(/\D/g, "");
+    if (rawNoTelp.startsWith("62")) {
+        inputNoTelp.value = rawNoTelp.slice(2);
+    } else if (rawNoTelp.startsWith("0")) {
+        inputNoTelp.value = rawNoTelp.slice(1);
+    } else {
+        inputNoTelp.value = rawNoTelp;
+    }
+    form.no_telp = inputNoTelp.value ? "62" + inputNoTelp.value : "";
     form.email = p.email || "";
 
     selectedJabatans.value = parseJabatanList(p.jabatan);
@@ -776,6 +807,7 @@ function closeFormModal() {
     form.clearErrors();
     clientErrors.value = {};
     selectedJabatans.value = [];
+    inputNoTelp.value = "";
 }
 
 function submitForm() {
@@ -951,7 +983,7 @@ watch(
                             {{ summary.total_petugas ?? 0 }} <span class="text-xs font-normal text-slate-500">orang</span>
                         </p>
                         <p class="text-[9.5px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                            {{ summary.total_laki ?? 0 }} L • {{ summary.total_perempuan ?? 0 }} P
+                            {{ summary.total_laki ?? 0 }} L • {{ summary.total_perempuan ?? 0 }} P Aktif<span v-if="summary.total_petugas_nonaktif" class="text-slate-400"> ({{ summary.total_petugas_nonaktif }} Nonaktif)</span>
                         </p>
                     </div>
                 </div>
@@ -1516,30 +1548,30 @@ watch(
                             </div>
                         </div>
 
-                        <!-- Section 2: Kontak Resmi (Mulai 62xxxx) -->
+                        <!-- Section 2: Kontak Resmi (Prefix Default +62) -->
                         <div>
                             <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100 flex items-center gap-1.5">
                                 <Phone class="h-3.5 w-3.5 text-primary" />
                                 <span>2. Kontak Resmi</span>
                             </h3>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <!-- No Telp WA (Mulai 62xxxx) -->
+                                <!-- No Telp WA (Prefix Default +62) -->
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-700 mb-1">
-                                        Nomor Telepon / WA (Format 62xxxx) <span class="text-rose-500">*</span>
+                                        Nomor Telepon / WA <span class="text-rose-500">*</span>
                                     </label>
-                                    <div class="relative">
-                                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700 font-mono">
-                                            +
+                                    <div class="flex rounded-lg shadow-2xs">
+                                        <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-700 font-mono text-xs font-bold select-none">
+                                            +62
                                         </span>
                                         <input
-                                            :value="form.no_telp"
+                                            :value="inputNoTelp"
                                             @input="handleNoTelpInput"
-                                            type="text"
+                                            type="tel"
                                             required
-                                            placeholder="6281234567890"
+                                            placeholder="81234567890"
                                             :class="[
-                                                'w-full pl-7 pr-3 py-2 rounded-lg border text-xs font-mono focus:ring-1 focus:ring-primary focus:border-primary',
+                                                'block w-full min-w-0 flex-1 rounded-none rounded-r-lg border text-xs font-mono focus:ring-1 focus:ring-primary focus:border-primary px-3 py-2',
                                                 clientErrors.no_telp || form.errors.no_telp ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'
                                             ]"
                                         />
@@ -1547,6 +1579,9 @@ watch(
                                     <p v-if="clientErrors.no_telp || form.errors.no_telp" class="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
                                         <AlertCircle class="h-3 w-3 shrink-0" />
                                         <span>{{ clientErrors.no_telp || form.errors.no_telp }}</span>
+                                    </p>
+                                    <p v-else class="text-[10.5px] text-slate-500 mt-1 font-mono">
+                                        Tersimpan di database: <strong class="text-emerald-700 font-semibold">{{ form.no_telp || '62...' }}</strong>
                                     </p>
                                 </div>
 

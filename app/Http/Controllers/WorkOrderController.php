@@ -381,6 +381,10 @@ class WorkOrderController extends Controller
 
         if ($request->boolean('lanjut_ke_rancang_menu') || $request->input('lanjut_ke_rancang_menu')) {
             $step = $request->input('step', 'formula');
+            if ($validated['metode_wo'] === 'manual') {
+                return redirect()->route('gizi.rancang-menu-manual', ['id' => $workOrder->uuid])
+                    ->with('success', 'Perencanaan Produksi WO Manual (' . $workOrder->nomor_wo . ') berhasil disimpan. Silakan lanjutkan ke Formula Makanan.');
+            }
             return redirect()->route('gizi.rancang-menu', ['id' => $workOrder->uuid, 'step' => $step])
                 ->with('success', 'Perencanaan Produksi WO (' . $workOrder->nomor_wo . ') berhasil disimpan. Silakan lanjutkan ke Formula Makanan.');
         }

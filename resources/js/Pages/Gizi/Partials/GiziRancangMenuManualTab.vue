@@ -2744,11 +2744,87 @@ function handleSavePerencanaanManualAndOpenFormula() {
         activeManualTab.value = "perencanaan";
         return;
     }
-    activeManualTab.value = "formula";
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    triggerPasteToast(
-        "Beralih ke Formula Makanan. Silakan lengkapi kandungan gizi.",
+
+    isSubmitting.value = true;
+
+    const cleanSubMenus = subMenuKeys.value.map((k) =>
+        (subMenuKomponen.value[k] || "").trim(),
     );
+
+    const payload = {
+        id: isEditMode.value ? editingWoId.value : null,
+        uuid: isEditMode.value ? editingWoUuid.value : null,
+        nomor_wo: woNo.value,
+        tanggal_distribusi: tanggalRencana.value,
+        siklus_ke: 1,
+        metode_wo: "manual",
+        database_pangan: "tkpi2020",
+        nama_menu: namaMenuAktif.value.trim(),
+        sub_menus: cleanSubMenus,
+        sub_menu_1: cleanSubMenus[0] || null,
+        sub_menu_2: cleanSubMenus[1] || null,
+        sub_menu_3: cleanSubMenus[2] || null,
+        sub_menu_4: cleanSubMenus[3] || null,
+        sub_menu_5: cleanSubMenus[4] || null,
+        sub_menu_kategori: subMenuKategori.value,
+        sub_menu_alergi: subMenuAlergi.value,
+        total_pm: totalPM.value,
+        total_pk: totalPK.value,
+        total_pb: totalPB.value,
+        total_alergi: totalPKAlergi.value + totalPBAlergi.value,
+        total_kelompok: kelompokMenerimaAktif.value.length,
+        jadwal_operasional: payloadJadwalOperasional.value,
+        lanjut_ke_rancang_menu: false,
+        tetap_di_halaman: true,
+        tab_tujuan: "formula",
+        akg_pk: akgPk.value,
+        akg_pb: akgPb.value,
+        akg_alergi: filteredAkgAlergiPayload.value,
+        catatan: {
+            ...(catatanResep.value ? { catatan_resep: catatanResep.value } : {}),
+            jadwal_operasional: payloadJadwalOperasional.value,
+            sub_menu_kategori: subMenuKategori.value,
+        },
+        porsi_tambahan: porsiTambahanPayload.value,
+        kelompoks: woKelompokList.value.map((k) => ({
+            kelompok_id: k.id,
+            nama_kelompok: k.nama_kelompok,
+            kategori: k.kategori,
+            desa_kelurahan: k.desa_kelurahan,
+            kecamatan: k.kecamatan,
+            is_menerima: k.status_menerima !== false,
+            total_penerima: k.total_penerima,
+            total_porsi_kecil: k.total_porsi_kecil,
+            total_porsi_besar: k.total_porsi_besar,
+            porsi_kecil: k.total_porsi_kecil,
+            porsi_besar: k.total_porsi_besar,
+            rincian: k.rincian || [],
+            detail_alergi: k.keterangan_alergi || [],
+            keterangan_alergi: k.keterangan_alergi || [],
+        })),
+        status: isEditMode.value
+            ? (props.editWorkOrder?.status === "Draft" ? "Siap Produksi" : (props.editWorkOrder?.status || "Siap Produksi"))
+            : "Siap Produksi",
+    };
+
+    router.post(route("work-order.store"), payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isSubmitting.value = false;
+            isNavigationConfirmed.value = true;
+            nextTick(() => {
+                initialFormSnapshot.value = takeFormSnapshot();
+            });
+            activeManualTab.value = "formula";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            triggerPasteToast("Perencanaan Produksi berhasil disimpan & beralih ke Formula Makanan.");
+        },
+        onError: (err) => {
+            isSubmitting.value = false;
+            const msg = Object.values(err)[0] || "Gagal menyimpan Perencanaan Produksi.";
+            triggerSubmitError(msg);
+        },
+    });
 }
 
 function handleSavePerencanaanManualComplete() {

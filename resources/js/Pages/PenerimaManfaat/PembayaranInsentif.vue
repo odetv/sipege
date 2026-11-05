@@ -7,6 +7,8 @@ import InsentifKpiCards from "./Partials/InsentifKpiCards.vue";
 import InsentifTable from "./Partials/InsentifTable.vue";
 import InsentifReceiptModal from "./Partials/InsentifReceiptModal.vue";
 import { downloadRekapInsentifExcel } from "@/Services/exportInsentifHelper";
+import axios from "axios";
+import { CheckCircle2, X } from "lucide-vue-next";
 
 const props = defineProps({
     user: { type: Object, default: () => ({}) },
@@ -366,6 +368,99 @@ async function handleExportExcel() {
         isExporting.value = false;
     }
 }
+
+// ─── Ekspor Excel Template Resmi Daftar Relawan Harian (.XLSX) ─────────────────
+const isExportingRelawan = ref(false);
+const exportRelawanSuccess = ref(false);
+
+async function handleExportRelawanExcel() {
+    // Ambil data yang terdistribusi (hari_distribusi > 0)
+    const candidates = selectedRows.value.length > 0 ? selectedRows.value : filteredItems.value;
+    const distributedItems = candidates.filter(
+        (it) => (parseInt(it.hari_distribusi, 10) || 0) > 0 && (parseInt(it.amount, 10) || 0) > 0
+    );
+
+    if (distributedItems.length === 0) {
+        alert("Tidak ada sasaran sekolah atau posyandu yang memiliki catatan distribusi (hari distribusi > 0) pada periode/rentang tanggal ini.");
+        return;
+    }
+
+    isExportingRelawan.value = true;
+    try {
+        const payloadItems = distributedItems.map((it, idx) => {
+            const isPosyandu = String(it.kategori || "").toLowerCase() === "posyandu" || String(it.nama_kelompok || "").toLowerCase().includes("posyandu");
+            const peran = isPosyandu ? "Kader Posyandu" : "Penanggung Jawab Satuan Pendidikan";
+            const hari = parseInt(it.hari_distribusi, 10) || 1;
+            const tarif = parseInt(it.tarif_harian, 10) || (hari > 0 ? Math.round((it.amount || 0) / hari) : 0);
+
+            return {
+                no: idx + 1,
+                nama_kelompok: String(it.nama_kelompok || "").trim(),
+                kategori: it.kategori,
+                peran: peran,
+                hari_distribusi: hari,
+                tarif_harian: tarif,
+                amount: it.amount,
+                metode_bayar: "Tunai",
+                tanggal_bayar: tanggalSelesai.value || tanggalMulai.value,
+                nama_pic: it.nama_pic || "",
+                keterangan: it.nama_pic ? `PIC: ${it.nama_pic}` : "",
+            };
+        });
+
+        const response = await axios.post(
+            route("penerima-manfaat.pembayaran-insentif.download-relawan-harian"),
+            {
+                items: payloadItems,
+                tgl_transaksi: tanggalSelesai.value || tanggalMulai.value,
+                tanggal_mulai: tanggalMulai.value,
+                tanggal_selesai: tanggalSelesai.value,
+                periode_label: labelSiklus.value || "",
+            },
+            { responseType: "blob" }
+        );
+
+        const blob = new Blob([response.data], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const dateLabel = (tanggalMulai.value && tanggalSelesai.value && tanggalMulai.value !== tanggalSelesai.value)
+            ? `${tanggalMulai.value}_sd_${tanggalSelesai.value}`
+            : (tanggalMulai.value || tanggalSelesai.value || "export");
+        link.setAttribute("download", `Daftar_Insentif_Relawan_PM_${dateLabel}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        exportRelawanSuccess.value = true;
+        setTimeout(() => {
+            exportRelawanSuccess.value = false;
+        }, 5000);
+    } catch (err) {
+        console.error("Gagal export template relawan insentif:", err);
+        let errorMsg = "Terjadi kesalahan saat mengekspor Excel template relawan.";
+        if (err.response?.data instanceof Blob) {
+            try {
+                const text = await err.response.data.text();
+                const json = JSON.parse(text);
+                if (json.message) errorMsg = json.message;
+                else if (json.error) errorMsg = json.error;
+            } catch (_) {}
+        } else if (err.response?.data?.message) {
+            errorMsg = err.response.data.message;
+        } else if (err.response?.data?.error) {
+            errorMsg = err.response.data.error;
+        } else if (err.message) {
+            errorMsg = err.message;
+        }
+        alert(errorMsg);
+    } finally {
+        isExportingRelawan.value = false;
+    }
+}
 </script>
 
 <template>
@@ -385,12 +480,37 @@ async function handleExportExcel() {
                 :rentangHariCount="rentangHariCount"
                 :labelSiklus="labelSiklus"
                 :unitSppg="unitSppg"
+                :isExportingRelawan="isExportingRelawan"
                 @dateFilterChange="onDateFilterChange"
                 @changeModeSkala="changeModeSkala"
                 @selectPeriode="selectPeriode"
                 @applyDateRange="onApplyDateRange"
                 @printAllReceipts="printAllReceipts"
+                @exportRelawanExcel="handleExportRelawanExcel"
             />
+
+            <!-- Relawan Harian Insentif Download Success Alert -->
+            <div
+                v-if="exportRelawanSuccess"
+                class="flex items-center justify-between p-4 rounded-xl bg-blue-50 border border-blue-300 text-blue-900 text-xs shadow-2xs animate-in fade-in duration-200"
+            >
+                <div class="flex items-center gap-2.5">
+                    <CheckCircle2 class="h-5 w-5 text-blue-600 shrink-0" />
+                    <div>
+                        <p class="font-bold">File Excel Daftar Relawan Insentif PM Berhasil Diunduh!</p>
+                        <p class="text-[11px] text-blue-700 mt-0.5">
+                            File <b>Template_Daftar_Relawan_Harian.xlsx</b> telah terisi data nominatif nama sekolah/posyandu, peran (PJ Satuan Pendidikan & Kader Posyandu), hari distribusi, tarif insentif harian, metode Tunai, dan rekap per peran otomatis.
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    @click="exportRelawanSuccess = false"
+                    class="p-1 rounded-md text-blue-600 hover:bg-blue-100/60"
+                >
+                    <X class="h-4 w-4" />
+                </button>
+            </div>
 
             <!-- ─── Komponen 2: KPI Statistics Cards (5 Cards) ────────────────── -->
             <InsentifKpiCards

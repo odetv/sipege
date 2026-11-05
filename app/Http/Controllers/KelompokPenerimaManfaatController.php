@@ -1568,6 +1568,170 @@ class KelompokPenerimaManfaatController extends Controller
     }
 
     /**
+     * Download template resmi Daftar Nominatif Pembayaran Relawan Harian (.xlsx) untuk Insentif Penerima Manfaat.
+     * Mengisi sheet Daftar_Relawan dengan:
+     * - Kolom B (Nama Relawan): Nama Sekolah / Nama Posyandu yang terdistribusi
+     * - Kolom C (Peran): 'Penanggung Jawab Satuan Pendidikan' (untuk sekolah) atau 'Kader Posyandu' (untuk posyandu)
+     * - Kolom D (Hari Kerja): Hari distribusi
+     * - Kolom E (Besaran Harian): Tarif harian insentif
+     * - Kolom F: Formula Jumlah Diterima
+     * - Kolom G (Metode Bayar): 'Tunai'
+     * - Kolom H (Tanggal Bayar): Tanggal transaksi/bayar
+     * - Kolom I (Keterangan): Info tambahan (misal PIC: ...)
+     * - Kolom J: Formula Status Baris
+     */
+    public function downloadInsentifRelawanHarian(Request $request)
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.nama_kelompok' => 'required|string',
+            'items.*.kategori' => 'nullable|string',
+            'items.*.peran' => 'nullable|string',
+            'items.*.hari_distribusi' => 'nullable|numeric',
+            'items.*.tarif_harian' => 'nullable|numeric',
+            'items.*.amount' => 'nullable|numeric',
+            'items.*.metode_bayar' => 'nullable|string',
+            'items.*.tanggal_bayar' => 'nullable|string',
+            'items.*.keterangan' => 'nullable|string',
+            'items.*.nama_pic' => 'nullable|string',
+            'tgl_transaksi' => 'nullable|string',
+            'tanggal_mulai' => 'nullable|string',
+            'tanggal_selesai' => 'nullable|string',
+            'periode_label' => 'nullable|string',
+        ]);
+
+        $templatePath = database_path('data/Template_Daftar_Relawan_Harian.xlsx');
+        if (!file_exists($templatePath)) {
+            $templatePath = public_path('templates/Template_Daftar_Relawan_Harian.xlsx');
+        }
+
+        if (!file_exists($templatePath)) {
+            return response()->json(['error' => 'Template file Template_Daftar_Relawan_Harian.xlsx tidak ditemukan.'], 404);
+        }
+
+        // Tanggal bayar pada template resmi adalah tanggal saat proses download dilakukan
+        $tglSaatDownload = Carbon::now()->format('d-m-Y');
+
+        try {
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+            $spreadsheet = $reader->load($templatePath);
+            $sheet = $spreadsheet->getSheetByName('Daftar_Relawan');
+
+            if (!$sheet) {
+                return response()->json(['error' => 'Sheet Daftar_Relawan tidak ditemukan dalam template.'], 422);
+            }
+
+            $startRow = 9;
+            $items = array_values($validated['items']);
+            $count = count($items);
+
+            for ($i = 0; $i < $count; $i++) {
+                $item = $items[$i];
+                $row = $startRow + $i;
+
+                $namaKelompok = trim((string)($item['nama_kelompok'] ?? ''));
+                $kategori = trim((string)($item['kategori'] ?? ''));
+                $isPosyandu = strtolower($kategori) === 'posyandu' || str_contains(strtolower($namaKelompok), 'posyandu');
+
+                // Khusus Pembayaran Insentif:
+                // Posyandu -> 'Kader Posyandu'
+                // Satuan Pendidikan / Sekolah -> 'Penanggung Jawab Satuan Pendidikan'
+                $peran = $isPosyandu ? 'Kader Posyandu' : 'Penanggung Jawab Satuan Pendidikan';
+                if (!empty($item['peran']) && in_array($item['peran'], ['Penanggung Jawab Satuan Pendidikan', 'Kader Posyandu'], true)) {
+                    $peran = $item['peran'];
+                }
+
+                $hariKerja = (float)($item['hari_distribusi'] ?? 1);
+                if ($hariKerja <= 0) $hariKerja = 1;
+
+                $besaranHarian = (float)($item['tarif_harian'] ?? 0);
+                if ($besaranHarian <= 0 && !empty($item['amount']) && $hariKerja > 0) {
+                    $besaranHarian = round((float)$item['amount'] / $hariKerja);
+                }
+
+                // Sesuai permintaan, pembayaran insentif menggunakan metode Tunai
+                $metodeBayar = 'Tunai';
+
+                $pic = trim((string)($item['nama_pic'] ?? ''));
+                $keterangan = trim((string)($item['keterangan'] ?? ''));
+                if (empty($keterangan) && !empty($pic)) {
+                    $keterangan = "PIC: {$pic}";
+                }
+
+                // Col A: No
+                $sheet->setCellValue("A{$row}", $i + 1);
+                // Col B: Nama Relawan (Nama Sekolah / Posyandu)
+                $sheet->setCellValue("B{$row}", $namaKelompok);
+                // Col C: Peran (Penanggung Jawab Satuan Pendidikan / Kader Posyandu)
+                $sheet->setCellValue("C{$row}", $peran);
+                // Col D: Hari Kerja (Hari Distribusi)
+                $sheet->setCellValue("D{$row}", $hariKerja);
+                // Col E: Besaran Harian (Rp)
+                $sheet->setCellValue("E{$row}", $besaranHarian);
+                // Col F: Formula Jumlah Diterima (Rp)
+                $sheet->setCellValue("F{$row}", "=IF(OR(D{$row}=\"\",E{$row}=\"\"),\"\",D{$row}*E{$row})");
+                // Col G: Metode Bayar (Tunai)
+                $sheet->setCellValue("G{$row}", $metodeBayar);
+                // Col H: Tanggal Bayar (tanggal saat download)
+                $sheet->setCellValue("H{$row}", $tglSaatDownload);
+                // Col I: Keterangan
+                $sheet->setCellValue("I{$row}", $keterangan);
+                // Col J: Formula Status Baris
+                $sheet->setCellValue("J{$row}", "=IF(B{$row}=\"\",\"\",IF(COUNTIF(\$B\$9:\$B\$108,B{$row})>1,\"DUPLIKAT NAMA\",IF(OR(C{$row}=\"\",D{$row}=\"\",E{$row}=\"\",G{$row}=\"\",H{$row}=\"\"),\"BELUM LENGKAP\",\"OK\")))");
+            }
+
+            // Kosongkan sisa baris sampai baris 108
+            for ($row = $startRow + $count; $row <= 108; $row++) {
+                $sheet->setCellValue("B{$row}", null);
+                $sheet->setCellValue("C{$row}", null);
+                $sheet->setCellValue("D{$row}", null);
+                $sheet->setCellValue("E{$row}", null);
+                $sheet->setCellValue("G{$row}", null);
+                $sheet->setCellValue("H{$row}", null);
+                $sheet->setCellValue("I{$row}", null);
+            }
+
+            // Sinkronisasi baris total di sheet Rekap_Per_Peran
+            $sheetRekap = $spreadsheet->getSheetByName('Rekap_Per_Peran');
+            if ($sheetRekap) {
+                $sheetRekap->setCellValue('D19', '=IF(D18=Daftar_Relawan!F110,"OK","PERIKSA: ada baris tanpa peran")');
+            }
+
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'Daftar_Insentif_PM_' . uniqid() . '.xlsx';
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->setPreCalculateFormulas(false);
+            $writer->save($tempFile);
+
+            $mulai = $validated['tanggal_mulai'] ?? null;
+            $selesai = $validated['tanggal_selesai'] ?? null;
+            if ($mulai && $selesai && $mulai !== $selesai) {
+                $dateLabel = "{$mulai}_sd_{$selesai}";
+            } elseif ($mulai) {
+                $dateLabel = $mulai;
+            } elseif (!empty($validated['tgl_transaksi'])) {
+                $dateLabel = Carbon::parse($validated['tgl_transaksi'])->format('Y-m-d');
+            } else {
+                $dateLabel = Carbon::now()->format('Y-m-d');
+            }
+            $filename = "Daftar_Insentif_Relawan_PM_{$dateLabel}.xlsx";
+
+            return response()->download($tempFile, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            \Log::error('Error generate Daftar Insentif Relawan PM: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'error' => 'Gagal memproses file template Daftar Insentif Relawan PM: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Helper membersihkan karakter terlarang sesuai sheet 'Restricted Characters' BNI Direct
      */
     private function sanitizeBniText(string $text, int $maxLen = 40): string

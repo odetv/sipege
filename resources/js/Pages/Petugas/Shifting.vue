@@ -247,6 +247,8 @@ function showToast(msg) {
 // ─── Cell Toggle Interaction ──────────────────────────────────────────────────
 // Toggle cycle: '' -> 'H' (Masuk) -> 'L' (Libur) -> ''
 function toggleCellShift(petugasId, dateStr) {
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (p && p.status === "Nonaktif") return;
     if (!matrixShifting.value[petugasId]) {
         matrixShifting.value[petugasId] = {};
     }
@@ -265,6 +267,8 @@ function toggleCellShift(petugasId, dateStr) {
 }
 
 function setCellShiftDirect(petugasId, dateStr, val) {
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (p && p.status === "Nonaktif") return;
     if (!matrixShifting.value[petugasId]) {
         matrixShifting.value[petugasId] = {};
     }
@@ -274,7 +278,7 @@ function setCellShiftDirect(petugasId, dateStr, val) {
 
 // ─── Bulk Column Date Header Actions (Atur Serentak Bergantian: H ➜ L ➜ Kosong) ───
 function toggleKolomStatus(dateStr) {
-    const list = filteredPetugas.value;
+    const list = filteredPetugas.value.filter((p) => p.status !== "Nonaktif");
     if (list.length === 0) return;
 
     // Ambil status personil pertama sebagai acuan
@@ -324,13 +328,10 @@ function isStaffKeamanan(p) {
 }
 
 function toggleBarisStatus(petugasId) {
+    const p = props.petugas.find((x) => x.id === petugasId);
+    if (!p || p.status === "Nonaktif") return;
     const dates = dateColumns.value;
     if (dates.length === 0) return;
-    if (!matrixShifting.value[petugasId]) {
-        matrixShifting.value[petugasId] = {};
-    }
-
-    const p = props.petugas.find((x) => x.id === petugasId);
     const isKeam = isStaffKeamanan(p);
 
     // Ambil acuan dari hari kerja pertama (khusus keamanan mencakup semua hari), atau hari pertama
@@ -475,7 +476,7 @@ const inlineTarifInput = ref("");
 const inlineInputRef = ref(null);
 
 function startInlineEditTarif(p) {
-    if (!p) return;
+    if (!p || p.status === "Nonaktif") return;
     editingPetugasTarifId.value = p.id;
     const curVal = getTarifShifting(p.id);
     inlineTarifInput.value = curVal > 0 ? formatRibuan(curVal) : "";
@@ -2916,6 +2917,7 @@ function getTeamBorderClass(jabatan) {
                                 :key="p.id"
                                 :class="[
                                     'transition-colors group',
+                                    p.status === 'Nonaktif' ? 'bg-slate-100/75 opacity-60' : '',
                                     getTeamRowClass(p.jabatan),
                                     isFirstOfTeam(pIdx) ? '!border-t-2 !border-slate-300 sm:!border-slate-400/80 shadow-[0_-1px_0_0_rgba(148,163,184,0.3)]' : '',
                                 ]"
@@ -2923,12 +2925,13 @@ function getTeamBorderClass(jabatan) {
                                 <!-- Sticky Left 1: No (Sticky on Desktop, Natural Flow on Mobile) -->
                                 <td
                                     :class="[
-                                        'sm:sticky sm:left-0 z-0 sm:z-10 px-2 sm:px-3 py-2 text-center text-slate-500 hover:text-emerald-700 font-medium w-10 sm:w-12 min-w-[40px] sm:min-w-[48px] border-r border-slate-200 cursor-pointer select-none transition-colors',
+                                        'sm:sticky sm:left-0 z-0 sm:z-10 px-2 sm:px-3 py-2 text-center text-slate-500 font-medium w-10 sm:w-12 min-w-[40px] sm:min-w-[48px] border-r border-slate-200 select-none transition-colors',
+                                        p.status === 'Nonaktif' ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer hover:text-emerald-700',
                                         getTeamStickyClass(p.jabatan),
                                         getTeamBorderClass(p.jabatan),
                                     ]"
-                                    :title="`Klik untuk ganti serentak baris ${p.nama}: H ➜ L ➜ Kosong`"
-                                    @click="toggleBarisStatus(p.id)"
+                                    :title="p.status === 'Nonaktif' ? `${p.nama} (Petugas Berhenti / Nonaktif - Hanya Tampilan)` : `Klik untuk ganti serentak baris ${p.nama}: H ➜ L ➜ Kosong`"
+                                    @click="p.status !== 'Nonaktif' && toggleBarisStatus(p.id)"
                                 >
                                     {{ pIdx + 1 }}
                                 </td>
@@ -2936,17 +2939,27 @@ function getTeamBorderClass(jabatan) {
                                 <!-- Sticky Left 2: Petugas & Divisi (Sticky on Desktop, Natural Flow on Mobile) -->
                                 <td
                                     :class="[
-                                        'sm:sticky sm:left-10 sm:left-12 z-0 sm:z-10 px-3 sm:px-3.5 py-2 border-r border-slate-200 cursor-pointer select-none transition-colors w-[220px] sm:w-[260px] min-w-[200px] sm:min-w-[260px]',
+                                        'sm:sticky sm:left-10 sm:left-12 z-0 sm:z-10 px-3 sm:px-3.5 py-2 border-r border-slate-200 select-none transition-colors w-[220px] sm:w-[260px] min-w-[200px] sm:min-w-[260px]',
+                                        p.status === 'Nonaktif' ? 'cursor-not-allowed bg-slate-100/80' : 'cursor-pointer',
                                         getTeamStickyClass(p.jabatan),
                                     ]"
-                                    :title="`Klik nama ${p.nama} untuk ganti serentak satu baris: H ➜ L ➜ Kosong`"
-                                    @click="toggleBarisStatus(p.id)"
+                                    :title="p.status === 'Nonaktif' ? `${p.nama} (Petugas Berhenti / Nonaktif - Hanya Tampilan)` : `Klik nama ${p.nama} untuk ganti serentak satu baris: H ➜ L ➜ Kosong`"
+                                    @click="p.status !== 'Nonaktif' && toggleBarisStatus(p.id)"
                                 >
                                     <div class="min-w-0">
-                                        <p class="font-bold text-slate-900 text-xs break-words leading-tight hover:text-emerald-700 transition-colors">
+                                        <p
+                                            class="font-bold text-slate-900 text-xs break-words leading-tight transition-colors"
+                                            :class="p.status === 'Nonaktif' ? 'text-slate-500' : 'hover:text-emerald-700'"
+                                        >
                                              {{ p.nama }}
                                         </p>
                                         <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                            <span
+                                                v-if="p.status === 'Nonaktif'"
+                                                class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
+                                            >
+                                                Berhenti
+                                            </span>
                                             <span
                                                 v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
                                                 :key="jab"
@@ -2958,7 +2971,7 @@ function getTeamBorderClass(jabatan) {
                                                 {{ jab }}
                                             </span>
                                             <span
-                                                v-if="wajibHadirStaffIds.includes(p.id)"
+                                                v-if="wajibHadirStaffIds.includes(p.id) && p.status !== 'Nonaktif'"
                                                 class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shrink-0 leading-none"
                                                 title="Personil Wajib Selalu Hadir (Bebas Shifting)"
                                             >
@@ -2972,14 +2985,14 @@ function getTeamBorderClass(jabatan) {
                                 <!-- Kolom Tarif Harian (BGN / Khusus Shifting - Edit Cell & Paste Deret Sekaligus) -->
                                 <td
                                     class="py-1 px-2.5 text-right font-medium text-slate-800 border-r border-slate-200 select-none group transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-inset"
-                                    :class="editingPetugasTarifId === p.id ? 'bg-emerald-50/90 ring-2 ring-emerald-500 ring-inset z-10' : 'hover:bg-emerald-50/40 cursor-pointer'"
-                                    tabindex="0"
-                                    @click="editingPetugasTarifId !== p.id && startInlineEditTarif(p)"
-                                    @paste="handlePasteTarifColumn($event, p)"
-                                    :title="editingPetugasTarifId === p.id ? '' : 'Klik cell untuk mengedit manual, atau tekan Ctrl+V langsung untuk menempel 1 deret kolom gaji mulai dari baris ini'"
+                                    :class="p.status === 'Nonaktif' ? 'bg-slate-100/60 cursor-not-allowed text-slate-400' : (editingPetugasTarifId === p.id ? 'bg-emerald-50/90 ring-2 ring-emerald-500 ring-inset z-10' : 'hover:bg-emerald-50/40 cursor-pointer')"
+                                    :tabindex="p.status === 'Nonaktif' ? -1 : 0"
+                                    @click="p.status !== 'Nonaktif' && editingPetugasTarifId !== p.id && startInlineEditTarif(p)"
+                                    @paste="p.status !== 'Nonaktif' && handlePasteTarifColumn($event, p)"
+                                    :title="p.status === 'Nonaktif' ? 'Personil Berhenti (Hanya Tampilan)' : (editingPetugasTarifId === p.id ? '' : 'Klik cell untuk mengedit manual, atau tekan Ctrl+V langsung untuk menempel 1 deret kolom gaji mulai dari baris ini')"
                                 >
                                     <!-- Input Mode Aktif di Cell -->
-                                    <div v-if="editingPetugasTarifId === p.id" class="flex items-center justify-end gap-1 py-0.5">
+                                    <div v-if="editingPetugasTarifId === p.id && p.status !== 'Nonaktif'" class="flex items-center justify-end gap-1 py-0.5">
                                         <span class="text-[10px] font-bold text-slate-400 select-none">Rp</span>
                                         <input
                                             ref="inlineInputRef"
@@ -2999,6 +3012,7 @@ function getTeamBorderClass(jabatan) {
                                     <div v-else class="flex items-center justify-end gap-1.5">
                                         <!-- Tombol Cepat Paste Deret Mulai Baris Ini -->
                                         <button
+                                            v-if="p.status !== 'Nonaktif'"
                                             type="button"
                                             @click.stop="openPasteTarifModal(p.id)"
                                             class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-emerald-100 text-slate-400 hover:text-emerald-700 transition cursor-pointer"
@@ -3009,7 +3023,7 @@ function getTeamBorderClass(jabatan) {
 
                                         <!-- Tombol Reset ke Master BGN jika tarif sedang kustom -->
                                         <button
-                                            v-if="isCustomTarif(p.id)"
+                                            v-if="p.status !== 'Nonaktif' && isCustomTarif(p.id)"
                                             type="button"
                                             @click.stop="resetTarifToMaster(p, $event)"
                                             class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition cursor-pointer"
@@ -3019,14 +3033,17 @@ function getTeamBorderClass(jabatan) {
                                         </button>
 
                                         <span
-                                            v-else
+                                            v-else-if="p.status !== 'Nonaktif'"
                                             class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-300 group-hover:text-slate-500 transition"
                                         >
                                             <Pencil class="w-3 h-3" />
                                         </span>
 
                                         <div>
-                                            <p class="font-bold text-slate-900 text-xs font-mono leading-tight">
+                                            <p
+                                                class="font-bold text-xs font-mono leading-tight"
+                                                :class="p.status === 'Nonaktif' ? 'text-slate-400' : 'text-slate-900'"
+                                            >
                                                 {{ formatRupiah(getTarifShifting(p.id)) }}
                                             </p>
                                             <div class="flex items-center justify-end gap-1 mt-0.5">
@@ -3055,6 +3072,7 @@ function getTeamBorderClass(jabatan) {
                                     ]"
                                 >
                                     <button
+                                        v-if="p.status !== 'Nonaktif'"
                                         type="button"
                                         @click="toggleCellShift(p.id, col.dateStr)"
                                         :class="[
@@ -3079,6 +3097,26 @@ function getTeamBorderClass(jabatan) {
                                                 : '·'
                                         }}
                                     </button>
+                                    <div
+                                        v-else
+                                        class="w-7 h-7 mx-auto rounded-md text-[11px] font-bold flex items-center justify-center select-none opacity-50 cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                                        :class="[
+                                            matrixShifting[p.id]?.[col.dateStr] === 'H' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                            matrixShifting[p.id]?.[col.dateStr] === 'H2' ? 'bg-teal-100 text-teal-700 border-teal-200' :
+                                            matrixShifting[p.id]?.[col.dateStr] === 'L' ? 'bg-slate-200 text-slate-600 border-slate-300' : ''
+                                        ]"
+                                        :title="`${p.nama} (Petugas Berhenti / Nonaktif - Hanya Tampilan)`"
+                                    >
+                                        {{
+                                            matrixShifting[p.id]?.[col.dateStr] === 'H'
+                                                ? 'H'
+                                                : matrixShifting[p.id]?.[col.dateStr] === 'H2'
+                                                ? '½'
+                                                : matrixShifting[p.id]?.[col.dateStr] === 'L'
+                                                ? 'L'
+                                                : '·'
+                                        }}
+                                    </div>
                                 </td>
 
                                 <!-- Summary 1: Total Masuk (H) -->

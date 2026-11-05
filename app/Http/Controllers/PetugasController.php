@@ -41,16 +41,25 @@ class PetugasController extends Controller
         $daftarJabatan = [];
 
         if ($unitSppg) {
+            // Urutkan personil aktif terlebih dahulu sesuai urutan, lalu personil nonaktif di paling bawah
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
-            $summary['total_petugas'] = $petugas->count();
-            $summary['total_laki'] = $petugas->where('jenis_kelamin', 'L')->count();
-            $summary['total_perempuan'] = $petugas->where('jenis_kelamin', 'P')->count();
-            $summary['total_gaji_harian_bgn'] = (int) $petugas->sum('gaji_harian_bgn');
-            $summary['total_bonus_harian_mitra'] = (int) $petugas->sum('bonus_harian_mitra');
-            $summary['total_bpjs_tk'] = (int) $petugas->sum('iuran_bpjs_tk');
+            $petugasAktif = $petugas->where('status', 'Aktif');
+            $petugasNonaktif = $petugas->where('status', '!=', 'Aktif');
+
+            // Summary nominal rill hanya menghitung personil yang aktif
+            $summary['total_petugas'] = $petugasAktif->count();
+            $summary['total_petugas_all'] = $petugas->count();
+            $summary['total_petugas_nonaktif'] = $petugasNonaktif->count();
+            $summary['total_laki'] = $petugasAktif->where('jenis_kelamin', 'L')->count();
+            $summary['total_perempuan'] = $petugasAktif->where('jenis_kelamin', 'P')->count();
+            $summary['total_gaji_harian_bgn'] = (int) $petugasAktif->sum('gaji_harian_bgn');
+            $summary['total_bonus_harian_mitra'] = (int) $petugasAktif->sum('bonus_harian_mitra');
+            $summary['total_bpjs_tk'] = (int) $petugasAktif->sum('iuran_bpjs_tk');
             $summary['total_pengeluaran_harian'] = $summary['total_gaji_harian_bgn'] + $summary['total_bonus_harian_mitra'];
             $summary['total_pengeluaran_periodik'] = $summary['total_pengeluaran_harian'] * 10; // 10 hari kerja operasional (periodik)
             $summary['total_pengeluaran_bulanan_20'] = $summary['total_pengeluaran_harian'] * 20; // 20 hari kerja operasional standar BGN (bulanan)
@@ -157,6 +166,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
@@ -314,6 +324,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
@@ -474,6 +485,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
@@ -559,6 +571,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
@@ -937,6 +950,17 @@ class PetugasController extends Controller
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
         }
 
+        // Standardisasi nomor telepon / WhatsApp agar selalu tersimpan sebagai 628xxxxxxxx
+        if ($request->has('no_telp')) {
+            $rawTelp = preg_replace('/\D/', '', (string) $request->input('no_telp'));
+            if (str_starts_with($rawTelp, '0')) {
+                $rawTelp = '62' . substr($rawTelp, 1);
+            } elseif (!str_starts_with($rawTelp, '62') && !empty($rawTelp)) {
+                $rawTelp = '62' . $rawTelp;
+            }
+            $request->merge(['no_telp' => $rawTelp]);
+        }
+
         $validated = $request->validate([
             'nama' => ['required', 'string', 'min:3', 'max:255'],
             'nik' => ['required', 'string', 'size:16', 'regex:/^[0-9]{16}$/', 'unique:petugas,nik'],
@@ -947,6 +971,7 @@ class PetugasController extends Controller
             'no_telp' => ['required', 'string', 'regex:/^62[0-9]{8,14}$/'],
             'email' => ['required', 'email', 'max:255'],
             'jabatan' => ['required', 'string', 'max:150'],
+            'urutan' => ['nullable', 'integer', 'min:1'],
             'jenis_bank' => ['nullable', 'string', 'max:50'],
             'nomor_rekening' => ['nullable', 'string', 'max:50'],
             'jam_kerja' => ['required', 'string', 'max:255'],
@@ -982,8 +1007,12 @@ class PetugasController extends Controller
 
         $validated['unit_sppg_id'] = $unitSppg->id;
         $validated['jenis_bank'] = $validated['jenis_bank'] ?? 'BNI';
+        if (empty($validated['urutan'])) {
+            $validated['urutan'] = (Petugas::where('unit_sppg_id', $unitSppg->id)->max('urutan') ?? 0) + 1;
+        }
 
         Petugas::create($validated);
+        $this->reorderPetugasByStatus($unitSppg->id);
 
         return back()->with('success', 'Data Petugas berhasil ditambahkan.');
     }
@@ -1002,6 +1031,17 @@ class PetugasController extends Controller
 
         $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)->findOrFail($id);
 
+        // Standardisasi nomor telepon / WhatsApp agar selalu tersimpan sebagai 628xxxxxxxx
+        if ($request->has('no_telp')) {
+            $rawTelp = preg_replace('/\D/', '', (string) $request->input('no_telp'));
+            if (str_starts_with($rawTelp, '0')) {
+                $rawTelp = '62' . substr($rawTelp, 1);
+            } elseif (!str_starts_with($rawTelp, '62') && !empty($rawTelp)) {
+                $rawTelp = '62' . $rawTelp;
+            }
+            $request->merge(['no_telp' => $rawTelp]);
+        }
+
         $validated = $request->validate([
             'nama' => ['required', 'string', 'min:3', 'max:255'],
             'nik' => ['required', 'string', 'size:16', 'regex:/^[0-9]{16}$/', Rule::unique('petugas', 'nik')->ignore($petugas->id)],
@@ -1012,6 +1052,7 @@ class PetugasController extends Controller
             'no_telp' => ['required', 'string', 'regex:/^62[0-9]{8,14}$/'],
             'email' => ['required', 'email', 'max:255'],
             'jabatan' => ['required', 'string', 'max:150'],
+            'urutan' => ['nullable', 'integer', 'min:1'],
             'jenis_bank' => ['nullable', 'string', 'max:50'],
             'nomor_rekening' => ['nullable', 'string', 'max:50'],
             'jam_kerja' => ['required', 'string', 'max:255'],
@@ -1046,6 +1087,7 @@ class PetugasController extends Controller
         ]);
 
         $petugas->update($validated);
+        $this->reorderPetugasByStatus($unitSppg->id);
 
         return back()->with('success', 'Data Petugas berhasil diperbarui.');
     }
@@ -1065,8 +1107,30 @@ class PetugasController extends Controller
         $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)->findOrFail($id);
         $nama = $petugas->nama;
         $petugas->delete();
+        $this->reorderPetugasByStatus($unitSppg->id);
 
         return back()->with('success', "Data Petugas \"{$nama}\" berhasil dihapus.");
+    }
+
+    /**
+     * Otomatis rapikan urutan petugas: personil Aktif berada di urutan atas (1..N),
+     * sedangkan personil Nonaktif otomatis dipindahkan ke urutan paling bawah.
+     */
+    private function reorderPetugasByStatus(int $unitSppgId): void
+    {
+        $all = Petugas::where('unit_sppg_id', $unitSppgId)
+            ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
+            ->orderBy('urutan', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $urutan = 1;
+        foreach ($all as $p) {
+            if ($p->urutan !== $urutan) {
+                $p->update(['urutan' => $urutan]);
+            }
+            $urutan++;
+        }
     }
 
     /**
@@ -1164,6 +1228,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
@@ -1611,6 +1676,187 @@ class PetugasController extends Controller
         return response()->download($tempFile, $filename, [
             'Content-Type' => 'application/vnd.ms-excel',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Download template resmi Daftar Nominatif Pembayaran Relawan Harian (.xlsx)
+     * Mengisi sheet Daftar_Relawan (No, Nama Relawan, Peran, Hari Kerja, Besaran Harian, Metode Bayar, Tanggal Bayar, Keterangan)
+     * sambil mempertahankan seluruh formula pada kolom Jumlah Diterima (F), Status Baris (J), Rekap Per Peran, dan validasi dropdown Ref.
+     */
+    public function downloadDaftarRelawanHarian(Request $request)
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.nama' => 'required|string',
+            'items.*.peran' => 'nullable|string',
+            'items.*.hari_kerja' => 'nullable|numeric',
+            'items.*.besaran_harian' => 'nullable|numeric',
+            'items.*.metode_bayar' => 'nullable|string',
+            'items.*.tanggal_bayar' => 'nullable|string',
+            'items.*.keterangan' => 'nullable|string',
+            'tgl_transaksi' => 'nullable|string',
+            'tanggal_mulai' => 'nullable|string',
+            'tanggal_selesai' => 'nullable|string',
+            'periode_label' => 'nullable|string',
+        ]);
+
+        $templatePath = database_path('data/Template_Daftar_Relawan_Harian.xlsx');
+        if (!file_exists($templatePath)) {
+            $templatePath = public_path('templates/Template_Daftar_Relawan_Harian.xlsx');
+        }
+
+        if (!file_exists($templatePath)) {
+            return response()->json(['error' => 'Template file Template_Daftar_Relawan_Harian.xlsx tidak ditemukan.'], 404);
+        }
+
+        $validRoles = [
+            'Pengawas Sanitasi',
+            'Juru Masak',
+            'Asisten Lapangan/Aslap',
+            'Persiapan Bahan Makanan',
+            'Pengolahan Bahan Makanan',
+            'Pemorsian',
+            'Packing',
+            'Distribusi',
+            'Petugas Kebersihan',
+            'Pencuci Alat Makan',
+            'Petugas Keamanan',
+            'Penanggung Jawab Satuan Pendidikan',
+            'Kader Posyandu',
+        ];
+
+        // Tanggal bayar pada template resmi adalah tanggal saat proses download dilakukan
+        $tglSaatDownload = Carbon::now()->format('d-m-Y');
+
+        try {
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+            $spreadsheet = $reader->load($templatePath);
+            $sheet = $spreadsheet->getSheetByName('Daftar_Relawan');
+
+            if (!$sheet) {
+                return response()->json(['error' => 'Sheet Daftar_Relawan tidak ditemukan dalam template.'], 422);
+            }
+
+            $startRow = 9;
+            $items = array_values($validated['items']);
+            $count = count($items);
+
+            for ($i = 0; $i < $count; $i++) {
+                $item = $items[$i];
+                $row = $startRow + $i;
+
+                $nama = trim((string)($item['nama'] ?? ''));
+                $peranRaw = trim((string)($item['peran'] ?? ''));
+
+                // Jika peran belum sesuai salah satu dari 13 opsi template, petakan otomatis
+                $peran = in_array($peranRaw, $validRoles, true) ? $peranRaw : $this->mapJabatanToPeranBgn($peranRaw);
+
+                $hariKerja = (float)($item['hari_kerja'] ?? 1);
+                if ($hariKerja <= 0) $hariKerja = 1;
+
+                $besaranHarian = (float)($item['besaran_harian'] ?? 0);
+                $metodeBayar = in_array(ucfirst(strtolower(trim((string)($item['metode_bayar'] ?? '')))), ['Transfer', 'Tunai']) 
+                    ? ucfirst(strtolower(trim($item['metode_bayar']))) 
+                    : 'Transfer';
+
+                $keterangan = trim((string)($item['keterangan'] ?? ''));
+
+                // Col A: No
+                $sheet->setCellValue("A{$row}", $i + 1);
+                // Col B: Nama Relawan
+                $sheet->setCellValue("B{$row}", $nama);
+                // Col C: Peran
+                $sheet->setCellValue("C{$row}", $peran);
+                // Col D: Hari Kerja
+                $sheet->setCellValue("D{$row}", $hariKerja);
+                // Col E: Besaran Harian (Rp)
+                $sheet->setCellValue("E{$row}", $besaranHarian);
+                // Col F: Formula Jumlah Diterima (Rp)
+                $sheet->setCellValue("F{$row}", "=IF(OR(D{$row}=\"\",E{$row}=\"\"),\"\",D{$row}*E{$row})");
+                // Col G: Metode Bayar
+                $sheet->setCellValue("G{$row}", $metodeBayar);
+                // Col H: Tanggal Bayar (tanggal saat download)
+                $sheet->setCellValue("H{$row}", $tglSaatDownload);
+                // Col I: Keterangan
+                $sheet->setCellValue("I{$row}", $keterangan);
+                // Col J: Formula Status Baris
+                $sheet->setCellValue("J{$row}", "=IF(B{$row}=\"\",\"\",IF(COUNTIF(\$B\$9:\$B\$108,B{$row})>1,\"DUPLIKAT NAMA\",IF(OR(C{$row}=\"\",D{$row}=\"\",E{$row}=\"\",G{$row}=\"\",H{$row}=\"\"),\"BELUM LENGKAP\",\"OK\")))");
+            }
+
+            // Jika ada baris sisa di bawahnya sampai baris 108, kosongkan kolom data agar tidak ada sisa dummy
+            for ($row = $startRow + $count; $row <= 108; $row++) {
+                $sheet->setCellValue("B{$row}", null);
+                $sheet->setCellValue("C{$row}", null);
+                $sheet->setCellValue("D{$row}", null);
+                $sheet->setCellValue("E{$row}", null);
+                $sheet->setCellValue("G{$row}", null);
+                $sheet->setCellValue("H{$row}", null);
+                $sheet->setCellValue("I{$row}", null);
+            }
+
+            // Pastikan formula validasi sinkronisasi total di sheet Rekap_Per_Peran membandingkan baris total D18
+            $sheetRekap = $spreadsheet->getSheetByName('Rekap_Per_Peran');
+            if ($sheetRekap) {
+                $sheetRekap->setCellValue('D19', '=IF(D18=Daftar_Relawan!F110,"OK","PERIKSA: ada baris tanpa peran")');
+            }
+
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'Daftar_Relawan_' . uniqid() . '.xlsx';
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->setPreCalculateFormulas(false);
+            $writer->save($tempFile);
+
+            $mulai = $validated['tanggal_mulai'] ?? null;
+            $selesai = $validated['tanggal_selesai'] ?? null;
+            if ($mulai && $selesai && $mulai !== $selesai) {
+                $dateLabel = "{$mulai}_sd_{$selesai}";
+            } elseif ($mulai) {
+                $dateLabel = $mulai;
+            } elseif (!empty($validated['tgl_transaksi'])) {
+                $dateLabel = Carbon::parse($validated['tgl_transaksi'])->format('Y-m-d');
+            } else {
+                $dateLabel = Carbon::now()->format('Y-m-d');
+            }
+            $filename = "Daftar_Relawan_Harian_{$dateLabel}.xlsx";
+
+            return response()->download($tempFile, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            \Log::error('Error generate Daftar Relawan Harian: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'error' => 'Gagal memproses file template Daftar Relawan Harian: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Memetakan jabatan/divisi internal SPPG ke dalam 13 opsi Peran standar BGN.
+     */
+    private function mapJabatanToPeranBgn(?string $jabatan): string
+    {
+        if (!$jabatan) return 'Pengawas Sanitasi';
+        $j = strtolower($jabatan);
+
+        if (str_contains($j, 'chef') || str_contains($j, 'masak')) return 'Juru Masak';
+        if (str_contains($j, 'koordinator lapangan') || str_contains($j, 'aslap')) return 'Asisten Lapangan/Aslap';
+        if (str_contains($j, 'persiapan')) return 'Persiapan Bahan Makanan';
+        if (str_contains($j, 'pengolahan')) return 'Pengolahan Bahan Makanan';
+        if (str_contains($j, 'pemorsian')) return 'Pemorsian';
+        if (str_contains($j, 'pengemudi') || str_contains($j, 'distribusi') || str_contains($j, 'sopir') || str_contains($j, 'driver')) return 'Distribusi';
+        if (str_contains($j, 'cuci') || str_contains($j, 'ompreng') || str_contains($j, 'pencuci')) return 'Pencuci Alat Makan';
+        if (str_contains($j, 'kebersihan')) return 'Petugas Kebersihan';
+        if (str_contains($j, 'keamanan') || str_contains($j, 'satpam') || str_contains($j, 'security')) return 'Petugas Keamanan';
+        if (str_contains($j, 'sanitasi') || str_contains($j, 'gizi')) return 'Pengawas Sanitasi';
+        if (str_contains($j, 'packing') || str_contains($j, 'kemas')) return 'Packing';
+        if (str_contains($j, 'posyandu')) return 'Kader Posyandu';
+        if (str_contains($j, 'satuan pendidikan') || str_contains($j, 'sekolah')) return 'Penanggung Jawab Satuan Pendidikan';
+
+        return 'Pengawas Sanitasi';
     }
 
     /**

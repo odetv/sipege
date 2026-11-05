@@ -458,9 +458,14 @@ export async function downloadRekapDistribusiExcel({
                     cell.value = String(status);
                     cell.font = { name: 'Arial', size: 8.5 };
                 } else {
-                    cell.value = '';
-                    if (col.isSunday) {
+                    // Ketika hari tidak terdistribusi / kosong / libur
+                    cell.value = 'L';
+                    if (col.isSunday || col.isSaturday) {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+                        cell.font = { name: 'Arial', size: 8.5, bold: true, color: { argb: 'FF991B1B' } };
+                    } else {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                        cell.font = { name: 'Arial', size: 8.5, color: { argb: 'FF94A3B8' } };
                     }
                 }
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -790,7 +795,9 @@ export async function downloadRekapDistribusiExcel({
     });
 
     // Download File Excel
-    const filename = `Rekap_Distribusi_PM_${actualStartStr}_sd_${actualEndStr}.xlsx`;
+    const filename = actualStartStr === actualEndStr 
+        ? `Rekap_Distribusi_PM_${actualStartStr}.xlsx` 
+        : `Rekap_Distribusi_PM_${actualStartStr}_sd_${actualEndStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -981,17 +988,28 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
         let curRow = dataStartRow;
 
         items.forEach((item, idx) => {
-            const isTerkirim = matrixDistribusi[item.id]?.[dt.dateStr] === 'T';
+            const rawStatus = matrixDistribusi[item.id]?.[dt.dateStr] || '';
+            const isTerkirim = rawStatus === 'T';
+            const isProses = rawStatus === 'P';
+            const isLibur = rawStatus === 'L' || (!isTerkirim && !isProses);
+
             // Porsi harian riil diambil dari Work Order untuk tanggal ini
             const daily = getDailyPorsiItem(item, dt.dateStr, matrixDetailMap, woByDateMap);
-            const pk = daily.pk;
-            const pb = daily.pb;
-            const totalPorsi = daily.totalPorsi;
+            const pk = isTerkirim ? daily.pk : 0;
+            const pb = isTerkirim ? daily.pb : 0;
+            const totalPorsi = isTerkirim ? daily.totalPorsi : 0;
             const totalPm = daily.totalPm;
-            const tarifHarian = hitungTarifInsentifHarian(item.kategori, totalPm);
+            const tarifHarian = isTerkirim ? hitungTarifInsentifHarian(item.kategori, totalPm) : 0;
 
             const ttdNum = idx + 1;
-            const ttdText = (ttdNum % 2 === 1) ? `${ttdNum}. ..........................` : `            ${ttdNum}. ..........................`;
+            let ttdText = '';
+            if (isTerkirim) {
+                ttdText = (ttdNum % 2 === 1) ? `${ttdNum}. ..........................` : `            ${ttdNum}. ..........................`;
+            } else if (isProses) {
+                ttdText = 'PROSES';
+            } else {
+                ttdText = rawStatus === 'L' ? 'L (LIBUR)' : 'LIBUR';
+            }
 
             const row = sheet.addRow([
                 idx + 1,
@@ -1009,7 +1027,10 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
             row.height = 22;
 
             const isEven = idx % 2 === 1;
-            const rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+            let rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+            if (isLibur) {
+                rowBg = 'FFF1F5F9';
+            }
 
             row.eachCell({ includeEmpty: true }, (cell, cIdx) => {
                 cell.font = { name: 'Arial', size: 9 };
@@ -1032,14 +1053,22 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
                     cell.alignment = { horizontal: 'right', vertical: 'middle' };
                     cell.numFmt = '#,##0';
                     if (cIdx === 9) {
-                        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF065F46' } };
+                        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: isTerkirim ? 'FF065F46' : 'FF94A3B8' } };
                     }
                     if (cIdx === 10) {
-                        cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F766E' } };
+                        cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: isTerkirim ? 'FF0F766E' : 'FF94A3B8' } };
                     }
                 } else if (cIdx === 11) {
-                    cell.font = { name: 'Arial', size: 8.5, italic: true, color: { argb: 'FF475569' } };
-                    cell.alignment = { horizontal: 'left', vertical: 'middle' };
+                    if (isLibur) {
+                        cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFDC2626' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    } else if (isProses) {
+                        cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF1E40AF' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    } else {
+                        cell.font = { name: 'Arial', size: 8.5, italic: true, color: { argb: 'FF475569' } };
+                        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+                    }
                 }
             });
             curRow++;

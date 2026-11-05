@@ -67,7 +67,7 @@ class UnitSppg extends Model
      */
     public function petugas(): HasMany
     {
-        return $this->hasMany(Petugas::class, 'unit_sppg_id');
+        return $this->hasMany(Petugas::class, 'unit_sppg_id')->orderBy('urutan', 'asc')->orderBy('id', 'asc');
     }
 
     /**

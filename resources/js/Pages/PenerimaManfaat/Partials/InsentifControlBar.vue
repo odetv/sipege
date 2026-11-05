@@ -35,6 +35,7 @@ const props = defineProps({
     selectedKategoriFilter: { type: String, default: "all" },
     unitSppg: { type: Object, default: null },
     isExporting: { type: Boolean, default: false },
+    isExportingRelawan: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -45,6 +46,7 @@ const emit = defineEmits([
     "selectPeriode",
     "applyDateRange",
     "exportExcel",
+    "exportRelawanExcel",
     "printAllReceipts",
 ]);
 
@@ -93,7 +95,7 @@ function onApplyDateRange(newRange) {
                 </div>
             </div>
 
-            <!-- Tombol Aksi Kanan: Download Kuitansi PDF -->
+            <!-- Tombol Aksi Kanan: Download Kuitansi PDF & Download Template .XLSX -->
             <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
                 <button
                     type="button"
@@ -103,6 +105,18 @@ function onApplyDateRange(newRange) {
                 >
                     <Receipt class="h-4 w-4 text-emerald-400 shrink-0" />
                     <span>Download Kuitansi</span>
+                </button>
+
+                <button
+                    type="button"
+                    @click="$emit('exportRelawanExcel')"
+                    :disabled="isExportingRelawan"
+                    class="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none min-w-0"
+                    title="Download format resmi Excel Daftar Relawan Harian (.xlsx) untuk Penanggung Jawab Satuan Pendidikan & Kader Posyandu"
+                >
+                    <RefreshCw v-if="isExportingRelawan" class="h-4 w-4 shrink-0 animate-spin" />
+                    <FileSpreadsheet v-else class="h-4 w-4 shrink-0" />
+                    <span>{{ isExportingRelawan ? 'Menyiapkan .xlsx...' : 'Download Template .XLSX' }}</span>
                 </button>
             </div>
         </div>
