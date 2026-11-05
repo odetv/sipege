@@ -1113,9 +1113,13 @@ class KelompokPenerimaManfaatController extends Controller
         $tglMulai = $request->input('tanggal_mulai');
         $tglSelesai = $request->input('tanggal_selesai');
         $periodeId = $request->input('periode_id');
-        $mode = $request->input('mode');
+        $mode = $request->input('mode') ?: $request->input('mode_skala');
         $search = trim($request->input('search', ''));
         $kategoriFilter = $request->input('kategori', 'all');
+        $aturan = $request->input('aturan') ?: $request->input('aturan_insentif', 'aturan_2');
+        if (!in_array($aturan, ['aturan_1', 'aturan_2'], true)) {
+            $aturan = 'aturan_2';
+        }
 
         // Normalisasi mode jika ada format lama
         if ($mode === 'periodik') $mode = 'periode';
@@ -1235,7 +1239,8 @@ class KelompokPenerimaManfaatController extends Controller
 
         $allKelompok = $query->orderBy('kategori', 'asc')->orderBy('nama_kelompok', 'asc')->get();
 
-        $insentifList = $allKelompok->map(function ($kpm) use ($startDate, $endDate, $hariOperasional, $woByDateMap, $savedDistribusiMap, $mode) {
+        // Helper mapper untuk kelompok individual (sekolah, dan posyandu versi lama)
+        $mapKelompokItem = function ($kpm) use ($startDate, $endDate, $hariOperasional, $woByDateMap, $savedDistribusiMap, $mode) {
             $kId = $kpm->id;
             $isPosyandu = $kpm->kategori === 'Posyandu';
             $masterPm = (int) $kpm->total_penerima;
@@ -1284,11 +1289,9 @@ class KelompokPenerimaManfaatController extends Controller
 
                 if ($isT) {
                     $hariDistribusi++;
-                    // Gunakan porsi riil dari Work Order jika tersedia
                     $pmHariIni = ($wok && isset($wok['total_penerima'])) ? (int)$wok['total_penerima'] : $masterPm;
                     $totalPmAkumulasi += $pmHariIni;
 
-                    // Hitung tarif hari ini berdasarkan porsi PM riil hari ini
                     if ($isPosyandu) {
                         $tarifHariIni = $pmHariIni * 1000;
                     } else {
@@ -1312,10 +1315,6 @@ class KelompokPenerimaManfaatController extends Controller
                 $curDate->addDay();
             }
 
-            // Tentukan total_penerima representatif untuk ditampilkan di tabel:
-            // 1. Jika terdistribusi minimal 1 hari, gunakan rata-rata porsi harian riil
-            // 2. Jika belum terdistribusi tapi ada WO dalam rentang, gunakan porsi dari WO
-            // 3. Jika tidak ada WO, gunakan dari master data kelompok
             if ($hariDistribusi > 0) {
                 $totalPm = (int) round($totalPmAkumulasi / $hariDistribusi);
                 $tarifHarian = (int) round($totalInsentif / $hariDistribusi);
@@ -1346,9 +1345,9 @@ class KelompokPenerimaManfaatController extends Controller
             }
 
             if ($isPosyandu) {
-                $skemaTier = "Posyandu: Rp 1.000 / PM / hari";
-                $tipePenerima = "Kader Posyandu (Pendamping PM)";
-                $deskripsiTarif = "{$totalPm} PM × Rp 1.000";
+                $skemaTier = "Aturan 1 (SK No. 401.1 Th 2025): Rp 1.000 / PM / hari";
+                $tipePenerima = "Kader Posyandu (3B)";
+                $deskripsiTarif = "{$totalPm} PM × Rp 1.000 / hari";
             } else {
                 if ($totalPm < 100) {
                     $skemaTier = "< 100 Siswa (Tier 1)";
@@ -1391,23 +1390,252 @@ class KelompokPenerimaManfaatController extends Controller
                 'has_wo' => $lastWoKpm !== null,
                 'is_wo_menerima' => $lastWoKpm ? $lastWoKpm['is_menerima'] : null,
             ];
-        });
+        };
+
+        // Pilihan Aturan Perhitungan:
+        // Aturan 1: Sekolah (Tabel 2/3) + Posyandu individual Rp 1.000 / PM / hari (Lampiran 26)
+        // Aturan 2: Sekolah (Tabel 2/3) + 3B Posyandu Kompulir se-SPPG Tabel 1 (Default / Terbaru)
+        $isGlobal3bMode = ($aturan === 'aturan_2');
+
+        if (!$isGlobal3bMode) {
+            // Aturan 1: Semua sekolah dan masing-masing posyandu tampil individual dengan tarif Rp 1.000 / PM / hari
+            $insentifList = $allKelompok->map($mapKelompokItem);
+        } else {
+            // Aturan 2:
+            // 1. Satuan pendidikan (Sekolah) tetap individual
+            $sekolahList = $allKelompok->filter(fn($k) => $k->kategori !== 'Posyandu')->map($mapKelompokItem);
+
+            // 2. Kategori Posyandu 3B seluruhnya dikompulir/ditotal secara per SPPG menjadi 1 baris
+            $posyanduList = collect();
+            if ($kategoriFilter !== 'Sekolah') {
+                $posyanduKelompoks = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg ? $unitSppg->id : 1)
+                    ->where('kategori', 'Posyandu')
+                    ->get();
+
+                $matchSearch = true;
+                if (!empty($search)) {
+                    $s = strtolower($search);
+                    $matchSearch = str_contains('3b posyandu', $s)
+                        || str_contains('posyandu', $s)
+                        || str_contains('kader', $s)
+                        || str_contains('tpk', $s)
+                        || str_contains('3b', $s)
+                        || $posyanduKelompoks->contains(function ($p) use ($s) {
+                            return str_contains(strtolower($p->nama_kelompok), $s)
+                                || str_contains(strtolower($p->nama_pic ?? ''), $s);
+                        });
+                }
+
+                if ($matchSearch && $posyanduKelompoks->isNotEmpty()) {
+                    $hariDistribusiGlobal = 0;
+                    $totalInsentifGlobal = 0;
+                    $totalPmAkumulasiGlobal = 0;
+
+                    $posyanduStats = [];
+                    foreach ($posyanduKelompoks as $pos) {
+                        $posyanduStats[$pos->id] = [
+                            'hari_distribusi' => 0,
+                            'total_pm_akumulasi' => 0,
+                            'last_pm' => (int)$pos->total_penerima,
+                        ];
+                    }
+
+                    $curDate = $startDate->copy();
+                    while ($curDate->lte($endDate)) {
+                        $dateStr = $curDate->format('Y-m-d');
+                        $woInfo = $woByDateMap[$dateStr] ?? null;
+
+                        $dailyPm3b = 0;
+                        $hasDistributionToday = false;
+
+                        foreach ($posyanduKelompoks as $pos) {
+                            $kId = $pos->id;
+                            $savedStatus = $savedDistribusiMap[$kId][$dateStr] ?? null;
+                            $wok = null;
+                            if ($woInfo && !empty($woInfo['kelompoks'])) {
+                                $wok = collect($woInfo['kelompoks'])->first(function ($item) use ($kId, $pos) {
+                                    return (int)$item['kelompok_id'] === (int)$kId || $item['nama_kelompok'] === $pos->nama_kelompok;
+                                });
+                            }
+
+                            $isT = false;
+                            if ($woInfo && $wok) {
+                                if ($wok['is_menerima'] && $wok['total_penerima'] > 0) {
+                                    $woStatus = strtolower((string)$woInfo['status']);
+                                    if (in_array($woStatus, ['selesai', 'siap produksi', 'terkirim'])) {
+                                        $isT = true;
+                                    } elseif ($savedStatus !== null && $savedStatus !== '') {
+                                        $isT = ($savedStatus === 'T');
+                                    } elseif ($mode === 'hari_ini') {
+                                        $isT = true;
+                                    }
+                                }
+                            } elseif ($savedStatus !== null && $savedStatus !== '') {
+                                $isT = ($savedStatus === 'T');
+                            }
+
+                            if ($isT) {
+                                $hasDistributionToday = true;
+                                $pmPos = ($wok && isset($wok['total_penerima'])) ? (int)$wok['total_penerima'] : (int)$pos->total_penerima;
+                                $dailyPm3b += $pmPos;
+                                $posyanduStats[$pos->id]['hari_distribusi']++;
+                                $posyanduStats[$pos->id]['total_pm_akumulasi'] += $pmPos;
+                                $posyanduStats[$pos->id]['last_pm'] = $pmPos;
+                            }
+                        }
+
+                        if ($hasDistributionToday) {
+                            $hariDistribusiGlobal++;
+                            $totalPmAkumulasiGlobal += $dailyPm3b;
+
+                            // Skema Insentif Harian Penanggung Jawab 3B (Kader/TPK) per SPPG (Aturan 2 - Tabel 1)
+                            if ($dailyPm3b <= 100) $tarifHariIni = 60000;
+                            elseif ($dailyPm3b <= 300) $tarifHariIni = 150000;
+                            elseif ($dailyPm3b <= 500) $tarifHariIni = 250000;
+                            elseif ($dailyPm3b <= 1000) $tarifHariIni = 400000;
+                            elseif ($dailyPm3b <= 1500) $tarifHariIni = 550000;
+                            else $tarifHariIni = 700000;
+
+                            $totalInsentifGlobal += $tarifHariIni;
+                        }
+
+                        $curDate->addDay();
+                    }
+
+                    if ($hariDistribusiGlobal > 0) {
+                        $totalPmGlobal = (int) round($totalPmAkumulasiGlobal / $hariDistribusiGlobal);
+                        $tarifHarianGlobal = (int) round($totalInsentifGlobal / $hariDistribusiGlobal);
+                    } else {
+                        $totalPmGlobal = (int) $posyanduKelompoks->sum('total_penerima');
+                        if ($totalPmGlobal <= 100) $tarifHarianGlobal = 60000;
+                        elseif ($totalPmGlobal <= 300) $tarifHarianGlobal = 150000;
+                        elseif ($totalPmGlobal <= 500) $tarifHarianGlobal = 250000;
+                        elseif ($totalPmGlobal <= 1000) $tarifHarianGlobal = 400000;
+                        elseif ($totalPmGlobal <= 1500) $tarifHarianGlobal = 550000;
+                        else $tarifHarianGlobal = 700000;
+                        $totalInsentifGlobal = 0;
+                    }
+
+                    // Tentukan Label Tingkat Skema 3B
+                    if ($totalPmGlobal <= 100) $skemaTier = "≤ 100 PM 3B (Tingkat 1)";
+                    elseif ($totalPmGlobal <= 300) $skemaTier = "101 - 300 PM 3B (Tingkat 2)";
+                    elseif ($totalPmGlobal <= 500) $skemaTier = "301 - 500 PM 3B (Tingkat 3)";
+                    elseif ($totalPmGlobal <= 1000) $skemaTier = "501 - 1.000 PM 3B (Tingkat 4)";
+                    elseif ($totalPmGlobal <= 1500) $skemaTier = "1.001 - 1.500 PM 3B (Tingkat 5)";
+                    else $skemaTier = "> 1.500 PM 3B (Tingkat 6)";
+
+                    $deskripsiTarif = "Rp " . number_format($tarifHarianGlobal, 0, ',', '.') . "/hari";
+
+                    // Rincian posyandu penyusun skema 3B
+                    $countPos = $posyanduKelompoks->count();
+                    $nominalRata = $countPos > 0 ? (int) floor($totalInsentifGlobal / $countPos) : 0;
+                    $rincianPosyandu = [];
+                    $allocatedSum = 0;
+
+                    $sortedPosyandus = $posyanduKelompoks->sortByDesc('total_penerima')->values();
+
+                    foreach ($sortedPosyandus as $idx => $pos) {
+                        $pStats = $posyanduStats[$pos->id] ?? [
+                            'hari_distribusi' => 0,
+                            'total_pm_akumulasi' => 0,
+                            'last_pm' => (int)$pos->total_penerima
+                        ];
+                        $pDays = $pStats['hari_distribusi'] > 0 ? $pStats['hari_distribusi'] : ($hariDistribusiGlobal > 0 ? 1 : 0);
+                        $pPm = (int)$pos->total_penerima;
+
+                        $persentase = $totalPmGlobal > 0 ? ($pPm / $totalPmGlobal) * 100 : ($countPos > 0 ? 100 / $countPos : 0);
+
+                        if ($idx === $countPos - 1) {
+                            $nominalProporsional = max(0, $totalInsentifGlobal - $allocatedSum);
+                        } else {
+                            $nominalProporsional = (int) round(($persentase / 100) * $totalInsentifGlobal);
+                            $allocatedSum += $nominalProporsional;
+                        }
+
+                        $tarifHarianPos = $pDays > 0 ? (int) round($nominalProporsional / $pDays) : 0;
+
+                        $rincianPosyandu[] = [
+                            'id' => $pos->id,
+                            'uid' => $pos->uid,
+                            'parent_id' => 99999,
+                            'nama_kelompok' => $pos->nama_kelompok,
+                            'kategori' => 'Posyandu',
+                            'tipe_penerima' => 'Kader Posyandu (3B)',
+                            'nama_pic' => $pos->nama_pic ?: 'Kader Posyandu',
+                            'telepon_pic' => $pos->telepon_pic ?: '',
+                            'email_pic' => $pos->email_pic ?: '',
+                            'desa_kelurahan' => $pos->desa_kelurahan ?: 'Tegallinggah',
+                            'total_penerima' => $pPm,
+                            'persentase_pm' => round($persentase, 1),
+                            'hari_distribusi' => $pDays,
+                            'hari_operasional' => $pDays,
+                            'hari_rentang' => $hariOperasional,
+                            'nominal_proporsional' => $nominalProporsional,
+                            'nominal_rata' => $nominalRata,
+                            'amount' => $nominalProporsional,
+                            'tarif_harian' => $tarifHarianPos,
+                            'skema_tier' => 'Porsi ' . round($persentase, 1) . '% (' . $pPm . ' PM)',
+                            'deskripsi_tarif' => 'Rp ' . number_format($tarifHarianPos, 0, ',', '.') . ' / hari',
+                            'metode_bayar' => 'Tunai Langsung',
+                            'is_valid' => $nominalProporsional > 0,
+                            'status_label' => $nominalProporsional > 0 ? 'Siap Disalurkan (Tunai)' : 'Belum Ada Distribusi',
+                        ];
+                    }
+
+                    $global3bRow = [
+                        'id' => 99999,
+                        'uid' => 'posyandu-3b',
+                        'nama_kelompok' => '3B Posyandu',
+                        'kategori' => 'Posyandu',
+                        'tipe_penerima' => 'Kader Posyandu (3B)',
+                        'nama_pic' => '',
+                        'telepon_pic' => '',
+                        'email_pic' => '',
+                        'total_penerima' => $totalPmGlobal,
+                        'skema_tier' => $skemaTier,
+                        'deskripsi_tarif' => $deskripsiTarif,
+                        'tarif_harian' => $tarifHarianGlobal,
+                        'hari_operasional' => $hariDistribusiGlobal,
+                        'hari_rentang' => $hariOperasional,
+                        'hari_distribusi' => $hariDistribusiGlobal,
+                        'amount' => $totalInsentifGlobal,
+                        'metode_bayar' => 'Tunai Langsung',
+                        'desa_kelurahan' => '',
+                        'is_valid' => $totalInsentifGlobal > 0,
+                        'status_label' => $totalInsentifGlobal > 0 ? 'Siap Disalurkan (Tunai)' : 'Belum Ada Distribusi',
+                        'has_wo' => true,
+                        'is_wo_menerima' => true,
+                        'rincian_posyandu' => $rincianPosyandu,
+                    ];
+
+                    $posyanduList->push($global3bRow);
+                }
+            }
+
+            $insentifList = $sekolahList->concat($posyanduList)->values();
+        }
 
         $totalAnggaran = $insentifList->sum('amount');
         $insentifSekolah = $insentifList->where('kategori', '!=', 'Posyandu')->sum('amount');
         $insentifPosyandu = $insentifList->where('kategori', 'Posyandu')->sum('amount');
 
+        $actualPosyanduCount = isset($posyanduKelompoks) && $posyanduKelompoks->isNotEmpty()
+            ? $posyanduKelompoks->count()
+            : $insentifList->where('kategori', 'Posyandu')->count();
+        $actualSekolahCount = $insentifList->where('kategori', '!=', 'Posyandu')->count();
+        $actualTotalTitik = $actualSekolahCount + $actualPosyanduCount;
+
         $summary = [
-            'total_kelompok' => $insentifList->count(),
-            'total_rows' => $insentifList->count(),
-            'total_sekolah' => $insentifList->where('kategori', '!=', 'Posyandu')->count(),
-            'total_posyandu' => $insentifList->where('kategori', 'Posyandu')->count(),
+            'total_kelompok' => $actualTotalTitik,
+            'total_rows' => $actualTotalTitik,
+            'total_sekolah' => $actualSekolahCount,
+            'total_posyandu' => $actualPosyanduCount,
             'total_penerima_jiwa' => $insentifList->sum('total_penerima'),
             'hari_operasional' => $hariOperasional,
             'total_anggaran' => $totalAnggaran,
             'insentif_sekolah' => $insentifSekolah,
             'insentif_posyandu' => $insentifPosyandu,
-            'rata_rata_insentif' => $insentifList->count() > 0 ? round($totalAnggaran / $insentifList->count()) : 0,
+            'rata_rata_insentif' => $actualTotalTitik > 0 ? round($totalAnggaran / $actualTotalTitik) : 0,
         ];
 
         $distribusiCountMap = [];
@@ -1424,6 +1652,7 @@ class KelompokPenerimaManfaatController extends Controller
             'distribusiCountMap' => $distribusiCountMap,
             'summary' => $summary,
             'stats' => $summary,
+            'aturan' => $aturan,
             'initialMode' => $mode,
             'initialTanggalMulai' => $startDate->format('Y-m-d'),
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
@@ -1435,6 +1664,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'periode_id' => $periodeId ?? 'all',
                 'kategori' => $kategoriFilter,
                 'search' => $search,
+                'aturan' => $aturan,
             ],
         ]);
     }

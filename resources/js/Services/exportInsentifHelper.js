@@ -170,7 +170,7 @@ export async function downloadRekapInsentifExcel({
         row.getCell(4).value = `${item.nama_pic || '-'} (${item.telepon_pic || '-'})`;
         row.getCell(5).value = Number(item.total_penerima) || 0;
         row.getCell(6).value = item.deskripsi_tarif || '-';
-        row.getCell(7).value = Number(item.hari_operasional) || 1;
+        row.getCell(7).value = Number(item.hari_distribusi ?? item.hari_operasional) || 1;
         row.getCell(8).value = Number(item.amount) || 0;
         row.getCell(9).value = 'Tunai Langsung';
         row.getCell(10).value = `${index + 1}. ......................................`;
@@ -201,6 +201,53 @@ export async function downloadRekapInsentifExcel({
             }
         }
         currentRow++;
+
+        // Jika baris memiliki rincian posyandu penyusun skema 3B
+        if (item.rincian_posyandu && item.rincian_posyandu.length > 0) {
+            item.rincian_posyandu.forEach((sub, sIdx) => {
+                const subRow = sheet.getRow(currentRow);
+                subRow.height = 22;
+
+                subRow.getCell(1).value = `   ${index + 1}.${sIdx + 1}`;
+                subRow.getCell(2).value = `      ↳ ${sub.nama_kelompok} (${sub.desa_kelurahan || '-'})`;
+                subRow.getCell(3).value = 'Posyandu';
+                subRow.getCell(4).value = `${sub.nama_pic || '-'} (${sub.telepon_pic || '-'})`;
+                subRow.getCell(5).value = Number(sub.total_penerima) || 0;
+                subRow.getCell(6).value = `Porsi ${sub.persentase_pm}% (${sub.skema_tier || ''})`;
+                subRow.getCell(7).value = Number(sub.hari_distribusi) || 1;
+                subRow.getCell(8).value = Number(sub.amount) || 0;
+                subRow.getCell(9).value = 'Tunai';
+                subRow.getCell(10).value = `       [ Kuitansi Sub #${sIdx + 1} ]`;
+
+                for (let c = 1; c <= maxCols; c++) {
+                    const subCell = subRow.getCell(c);
+                    subCell.font = { name: 'Arial', size: 8.5, italic: true, color: { argb: 'FF334155' } };
+                    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                    subCell.border = {
+                        top: { style: 'hair', color: { argb: 'FFE2E8F0' } },
+                        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                        bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } },
+                        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                    };
+                    subCell.alignment = { vertical: 'middle' };
+
+                    if ([1, 3, 7, 9].includes(c)) {
+                        subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    } else if (c === 5) {
+                        subCell.alignment = { horizontal: 'right', vertical: 'middle' };
+                        subCell.numFmt = '#,##0';
+                    } else if (c === 8) {
+                        subCell.alignment = { horizontal: 'right', vertical: 'middle' };
+                        subCell.numFmt = '"Rp "#,##0';
+                        subCell.font = { name: 'Arial', size: 8.5, bold: true, color: { argb: 'FF047857' } };
+                    } else if (c === 10) {
+                        subCell.alignment = { horizontal: 'left', vertical: 'middle' };
+                        subCell.font = { name: 'Arial', size: 7.5, color: { argb: 'FF94A3B8' } };
+                    }
+                }
+                currentRow++;
+            });
+        }
     });
 
     // Baris Total

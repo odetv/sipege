@@ -18,6 +18,10 @@ import {
     CheckCircle2,
     HeartPulse,
     ChevronDown,
+    ChevronRight,
+    BookOpen,
+    HelpCircle,
+    Settings2,
 } from "lucide-vue-next";
 import DateRangePicker from "@/Components/DateRangePicker.vue";
 import PeriodDateFilterBar from "@/Components/PeriodDateFilterBar.vue";
@@ -33,6 +37,7 @@ const props = defineProps({
     labelSiklus: { type: String, default: "" },
     searchQuery: { type: String, default: "" },
     selectedKategoriFilter: { type: String, default: "all" },
+    selectedAturan: { type: String, default: "aturan_2" },
     unitSppg: { type: Object, default: null },
     isExporting: { type: Boolean, default: false },
     isExportingRelawan: { type: Boolean, default: false },
@@ -41,6 +46,8 @@ const props = defineProps({
 const emit = defineEmits([
     "update:searchQuery",
     "update:selectedKategoriFilter",
+    "changeAturan",
+    "openAturanModal",
     "dateFilterChange",
     "changeModeSkala",
     "selectPeriode",
@@ -140,9 +147,10 @@ function onApplyDateRange(newRange) {
 
         <!-- ─── Secondary Filter Bar ───────── -->
         <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
-            <!-- Search & Filter Kategori Satuan Pendidikan / Posyandu -->
+            <!-- Search & Filter Kategori Satuan Pendidikan / Posyandu & Pilihan Aturan -->
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div class="sm:col-span-5 relative">
+                <!-- Search Input -->
+                <div class="sm:col-span-4 relative">
                     <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <input
                         :value="searchQuery"
@@ -153,7 +161,8 @@ function onApplyDateRange(newRange) {
                     />
                 </div>
 
-                <div class="sm:col-span-4">
+                <!-- Kategori Filter -->
+                <div class="sm:col-span-3">
                     <select
                         :value="selectedKategoriFilter"
                         @change="$emit('update:selectedKategoriFilter', $event.target.value)"
@@ -169,28 +178,88 @@ function onApplyDateRange(newRange) {
                     </select>
                 </div>
 
-                <div class="sm:col-span-3 flex items-center justify-end">
-                    <div class="text-[11px] font-semibold text-emerald-900/90 flex items-center gap-1.5">
-                        <Sparkles class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>{{ labelSiklus }}</span>
+                <!-- Pilihan Aturan Perhitungan Insentif -->
+                <div class="sm:col-span-3">
+                    <div class="relative">
+                        <select
+                            :value="selectedAturan"
+                            @change="$emit('changeAturan', $event.target.value)"
+                            class="w-full pl-3 pr-8 py-2 rounded-xl border text-xs font-bold bg-emerald-50/40 text-emerald-950 border-emerald-300 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 cursor-pointer outline-hidden shadow-2xs"
+                            title="Pilih rumus regulasi insentif yang digunakan"
+                        >
+                            <option value="aturan_2">Aturan 2: SK No. 63551 Tahun 2026</option>
+                            <option value="aturan_1">Aturan 1: SK No. 401.1 Tahun 2025</option>
+                        </select>
+                        <span class="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-700">
+                            <ChevronDown class="w-3.5 h-3.5" />
+                        </span>
                     </div>
+                </div>
+
+                <!-- Tombol Petunjuk Rumus -->
+                <div class="sm:col-span-2 flex items-center justify-end">
+                    <button
+                        type="button"
+                        @click="$emit('openAturanModal')"
+                        class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+                        title="Buka petunjuk perbandingan rumus dan tabel skema insentif"
+                    >
+                        <BookOpen class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Petunjuk Rumus</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Panduan Formula Regulasi Resmi BGN -->
-            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <!-- Panduan Formula Regulasi Resmi BGN & Status Aturan Terpilih -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
                 <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-extrabold text-slate-800 flex items-center gap-1">
-                        <Info class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>Regulasi Insentif:</span>
+                    <span class="font-extrabold text-slate-800 flex items-center gap-1.5">
+                        <span
+                            class="w-2.5 h-2.5 rounded-full"
+                            :class="selectedAturan === 'aturan_2' ? 'bg-emerald-600 ring-2 ring-emerald-200' : 'bg-blue-600 ring-2 ring-blue-200'"
+                        ></span>
+                        <span>Rumus Aktif:</span>
                     </span>
-                    <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-700">
-                        <b>Sekolah (Tabel 3):</b> &lt;100: 20rb, 100-500: 30rb, 501-750: 50rb, 751-1rb: 60rb, 1rb-2rb: 100rb, &gt;2rb: 200rb/hari
-                    </span>
-                    <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-semibold text-pink-700">
-                        <b>Posyandu:</b> Rp 1.000 / PM (Ibu Hamil, Menyusui, Balita) / hari
-                    </span>
+
+                    <!-- Penjelasan Aturan 2 -->
+                    <template v-if="selectedAturan === 'aturan_2'">
+                        <span class="px-2 py-0.5 rounded-lg bg-emerald-100/80 border border-emerald-300 font-bold text-emerald-900 flex items-center gap-1.5">
+                            <Sparkles class="w-3 h-3 text-emerald-700 shrink-0" />
+                            <span>Aturan 2: SK No. 63551 Tahun 2026</span>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-600 text-white">AKTIF</span>
+                        </span>
+                        <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                            <b>Sekolah:</b> Tier Siswa (Tabel 2/3: Rp 20rb - 200rb)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-medium text-pink-700">
+                            <b>3B Posyandu:</b> Tabel 1 Kompulir SPPG (Tingkat 1–6: Rp 60rb - 700rb/hari)
+                        </span>
+                    </template>
+
+                    <!-- Penjelasan Aturan 1 -->
+                    <template v-else>
+                        <span class="px-2 py-0.5 rounded-lg bg-blue-100/80 border border-blue-300 font-bold text-blue-900 flex items-center gap-1.5">
+                            <Info class="w-3 h-3 text-blue-700 shrink-0" />
+                            <span>Aturan 1: SK No. 401.1 Tahun 2025</span>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-600 text-white">AKTIF</span>
+                        </span>
+                        <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                            <b>Sekolah:</b> Tier Siswa (Tabel 2/3: Rp 20rb - 200rb)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-medium text-pink-700">
+                            <b>Posyandu:</b> Flat Rp 1.000 / PM / hari (Perorangan Posyandu)
+                        </span>
+                    </template>
                 </div>
+
+                <button
+                    type="button"
+                    @click="$emit('openAturanModal')"
+                    class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline shrink-0 cursor-pointer"
+                >
+                    <span>Lihat Tabel & Panduan Rumus</span>
+                    <ChevronRight class="w-3.5 h-3.5" />
+                </button>
             </div>
         </div>
     </div>

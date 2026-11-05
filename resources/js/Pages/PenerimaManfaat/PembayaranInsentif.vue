@@ -6,6 +6,7 @@ import InsentifControlBar from "./Partials/InsentifControlBar.vue";
 import InsentifKpiCards from "./Partials/InsentifKpiCards.vue";
 import InsentifTable from "./Partials/InsentifTable.vue";
 import InsentifReceiptModal from "./Partials/InsentifReceiptModal.vue";
+import InsentifAturanModal from "./Partials/InsentifAturanModal.vue";
 import { downloadRekapInsentifExcel } from "@/Services/exportInsentifHelper";
 import axios from "axios";
 import { CheckCircle2, X } from "lucide-vue-next";
@@ -19,6 +20,7 @@ const props = defineProps({
     distribusiCountMap: { type: Object, default: () => ({}) },
     summary: { type: Object, default: () => ({}) },
     stats: { type: Object, default: () => ({}) },
+    aturan: { type: String, default: "aturan_2" },
     initialMode: { type: String, default: "hari_ini" },
     initialTanggalMulai: { type: String, default: "" },
     initialTanggalSelesai: { type: String, default: "" },
@@ -126,6 +128,29 @@ function updateAmount({ id, amount, isCustom = true }) {
         item.amount = Math.max(0, amount);
         item.isCustom = isCustom;
         item.is_valid = item.amount > 0;
+
+        // Jika baris memiliki rincian_posyandu (seperti global 3B), sinkronkan alokasi masing-masing posyandu
+        if (item.rincian_posyandu && item.rincian_posyandu.length > 0) {
+            let allocated = 0;
+            const count = item.rincian_posyandu.length;
+            const totalPm = Number(item.total_penerima) || 1;
+            const nominalRata = count > 0 ? Math.floor(item.amount / count) : 0;
+
+            item.rincian_posyandu.forEach((sub, idx) => {
+                sub.nominal_rata = nominalRata;
+                const pDays = Number(sub.hari_distribusi) || 1;
+                if (idx === count - 1) {
+                    sub.amount = Math.max(0, item.amount - allocated);
+                    sub.nominal_proporsional = sub.amount;
+                } else {
+                    const share = (Number(sub.total_penerima) || 0) / totalPm;
+                    sub.nominal_proporsional = Math.round(share * item.amount);
+                    sub.amount = sub.nominal_proporsional;
+                    allocated += sub.nominal_proporsional;
+                }
+                sub.tarif_harian = pDays > 0 ? Math.round(sub.amount / pDays) : sub.amount;
+            });
+        }
     }
 }
 
@@ -135,6 +160,28 @@ function resetAmount(id) {
         item.amount = item.originalAmount;
         item.isCustom = false;
         item.is_valid = item.amount > 0;
+
+        if (item.rincian_posyandu && item.rincian_posyandu.length > 0) {
+            let allocated = 0;
+            const count = item.rincian_posyandu.length;
+            const totalPm = Number(item.total_penerima) || 1;
+            const nominalRata = count > 0 ? Math.floor(item.amount / count) : 0;
+
+            item.rincian_posyandu.forEach((sub, idx) => {
+                sub.nominal_rata = nominalRata;
+                const pDays = Number(sub.hari_distribusi) || 1;
+                if (idx === count - 1) {
+                    sub.amount = Math.max(0, item.amount - allocated);
+                    sub.nominal_proporsional = sub.amount;
+                } else {
+                    const share = (Number(sub.total_penerima) || 0) / totalPm;
+                    sub.nominal_proporsional = Math.round(share * item.amount);
+                    sub.amount = sub.nominal_proporsional;
+                    allocated += sub.nominal_proporsional;
+                }
+                sub.tarif_harian = pDays > 0 ? Math.round(sub.amount / pDays) : sub.amount;
+            });
+        }
     }
 }
 
@@ -227,17 +274,59 @@ const totalPenerimaJiwa = computed(() => {
     return selectedRows.value.reduce((sum, it) => sum + (Number(it.total_penerima) || 0), 0);
 });
 
-const computedStats = computed(() => ({
-    total_kelompok: selectedRows.value.length,
-    total_sekolah: selectedRows.value.filter(it => it.kategori !== "Posyandu").length,
-    total_posyandu: selectedRows.value.filter(it => it.kategori === "Posyandu").length,
-    total_penerima_jiwa: totalPenerimaJiwa.value,
-    hari_operasional: rentangHariCount.value,
-    total_anggaran: totalPayrollAmount.value,
-    insentif_sekolah: insentifSekolah.value,
-    insentif_posyandu: insentifPosyandu.value,
-    rata_rata_insentif: averagePayroll.value,
-}));
+const selectedTitikCount = computed(() => {
+    return selectedRows.value.reduce((acc, it) => {
+        return acc + (it.rincian_posyandu && it.rincian_posyandu.length > 0 ? it.rincian_posyandu.length : 1);
+    }, 0);
+});
+
+const totalTitikFiltered = computed(() => {
+    return filteredItems.value.reduce((acc, it) => {
+        return acc + (it.rincian_posyandu && it.rincian_posyandu.length > 0 ? it.rincian_posyandu.length : 1);
+    }, 0);
+});
+
+const computedStats = computed(() => {
+    const sekolahCount = selectedRows.value.filter(it => it.kategori !== "Posyandu").length;
+    let posyanduCount = 0;
+    selectedRows.value.forEach(it => {
+        if (it.kategori === "Posyandu") {
+            posyanduCount += (it.rincian_posyandu && it.rincian_posyandu.length > 0 ? it.rincian_posyandu.length : 1);
+        }
+    });
+
+    const totalTitik = sekolahCount + posyanduCount;
+
+    return {
+        total_kelompok: totalTitik,
+        total_rows: totalTitik,
+        total_sekolah: sekolahCount,
+        total_posyandu: posyanduCount,
+        total_penerima_jiwa: totalPenerimaJiwa.value,
+        hari_operasional: rentangHariCount.value,
+        total_anggaran: totalPayrollAmount.value,
+        insentif_sekolah: insentifSekolah.value,
+        insentif_posyandu: insentifPosyandu.value,
+        rata_rata_insentif: averagePayroll.value,
+    };
+});
+
+// ─── Pilihan Aturan Perhitungan Insentif & Modal Petunjuk ─────────────────────
+const selectedAturan = ref(props.aturan || props.filters?.aturan || "aturan_2");
+const showAturanModal = ref(false);
+
+watch(
+    () => [props.aturan, props.filters?.aturan],
+    ([newAturan, newFilterAturan]) => {
+        if (newAturan) selectedAturan.value = newAturan;
+        else if (newFilterAturan) selectedAturan.value = newFilterAturan;
+    }
+);
+
+function changeAturan(newAturan) {
+    selectedAturan.value = newAturan;
+    applyFilterTanggal();
+}
 
 // ─── Filter Tanggal & Periode Navigation ──────────────────────────────────────
 function applyFilterTanggal() {
@@ -250,6 +339,7 @@ function applyFilterTanggal() {
             periode_id: selectedPeriodeId.value,
             kategori: selectedKategoriFilter.value,
             search: searchQuery.value,
+            aturan: selectedAturan.value,
         },
         {
             preserveState: true,
@@ -274,6 +364,7 @@ function onDateFilterChange(filter) {
             periode_id: filter.periodeId,
             kategori: selectedKategoriFilter.value,
             search: searchQuery.value,
+            aturan: selectedAturan.value,
         },
         {
             preserveState: true,
@@ -387,11 +478,23 @@ async function handleExportRelawanExcel() {
 
     isExportingRelawan.value = true;
     try {
-        const payloadItems = distributedItems.map((it, idx) => {
+        // Jika terdapat baris gabungan yang memiliki rincian_posyandu, uraikan ke masing-masing posyandu
+        const flattenedItems = [];
+        distributedItems.forEach((it) => {
+            if (it.rincian_posyandu && it.rincian_posyandu.length > 0) {
+                it.rincian_posyandu.forEach((sub) => {
+                    flattenedItems.push(sub);
+                });
+            } else {
+                flattenedItems.push(it);
+            }
+        });
+
+        const payloadItems = flattenedItems.map((it, idx) => {
             const isPosyandu = String(it.kategori || "").toLowerCase() === "posyandu" || String(it.nama_kelompok || "").toLowerCase().includes("posyandu");
             const peran = isPosyandu ? "Kader Posyandu" : "Penanggung Jawab Satuan Pendidikan";
             const hari = parseInt(it.hari_distribusi, 10) || 1;
-            const tarif = parseInt(it.tarif_harian, 10) || (hari > 0 ? Math.round((it.amount || 0) / hari) : 0);
+            const tarif = Number(it.tarif_harian) > 0 ? Number(it.tarif_harian) : (hari > 0 ? Math.round((Number(it.amount) || 0) / hari) : 0);
 
             return {
                 no: idx + 1,
@@ -479,8 +582,11 @@ async function handleExportRelawanExcel() {
                 :tanggalSelesai="tanggalSelesai"
                 :rentangHariCount="rentangHariCount"
                 :labelSiklus="labelSiklus"
+                :selectedAturan="selectedAturan"
                 :unitSppg="unitSppg"
                 :isExportingRelawan="isExportingRelawan"
+                @changeAturan="changeAturan"
+                @openAturanModal="showAturanModal = true"
                 @dateFilterChange="onDateFilterChange"
                 @changeModeSkala="changeModeSkala"
                 @selectPeriode="selectPeriode"
@@ -515,8 +621,8 @@ async function handleExportRelawanExcel() {
             <!-- ─── Komponen 2: KPI Statistics Cards (5 Cards) ────────────────── -->
             <InsentifKpiCards
                 :stats="computedStats"
-                :selectedCount="selectedRows.length"
-                :totalRowsCount="filteredItems.length"
+                :selectedCount="selectedTitikCount"
+                :totalRowsCount="totalTitikFiltered"
                 :totalPayrollAmount="totalPayrollAmount"
                 :insentifSekolah="insentifSekolah"
                 :insentifPosyandu="insentifPosyandu"
@@ -551,6 +657,14 @@ async function handleExportRelawanExcel() {
             :end-date="tanggalSelesai"
             :rentang-hari-count="rentangHariCount"
             @close="showReceiptModal = false"
+        />
+
+        <!-- ─── Modal Petunjuk & Pedoman Rumus Perhitungan Insentif ─── -->
+        <InsentifAturanModal
+            :show="showAturanModal"
+            :current-aturan="selectedAturan"
+            @selectAturan="changeAturan"
+            @close="showAturanModal = false"
         />
     </AppLayout>
 </template>
