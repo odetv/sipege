@@ -1910,15 +1910,18 @@ class KelompokPenerimaManfaatController extends Controller
                 $sheet->setCellValue("J{$row}", "=IF(B{$row}=\"\",\"\",IF(COUNTIF(\$B\$9:\$B\$108,B{$row})>1,\"DUPLIKAT NAMA\",IF(OR(C{$row}=\"\",D{$row}=\"\",E{$row}=\"\",G{$row}=\"\",H{$row}=\"\"),\"BELUM LENGKAP\",\"OK\")))");
             }
 
-            // Kosongkan sisa baris sampai baris 108
+            // Kosongkan sisa baris sampai baris 108 agar format bersih sesuai standar ERP
             for ($row = $startRow + $count; $row <= 108; $row++) {
+                $sheet->setCellValue("A{$row}", $row - $startRow + 1);
                 $sheet->setCellValue("B{$row}", null);
                 $sheet->setCellValue("C{$row}", null);
                 $sheet->setCellValue("D{$row}", null);
                 $sheet->setCellValue("E{$row}", null);
+                $sheet->setCellValue("F{$row}", null);
                 $sheet->setCellValue("G{$row}", null);
                 $sheet->setCellValue("H{$row}", null);
                 $sheet->setCellValue("I{$row}", null);
+                $sheet->setCellValue("J{$row}", null);
             }
 
             // Sinkronisasi baris total di sheet Rekap_Per_Peran
@@ -1927,36 +1930,48 @@ class KelompokPenerimaManfaatController extends Controller
                 $sheetRekap->setCellValue('D19', '=IF(D18=Daftar_Relawan!F110,"OK","PERIKSA: ada baris tanpa peran")');
             }
 
+            // Pastikan sheet aktif saat file dibuka adalah Daftar_Relawan
+            $spreadsheet->setActiveSheetIndexByName('Daftar_Relawan');
+
             $tempDir = storage_path('app/temp');
             if (!is_dir($tempDir)) {
                 mkdir($tempDir, 0755, true);
             }
-            $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'Daftar_Insentif_PM_' . uniqid() . '.xlsx';
+            $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'Daftar_Insentif_PIC_PM_' . uniqid() . '.xlsx';
 
             $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-            $writer->setPreCalculateFormulas(false);
+            $writer->setPreCalculateFormulas(true);
             $writer->save($tempFile);
+
+            $formatDmy = function (?string $val): string {
+                if (!$val) return Carbon::now()->format('d-m-Y');
+                try {
+                    return Carbon::parse($val)->format('d-m-Y');
+                } catch (\Throwable $e) {
+                    return $val;
+                }
+            };
 
             $mulai = $validated['tanggal_mulai'] ?? null;
             $selesai = $validated['tanggal_selesai'] ?? null;
             if ($mulai && $selesai && $mulai !== $selesai) {
-                $dateLabel = "{$mulai}_sd_{$selesai}";
+                $dateLabel = "{$formatDmy($mulai)}_sd_{$formatDmy($selesai)}";
             } elseif ($mulai) {
-                $dateLabel = $mulai;
+                $dateLabel = $formatDmy($mulai);
             } elseif (!empty($validated['tgl_transaksi'])) {
-                $dateLabel = Carbon::parse($validated['tgl_transaksi'])->format('Y-m-d');
+                $dateLabel = $formatDmy($validated['tgl_transaksi']);
             } else {
-                $dateLabel = Carbon::now()->format('Y-m-d');
+                $dateLabel = Carbon::now()->format('d-m-Y');
             }
-            $filename = "Daftar_Insentif_Relawan_PM_{$dateLabel}.xlsx";
+            $filename = "Payroll ERP Insentif PIC KPM {$dateLabel}.xlsx";
 
             return response()->download($tempFile, $filename, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ])->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
-            \Log::error('Error generate Daftar Insentif Relawan PM: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            \Log::error('Error generate Payroll ERP Insentif PIC KPM: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json([
-                'error' => 'Gagal memproses file template Daftar Insentif Relawan PM: ' . $e->getMessage()
+                'error' => 'Gagal memproses file template Payroll ERP Insentif PIC KPM: ' . $e->getMessage()
             ], 500);
         }
     }

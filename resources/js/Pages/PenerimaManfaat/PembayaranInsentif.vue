@@ -529,10 +529,21 @@ async function handleExportRelawanExcel() {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        const dateLabel = (tanggalMulai.value && tanggalSelesai.value && tanggalMulai.value !== tanggalSelesai.value)
-            ? `${tanggalMulai.value}_sd_${tanggalSelesai.value}`
-            : (tanggalMulai.value || tanggalSelesai.value || "export");
-        link.setAttribute("download", `Daftar_Insentif_Relawan_PM_${dateLabel}.xlsx`);
+        const formatDmy = (val) => {
+            if (!val) return "";
+            const parts = String(val).split("-");
+            return parts.length === 3 && parts[0].length === 4
+                ? `${parts[2]}-${parts[1]}-${parts[0]}`
+                : val;
+        };
+
+        const mulaiDmy = formatDmy(tanggalMulai.value);
+        const selesaiDmy = formatDmy(tanggalSelesai.value);
+        const dateLabel = (mulaiDmy && selesaiDmy && mulaiDmy !== selesaiDmy)
+            ? `${mulaiDmy}_sd_${selesaiDmy}`
+            : (mulaiDmy || selesaiDmy || formatDmy(new Date().toISOString().slice(0, 10)));
+
+        link.setAttribute("download", `Payroll ERP Insentif PIC KPM ${dateLabel}.xlsx`);
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -543,8 +554,8 @@ async function handleExportRelawanExcel() {
             exportRelawanSuccess.value = false;
         }, 5000);
     } catch (err) {
-        console.error("Gagal export template relawan insentif:", err);
-        let errorMsg = "Terjadi kesalahan saat mengekspor Excel template relawan.";
+        console.error("Gagal export Payroll ERP Insentif PIC KPM:", err);
+        let errorMsg = "Terjadi kesalahan saat mengekspor Payroll ERP Insentif PIC KPM.";
         if (err.response?.data instanceof Blob) {
             try {
                 const text = await err.response.data.text();
@@ -603,9 +614,9 @@ async function handleExportRelawanExcel() {
                 <div class="flex items-center gap-2.5">
                     <CheckCircle2 class="h-5 w-5 text-blue-600 shrink-0" />
                     <div>
-                        <p class="font-bold">File Excel Daftar Relawan Insentif PM Berhasil Diunduh!</p>
+                        <p class="font-bold">File Payroll ERP Insentif PIC KPM Berhasil Diunduh!</p>
                         <p class="text-[11px] text-blue-700 mt-0.5">
-                            File <b>Template_Daftar_Relawan_Harian.xlsx</b> telah terisi data nominatif nama sekolah/posyandu, peran (PJ Satuan Pendidikan & Kader Posyandu), hari distribusi, tarif insentif harian, metode Tunai, dan rekap per peran otomatis.
+                            File format Payroll ERP telah terisi data nominatif nama sekolah/posyandu, PIC, peran (PJ Satuan Pendidikan & Kader Posyandu), hari distribusi, tarif insentif harian, metode Tunai, dan rekap per peran otomatis.
                         </p>
                     </div>
                 </div>

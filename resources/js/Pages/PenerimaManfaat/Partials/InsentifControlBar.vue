@@ -43,6 +43,8 @@ const props = defineProps({
     isExportingRelawan: { type: Boolean, default: false },
 });
 
+const isDownloadDropdownOpen = ref(false);
+
 const emit = defineEmits([
     "update:searchQuery",
     "update:selectedKategoriFilter",
@@ -102,29 +104,109 @@ function onApplyDateRange(newRange) {
                 </div>
             </div>
 
-            <!-- Tombol Aksi Kanan: Download Kuitansi PDF & Download Template .XLSX -->
-            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
+            <!-- Tombol Aksi Kanan: Dropdown Download (Kuitansi PDF & Payroll ERP .XLSX) -->
+            <div class="relative inline-flex">
                 <button
                     type="button"
-                    @click="$emit('printAllReceipts')"
-                    class="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex-1 sm:flex-none min-w-0"
-                    title="Download file PDF kuitansi resmi insentif MBG (1 kuitansi per halaman A4 atau per orangan)"
+                    @click="isDownloadDropdownOpen = !isDownloadDropdownOpen"
+                    :disabled="isExportingRelawan"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto min-w-0"
+                    title="Pilihan download berkas Kuitansi resmi (.pdf) atau Payroll ERP (.xlsx)"
                 >
-                    <Receipt class="h-4 w-4 text-emerald-400 shrink-0" />
-                    <span>Download Kuitansi</span>
+                    <RefreshCw
+                        v-if="isExportingRelawan"
+                        class="h-4 w-4 shrink-0 animate-spin"
+                    />
+                    <Download v-else class="h-4 w-4 shrink-0" />
+                    <span class="truncate">
+                        {{ isExportingRelawan ? 'Menyiapkan .xlsx...' : 'Download' }}
+                    </span>
+                    <ChevronDown
+                        class="h-3.5 w-3.5 shrink-0 transition-transform"
+                        :class="{ 'rotate-180': isDownloadDropdownOpen }"
+                    />
                 </button>
 
-                <button
-                    type="button"
-                    @click="$emit('exportRelawanExcel')"
-                    :disabled="isExportingRelawan"
-                    class="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex-1 sm:flex-none min-w-0"
-                    title="Download format resmi Excel Daftar Relawan Harian (.xlsx) untuk Penanggung Jawab Satuan Pendidikan & Kader Posyandu"
+                <!-- Backdrop Click Outside -->
+                <div
+                    v-if="isDownloadDropdownOpen"
+                    class="fixed inset-0 z-40"
+                    @click="isDownloadDropdownOpen = false"
+                ></div>
+
+                <!-- Dropdown Menu -->
+                <div
+                    v-if="isDownloadDropdownOpen"
+                    class="absolute right-0 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                 >
-                    <RefreshCw v-if="isExportingRelawan" class="h-4 w-4 shrink-0 animate-spin" />
-                    <FileSpreadsheet v-else class="h-4 w-4 shrink-0" />
-                    <span>{{ isExportingRelawan ? 'Menyiapkan .xlsx...' : 'Download Template .XLSX' }}</span>
-                </button>
+                    <div class="p-1.5 space-y-1">
+                        <!-- Opsi 1: Download Kuitansi PDF -->
+                        <button
+                            type="button"
+                            @click="
+                                isDownloadDropdownOpen = false;
+                                $emit('printAllReceipts');
+                            "
+                            class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                        >
+                            <div
+                                class="p-2 rounded-lg bg-slate-800 text-white mt-0.5 shrink-0 shadow-2xs"
+                            >
+                                <Receipt class="h-4 w-4 text-emerald-400" />
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-bold text-slate-900"
+                                        >Download Kuitansi</span
+                                    >
+                                    <span
+                                        class="px-1.5 py-0.2 rounded text-[9px] font-black bg-slate-200 text-slate-800"
+                                        >.PDF</span
+                                    >
+                                </div>
+                                <p
+                                    class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug"
+                                >
+                                    Kuitansi resmi tanda terima insentif (1 lembar per halaman atau per titik sasaran).
+                                </p>
+                            </div>
+                        </button>
+
+                        <!-- Opsi 2: Download Payroll ERP .XLSX -->
+                        <button
+                            type="button"
+                            @click="
+                                isDownloadDropdownOpen = false;
+                                $emit('exportRelawanExcel');
+                            "
+                            :disabled="isExportingRelawan"
+                            class="w-full text-left p-2.5 rounded-xl hover:bg-emerald-50/80 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                        >
+                            <div
+                                class="p-2 rounded-lg bg-emerald-600 text-white mt-0.5 shrink-0 shadow-2xs"
+                            >
+                                <FileSpreadsheet class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span
+                                        class="text-xs font-bold text-emerald-950"
+                                        >Download Payroll ERP</span
+                                    >
+                                    <span
+                                        class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-800"
+                                        >.XLSX</span
+                                    >
+                                </div>
+                                <p
+                                    class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug"
+                                >
+                                    Format nominatif resmi PIC Satuan Pendidikan & Posyandu siap unggah ke portal ERP BGN.
+                                </p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 

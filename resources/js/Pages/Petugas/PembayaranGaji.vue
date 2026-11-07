@@ -1421,12 +1421,23 @@ async function triggerDownloadRelawanExcel() {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        const dateLabel = (tanggalMulai.value && tanggalSelesai.value && tanggalMulai.value !== tanggalSelesai.value)
-            ? `${tanggalMulai.value}_sd_${tanggalSelesai.value}`
-            : (tanggalMulai.value || tglTransaksi.value || "export");
+        const formatDmy = (val) => {
+            if (!val) return "";
+            const parts = String(val).split("-");
+            return parts.length === 3 && parts[0].length === 4
+                ? `${parts[2]}-${parts[1]}-${parts[0]}`
+                : val;
+        };
+
+        const mulaiDmy = formatDmy(tanggalMulai.value);
+        const selesaiDmy = formatDmy(tanggalSelesai.value);
+        const dateLabel = (mulaiDmy && selesaiDmy && mulaiDmy !== selesaiDmy)
+            ? `${mulaiDmy}_sd_${selesaiDmy}`
+            : (mulaiDmy || formatDmy(tglTransaksi.value) || formatDmy(new Date().toISOString().slice(0, 10)));
+
         link.setAttribute(
             "download",
-            `Daftar_Relawan_Harian_${dateLabel}.xlsx`,
+            `Payroll ERP Gaji Petugas SPPG ${dateLabel}.xlsx`,
         );
         document.body.appendChild(link);
         link.click();
@@ -1438,9 +1449,9 @@ async function triggerDownloadRelawanExcel() {
             downloadRelawanSuccess.value = false;
         }, 5000);
     } catch (e) {
-        console.error("Gagal mendownload template Daftar Relawan Harian:", e);
+        console.error("Gagal mendownload Payroll ERP Gaji Petugas:", e);
         let errorMsg =
-            "Terjadi kesalahan saat memproses file template Daftar Relawan Harian.";
+            "Terjadi kesalahan saat memproses file Payroll ERP Gaji Petugas.";
         if (e.response?.data instanceof Blob) {
             try {
                 const text = await e.response.data.text();
@@ -1558,19 +1569,7 @@ function copyRowRekening(id, text) {
                         <span class="truncate">Preview CSV</span>
                     </button>
 
-                    <!-- Download Kuitansi Gaji PDF (1 Lembar per Halaman) -->
-                    <button
-                        type="button"
-                        @click="openKwitansiModal(null)"
-                        :disabled="totalSelectedCount === 0"
-                        class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer min-w-0 truncate"
-                        title="Download file PDF kuitansi resmi gaji petugas (1 kuitansi per halaman A4 atau per orangan)"
-                    >
-                        <Receipt class="h-4 w-4 shrink-0 text-emerald-400" />
-                        <span class="truncate">Kuitansi</span>
-                    </button>
-
-                    <!-- 1 Tombol Dropdown Download Format BNI Direct & Relawan Harian -->
+                    <!-- 1 Tombol Dropdown Download Format Kuitansi, BNI Direct, & Payroll ERP -->
                     <div class="relative col-span-2 sm:col-span-1 inline-flex">
                         <button
                             type="button"
@@ -1582,7 +1581,7 @@ function copyRowRekening(id, text) {
                                 totalSelectedCount === 0
                             "
                             class="inline-flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer w-full sm:w-auto min-w-0"
-                            title="Download format transfer payroll BNI Direct (.csv / .xls) atau format resmi Daftar Relawan Harian (.xlsx)"
+                            title="Download format Kuitansi (.pdf), BNI Direct (.csv / .xls), atau Payroll ERP (.xlsx)"
                         >
                             <RefreshCw
                                 v-if="
@@ -1623,7 +1622,73 @@ function copyRowRekening(id, text) {
                             class="absolute right-0 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-white border border-slate-200 shadow-xl py-1 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
                         >
                             <div class="p-1.5 space-y-1">
-                                <!-- Opsi 1: Download CSV BNI Direct -->
+                                <!-- Opsi 1: Download Kuitansi PDF -->
+                                <button
+                                    type="button"
+                                    @click="
+                                        isBniDropdownOpen = false;
+                                        openKwitansiModal(null);
+                                    "
+                                    class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div
+                                        class="p-2 rounded-lg bg-slate-800 text-white mt-0.5 shrink-0 shadow-2xs"
+                                    >
+                                        <Receipt class="h-4 w-4 text-emerald-400" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span
+                                                class="text-xs font-bold text-slate-900"
+                                                >Download Kuitansi</span
+                                            >
+                                            <span
+                                                class="px-1.5 py-0.2 rounded text-[9px] font-black bg-slate-200 text-slate-800"
+                                                >.PDF</span
+                                            >
+                                        </div>
+                                        <p
+                                            class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug"
+                                        >
+                                            Kuitansi resmi tanda terima gaji petugas SPPG (1 lembar per halaman atau per orang).
+                                        </p>
+                                    </div>
+                                </button>
+
+                                <!-- Opsi 2: Download Payroll ERP .XLSX -->
+                                <button
+                                    type="button"
+                                    @click="
+                                        isBniDropdownOpen = false;
+                                        triggerDownloadRelawanExcel();
+                                    "
+                                    class="w-full text-left p-2.5 rounded-xl hover:bg-emerald-50/80 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
+                                >
+                                    <div
+                                        class="p-2 rounded-lg bg-emerald-600 text-white mt-0.5 shrink-0 shadow-2xs"
+                                    >
+                                        <FileSpreadsheet class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span
+                                                class="text-xs font-bold text-emerald-950"
+                                                >Download Payroll ERP</span
+                                            >
+                                            <span
+                                                class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-200 text-emerald-800"
+                                                >.XLSX</span
+                                            >
+                                        </div>
+                                        <p
+                                            class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug"
+                                        >
+                                            Format nominatif resmi SPPG sesuai peran standar BGN siap unggah ke ERP.
+                                        </p>
+                                    </div>
+                                </button>
+
+                                <!-- Opsi 3: Download CSV BNI Direct -->
                                 <button
                                     type="button"
                                     @click="
@@ -1658,7 +1723,7 @@ function copyRowRekening(id, text) {
                                     </div>
                                 </button>
 
-                                <!-- Opsi 2: Download Template .XLS -->
+                                <!-- Opsi 4: Download Template .XLS -->
                                 <button
                                     type="button"
                                     @click="
@@ -1690,42 +1755,6 @@ function copyRowRekening(id, text) {
                                             Template Excel resmi BNI Direct
                                             (hanya 3 kolom terisi: Rekening,
                                             Nama, Amount).
-                                        </p>
-                                    </div>
-                                </button>
-
-                                <!-- Opsi 3: Download Daftar Relawan Harian .XLSX -->
-                                <button
-                                    type="button"
-                                    @click="
-                                        isBniDropdownOpen = false;
-                                        triggerDownloadRelawanExcel();
-                                    "
-                                    class="w-full text-left p-2.5 rounded-xl hover:bg-blue-50/80 text-slate-800 font-bold flex items-start gap-2.5 cursor-pointer transition-colors"
-                                >
-                                    <div
-                                        class="p-2 rounded-lg bg-blue-600 text-white mt-0.5 shrink-0 shadow-2xs"
-                                    >
-                                        <FileSpreadsheet class="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <div class="flex items-center gap-1.5">
-                                            <span
-                                                class="text-xs font-bold text-blue-950"
-                                                >Download Daftar Relawan
-                                                Harian</span
-                                            >
-                                            <span
-                                                class="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-200 text-blue-800"
-                                                >.XLSX</span
-                                            >
-                                        </div>
-                                        <p
-                                            class="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug"
-                                        >
-                                            Format nominatif resmi SPPG sesuai
-                                            peran standar BGN, hari kerja,
-                                            besaran harian, & metode bayar.
                                         </p>
                                     </div>
                                 </button>
@@ -1917,15 +1946,11 @@ function copyRowRekening(id, text) {
                         <CheckCircle2 class="h-5 w-5 text-blue-600 shrink-0" />
                         <div>
                             <p class="font-bold">
-                                File Excel Daftar Relawan Harian Berhasil
+                                File Payroll ERP Gaji Petugas SPPG Berhasil
                                 Diunduh!
                             </p>
                             <p class="text-[11px] text-blue-700 mt-0.5">
-                                File
-                                <b>Template_Daftar_Relawan_Harian.xlsx</b> telah
-                                terisi data nominatif (Peran standar BGN, Hari
-                                Kerja, Besaran Harian, & Metode Bayar) serta
-                                rekap per peran otomatis.
+                                File format Payroll ERP telah terisi data nominatif (Peran standar BGN, Hari Kerja, Besaran Harian, & Metode Bayar) serta rekap per peran otomatis.
                             </p>
                         </div>
                     </div>
