@@ -56,7 +56,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'nama' => 'Paket Standart',
             'badge' => '200rb / bln',
             'is_free' => false,
-            'keterangan' => 'Akses Lengkap SPPG, Manajemen Shifting Petugas & Kelompok Penerima Manfaat.',
+            'keterangan' => 'Akses Lengkap SPPG, Manajemen Petugas & Kelompok Penerima Manfaat.',
             'harga_bulanan' => 200000,
             'harga_tahunan' => 2000000, // Hemat Rp 400.000
             'durasi_label' => '200rb / bulan',

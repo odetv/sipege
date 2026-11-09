@@ -123,7 +123,7 @@ function formatRupiah(val) {
                                     Aturan 2: SK No. 63551 Tahun 2026 (Mulai 02 November 2026)
                                 </div>
                                 <p class="text-xs text-emerald-800 mt-1 leading-relaxed">
-                                    Merupakan aturan standar yang digunakan saat ini. Perhitungan 3B Posyandu seluruhnya dikompulir se-SPPG terlebih dahulu, lalu disandingkan dengan Tabel Tingkat 1–6 (Rp 60.000 s/d Rp 700.000/hari) dan dialokasikan proporsional per posyandu.
+                                    Merupakan aturan standar yang digunakan saat ini. Perhitungan 3B Posyandu seluruhnya dikompulir se-SPPG terlebih dahulu, lalu disandingkan dengan Tabel Tingkat SK No. 63551 (Tingkat Khusus Rp 1.000/PM, Tingkat 1–6 Rp 60.000 s/d Rp 700.000/hari) dan dialokasikan proporsional per posyandu.
                                 </p>
                             </div>
                         </div>
@@ -178,19 +178,83 @@ function formatRupiah(val) {
                                 <div class="overflow-x-auto">
                                     <table class="w-full text-left border-collapse border border-slate-200 text-xs">
                                         <thead>
-                                            <tr class="bg-pink-50/40 text-[10.5px] font-bold text-slate-700 border-b">
-                                                <th class="py-1.5 px-3 border-r w-16 text-center">Tingkat</th>
-                                                <th class="py-1.5 px-3 border-r">Jumlah Penerima Manfaat 3B per SPPG</th>
-                                                <th class="py-1.5 px-3 text-right">Besaran Insentif (per hari pelayanan)</th>
+                                            <tr class="bg-pink-50/60 text-[10.5px] font-bold text-slate-700 border-b">
+                                                <th class="py-2 px-3 border-r w-16 text-center">Tingkat</th>
+                                                <th class="py-2 px-2.5 border-r w-16 text-center">Batas Min</th>
+                                                <th class="py-2 px-2.5 border-r w-16 text-center">Batas Maks</th>
+                                                <th class="py-2 px-3 border-r">Jumlah Penerima Manfaat 3B per SPPG</th>
+                                                <th class="py-2 px-3 border-r text-right">Besaran Insentif (per hari)</th>
+                                                <th class="py-2 px-3">Keterangan Terbilang</th>
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-100 font-medium">
-                                            <tr><td class="py-1.5 px-3 text-center border-r font-bold">1</td><td class="py-1.5 px-3 border-r">&le; 100 penerima manfaat</td><td class="py-1.5 px-3 text-right font-bold text-emerald-800">Rp 60.000,-</td></tr>
-                                            <tr><td class="py-1.5 px-3 text-center border-r font-bold">2</td><td class="py-1.5 px-3 border-r">101 s.d. 300 penerima manfaat</td><td class="py-1.5 px-3 text-right font-bold text-emerald-800">Rp 150.000,-</td></tr>
-                                            <tr class="bg-emerald-50/40 font-bold"><td class="py-1.5 px-3 text-center border-r font-bold text-emerald-900">3 ★</td><td class="py-1.5 px-3 border-r text-emerald-950">301 s.d. 500 penerima manfaat (SPPG Tegallinggah: 326 PM)</td><td class="py-1.5 px-3 text-right font-black text-emerald-900">Rp 250.000,-</td></tr>
-                                            <tr><td class="py-1.5 px-3 text-center border-r font-bold">4</td><td class="py-1.5 px-3 border-r">501 s.d. 1.000 penerima manfaat</td><td class="py-1.5 px-3 text-right font-bold text-emerald-800">Rp 400.000,-</td></tr>
-                                            <tr><td class="py-1.5 px-3 text-center border-r font-bold">5</td><td class="py-1.5 px-3 border-r">1.001 s.d. 1.500 penerima manfaat</td><td class="py-1.5 px-3 text-right font-bold text-emerald-800">Rp 550.000,-</td></tr>
-                                            <tr><td class="py-1.5 px-3 text-center border-r font-bold">6</td><td class="py-1.5 px-3 border-r">&gt; 1.500 penerima manfaat</td><td class="py-1.5 px-3 text-right font-bold text-emerald-800">Rp 700.000,-</td></tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold text-amber-700 bg-amber-50/40">Khusus</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">1</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">60</td>
+                                                <td class="py-1.5 px-3 border-r">1 s.d. 60 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 1.000 / PM</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Seribu rupiah per penerima manfaat)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold">1</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">61</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">100</td>
+                                                <td class="py-1.5 px-3 border-r">61 s.d. 100 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 60,000</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Enam puluh ribu rupiah)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold text-amber-700 bg-amber-50/40">Khusus</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">101</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">150</td>
+                                                <td class="py-1.5 px-3 border-r">101 s.d. 150 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 1.000 / PM</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Seribu rupiah per penerima manfaat)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold">2</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">151</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">300</td>
+                                                <td class="py-1.5 px-3 border-r">151 s.d. 300 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 150,000</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Seratus lima puluh ribu rupiah)</td>
+                                            </tr>
+                                            <tr class="bg-emerald-50/60 font-bold border-y-2 border-emerald-300">
+                                                <td class="py-2 px-3 text-center border-r font-bold text-emerald-900 bg-emerald-100/60">3 ★</td>
+                                                <td class="py-2 px-2.5 text-center border-r font-black text-emerald-950">301</td>
+                                                <td class="py-2 px-2.5 text-center border-r font-black text-emerald-950">500</td>
+                                                <td class="py-2 px-3 border-r text-emerald-950">
+                                                    301 s.d. 500 penerima manfaat
+                                                    <span class="block text-[10px] text-emerald-700 font-normal mt-0.5">(SPPG Tegallinggah: 326 PM)</span>
+                                                </td>
+                                                <td class="py-2 px-3 text-right font-black text-emerald-900 border-r">Rp 250,000</td>
+                                                <td class="py-2 px-3 text-emerald-950 italic">(Dua ratus lima puluh ribu rupiah)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold">4</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">501</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">1000</td>
+                                                <td class="py-1.5 px-3 border-r">501 s.d. 1.000 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 400,000</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Empat ratus ribu rupiah)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold">5</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">1001</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">1500</td>
+                                                <td class="py-1.5 px-3 border-r">1.001 s.d. 1.500 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 550,000</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Lima ratus lima puluh ribu rupiah)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="py-1.5 px-3 text-center border-r font-bold">6</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">1501</td>
+                                                <td class="py-1.5 px-2.5 text-center border-r font-semibold">&gt; 1.500</td>
+                                                <td class="py-1.5 px-3 border-r">&gt; 1.500 penerima manfaat</td>
+                                                <td class="py-1.5 px-3 text-right font-bold text-emerald-800 border-r">Rp 700,000</td>
+                                                <td class="py-1.5 px-3 text-slate-600 italic">(Tujuh ratus ribu rupiah)</td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -303,7 +367,7 @@ function formatRupiah(val) {
                                     <span>Aturan 2: SK No. 63551 Tahun 2026:</span>
                                 </div>
                                 <p class="text-slate-600">• Sekolah: Sesuai Tabel 2/3 (Tier 1-6)</p>
-                                <p class="text-slate-600">• Posyandu: Kompulir SPPG Tabel 1 (Tingkat 1-6)</p>
+                                <p class="text-slate-600">• Posyandu: Kompulir SPPG Tabel SK 63551 (Khusus & Tingkat 1–6)</p>
                                 <p class="text-slate-600">• Tampilan: 1 baris utama 3B Posyandu (Expandable)</p>
                             </div>
                         </div>

@@ -38,8 +38,10 @@ import {
     Trash2,
     ArrowRight,
     Receipt,
+    Send,
 } from "lucide-vue-next";
 import KwitansiGajiModal from "./Partials/KwitansiGajiModal.vue";
+import Modal from "@/Components/Modal.vue";
 
 const props = defineProps({
     petugas: { type: Array, default: () => [] },
@@ -55,6 +57,8 @@ const props = defineProps({
     initialPresensiDetailsMap: { type: Object, default: () => ({}) },
     mandaysMap: { type: Object, default: () => ({}) },
     initialSelectedDates: { type: Array, default: () => [] },
+    transaksiPengajuan: { type: Object, default: null },
+    statusPengajuan: { type: String, default: null },
 });
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -779,6 +783,50 @@ const searchQuery = ref("");
 const filterJabatan = ref("all");
 const filterRekening = ref("all"); // 'all' | 'siap' | 'invalid_zero' | 'empty' | 'valid'
 
+// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas)
+function parseJabatanList(str) {
+    if (!str) return [];
+    const normalized = str
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
+}
+
+// Helper Filter Multi-Jabatan
+function matchJabatan(petugasJabatan, filterVal) {
+    if (!filterVal || filterVal === "all") return true;
+    const list = parseJabatanList(petugasJabatan);
+    return (
+        list.some((j) => j.toLowerCase() === filterVal.toLowerCase()) ||
+        (petugasJabatan || "").toLowerCase().includes(filterVal.toLowerCase())
+    );
+}
+
+// Helper Badge Divisi / Jabatan
+function getJabatanBadgeClass(jabatan) {
+    if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
+    const j = jabatan.toLowerCase();
+    if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
+    if (j.includes("chef")) return "bg-amber-50 text-amber-700 border-amber-200";
+    if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (j.includes("persiapan")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
+    if (j.includes("pemorsian")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("pengemudi") || j.includes("distribusi")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
+    if (j.includes("admin")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("kebersihan")) return "bg-purple-50 text-purple-700 border-purple-200";
+    if (j.includes("keamanan")) return "bg-rose-50 text-rose-700 border-rose-200";
+    return "bg-slate-50 text-slate-700 border-slate-200";
+}
+
 // ─── Perhitungan Amount Rows Petugas ──────────────────────────────────────────
 const rows = ref([]);
 
@@ -900,7 +948,7 @@ const filteredRows = computed(() => {
             const matchNama = (p.nama || "").toLowerCase().includes(q);
             const matchNik = (p.nik || "").toLowerCase().includes(q);
             const matchRek = (p.nomor_rekening || "").toLowerCase().includes(q);
-            const matchJab = (p.jabatan || "").toLowerCase().includes(q);
+            const matchJab = parseJabatanList(p.jabatan).some((j) => j.toLowerCase().includes(q)) || (p.jabatan || "").toLowerCase().includes(q);
             if (!matchNama && !matchNik && !matchRek && !matchJab) {
                 return false;
             }
@@ -908,9 +956,7 @@ const filteredRows = computed(() => {
 
         // Filter Jabatan (Mendukung Multi-Jabatan)
         if (filterJabatan.value !== "all") {
-            const jabStr = (p.jabatan || "").toLowerCase();
-            const fVal = filterJabatan.value.toLowerCase();
-            if (!jabStr.includes(fVal)) {
+            if (!matchJabatan(p.jabatan, filterJabatan.value)) {
                 return false;
             }
         }
@@ -969,6 +1015,12 @@ function toggleSelectAll() {
 // ─── KPI Summaries ────────────────────────────────────────────────────────────
 const selectedRows = computed(() => rows.value.filter((r) => r.selected));
 const totalSelectedCount = computed(() => selectedRows.value.length);
+const totalSelectedMandays = computed(() => {
+    return selectedRows.value.reduce(
+        (acc, r) => acc + (Number(r.mandaysInfo?.mandays) || 0),
+        0
+    );
+});
 const totalPayrollAmount = computed(() => {
     return selectedRows.value.reduce((acc, r) => acc + (r.amount || 0), 0);
 });
@@ -1294,35 +1346,23 @@ async function triggerDownloadExcel() {
 // ─── Mapping Jabatan ke Peran Standar BGN (Template Relawan Harian) ────────────
 function mapJabatanToPeran(jabatan) {
     if (!jabatan) return "Pengawas Sanitasi";
-    const j = String(jabatan).toLowerCase();
-    if (j.includes("chef") || j.includes("masak")) return "Juru Masak";
-    if (j.includes("koordinator lapangan") || j.includes("aslap"))
-        return "Asisten Lapangan/Aslap";
-    if (j.includes("persiapan")) return "Persiapan Bahan Makanan";
-    if (j.includes("pengolahan")) return "Pengolahan Bahan Makanan";
-    if (j.includes("pemorsian")) return "Pemorsian";
-    if (
-        j.includes("pengemudi") ||
-        j.includes("distribusi") ||
-        j.includes("sopir") ||
-        j.includes("driver")
-    )
-        return "Distribusi";
-    if (j.includes("cuci") || j.includes("ompreng") || j.includes("pencuci"))
-        return "Pencuci Alat Makan";
-    if (j.includes("kebersihan")) return "Petugas Kebersihan";
-    if (
-        j.includes("keamanan") ||
-        j.includes("satpam") ||
-        j.includes("security")
-    )
-        return "Petugas Keamanan";
-    if (j.includes("sanitasi") || j.includes("gizi"))
-        return "Pengawas Sanitasi";
-    if (j.includes("packing") || j.includes("kemas")) return "Packing";
-    if (j.includes("posyandu")) return "Kader Posyandu";
-    if (j.includes("satuan pendidikan") || j.includes("sekolah"))
-        return "Penanggung Jawab Satuan Pendidikan";
+    const jList = parseJabatanList(jabatan).map((s) => s.toLowerCase());
+    const full = String(jabatan).toLowerCase();
+    const has = (keyword) => jList.some((s) => s.includes(keyword)) || full.includes(keyword);
+
+    if (has("chef") || has("masak")) return "Juru Masak";
+    if (has("koordinator lapangan") || has("aslap")) return "Asisten Lapangan/Aslap";
+    if (has("persiapan")) return "Persiapan Bahan Makanan";
+    if (has("pengolahan")) return "Pengolahan Bahan Makanan";
+    if (has("pemorsian")) return "Pemorsian";
+    if (has("pengemudi") || has("distribusi") || has("sopir") || has("driver")) return "Distribusi";
+    if (has("cuci") || has("ompreng") || has("pencuci")) return "Pencuci Alat Makan";
+    if (has("kebersihan")) return "Petugas Kebersihan";
+    if (has("keamanan") || has("satpam") || has("security")) return "Petugas Keamanan";
+    if (has("sanitasi") || has("gizi")) return "Pengawas Sanitasi";
+    if (has("packing") || has("kemas")) return "Packing";
+    if (has("posyandu")) return "Kader Posyandu";
+    if (has("satuan pendidikan") || has("sekolah")) return "Penanggung Jawab Satuan Pendidikan";
     return "Pengawas Sanitasi";
 }
 
@@ -1474,6 +1514,80 @@ async function triggerDownloadRelawanExcel() {
     }
 }
 
+// ─── Modal Konfirmasi Ajukan Pembayaran Gaji ke Menu Transaksi ─────────────────
+const showAjukanModal = ref(false);
+const isSubmittingTrx = ref(false);
+const currentStatusPengajuan = ref(props.statusPengajuan);
+watch(
+    () => props.statusPengajuan,
+    (val) => {
+        currentStatusPengajuan.value = val;
+    }
+);
+const showResultModal = ref(false);
+const resultModalData = ref({
+    title: "",
+    message: "",
+    nomorTransaksi: "",
+    isError: false,
+});
+
+function handleAjukanPembayaranGaji() {
+    if (totalSelectedCount.value === 0 || totalPayrollAmount.value <= 0) {
+        resultModalData.value = {
+            title: "Tidak Ada Personil",
+            message: "Tidak ada personil aktif dengan hak honor untuk diajukan pembayarannya.",
+            nomorTransaksi: "",
+            isError: true,
+        };
+        showResultModal.value = true;
+        return;
+    }
+    showAjukanModal.value = true;
+}
+
+async function confirmAjukanPembayaranGaji() {
+    const tgl = tanggalSelesai.value || tanggalMulai.value || new Date().toISOString().slice(0, 10);
+    const label = labelSiklus.value || `${formatTanggalIndo(tanggalMulai.value)} s/d ${formatTanggalIndo(tanggalSelesai.value)}`;
+
+    isSubmittingTrx.value = true;
+    try {
+        const response = await axios.post(route("petugas.pembayaran-gaji.ajukan-pembayaran"), {
+            tanggal_transaksi: tgl,
+            tanggal_mulai: tanggalMulai.value,
+            tanggal_selesai: tanggalSelesai.value,
+            periode_id: selectedPeriodeId.value,
+            periode_label: label,
+            nominal: totalPayrollAmount.value,
+            total_personil: totalSelectedCount.value,
+            total_mandays: totalSelectedMandays.value,
+            metode_bayar: "Transfer",
+        });
+
+        showAjukanModal.value = false;
+        currentStatusPengajuan.value = response.data.status === 'already_approved' ? 'Disetujui' : 'Ditunda';
+        resultModalData.value = {
+            title: response.data.status === 'already_approved' ? 'Pengajuan Sudah Disetujui' : 'Pengajuan Berhasil Dicatat!',
+            message: response.data.message || 'Pengajuan pembayaran gaji berhasil diajukan ke Menu Transaksi.',
+            nomorTransaksi: response.data.data?.nomor_transaksi || '',
+            isError: false,
+        };
+        showResultModal.value = true;
+    } catch (err) {
+        console.error("Gagal mengajukan pembayaran gaji:", err);
+        const errMsg = err.response?.data?.message || err.response?.data?.error || "Terjadi kesalahan saat mengajukan pembayaran gaji ke Menu Transaksi.";
+        resultModalData.value = {
+            title: "Gagal Mengajukan Pembayaran",
+            message: errMsg,
+            nomorTransaksi: "",
+            isError: true,
+        };
+        showResultModal.value = true;
+    } finally {
+        isSubmittingTrx.value = false;
+    }
+}
+
 // ─── Preview Modal State ──────────────────────────────────────────────────────
 const isPreviewModalOpen = ref(false);
 const previewCsvText = ref("");
@@ -1559,6 +1673,7 @@ function copyRowRekening(id, text) {
                     v-if="activeBankTab === 'BNI'"
                     class="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto"
                 >
+                    <!-- 1. Preview CSV -->
                     <button
                         type="button"
                         @click="openPreviewModal"
@@ -1569,7 +1684,46 @@ function copyRowRekening(id, text) {
                         <span class="truncate">Preview CSV</span>
                     </button>
 
-                    <!-- 1 Tombol Dropdown Download Format Kuitansi, BNI Direct, & Payroll ERP -->
+                    <!-- 2. Ajukan Pembayaran / Telah Diajukan / Disetujui -->
+                    <template v-if="currentStatusPengajuan === 'Disetujui'">
+                        <button
+                            type="button"
+                            disabled
+                            class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold shadow-2xs cursor-default min-w-0"
+                            title="Pembayaran gaji untuk periode ini telah Disetujui pada Menu Transaksi"
+                        >
+                            <CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-600" />
+                            <span class="truncate">Disetujui</span>
+                        </button>
+                    </template>
+
+                    <template v-else-if="currentStatusPengajuan === 'Ditunda'">
+                        <button
+                            type="button"
+                            disabled
+                            class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold shadow-2xs cursor-default min-w-0"
+                            title="Pembayaran gaji untuk periode ini telah diajukan ke Menu Transaksi (Status: Ditunda) dan sedang menunggu verifikasi"
+                        >
+                            <Clock class="h-4 w-4 shrink-0 text-amber-600 animate-pulse" />
+                            <span class="truncate">Telah Diajukan</span>
+                        </button>
+                    </template>
+
+                    <template v-else>
+                        <button
+                            type="button"
+                            @click="handleAjukanPembayaranGaji"
+                            :disabled="isSubmittingTrx || totalSelectedCount === 0 || totalPayrollAmount === 0"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer min-w-0"
+                            :title="currentStatusPengajuan === 'Ditolak' ? 'Pengajuan sebelumnya Ditolak di Menu Transaksi. Klik untuk mengajukan ulang.' : 'Ajukan pembayaran gaji petugas ke Menu Transaksi Keuangan dengan status Ditunda'"
+                        >
+                            <RefreshCw v-if="isSubmittingTrx" class="h-4 w-4 shrink-0 animate-spin" />
+                            <Send v-else class="h-4 w-4 shrink-0" />
+                            <span class="truncate">{{ isSubmittingTrx ? 'Mengajukan...' : 'Ajukan Pembayaran' }}</span>
+                        </button>
+                    </template>
+
+                    <!-- 3. 1 Tombol Dropdown Download Format Kuitansi, BNI Direct, & Payroll ERP -->
                     <div class="relative col-span-2 sm:col-span-1 inline-flex">
                         <button
                             type="button"
@@ -2799,25 +2953,11 @@ function copyRowRekening(id, text) {
                                                         Berhenti
                                                     </span>
                                                     <span
-                                                        v-for="jab in (
-                                                            r.petugas.jabatan ||
-                                                            ''
-                                                        )
-                                                            .split(/[,&/]/)
-                                                            .map((s) =>
-                                                                s.trim(),
-                                                            )
-                                                            .filter(Boolean)"
+                                                        v-for="jab in parseJabatanList(r.petugas.jabatan)"
                                                         :key="jab"
                                                         :class="[
-                                                            'text-[10px] px-1.5 py-0.2 rounded font-semibold border',
-                                                            jab
-                                                                .toLowerCase()
-                                                                .includes(
-                                                                    'koordinator',
-                                                                )
-                                                                ? 'bg-sky-50 text-sky-800 border-sky-300'
-                                                                : 'bg-slate-100 text-slate-700 border-slate-200',
+                                                            'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border font-medium leading-none',
+                                                            getJabatanBadgeClass(jab),
                                                         ]"
                                                     >
                                                         {{ jab }}
@@ -3500,5 +3640,147 @@ function copyRowRekening(id, text) {
             :initial-petugas-id="kwitansiInitialPetugasId"
             @close="isKwitansiModalOpen = false"
         />
+
+        <!-- ─── Modal Konfirmasi Ajukan Pembayaran Gaji ke Menu Transaksi ─── -->
+        <Modal :show="showAjukanModal" @close="showAjukanModal = false" max-width="md">
+            <div class="p-5 sm:p-6 space-y-4 text-xs">
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-600">
+                            <Send class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Konfirmasi Ajukan Pembayaran Gaji</h3>
+                            <p class="text-[11px] text-slate-500">Pencatatan ke Menu Transaksi Keuangan</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showAjukanModal = false"
+                        class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <!-- Info Alert -->
+                <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-xs text-amber-800">
+                        <AlertCircle class="h-4 w-4 shrink-0 text-amber-600" />
+                        <span>Status Awal: DITUNDA</span>
+                    </div>
+                    <p class="text-[11px] text-amber-700 leading-relaxed">
+                        Data pembayaran akan otomatis dicatat sebagai <b>Uang Keluar</b> kategori <b>Operasional</b> dengan status <b>Ditunda</b>. Transaksi baru sah terhitung ke dalam realisasi keuangan setelah disetujui di Menu Transaksi.
+                    </p>
+                </div>
+
+                <!-- Rincian Parameter Pengajuan -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Periode Pembayaran:</span>
+                        <span class="font-bold text-slate-800">{{ labelSiklus || `${formatTanggalIndo(tanggalMulai)} s/d ${formatTanggalIndo(tanggalSelesai)}` }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Total Personil Terpilih:</span>
+                        <span class="font-bold text-slate-800">{{ totalSelectedCount }} Personil</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Total Mandays:</span>
+                        <span class="font-bold text-slate-800">{{ totalSelectedMandays }} Hari Kerja</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Metode Pembayaran:</span>
+                        <span class="font-bold text-slate-800">Transfer Bank</span>
+                    </div>
+                    <div class="flex items-baseline justify-between pt-2 border-t border-slate-200">
+                        <span class="text-slate-700 font-extrabold uppercase">Total Nominal Honor:</span>
+                        <span class="text-base font-black text-amber-600">{{ formatRupiah(totalPayrollAmount) }}</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        @click="showAjukanModal = false"
+                        :disabled="isSubmittingTrx"
+                        class="px-4 py-2 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        @click="confirmAjukanPembayaranGaji"
+                        :disabled="isSubmittingTrx"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white cursor-pointer shadow-xs transition-colors disabled:opacity-50"
+                    >
+                        <RefreshCw v-if="isSubmittingTrx" class="h-3.5 w-3.5 animate-spin" />
+                        <Send v-else class="h-3.5 w-3.5" />
+                        <span>{{ isSubmittingTrx ? 'Memproses Pengajuan...' : 'Ya, Ajukan Pembayaran' }}</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ─── Modal Feedback Hasil Ajukan Transaksi Gaji ─── -->
+        <Modal :show="showResultModal" @close="showResultModal = false" max-width="md">
+            <div class="p-6 text-center space-y-4">
+                <div
+                    class="mx-auto flex items-center justify-center h-14 w-14 rounded-full"
+                    :class="resultModalData.isError ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'"
+                >
+                    <AlertCircle v-if="resultModalData.isError" class="h-8 w-8" />
+                    <CheckCircle2 v-else class="h-8 w-8" />
+                </div>
+
+                <div class="space-y-1.5">
+                    <h3 class="text-base font-extrabold text-slate-900">
+                        {{ resultModalData.title }}
+                    </h3>
+                    <div v-if="resultModalData.nomorTransaksi">
+                        <span class="text-xs font-mono font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 inline-block">
+                            {{ resultModalData.nomorTransaksi }}
+                        </span>
+                    </div>
+                </div>
+
+                <p class="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                    {{ resultModalData.message }}
+                </p>
+
+                <div
+                    v-if="!resultModalData.isError"
+                    class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-[11px] text-slate-600 space-y-1"
+                >
+                    <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span>Status Saat Ini: Ditunda</span>
+                    </div>
+                    <p class="text-slate-500">
+                        Data telah masuk ke <b>Menu Keuangan &rarr; Sub Menu Transaksi</b>. Silakan review dan setujui transaksi tersebut agar sah mengurangi saldo kas operasional.
+                    </p>
+                </div>
+
+                <div class="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+                    <button
+                        type="button"
+                        @click="showResultModal = false"
+                        class="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
+                    >
+                        Tutup
+                    </button>
+                    <button
+                        v-if="!resultModalData.isError"
+                        type="button"
+                        @click="router.visit(route('keuangan.transaksi'))"
+                        class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs transition-colors"
+                    >
+                        <span>Lihat di Menu Transaksi</span>
+                        <ArrowRight class="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </AppLayout>
 </template>

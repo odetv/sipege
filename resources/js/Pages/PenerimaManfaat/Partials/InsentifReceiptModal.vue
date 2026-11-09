@@ -240,19 +240,21 @@ watch(tanggalKuitansi, (newDate) => {
     }
 });
 
-// Daftar Titik Sasaran Terpilih untuk Kwitansi
+// Daftar Titik Sasaran Terpilih untuk Kwitansi (Hanya yang terdistribusi aktif)
 const receiptList = computed(() => {
+    let source = [];
     if (props.selectedRows && props.selectedRows.length > 0) {
-        return props.selectedRows;
+        source = props.selectedRows;
+    } else if (props.allRows && props.allRows.length > 0) {
+        source = props.allRows;
+    } else {
+        const single = props.initialItem || props.item;
+        return single ? [single] : [];
     }
-    if (props.allRows && props.allRows.length > 0) {
-        return props.allRows;
-    }
-    const single = props.initialItem || props.item;
-    if (single) {
-        return [single];
-    }
-    return [];
+
+    return source.filter(
+        (it) => (Number(it.amount) || 0) > 0 && ((Number(it.hari_distribusi) || Number(it.hari_operasional) || 0) > 0)
+    );
 });
 
 // Personil / Titik Sasaran yang Ditampilkan Berdasarkan Mode
@@ -284,18 +286,20 @@ function getKeteranganPembayaran(row) {
     if (props.selectedPeriode) {
         periodeStr = `Periode ${props.selectedPeriode.nomor_periode} (${formatTanggalIndo(effectiveStartDate.value)} s/d ${formatTanggalIndo(effectiveEndDate.value)})`;
     } else if (effectiveStartDate.value && effectiveEndDate.value) {
-        periodeStr = `${formatTanggalIndo(effectiveStartDate.value)} s/d ${formatTanggalIndo(effectiveEndDate.value)}`;
+        periodeStr = `Periode ${formatTanggalIndo(effectiveStartDate.value)} s/d ${formatTanggalIndo(effectiveEndDate.value)}`;
     } else {
-        periodeStr = `Operasional MBG`;
+        periodeStr = `Periode Operasional MBG`;
     }
 
     const hari = row.hari_operasional || props.rentangHariCount || 1;
     const sasaran = row.total_penerima || 0;
     const pic = row.nama_pic || row.nama_kelompok || "Penerima Manfaat";
     const kelompok = row.nama_kelompok ? ` (${row.nama_kelompok})` : "";
-    const kat = row.kategori ? ` - ${row.kategori}` : "";
+    const kat = (row.kategori && !String(row.nama_kelompok || "").toLowerCase().includes(String(row.kategori).toLowerCase()))
+        ? ` - ${row.kategori}`
+        : "";
 
-    return `Pembayaran Insentif Fasilitas Mitra / Penanggung Jawab Distribusi MBG ${periodeStr} an. ${pic}${kelompok}${kat} untuk ${sasaran} Sasaran Penerima Manfaat sejumlah ${hari} Hari Operasional.`;
+    return `Pembayaran Penanggung Jawab Kelompok Penerima Manfaat ${periodeStr} an. ${pic}${kelompok}${kat} untuk ${sasaran} Sasaran Penerima Manfaat sejumlah ${hari} Hari Operasional.`;
 }
 
 // Kop Dokumen HTML Terpusat

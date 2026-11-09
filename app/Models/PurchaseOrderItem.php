@@ -21,6 +21,7 @@ class PurchaseOrderItem extends Model
         'harga_master' => 'float',
         'harga_aktual' => 'float',
         'subtotal_aktual' => 'float',
+        'perlu_npo' => 'boolean',
     ];
 
     public function purchaseOrder(): BelongsTo

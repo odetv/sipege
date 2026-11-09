@@ -408,7 +408,7 @@ function handleLogout() {
                                 <Star class="w-4 h-4 text-amber-500 fill-amber-500" />
                             </div>
                             <p class="text-xs text-slate-500 mb-3">
-                                Akses Lengkap SPPG, Manajemen Shifting & KPM.
+                                Akses Lengkap SPPG, Manajemen Petugas & KPM.
                             </p>
                             <div class="text-xl font-black text-slate-900">
                                 <template v-if="selectedSiklus === 'tahunan'">

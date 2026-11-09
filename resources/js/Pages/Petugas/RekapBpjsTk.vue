@@ -63,18 +63,38 @@ function formatRibuan(val) {
     return new Intl.NumberFormat("id-ID").format(n);
 }
 
+// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas, Rekap Kehadiran, Rekap Bonus, & Pembayaran Gaji)
+function parseJabatanList(str) {
+    if (!str || str === "-") return [];
+    if (Array.isArray(str)) return str;
+    return String(str)
+        .split(/[;,/|\n]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+}
+
+// Helper Filter Multi-Jabatan
+function matchJabatan(petugasJabatan, filterVal) {
+    if (!filterVal || filterVal === "all") return true;
+    const list = parseJabatanList(petugasJabatan);
+    return (
+        list.some((j) => j.toLowerCase() === filterVal.toLowerCase()) ||
+        (petugasJabatan || "").toLowerCase().includes(filterVal.toLowerCase())
+    );
+}
+
 // Filter Data Petugas
 const filteredPetugas = computed(() => {
+    const q = searchQuery.value.toLowerCase().trim();
     return props.petugas.filter((p) => {
         const matchesSearch =
-            !searchQuery.value ||
-            p.nama.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-            p.nik.includes(searchQuery.value);
+            !q ||
+            (p.nama && p.nama.toLowerCase().includes(q)) ||
+            (p.nik && p.nik.includes(q)) ||
+            parseJabatanList(p.jabatan).some((j) => j.toLowerCase().includes(q)) ||
+            (p.jabatan && p.jabatan.toLowerCase().includes(q));
 
-        const matchesJabatan =
-            filterJabatan.value === "all" ||
-            p.jabatan === filterJabatan.value ||
-            (p.jabatan && p.jabatan.toLowerCase().includes(filterJabatan.value.toLowerCase()));
+        const matchesJabatan = matchJabatan(p.jabatan, filterJabatan.value);
 
         const isTerdaftar = (parseInt(p.iuran_bpjs_tk) || 0) > 0;
         let matchesStatus = true;
@@ -194,13 +214,21 @@ async function handleExportExcel() {
 }
 
 function getJabatanBadgeClass(jabatan) {
-    const j = (jabatan || "").toLowerCase();
-    if (j.includes("kepala") || j.includes("manager")) return "bg-purple-50 text-purple-700 border-purple-200";
-    if (j.includes("gizi")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (j.includes("keuangan") || j.includes("akuntan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
+    const j = jabatan.toLowerCase();
+    if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
     if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
-    if (j.includes("masak") || j.includes("koki") || j.includes("chef")) return "bg-amber-50 text-amber-700 border-amber-200";
-    if (j.includes("distribusi") || j.includes("driver")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("chef") || j.includes("koki")) return "bg-amber-50 text-amber-700 border-amber-200";
+    if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (j.includes("persiapan") || j.includes("potong")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
+    if (j.includes("pemorsian") || j.includes("packing") || j.includes("pengemasan")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("pengemudi") || j.includes("distribusi") || j.includes("driver") || j.includes("kurir")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
+    if (j.includes("admin") || j.includes("administrasi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("kebersihan") || j.includes("cleaning")) return "bg-purple-50 text-purple-700 border-purple-200";
+    if (j.includes("keamanan") || j.includes("security")) return "bg-rose-50 text-rose-700 border-rose-200";
     return "bg-slate-50 text-slate-700 border-slate-200";
 }
 </script>
@@ -328,7 +356,7 @@ function getJabatanBadgeClass(jabatan) {
                         v-model="filterJabatan"
                         class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-48 bg-white cursor-pointer"
                     >
-                        <option value="all">Semua Divisi</option>
+                        <option value="all">Semua Jabatan / Divisi ({{ props.daftarJabatan.length }})</option>
                         <option v-for="jab in props.daftarJabatan" :key="jab" :value="jab">
                             {{ jab }}
                         </option>
@@ -383,7 +411,22 @@ function getJabatanBadgeClass(jabatan) {
 
                                 <td class="py-2.5 px-3 border-r border-slate-200">
                                     <p class="font-bold text-slate-900 leading-snug">{{ p.nama }}</p>
-                                    <p class="text-[11px] text-slate-500 font-mono mt-0.5">NIK: {{ p.nik }}</p>
+                                    <div class="flex items-center gap-1 mt-1 flex-wrap">
+                                        <span
+                                            v-if="p.status === 'Nonaktif'"
+                                            class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
+                                        >
+                                            Berhenti
+                                        </span>
+                                        <span
+                                            v-for="jab in parseJabatanList(p.jabatan)"
+                                            :key="jab"
+                                            :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                        >
+                                            {{ jab }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">NIK: {{ p.nik }}</p>
                                 </td>
 
                                 <td class="py-2.5 px-2 text-center font-semibold text-slate-700 border-r border-slate-200">
@@ -398,11 +441,14 @@ function getJabatanBadgeClass(jabatan) {
                                 <td class="py-2.5 px-3 border-r border-slate-200">
                                     <div class="flex flex-wrap gap-1">
                                         <span
-                                            v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                            v-for="jab in parseJabatanList(p.jabatan)"
                                             :key="jab"
-                                            :class="['px-2 py-0.5 rounded text-[10px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                            :class="['px-1.5 py-0.5 rounded text-[9.5px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
                                         >
                                             {{ jab }}
+                                        </span>
+                                        <span v-if="parseJabatanList(p.jabatan).length === 0" class="text-[11px] text-slate-400 italic">
+                                            -
                                         </span>
                                     </div>
                                 </td>
@@ -490,7 +536,12 @@ function getJabatanBadgeClass(jabatan) {
                                 <ShieldCheck class="h-5 w-5 text-sky-200" />
                                 <div>
                                     <h3 class="text-sm font-bold">Ubah Iuran BPJS TK</h3>
-                                    <p class="text-[11px] text-sky-100">{{ editingPetugas.nama }}</p>
+                                    <p class="text-[11px] text-sky-100 flex items-center gap-1.5 flex-wrap">
+                                        <span class="font-bold">{{ editingPetugas.nama }}</span>
+                                        <span v-if="parseJabatanList(editingPetugas.jabatan).length > 0" class="text-[10px] text-sky-200">
+                                            &bull; {{ parseJabatanList(editingPetugas.jabatan).join(', ') }}
+                                        </span>
+                                    </p>
                                 </div>
                             </div>
                             <button

@@ -33,6 +33,7 @@ class PetugasSeeder extends Seeder
                 ['nik' => $item['nik']],
                 [
                     'unit_sppg_id' => $unitSppgId,
+                    'urutan' => $item['urutan'] ?? null,
                     'nama' => $item['nama'],
                     'jenis_kelamin' => $item['jenis_kelamin'],
                     'tempat_lahir' => $item['tempat_lahir'],

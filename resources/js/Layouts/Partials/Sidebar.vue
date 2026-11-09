@@ -28,6 +28,7 @@ import {
     Banknote,
     Package,
     Sliders,
+    SlidersHorizontal,
     Settings,
     Building,
     FileCheck2,
@@ -54,6 +55,7 @@ import {
     KeyRound,
     Server,
     Sparkles,
+    Scale,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -139,6 +141,47 @@ const isRancangMenuOpen = ref(isRancangMenuActive.value);
 
 function toggleRancangMenu() {
     isRancangMenuOpen.value = !isRancangMenuOpen.value;
+}
+
+const isKasBankActive = computed(() => {
+    try {
+        return route().current("kas-bank.*");
+    } catch {
+        return false;
+    }
+});
+
+const isPembelanjaanActive = computed(() => {
+    try {
+        const tab = page.props.activeTab;
+        return (
+            route().current("keuangan.bp-bahan-baku") ||
+            route().current("keuangan.bp-operasional") ||
+            route().current("keuangan.bp-fasilitas") ||
+            route().current("keuangan.pembelanjaan.*") ||
+            (route().current("keuangan.*") &&
+                [
+                    "bp-bahan-baku",
+                    "bp_bahan_baku",
+                    "bahan-baku",
+                    "bp-operasional",
+                    "bp_operasional",
+                    "operasional",
+                    "bp-fasilitas",
+                    "bp_fasilitas",
+                    "insentif-fasilitas",
+                    "fasilitas",
+                ].includes(tab))
+        );
+    } catch {
+        return false;
+    }
+});
+
+const isPembelanjaanOpen = ref(isPembelanjaanActive.value);
+
+function togglePembelanjaan() {
+    isPembelanjaanOpen.value = !isPembelanjaanOpen.value;
 }
 
 const isKeuanganActive = computed(() => {
@@ -272,6 +315,7 @@ function getInitialMenu() {
     if (isWorkOrderActive.value) return "work-order";
     if (isGiziActive.value) return "gizi";
     if (isKeuanganActive.value) return "keuangan";
+    if (isKasBankActive.value) return "kas-bank";
     if (isLaporanSppgActive.value) return "laporan-sppg";
     if (isPetunjukActive.value) return "petunjuk";
     if (isAsetDigitalActive.value) return "aset-digital";
@@ -299,6 +343,9 @@ const isWorkOrderExpanded = computed(
     () => activeExpandedMenu.value === "work-order",
 );
 const isGiziExpanded = computed(() => activeExpandedMenu.value === "gizi");
+const isKasBankExpanded = computed(
+    () => activeExpandedMenu.value === "kas-bank",
+);
 const isKeuanganExpanded = computed(
     () => activeExpandedMenu.value === "keuangan",
 );
@@ -333,6 +380,8 @@ watch(
             activeExpandedMenu.value = "gizi";
         } else if (isKeuanganActive.value) {
             activeExpandedMenu.value = "keuangan";
+        } else if (isKasBankActive.value) {
+            activeExpandedMenu.value = "kas-bank";
         } else if (isLaporanSppgActive.value) {
             activeExpandedMenu.value = "laporan-sppg";
         } else if (isPetunjukActive.value) {
@@ -399,6 +448,14 @@ function toggleGiziMenu() {
     }
     activeExpandedMenu.value =
         activeExpandedMenu.value === "gizi" ? null : "gizi";
+}
+
+function toggleKasBankMenu() {
+    if (props.isCollapsed) {
+        emit("update:isCollapsed", false);
+    }
+    activeExpandedMenu.value =
+        activeExpandedMenu.value === "kas-bank" ? null : "kas-bank";
 }
 
 function toggleKeuanganMenu() {
@@ -658,7 +715,6 @@ function logout() {
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
                                 (route().current('petugas.index') || route().current('petugas.*')) &&
-                                !route().current('petugas.shifting*') &&
                                 !route().current('petugas.rekap-kehadiran') &&
                                 !route().current('petugas.kehadiran') &&
                                 !route().current('petugas.rekap-bonus') &&
@@ -673,21 +729,7 @@ function logout() {
                             <span class="truncate">Daftar Petugas</span>
                         </Link>
 
-                        <!-- Sub-menu 2: Shifting (Konfigurasi Hari Kerja Petugas) -->
-                        <Link
-                            :href="route('petugas.shifting')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('petugas.shifting*')
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <CalendarRange class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Shifting</span>
-                        </Link>
-
-                        <!-- Sub-menu 3: Rekap Kehadiran -->
+                        <!-- Sub-menu 2: Rekap Kehadiran -->
                         <Link
                             :href="route('petugas.rekap-kehadiran')"
                             :class="[
@@ -1207,379 +1249,300 @@ function logout() {
                         v-if="!isCollapsed && isKeuanganExpanded"
                         class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
                     >
-                        <!-- 1. Anggaran -->
+                        <!-- 1. Persetujuan (Paling Atas) -->
                         <Link
-                            :href="route('keuangan.anggaran')"
+                            :href="route('keuangan.persetujuan')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.anggaran') ||
-                                (route().current('keuangan.index') &&
-                                    (page.props.activeTab === 'anggaran' ||
-                                        !page.props.activeTab))
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <Coins class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Anggaran</span>
-                        </Link>
-
-                        <!-- 2. Verifikasi PO -->
-                        <Link
-                            :href="route('keuangan.verifikasi-po')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.persetujuan') ||
+                                route().current('keuangan.verifikasi') ||
                                 route().current('keuangan.verifikasi-po') ||
                                 route().current('keuangan.verifikasi_po') ||
                                 (route().current('keuangan.*') &&
-                                    (page.props.activeTab === 'verifikasi-po' ||
-                                        page.props.activeTab ===
-                                            'verifikasi_po'))
+                                    (page.props.activeTab === 'persetujuan' ||
+                                        page.props.activeTab === 'verifikasi' ||
+                                        page.props.activeTab === 'verifikasi-po' ||
+                                        page.props.activeTab === 'verifikasi_po'))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
                             <ShieldCheck class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Verifikasi PO</span>
+                            <span class="truncate">Persetujuan</span>
                         </Link>
 
-                        <!-- 3. Daftar PO -->
+                        <!-- 2. Penyesuaian -->
                         <Link
-                            :href="route('keuangan.daftar-po')"
+                            :href="route('keuangan.penyesuaian')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.daftar-po') ||
-                                route().current('keuangan.daftar_po') ||
+                                route().current('keuangan.penyesuaian') ||
                                 (route().current('keuangan.*') &&
-                                    (page.props.activeTab === 'daftar-po' ||
-                                        page.props.activeTab === 'daftar_po'))
+                                    page.props.activeTab === 'penyesuaian')
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
-                            <Receipt class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Daftar PO</span>
+                            <SlidersHorizontal class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Penyesuaian</span>
                         </Link>
 
-                        <!-- 4. Survei Harga Pasar -->
-                        <Link
-                            :href="route('keuangan.survei-harga-pasar')"
-                            :class="[
-                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.survei-harga-pasar') ||
-                                route().current('keuangan.survei-harga') ||
-                                (route().current('keuangan.*') &&
-                                    (page.props.activeTab === 'survei-harga-pasar' ||
-                                        page.props.activeTab === 'survei-harga' ||
-                                        page.props.activeTab === 'survei_harga'))
-                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            ]"
-                        >
-                            <ClipboardList class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Survei Harga Pasar</span>
-                        </Link>
-
-                        <!-- 4. SPJ (Grouping Accordion) -->
-                        <div class="space-y-0.5 pt-0.5">
+                        <!-- 3. Pembelanjaan (Collapsible Parent) -->
+                        <div class="space-y-0.5">
                             <button
                                 type="button"
-                                @click="toggleSpjMenu"
+                                @click="togglePembelanjaan"
                                 :class="[
-                                    'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer text-left',
-                                    isSpjActive
-                                        ? 'text-primary bg-primary/5'
-                                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
+                                    'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                    isPembelanjaanActive
+                                        ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                 ]"
                             >
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <FolderKanban
-                                        class="h-3.5 w-3.5 shrink-0 text-slate-500"
-                                    />
-                                    <span class="truncate">SPJ</span>
+                                    <Package class="h-3.5 w-3.5 shrink-0" />
+                                    <span class="truncate">Pembelanjaan</span>
                                 </div>
                                 <ChevronDown
                                     :class="[
                                         'h-3 w-3 shrink-0 transition-transform duration-200 text-slate-400',
-                                        isSpjExpanded
+                                        isPembelanjaanOpen
                                             ? 'rotate-180 text-primary'
                                             : '',
                                     ]"
                                 />
                             </button>
 
-                            <!-- Sub-menu di dalam SPJ -->
+                            <!-- Anak dari Pembelanjaan: Bahan Baku, Operasional, Insentif Fasilitas -->
                             <div
-                                v-if="isSpjExpanded"
+                                v-if="isPembelanjaanOpen"
                                 class="pl-2 space-y-0.5 border-l-2 border-slate-200/80 ml-3.5 my-0.5 animate-in fade-in duration-150"
                             >
-                                <!-- Transaksi -->
-                                <Link
-                                    :href="route('keuangan.transaksi')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.transaksi') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab ===
-                                                'transaksi')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <CreditCard class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">Transaksi</span>
-                                </Link>
-
-                                <!-- BKU -->
-                                <Link
-                                    :href="route('keuangan.bku')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bku') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab === 'bku')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <BookOpen class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BKU</span>
-                                </Link>
-
-                                <!-- BP Bank -->
-                                <Link
-                                    :href="route('keuangan.bp-bank')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bp-bank') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab === 'bp-bank')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <Landmark class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BP Bank</span>
-                                </Link>
-
-                                <!-- BP Petty Cash -->
-                                <Link
-                                    :href="route('keuangan.bp-petty-cash')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.bp-petty-cash',
-                                        ) ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab ===
-                                                'bp-petty-cash')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <Banknote class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BP Petty Cash</span>
-                                </Link>
-
-                                <!-- BP Bahan Baku -->
+                                <!-- Anak 1: Bahan Baku -->
                                 <Link
                                     :href="route('keuangan.bp-bahan-baku')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.bp-bahan-baku',
-                                        ) ||
+                                        route().current('keuangan.bp-bahan-baku') ||
+                                        route().current('keuangan.pembelanjaan.bahan-baku') ||
                                         (route().current('keuangan.*') &&
-                                            page.props.activeTab ===
-                                                'bp-bahan-baku')
+                                            (page.props.activeTab === 'bp-bahan-baku' ||
+                                                page.props.activeTab === 'bp_bahan_baku' ||
+                                                page.props.activeTab === 'bahan-baku'))
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
                                 >
-                                    <Package class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BP Bahan Baku</span>
+                                    <Package class="h-3 w-3 shrink-0 text-emerald-600" />
+                                    <span class="truncate">Bahan Baku</span>
                                 </Link>
 
-                                <!-- BP Operasional -->
+                                <!-- Anak 2: Operasional -->
                                 <Link
                                     :href="route('keuangan.bp-operasional')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.bp-operasional',
-                                        ) ||
+                                        route().current('keuangan.bp-operasional') ||
+                                        route().current('keuangan.pembelanjaan.operasional') ||
                                         (route().current('keuangan.*') &&
-                                            page.props.activeTab ===
-                                                'bp-operasional')
+                                            (page.props.activeTab === 'bp-operasional' ||
+                                                page.props.activeTab === 'bp_operasional' ||
+                                                page.props.activeTab === 'operasional'))
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
                                 >
-                                    <Sliders class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BP Operasional</span>
+                                    <Sliders class="h-3 w-3 shrink-0 text-amber-600" />
+                                    <span class="truncate">Operasional</span>
                                 </Link>
 
-                                <!-- BP Fasilitas -->
+                                <!-- Anak 3: Insentif Fasilitas -->
                                 <Link
                                     :href="route('keuangan.bp-fasilitas')"
                                     :class="[
                                         'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.bp-fasilitas',
-                                        ) ||
+                                        route().current('keuangan.bp-fasilitas') ||
+                                        route().current('keuangan.pembelanjaan.insentif-fasilitas') ||
                                         (route().current('keuangan.*') &&
-                                            page.props.activeTab ===
-                                                'bp-fasilitas')
+                                            (page.props.activeTab === 'bp-fasilitas' ||
+                                                page.props.activeTab === 'bp_fasilitas' ||
+                                                page.props.activeTab === 'insentif-fasilitas' ||
+                                                page.props.activeTab === 'fasilitas'))
                                             ? 'bg-primary/10 text-primary font-bold'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                                     ]"
                                 >
-                                    <Building class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BP Fasilitas</span>
-                                </Link>
-
-                                <!-- LPA -->
-                                <Link
-                                    :href="route('keuangan.lpa')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.lpa') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab === 'lpa')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <FileCheck2 class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">LPA</span>
-                                </Link>
-
-                                <!-- SPTJ -->
-                                <Link
-                                    :href="route('keuangan.sptj')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.sptj') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab === 'sptj')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <FileSignature class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">SPTJ</span>
-                                </Link>
-
-                                <!-- BAPSD -->
-                                <Link
-                                    :href="route('keuangan.bapsd')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current('keuangan.bapsd') ||
-                                        (route().current('keuangan.*') &&
-                                            page.props.activeTab === 'bapsd')
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <CalendarRange class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">BAPSD</span>
+                                    <Building class="h-3 w-3 shrink-0 text-sky-600" />
+                                    <span class="truncate">Insentif Fasilitas</span>
                                 </Link>
                             </div>
                         </div>
 
-                        <!-- 5. Stok -->
+                        <!-- 4. Transaksi -->
                         <Link
-                            :href="route('keuangan.stok')"
+                            :href="route('keuangan.transaksi')"
                             :class="[
                                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                                route().current('keuangan.stok') ||
+                                route().current('keuangan.transaksi') ||
                                 (route().current('keuangan.*') &&
-                                    page.props.activeTab === 'stok')
+                                    (page.props.activeTab === 'transaksi' ||
+                                        !page.props.activeTab))
                                     ? 'bg-primary/10 text-primary font-bold shadow-2xs'
                                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                             ]"
                         >
-                            <Boxes class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">Stok</span>
+                            <CreditCard class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Transaksi</span>
                         </Link>
 
-                        <!-- 6. Laporan (Grouping Accordion) -->
-                        <div class="space-y-0.5 pt-0.5">
-                            <button
-                                type="button"
-                                @click="toggleLaporanMenu"
-                                :class="[
-                                    'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer text-left',
-                                    isLaporanActive
-                                        ? 'text-primary bg-primary/5'
-                                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-                                ]"
-                            >
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <FileText
-                                        class="h-3.5 w-3.5 shrink-0 text-slate-500"
-                                    />
-                                    <span class="truncate">Laporan</span>
-                                </div>
-                                <ChevronDown
-                                    :class="[
-                                        'h-3 w-3 shrink-0 transition-transform duration-200 text-slate-400',
-                                        isLaporanExpanded
-                                            ? 'rotate-180 text-primary'
-                                            : '',
-                                    ]"
-                                />
-                            </button>
-
-                            <!-- Sub-menu di dalam Laporan -->
-                            <div
-                                v-if="isLaporanExpanded"
-                                class="pl-2 space-y-0.5 border-l-2 border-slate-200/80 ml-3.5 my-0.5 animate-in fade-in duration-150"
-                            >
-                                <!-- Harian -->
-                                <Link
-                                    :href="route('keuangan.laporan-harian')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.laporan-harian',
-                                        ) ||
-                                        (route().current('keuangan.*') &&
-                                            (page.props.activeTab ===
-                                                'laporan-harian' ||
-                                                page.props.activeTab ===
-                                                    'laporan_harian'))
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <Calendar class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">Harian</span>
-                                </Link>
-
-                                <!-- Periodik -->
-                                <Link
-                                    :href="route('keuangan.laporan-periodik')"
-                                    :class="[
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer',
-                                        route().current(
-                                            'keuangan.laporan-periodik',
-                                        ) ||
-                                        (route().current('keuangan.*') &&
-                                            (page.props.activeTab ===
-                                                'laporan-periodik' ||
-                                                page.props.activeTab ===
-                                                    'laporan_periodik'))
-                                            ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                                    ]"
-                                >
-                                    <BarChart3 class="h-3 w-3 shrink-0" />
-                                    <span class="truncate">Periodik</span>
-                                </Link>
+                        <!-- 5. LPDH (Segera Hadir) -->
+                        <Link
+                            :href="route('keuangan.lpdh')"
+                            :class="[
+                                'flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.lpdh') ||
+                                (route().current('keuangan.*') && page.props.activeTab === 'lpdh')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <div class="flex items-center gap-2 min-w-0">
+                                <FileText class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">LPDH</span>
                             </div>
-                        </div>
+                            <span class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                                Segera
+                            </span>
+                        </Link>
+
+                        <!-- 6. Neraca (Segera Hadir) -->
+                        <Link
+                            :href="route('keuangan.neraca')"
+                            :class="[
+                                'flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.neraca') ||
+                                (route().current('keuangan.*') && page.props.activeTab === 'neraca')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <div class="flex items-center gap-2 min-w-0">
+                                <Scale class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">Neraca</span>
+                            </div>
+                            <span class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                                Segera
+                            </span>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- 5. Menu Kas & Bank (Accordion with Submenu) -->
+                <div class="space-y-0.5">
+                    <!-- Parent Kas & Bank Button -->
+                    <button
+                        type="button"
+                        @click="toggleKasBankMenu"
+                        :title="isCollapsed ? 'Kas & Bank' : ''"
+                        :class="[
+                            'w-full flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer text-left',
+                            isKasBankActive
+                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            isCollapsed
+                                ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                                : 'px-3.5 py-2.5 gap-3',
+                        ]"
+                    >
+                        <Landmark class="h-4 w-4 shrink-0" />
+                        <span
+                            :class="[
+                                'flex-1 truncate',
+                                isCollapsed ? 'inline lg:hidden' : 'inline',
+                            ]"
+                            >Kas & Bank</span
+                        >
+                        <ChevronDown
+                            :class="[
+                                'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-slate-400',
+                                isCollapsed ? 'hidden' : 'block',
+                                isKasBankExpanded
+                                    ? 'rotate-180 text-primary'
+                                    : '',
+                            ]"
+                        />
+                    </button>
+
+                    <!-- Sub-menu Items under Kas & Bank -->
+                    <div
+                        v-if="!isCollapsed && isKasBankExpanded"
+                        class="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-100 ml-5 my-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                        <!-- 1. Rekening Bank -->
+                        <Link
+                            :href="route('kas-bank.rekening-bank')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('kas-bank.rekening*') || route().current('kas-bank.index')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <CreditCard class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Rekening Bank</span>
+                        </Link>
+
+                        <!-- 2. Saldo Awal -->
+                        <Link
+                            :href="route('kas-bank.saldo-awal')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('kas-bank.saldo-awal*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Wallet class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">Saldo Awal</span>
+                        </Link>
+
+                        <!-- 3. Saldo Harian (Segera Hadir) -->
+                        <Link
+                            :href="route('kas-bank.saldo-harian')"
+                            :class="[
+                                'flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('kas-bank.saldo-harian*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <div class="flex items-center gap-2 min-w-0">
+                                <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">Saldo Harian</span>
+                            </div>
+                            <span class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                                Segera
+                            </span>
+                        </Link>
+
+                        <!-- 4. Kas Kecil (Segera Hadir) -->
+                        <Link
+                            :href="route('kas-bank.kas-kecil')"
+                            :class="[
+                                'flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('kas-bank.kas-kecil*')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <div class="flex items-center gap-2 min-w-0">
+                                <Banknote class="h-3.5 w-3.5 shrink-0" />
+                                <span class="truncate">Kas Kecil</span>
+                            </div>
+                            <span class="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                                Segera
+                            </span>
+                        </Link>
                     </div>
                 </div>
 

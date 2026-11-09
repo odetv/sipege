@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiziController;
 use App\Http\Controllers\KategoriKpmController;
 use App\Http\Controllers\KelompokPenerimaManfaatController;
+use App\Http\Controllers\KasBankController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\LaporanController;
@@ -77,6 +78,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
         Route::get('/pembayaran-insentif', [KelompokPenerimaManfaatController::class, 'pembayaranInsentif'])->name('pembayaran-insentif');
         Route::post('/pembayaran-insentif/generate-csv', [KelompokPenerimaManfaatController::class, 'generateInsentifCsv'])->name('pembayaran-insentif.generate-csv');
         Route::post('/pembayaran-insentif/download-relawan-harian', [KelompokPenerimaManfaatController::class, 'downloadInsentifRelawanHarian'])->name('pembayaran-insentif.download-relawan-harian');
+        Route::post('/pembayaran-insentif/ajukan-pembayaran', [KelompokPenerimaManfaatController::class, 'ajukanPembayaranInsentif'])->name('pembayaran-insentif.ajukan-pembayaran');
 
         // Kategori KPM
         Route::prefix('kategori-kpm')->name('kategori-kpm.')->group(function () {
@@ -148,27 +150,68 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
         Route::get('/api/nutrisurvey/data', [GiziController::class, 'getNutrisurveyData'])->name('nutrisurvey.data');
     });
 
+    // Kas & Bank SPPG (Rekening Bank, Saldo Awal, Saldo Harian, Kas Kecil)
+    Route::prefix('kas-bank')->name('kas-bank.')->group(function () {
+        Route::get('/', [KasBankController::class, 'rekeningBank'])->name('index');
+        Route::get('/rekening-bank', [KasBankController::class, 'rekeningBank'])->name('rekening-bank');
+        Route::post('/rekening-bank', [KasBankController::class, 'storeRekening'])->name('rekening-bank.store');
+        Route::put('/rekening-bank/{id}', [KasBankController::class, 'updateRekening'])->name('rekening-bank.update');
+        Route::delete('/rekening-bank/{id}', [KasBankController::class, 'destroyRekening'])->name('rekening-bank.destroy');
+        Route::patch('/rekening-bank/{id}/set-utama', [KasBankController::class, 'setUtama'])->name('rekening-bank.set-utama');
+
+        Route::get('/saldo-awal', [KasBankController::class, 'saldoAwal'])->name('saldo-awal');
+        Route::post('/saldo-awal', [KeuanganController::class, 'storeSaldoAwal'])->name('saldo-awal.store');
+        Route::put('/saldo-awal', [KeuanganController::class, 'updateSaldoAwal'])->name('saldo-awal.update');
+        Route::delete('/saldo-awal', [KeuanganController::class, 'destroySaldoAwal'])->name('saldo-awal.destroy');
+
+        Route::get('/saldo-harian', [KasBankController::class, 'saldoHarian'])->name('saldo-harian');
+        Route::get('/kas-kecil', [KasBankController::class, 'kasKecil'])->name('kas-kecil');
+    });
+
     // Keuangan SPPG (Sub-menu Lengkap)
     Route::prefix('keuangan')->name('keuangan.')->group(function () {
-        Route::get('/', [KeuanganController::class, 'anggaran'])->name('index');
-        Route::get('/anggaran', [KeuanganController::class, 'anggaran'])->name('anggaran');
+        Route::get('/', [KeuanganController::class, 'persetujuan'])->name('index');
+        Route::get('/persetujuan', [KeuanganController::class, 'persetujuan'])->name('persetujuan');
+        Route::get('/penyesuaian', [KeuanganController::class, 'penyesuaian'])->name('penyesuaian');
+        Route::post('/saldo-awal', [KeuanganController::class, 'storeSaldoAwal'])->name('saldo-awal.store');
+        Route::put('/saldo-awal', [KeuanganController::class, 'updateSaldoAwal'])->name('saldo-awal.update');
+        Route::delete('/saldo-awal', [KeuanganController::class, 'destroySaldoAwal'])->name('saldo-awal.destroy');
+        Route::post('/penyesuaian', [KeuanganController::class, 'storePenyesuaian'])->name('penyesuaian.store');
+        Route::put('/penyesuaian/{id}', [KeuanganController::class, 'updatePenyesuaian'])->name('penyesuaian.update');
+        Route::delete('/penyesuaian/{id}', [KeuanganController::class, 'destroyPenyesuaian'])->name('penyesuaian.destroy');
+        Route::get('/persetujuan', [KeuanganController::class, 'persetujuan'])->name('persetujuan');
+        Route::get('/verifikasi', [KeuanganController::class, 'verifikasiPoIndex'])->name('verifikasi');
         Route::get('/verifikasi-po', [KeuanganController::class, 'verifikasiPoIndex'])->name('verifikasi-po');
         Route::get('/verifikasi_po', [KeuanganController::class, 'verifikasiPoIndex'])->name('verifikasi_po');
+        Route::get('/transaksi', [KeuanganController::class, 'transaksi'])->name('transaksi');
+        Route::post('/transaksi', [KeuanganController::class, 'storeTransaksi'])->name('transaksi.store');
+        Route::post('/transaksi/batch', [KeuanganController::class, 'storeTransaksiBatch'])->name('transaksi.store-batch');
+        Route::put('/transaksi/{id}', [KeuanganController::class, 'updateTransaksi'])->name('transaksi.update');
+        Route::patch('/transaksi/{id}/status', [KeuanganController::class, 'updateStatusTransaksi'])->name('transaksi.update-status');
+        Route::delete('/transaksi/{id}', [KeuanganController::class, 'destroyTransaksi'])->name('transaksi.destroy');
+        Route::get('/anggaran', [KeuanganController::class, 'anggaran'])->name('anggaran');
         Route::get('/daftar-po', [KeuanganController::class, 'daftarPo'])->name('daftar-po');
         Route::get('/daftar_po', [KeuanganController::class, 'daftarPo'])->name('daftar_po');
-        Route::get('/transaksi', [KeuanganController::class, 'transaksi'])->name('transaksi');
         Route::get('/bku', [KeuanganController::class, 'bku'])->name('bku');
         Route::get('/bp-bank', [KeuanganController::class, 'bpBank'])->name('bp-bank');
         Route::get('/bp-petty-cash', [KeuanganController::class, 'bpPettyCash'])->name('bp-petty-cash');
+        
+        // Pembelanjaan Sub-menus
         Route::get('/bp-bahan-baku', [KeuanganController::class, 'bpBahanBaku'])->name('bp-bahan-baku');
+        Route::get('/pembelanjaan/bahan-baku', [KeuanganController::class, 'bpBahanBaku'])->name('pembelanjaan.bahan-baku');
         Route::get('/bp-operasional', [KeuanganController::class, 'bpOperasional'])->name('bp-operasional');
+        Route::get('/pembelanjaan/operasional', [KeuanganController::class, 'bpOperasional'])->name('pembelanjaan.operasional');
         Route::get('/bp-fasilitas', [KeuanganController::class, 'bpFasilitas'])->name('bp-fasilitas');
+        Route::get('/pembelanjaan/insentif-fasilitas', [KeuanganController::class, 'bpFasilitas'])->name('pembelanjaan.insentif-fasilitas');
+
         Route::get('/lpa', [KeuanganController::class, 'lpa'])->name('lpa');
         Route::get('/sptj', [KeuanganController::class, 'sptj'])->name('sptj');
         Route::get('/bapsd', [KeuanganController::class, 'bapsd'])->name('bapsd');
         Route::get('/stok', [KeuanganController::class, 'stok'])->name('stok');
         Route::get('/laporan-harian', [KeuanganController::class, 'laporanHarian'])->name('laporan-harian');
         Route::get('/laporan-periodik', [KeuanganController::class, 'laporanPeriodik'])->name('laporan-periodik');
+        Route::get('/lpdh', [KeuanganController::class, 'lpdh'])->name('lpdh');
+        Route::get('/neraca', [KeuanganController::class, 'neraca'])->name('neraca');
         Route::get('/survei-harga-pasar', [KeuanganController::class, 'surveiHarga'])->name('survei-harga-pasar');
         Route::get('/survei-harga', [KeuanganController::class, 'surveiHarga'])->name('survei-harga');
         Route::post('/survei-harga-pasar', [KeuanganController::class, 'storeSurveiHarga'])->name('survei-harga-pasar.store');
@@ -191,11 +234,9 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
 
     // Petugas SPPG (Daftar Petugas, Rekap Kehadiran, Rekap Bonus, Rekap Asuransi & Pembayaran Gaji BNI Direct)
     Route::get('/petugas/daftar-petugas', fn() => redirect()->route('petugas.index'))->name('petugas.daftar-petugas');
-    Route::get('/petugas/shifting', [PetugasController::class, 'shifting'])->name('petugas.shifting');
-    Route::post('/petugas/shifting/simpan', [PetugasController::class, 'simpanShifting'])->name('petugas.shifting.simpan');
-    Route::post('/petugas/shifting/update-tarif', [PetugasController::class, 'updateTarifShifting'])->name('petugas.shifting.update-tarif');
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
+    Route::post('/petugas/rekap-kehadiran/update-gaji-harian', [PetugasController::class, 'updateGajiHarianPresensi'])->name('petugas.rekap-kehadiran.update-gaji-harian');
     Route::get('/petugas/kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.kehadiran');
     Route::get('/petugas/rekap-bonus', [PetugasController::class, 'rekapBonus'])->name('petugas.rekap-bonus');
     Route::get('/petugas/rekap-asuransi', [PetugasController::class, 'rekapBpjsTk'])->name('petugas.rekap-asuransi');
@@ -206,6 +247,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
     Route::post('/petugas/pembayaran-gaji/generate-bni-csv', [PetugasController::class, 'generateBniDirectCsv'])->name('petugas.pembayaran-gaji.generate-csv');
     Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');
     Route::post('/petugas/pembayaran-gaji/download-relawan-harian', [PetugasController::class, 'downloadDaftarRelawanHarian'])->name('petugas.pembayaran-gaji.download-relawan-harian');
+    Route::post('/petugas/pembayaran-gaji/ajukan-pembayaran', [PetugasController::class, 'ajukanPembayaranGaji'])->name('petugas.pembayaran-gaji.ajukan-pembayaran');
     Route::resource('petugas', PetugasController::class);
 
     // Label SPPG (Menu Langsung)

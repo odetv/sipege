@@ -18,6 +18,7 @@ const props = defineProps({
     items: { type: Array, default: () => [] },
     selectedIds: { type: Array, default: () => [] },
     isAllSelected: { type: Boolean, default: false },
+    komponenSekolah: { type: String, default: "semua" },
 });
 
 const emit = defineEmits([
@@ -32,6 +33,33 @@ const emit = defineEmits([
 const totalTitikCount = computed(() => {
     return props.items.reduce((acc, it) => {
         return acc + (it.rincian_posyandu && it.rincian_posyandu.length > 0 ? it.rincian_posyandu.length : 1);
+    }, 0);
+});
+
+// Hitung titik nyata yang aktif terlayani menerima MBG
+const activeTitikCount = computed(() => {
+    return props.items.reduce((acc, it) => {
+        if (it.rincian_posyandu && it.rincian_posyandu.length > 0) {
+            return acc + it.rincian_posyandu.filter(
+                sub => (parseInt(sub.hari_distribusi, 10) || 0) > 0 && (Number(sub.amount) || 0) > 0
+            ).length;
+        }
+        return acc + ((parseInt(it.hari_distribusi, 10) || 0) > 0 && (Number(it.amount) || 0) > 0 ? 1 : 0);
+    }, 0);
+});
+
+// Hitung total PM terlayani (hanya dari yang aktif menerima MBG)
+const activePmCount = computed(() => {
+    return props.items.reduce((sum, it) => {
+        if (it.rincian_posyandu && it.rincian_posyandu.length > 0) {
+            return sum + it.rincian_posyandu
+                .filter(sub => (parseInt(sub.hari_distribusi, 10) || 0) > 0 && (Number(sub.amount) || 0) > 0)
+                .reduce((s, sub) => s + (Number(sub.total_penerima) || 0), 0);
+        }
+        if ((parseInt(it.hari_distribusi, 10) || 0) > 0 && (Number(it.amount) || 0) > 0) {
+            return sum + (Number(it.total_penerima) || 0);
+        }
+        return sum;
     }, 0);
 });
 
@@ -70,6 +98,14 @@ function formatRibuan(num) {
     return new Intl.NumberFormat("id-ID").format(num);
 }
 
+function getKomponenShortLabel(k) {
+    if (k === "siswa") return "Siswa";
+    if (k === "guru") return "Guru";
+    if (k === "tendik") return "Tendik";
+    if (k === "guru_tendik") return "Guru & Tendik";
+    return "PM";
+}
+
 function handleAmountInput(item, valStr) {
     const cleanDigits = String(valStr).replace(/\D/g, "");
     const intVal = cleanDigits === "" ? 0 : parseInt(cleanDigits, 10);
@@ -98,6 +134,12 @@ function getCategoryBadge(kategori) {
             return "bg-emerald-100 text-emerald-700 border-emerald-200";
     }
 }
+
+function isItemDisabled(item) {
+    const hari = Number(item.hari_distribusi ?? item.hari_operasional) || 0;
+    const amount = Number(item.amount) || 0;
+    return hari <= 0 || amount <= 0;
+}
 </script>
 
 <template>
@@ -106,7 +148,7 @@ function getCategoryBadge(kategori) {
         <div class="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
             <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Daftar Penerima Insentif Tunai ({{ totalTitikCount }} Titik)
+                    Daftar Penerima Insentif Tunai ({{ activeTitikCount }} Terlayani / {{ totalTitikCount }} Titik)
                 </span>
                 <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-800">
                     Penyaluran Kas Tunai
@@ -149,9 +191,12 @@ function getCategoryBadge(kategori) {
                     <template v-for="(item, index) in items" :key="item.id">
                         <tr
                             :class="[
-                                'hover:bg-slate-50/80 transition-colors',
-                                selectedIds.includes(item.id) ? 'bg-emerald-50/20' : '',
-                                item.rincian_posyandu ? 'bg-emerald-50/30' : ''
+                                'transition-colors',
+                                isItemDisabled(item)
+                                    ? 'bg-slate-50/70 opacity-60 text-slate-400'
+                                    : (item.rincian_posyandu
+                                        ? 'bg-emerald-50/30 hover:bg-emerald-50/50'
+                                        : (selectedIds.includes(item.id) ? 'bg-emerald-50/20 hover:bg-slate-50/80' : 'hover:bg-slate-50/80'))
                             ]"
                         >
                             <!-- Checkbox -->
@@ -159,8 +204,13 @@ function getCategoryBadge(kategori) {
                                 <input
                                     type="checkbox"
                                     :checked="selectedIds.includes(item.id)"
-                                    @change="$emit('toggleSelect', item.id)"
-                                    class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                    :disabled="isItemDisabled(item)"
+                                    @change="!isItemDisabled(item) && $emit('toggleSelect', item.id)"
+                                    :class="[
+                                        'rounded border-slate-300 text-emerald-600 focus:ring-emerald-500',
+                                        isItemDisabled(item) ? 'opacity-30 cursor-not-allowed bg-slate-200' : 'cursor-pointer'
+                                    ]"
+                                    :title="isItemDisabled(item) ? 'Tidak dapat dipilih karena tidak menerima MBG (0 hari kerja)' : 'Pilih sasaran ini'"
                                 />
                             </td>
 
@@ -171,7 +221,7 @@ function getCategoryBadge(kategori) {
 
                             <!-- Satuan / Posyandu -->
                             <td class="py-3 px-4">
-                                <div class="font-bold text-slate-900 line-clamp-1">
+                                <div class="font-bold line-clamp-1" :class="isItemDisabled(item) ? 'text-slate-500' : 'text-slate-900'">
                                     {{ item.nama_kelompok }}
                                 </div>
                                 <div class="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
@@ -179,6 +229,12 @@ function getCategoryBadge(kategori) {
                                         {{ item.kategori }}
                                     </span>
                                     <span>{{ item.desa_kelurahan || '-' }}</span>
+                                    <span
+                                        v-if="isItemDisabled(item)"
+                                        class="px-1.5 py-0.2 rounded text-[9.5px] font-extrabold bg-rose-50 text-rose-600 border border-rose-200"
+                                    >
+                                        Tidak Menerima MBG
+                                    </span>
                                 </div>
 
                                 <!-- Tombol Expand/Collapse untuk Rincian Posyandu 3B -->
@@ -218,9 +274,22 @@ function getCategoryBadge(kategori) {
 
                             <!-- Sasaran PM -->
                             <td class="py-3 px-3 text-right">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 font-extrabold text-slate-800 text-xs">
-                                    {{ formatNumber(item.total_penerima) }} PM
-                                </span>
+                                <div class="inline-flex flex-col items-end">
+                                    <span
+                                        class="inline-flex items-center px-2 py-0.5 rounded-full font-extrabold text-xs"
+                                        :class="item.kategori !== 'Posyandu' && komponenSekolah !== 'semua' ? 'bg-indigo-100 text-indigo-900 ring-1 ring-indigo-300' : 'bg-slate-100 text-slate-800'"
+                                        :title="item.breakdown_pm ? `Rincian: ${formatNumber(item.breakdown_pm.siswa)} Siswa, ${formatNumber(item.breakdown_pm.guru)} Guru, ${formatNumber(item.breakdown_pm.tendik)} Tendik (Total: ${formatNumber(item.breakdown_pm.semua)})` : ''"
+                                    >
+                                        {{ formatNumber(item.total_penerima) }} {{ item.kategori === 'Posyandu' ? 'PM' : getKomponenShortLabel(komponenSekolah) }}
+                                    </span>
+                                    <span
+                                        v-if="item.kategori !== 'Posyandu' && item.breakdown_pm && komponenSekolah !== 'semua'"
+                                        class="text-[9px] text-slate-400 font-medium mt-0.5"
+                                        :title="`Total keseluruhan PM di sekolah ini: ${formatNumber(item.breakdown_pm.semua)} PM`"
+                                    >
+                                        dari total {{ formatNumber(item.breakdown_pm.semua) }}
+                                    </span>
+                                </div>
                             </td>
 
                             <!-- Skema Insentif Harian -->
@@ -247,11 +316,11 @@ function getCategoryBadge(kategori) {
                                     </span>
                                 </template>
                                 <template v-else>
-                                    <span class="font-medium text-slate-400">
+                                    <span class="font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                                         0 Hari
                                     </span>
-                                    <span class="block text-[10px] text-slate-400 mt-0.5">
-                                        Belum Terkirim
+                                    <span class="block text-[10px] text-rose-500 font-semibold mt-0.5">
+                                        Tidak Menerima
                                     </span>
                                 </template>
                             </td>
@@ -264,17 +333,20 @@ function getCategoryBadge(kategori) {
                                         <input
                                             type="text"
                                             :value="formatRibuan(item.amount)"
+                                            :disabled="isItemDisabled(item)"
                                             @input="handleAmountInput(item, $event.target.value)"
                                             :class="[
-                                                'w-full pl-8 pr-2 py-1 rounded-lg border text-xs font-mono font-bold text-right focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-colors',
-                                                item.isCustom
-                                                    ? 'border-amber-400 bg-amber-50/20 text-amber-900 ring-1 ring-amber-300'
-                                                    : 'border-slate-300 text-slate-900 bg-emerald-50/20'
+                                                'w-full pl-8 pr-2 py-1 rounded-lg border text-xs font-mono font-bold text-right transition-colors',
+                                                isItemDisabled(item)
+                                                    ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
+                                                    : (item.isCustom
+                                                        ? 'border-amber-400 bg-amber-50/20 text-amber-900 ring-1 ring-amber-300 focus:ring-1 focus:ring-emerald-500'
+                                                        : 'border-slate-300 text-slate-900 bg-emerald-50/20 focus:ring-1 focus:ring-emerald-500')
                                             ]"
                                         />
                                     </div>
                                     <button
-                                        v-if="item.isCustom"
+                                        v-if="item.isCustom && !isItemDisabled(item)"
                                         type="button"
                                         @click="$emit('resetAmount', item.id)"
                                         class="p-1 rounded text-slate-400 hover:text-amber-700 transition-colors cursor-pointer"
@@ -283,7 +355,7 @@ function getCategoryBadge(kategori) {
                                         <RefreshCw class="h-3 w-3" />
                                     </button>
                                 </div>
-                                <p v-if="item.isCustom" class="text-[9.5px] text-amber-600 font-semibold mt-0.5 text-right">
+                                <p v-if="item.isCustom && !isItemDisabled(item)" class="text-[9.5px] text-amber-600 font-semibold mt-0.5 text-right">
                                     *Nominal diedit manual
                                 </p>
                             </td>
@@ -300,11 +372,17 @@ function getCategoryBadge(kategori) {
                             <td class="py-3 px-3 text-center">
                                 <button
                                     type="button"
-                                    @click="$emit('openReceipt', item)"
-                                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs whitespace-nowrap"
-                                    title="Lihat & download kuitansi resmi untuk titik sasaran ini"
+                                    :disabled="isItemDisabled(item)"
+                                    @click="!isItemDisabled(item) && $emit('openReceipt', item)"
+                                    :class="[
+                                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[11px] border transition-all whitespace-nowrap',
+                                        !isItemDisabled(item)
+                                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 cursor-pointer shadow-2xs hover:shadow-xs'
+                                            : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                                    ]"
+                                    :title="!isItemDisabled(item) ? 'Lihat & download kuitansi resmi untuk titik sasaran ini' : 'Tidak dapat mencetak kuitansi karena sasaran ini tidak menerima MBG'"
                                 >
-                                    <Receipt class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                    <Receipt class="h-3.5 w-3.5 shrink-0" :class="!isItemDisabled(item) ? 'text-emerald-600' : 'text-slate-400'" />
                                     <span>Kwitansi</span>
                                 </button>
                             </td>
@@ -353,7 +431,14 @@ function getCategoryBadge(kategori) {
                                                     <th class="py-2.5 px-3 text-center w-8">#</th>
                                                     <th class="py-2.5 px-3 min-w-[220px]">Nama Posyandu & Lokasi</th>
                                                     <th class="py-2.5 px-3 min-w-[170px]">Kader / PIC & Kontak</th>
-                                                    <th class="py-2.5 px-3 text-right">Sasaran PM</th>
+                                                    <th class="py-2.5 px-3 text-right">
+                                <div class="flex flex-col items-end">
+                                    <span>Sasaran PM</span>
+                                    <span v-if="komponenSekolah !== 'semua'" class="text-[9px] font-bold text-indigo-700 normal-case">
+                                        ({{ getKomponenShortLabel(komponenSekolah) }})
+                                    </span>
+                                </div>
+                            </th>
                                                     <th class="py-2.5 px-3 text-center min-w-[130px]">Porsi Sasaran (%)</th>
                                                     <th class="py-2.5 px-3 text-center">Hari Layanan</th>
                                                     <th class="py-2.5 px-4 text-right min-w-[160px]">Nominal Insentif (Rp)</th>
@@ -364,13 +449,18 @@ function getCategoryBadge(kategori) {
                                                 <tr
                                                     v-for="(sub, subIdx) in item.rincian_posyandu"
                                                     :key="sub.id"
-                                                    class="hover:bg-emerald-50/30 transition-colors"
+                                                    :class="[
+                                                        'transition-colors',
+                                                        sub.hari_distribusi > 0 && sub.amount > 0
+                                                            ? 'hover:bg-emerald-50/30'
+                                                            : 'bg-slate-50/70 opacity-60 text-slate-400'
+                                                    ]"
                                                 >
                                                     <td class="py-2.5 px-3 text-center font-bold text-slate-400">
                                                         {{ subIdx + 1 }}
                                                     </td>
                                                     <td class="py-2.5 px-3">
-                                                        <div class="font-bold text-slate-800">
+                                                        <div class="font-bold" :class="(sub.hari_distribusi > 0 && sub.amount > 0) ? 'text-slate-800' : 'text-slate-500'">
                                                             {{ sub.nama_kelompok }}
                                                         </div>
                                                         <div class="text-[10.5px] text-slate-500 flex items-center gap-1.5 mt-0.5">
@@ -378,6 +468,12 @@ function getCategoryBadge(kategori) {
                                                                 Posyandu
                                                             </span>
                                                             <span>{{ sub.desa_kelurahan }}</span>
+                                                            <span
+                                                                v-if="sub.hari_distribusi <= 0 || sub.amount <= 0"
+                                                                class="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-rose-50 text-rose-600 border border-rose-200"
+                                                            >
+                                                                Tidak Menerima MBG
+                                                            </span>
                                                         </div>
                                                     </td>
                                                     <td class="py-2.5 px-3">
@@ -414,26 +510,50 @@ function getCategoryBadge(kategori) {
                                                         </div>
                                                     </td>
                                                     <td class="py-2.5 px-3 text-center">
-                                                        <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200">
-                                                            {{ sub.hari_distribusi }} Hari
-                                                        </span>
+                                                        <template v-if="sub.hari_distribusi > 0 && sub.amount > 0">
+                                                            <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200">
+                                                                {{ sub.hari_distribusi }} Hari
+                                                            </span>
+                                                            <span class="block text-[9.5px] text-emerald-600 font-semibold mt-0.5">
+                                                                ✓ Menerima MBG
+                                                            </span>
+                                                        </template>
+                                                        <template v-else>
+                                                            <span class="font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200">
+                                                                0 Hari
+                                                            </span>
+                                                            <span class="block text-[9.5px] text-rose-500 font-bold mt-0.5">
+                                                                Tidak Menerima
+                                                            </span>
+                                                        </template>
                                                     </td>
                                                     <td class="py-2.5 px-4 text-right">
-                                                        <div class="font-black text-slate-900 text-xs">
+                                                        <div class="font-black text-xs" :class="(sub.hari_distribusi > 0 && sub.amount > 0) ? 'text-slate-900' : 'text-slate-400'">
                                                             {{ formatRupiah(sub.amount) }}
                                                         </div>
                                                         <div class="text-[9.5px] text-slate-500">
-                                                            <span v-if="sub.hari_distribusi > 1" class="font-medium text-slate-600">{{ formatRupiah(sub.tarif_harian) }}/hari • </span>Proporsional ({{ sub.persentase_pm }}%)
+                                                            <template v-if="sub.hari_distribusi > 0 && sub.amount > 0">
+                                                                <span v-if="sub.hari_distribusi > 1" class="font-medium text-slate-600">{{ formatRupiah(sub.tarif_harian) }}/hari • </span>Proporsional ({{ sub.persentase_pm }}%)
+                                                            </template>
+                                                            <template v-else>
+                                                                <span class="text-slate-400 italic">Tidak ada insentif</span>
+                                                            </template>
                                                         </div>
                                                     </td>
                                                     <td class="py-2.5 px-3 text-center">
                                                         <button
                                                             type="button"
-                                                            @click="$emit('openReceipt', sub)"
-                                                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-emerald-50 text-emerald-800 font-bold text-[10.5px] border border-emerald-300 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
-                                                            title="Cetak Kuitansi Resmi Khusus Posyandu Ini"
+                                                            :disabled="sub.hari_distribusi <= 0 || sub.amount <= 0"
+                                                            @click="(sub.hari_distribusi > 0 && sub.amount > 0) && $emit('openReceipt', sub)"
+                                                            :class="[
+                                                                'inline-flex items-center gap-1 px-2.5 py-1 rounded font-bold text-[10.5px] border transition-all whitespace-nowrap',
+                                                                (sub.hari_distribusi > 0 && sub.amount > 0)
+                                                                    ? 'bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 cursor-pointer shadow-2xs hover:shadow-xs'
+                                                                    : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                                                            ]"
+                                                            :title="(sub.hari_distribusi > 0 && sub.amount > 0) ? 'Cetak Kuitansi Resmi Khusus Posyandu Ini' : 'Tidak dapat mencetak kuitansi karena tidak menerima MBG'"
                                                         >
-                                                            <Receipt class="h-3 w-3 text-emerald-600 shrink-0" />
+                                                            <Receipt class="h-3 w-3 shrink-0" :class="(sub.hari_distribusi > 0 && sub.amount > 0) ? 'text-emerald-600' : 'text-slate-400'" />
                                                             <span>Kwitansi</span>
                                                         </button>
                                                     </td>
@@ -487,10 +607,10 @@ function getCategoryBadge(kategori) {
                             Total Alokasi Insentif Tunai:
                         </td>
                         <td class="py-2.5 px-3 text-right font-extrabold text-slate-900">
-                            {{ formatNumber(items.reduce((s, it) => s + (Number(it.total_penerima) || 0), 0)) }} PM
+                            {{ formatNumber(activePmCount) }} PM
                         </td>
-                        <td colspan="2" class="py-2.5 px-3 text-center text-slate-500">
-                            {{ totalTitikCount }} Titik Terdaftar
+                        <td colspan="2" class="py-2.5 px-3 text-center text-slate-600 font-semibold text-[11px]">
+                            {{ activeTitikCount }} Terlayani / {{ totalTitikCount }} Titik
                         </td>
                         <td class="py-2.5 px-4 text-right font-black text-emerald-950 bg-emerald-100 text-sm">
                             {{ formatRupiah(items.reduce((s, it) => s + (Number(it.amount) || 0), 0)) }}

@@ -6,6 +6,7 @@ use App\Models\DistribusiPenerimaManfaat;
 use App\Models\KelompokPenerimaManfaat;
 use App\Models\Periode;
 use App\Models\Petugas;
+use App\Models\TransaksiKeuangan;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderKelompok;
 use Carbon\Carbon;
@@ -1121,6 +1122,11 @@ class KelompokPenerimaManfaatController extends Controller
             $aturan = 'aturan_2';
         }
 
+        $komponenSekolah = $request->input('komponen_sekolah') ?: $request->input('komponen', 'semua');
+        if (!in_array($komponenSekolah, ['semua', 'siswa', 'guru', 'tendik', 'guru_tendik'], true)) {
+            $komponenSekolah = 'semua';
+        }
+
         // Normalisasi mode jika ada format lama
         if ($mode === 'periodik') $mode = 'periode';
         if ($mode === 'bulanan' || $mode === 'custom') $mode = 'rentang';
@@ -1195,6 +1201,7 @@ class KelompokPenerimaManfaatController extends Controller
                     'porsi_kecil' => (int) $wk->porsi_kecil,
                     'porsi_besar' => (int) $wk->porsi_besar,
                     'total_penerima' => (int) $wk->total_penerima,
+                    'rincian' => $wk->rincian,
                 ];
             });
 
@@ -1237,13 +1244,54 @@ class KelompokPenerimaManfaatController extends Controller
             }
         }
 
-        $allKelompok = $query->orderBy('kategori', 'asc')->orderBy('nama_kelompok', 'asc')->get();
+        $allKelompok = $query->with(['rincian'])->orderBy('kategori', 'asc')->orderBy('nama_kelompok', 'asc')->get();
+
+        // Helper penghitung jumlah PM sekolah berdasarkan filter komponen (Semua, Siswa, Guru, Tendik, Guru & Tendik)
+        $countPmByKomponen = function ($rincianItems, string $komponen): int {
+            if (empty($rincianItems)) return 0;
+            $sum = 0;
+            foreach ($rincianItems as $r) {
+                $sub = is_array($r) ? ($r['sub_kategori'] ?? '') : ($r->sub_kategori ?? '');
+                $total = is_array($r) ? (int)($r['total'] ?? 0) : (int)($r->total ?? 0);
+                $subLower = strtolower($sub);
+
+                $isGuru = str_contains($subLower, 'guru');
+                $isTendik = str_contains($subLower, 'tenaga kependidikan')
+                    || str_contains($subLower, 'tendik')
+                    || str_contains($subLower, 'satpam')
+                    || (str_starts_with($sub, 'Pendukung') && !$isGuru);
+                $isSiswa = !$isGuru && !$isTendik;
+
+                if ($komponen === 'semua') {
+                    $sum += $total;
+                } elseif ($komponen === 'siswa' && $isSiswa) {
+                    $sum += $total;
+                } elseif ($komponen === 'guru' && $isGuru) {
+                    $sum += $total;
+                } elseif ($komponen === 'tendik' && $isTendik) {
+                    $sum += $total;
+                } elseif ($komponen === 'guru_tendik' && ($isGuru || $isTendik)) {
+                    $sum += $total;
+                }
+            }
+            return $sum;
+        };
 
         // Helper mapper untuk kelompok individual (sekolah, dan posyandu versi lama)
-        $mapKelompokItem = function ($kpm) use ($startDate, $endDate, $hariOperasional, $woByDateMap, $savedDistribusiMap, $mode) {
+        $mapKelompokItem = function ($kpm) use ($startDate, $endDate, $hariOperasional, $woByDateMap, $savedDistribusiMap, $mode, $komponenSekolah, $countPmByKomponen) {
             $kId = $kpm->id;
             $isPosyandu = $kpm->kategori === 'Posyandu';
-            $masterPm = (int) $kpm->total_penerima;
+            
+            // Tentukan master PM sesuai pilihan komponen untuk sekolah
+            if ($isPosyandu) {
+                $masterPm = (int) $kpm->total_penerima;
+            } else {
+                if ($kpm->rincian && $kpm->rincian->isNotEmpty()) {
+                    $masterPm = $countPmByKomponen($kpm->rincian, $komponenSekolah);
+                } else {
+                    $masterPm = ($komponenSekolah === 'semua' || $komponenSekolah === 'siswa') ? (int) $kpm->total_penerima : 0;
+                }
+            }
 
             $hariDistribusi = 0;
             $totalInsentif = 0;
@@ -1289,13 +1337,23 @@ class KelompokPenerimaManfaatController extends Controller
 
                 if ($isT) {
                     $hariDistribusi++;
-                    $pmHariIni = ($wok && isset($wok['total_penerima'])) ? (int)$wok['total_penerima'] : $masterPm;
+                    if ($isPosyandu) {
+                        $pmHariIni = ($wok && isset($wok['total_penerima'])) ? (int)$wok['total_penerima'] : $masterPm;
+                    } else {
+                        if ($wok && !empty($wok['rincian'])) {
+                            $pmHariIni = $countPmByKomponen($wok['rincian'], $komponenSekolah);
+                        } else {
+                            $pmHariIni = $masterPm;
+                        }
+                    }
                     $totalPmAkumulasi += $pmHariIni;
 
                     if ($isPosyandu) {
                         $tarifHariIni = $pmHariIni * 1000;
                     } else {
-                        if ($pmHariIni < 100) {
+                        if ($pmHariIni <= 0) {
+                            $tarifHariIni = 0;
+                        } elseif ($pmHariIni < 100) {
                             $tarifHariIni = 20000;
                         } elseif ($pmHariIni <= 500) {
                             $tarifHariIni = 30000;
@@ -1318,12 +1376,16 @@ class KelompokPenerimaManfaatController extends Controller
             if ($hariDistribusi > 0) {
                 $totalPm = (int) round($totalPmAkumulasi / $hariDistribusi);
                 $tarifHarian = (int) round($totalInsentif / $hariDistribusi);
-            } elseif ($lastWoKpm && isset($lastWoKpm['total_penerima'])) {
-                $totalPm = (int) $lastWoKpm['total_penerima'];
+            } elseif ($lastWoKpm) {
                 if ($isPosyandu) {
+                    $totalPm = (int) ($lastWoKpm['total_penerima'] ?? $masterPm);
                     $tarifHarian = $totalPm * 1000;
                 } else {
-                    if ($totalPm < 100) $tarifHarian = 20000;
+                    $totalPm = !empty($lastWoKpm['rincian'])
+                        ? $countPmByKomponen($lastWoKpm['rincian'], $komponenSekolah)
+                        : $masterPm;
+                    if ($totalPm <= 0) $tarifHarian = 0;
+                    elseif ($totalPm < 100) $tarifHarian = 20000;
                     elseif ($totalPm <= 500) $tarifHarian = 30000;
                     elseif ($totalPm <= 750) $tarifHarian = 50000;
                     elseif ($totalPm <= 1000) $tarifHarian = 60000;
@@ -1335,7 +1397,8 @@ class KelompokPenerimaManfaatController extends Controller
                 if ($isPosyandu) {
                     $tarifHarian = $totalPm * 1000;
                 } else {
-                    if ($totalPm < 100) $tarifHarian = 20000;
+                    if ($totalPm <= 0) $tarifHarian = 0;
+                    elseif ($totalPm < 100) $tarifHarian = 20000;
                     elseif ($totalPm <= 500) $tarifHarian = 30000;
                     elseif ($totalPm <= 750) $tarifHarian = 50000;
                     elseif ($totalPm <= 1000) $tarifHarian = 60000;
@@ -1349,18 +1412,28 @@ class KelompokPenerimaManfaatController extends Controller
                 $tipePenerima = "Kader Posyandu (3B)";
                 $deskripsiTarif = "{$totalPm} PM × Rp 1.000 / hari";
             } else {
-                if ($totalPm < 100) {
-                    $skemaTier = "< 100 Siswa (Tier 1)";
+                $komponenLabel = match ($komponenSekolah) {
+                    'siswa' => 'Siswa',
+                    'guru' => 'Guru',
+                    'tendik' => 'Tendik',
+                    'guru_tendik' => 'Guru & Tendik',
+                    default => 'PM',
+                };
+
+                if ($totalPm <= 0) {
+                    $skemaTier = "0 {$komponenLabel} (Rp 0/hari)";
+                } elseif ($totalPm < 100) {
+                    $skemaTier = "< 100 {$komponenLabel} (Tier 1)";
                 } elseif ($totalPm <= 500) {
-                    $skemaTier = "100 - 500 Siswa (Tier 2)";
+                    $skemaTier = "100 - 500 {$komponenLabel} (Tier 2)";
                 } elseif ($totalPm <= 750) {
-                    $skemaTier = "501 - 750 Siswa (Tier 3)";
+                    $skemaTier = "501 - 750 {$komponenLabel} (Tier 3)";
                 } elseif ($totalPm <= 1000) {
-                    $skemaTier = "751 - 1.000 Siswa (Tier 4)";
+                    $skemaTier = "751 - 1.000 {$komponenLabel} (Tier 4)";
                 } elseif ($totalPm <= 2000) {
-                    $skemaTier = "1.001 - 2.000 Siswa (Tier 5)";
+                    $skemaTier = "1.001 - 2.000 {$komponenLabel} (Tier 5)";
                 } else {
-                    $skemaTier = "2.001 - 3.000 Siswa (Tier 6)";
+                    $skemaTier = "2.001 - 3.000 {$komponenLabel} (Tier 6)";
                 }
                 $tipePenerima = "PJ Satuan Pendidikan (PIC)";
                 $deskripsiTarif = "Rp " . number_format($tarifHarian, 0, ',', '.') . "/hari";
@@ -1389,6 +1462,14 @@ class KelompokPenerimaManfaatController extends Controller
                 'status_label' => $totalInsentif > 0 ? 'Siap Disalurkan (Tunai)' : 'Belum Ada Distribusi',
                 'has_wo' => $lastWoKpm !== null,
                 'is_wo_menerima' => $lastWoKpm ? $lastWoKpm['is_menerima'] : null,
+                'breakdown_pm' => [
+                    'semua' => $isPosyandu ? (int)$kpm->total_penerima : $countPmByKomponen($kpm->rincian, 'semua'),
+                    'siswa' => $isPosyandu ? 0 : $countPmByKomponen($kpm->rincian, 'siswa'),
+                    'guru' => $isPosyandu ? 0 : $countPmByKomponen($kpm->rincian, 'guru'),
+                    'tendik' => $isPosyandu ? 0 : $countPmByKomponen($kpm->rincian, 'tendik'),
+                    'guru_tendik' => $isPosyandu ? 0 : $countPmByKomponen($kpm->rincian, 'guru_tendik'),
+                ],
+                'komponen_sekolah' => $komponenSekolah,
             ];
         };
 
@@ -1488,13 +1569,16 @@ class KelompokPenerimaManfaatController extends Controller
                             $hariDistribusiGlobal++;
                             $totalPmAkumulasiGlobal += $dailyPm3b;
 
-                            // Skema Insentif Harian Penanggung Jawab 3B (Kader/TPK) per SPPG (Aturan 2 - Tabel 1)
-                            if ($dailyPm3b <= 100) $tarifHariIni = 60000;
-                            elseif ($dailyPm3b <= 300) $tarifHariIni = 150000;
-                            elseif ($dailyPm3b <= 500) $tarifHariIni = 250000;
-                            elseif ($dailyPm3b <= 1000) $tarifHariIni = 400000;
-                            elseif ($dailyPm3b <= 1500) $tarifHariIni = 550000;
-                            else $tarifHariIni = 700000;
+                            // Skema Insentif Harian Penanggung Jawab 3B (Kader/TPK) per SPPG (Aturan 2 - SK No. 63551 Tahun 2026)
+                            if ($dailyPm3b <= 0) $tarifHariIni = 0;
+                            elseif ($dailyPm3b <= 60) $tarifHariIni = $dailyPm3b * 1000; // Tingkat Khusus: Rp 1.000 / PM
+                            elseif ($dailyPm3b <= 100) $tarifHariIni = 60000; // Tingkat 1: Rp 60.000
+                            elseif ($dailyPm3b <= 150) $tarifHariIni = $dailyPm3b * 1000; // Tingkat Khusus: Rp 1.000 / PM
+                            elseif ($dailyPm3b <= 300) $tarifHariIni = 150000; // Tingkat 2: Rp 150.000
+                            elseif ($dailyPm3b <= 500) $tarifHariIni = 250000; // Tingkat 3: Rp 250.000
+                            elseif ($dailyPm3b <= 1000) $tarifHariIni = 400000; // Tingkat 4: Rp 400.000
+                            elseif ($dailyPm3b <= 1500) $tarifHariIni = 550000; // Tingkat 5: Rp 550.000
+                            else $tarifHariIni = 700000; // Tingkat 6: Rp 700.000
 
                             $totalInsentifGlobal += $tarifHariIni;
                         }
@@ -1507,7 +1591,10 @@ class KelompokPenerimaManfaatController extends Controller
                         $tarifHarianGlobal = (int) round($totalInsentifGlobal / $hariDistribusiGlobal);
                     } else {
                         $totalPmGlobal = (int) $posyanduKelompoks->sum('total_penerima');
-                        if ($totalPmGlobal <= 100) $tarifHarianGlobal = 60000;
+                        if ($totalPmGlobal <= 0) $tarifHarianGlobal = 0;
+                        elseif ($totalPmGlobal <= 60) $tarifHarianGlobal = $totalPmGlobal * 1000;
+                        elseif ($totalPmGlobal <= 100) $tarifHarianGlobal = 60000;
+                        elseif ($totalPmGlobal <= 150) $tarifHarianGlobal = $totalPmGlobal * 1000;
                         elseif ($totalPmGlobal <= 300) $tarifHarianGlobal = 150000;
                         elseif ($totalPmGlobal <= 500) $tarifHarianGlobal = 250000;
                         elseif ($totalPmGlobal <= 1000) $tarifHarianGlobal = 400000;
@@ -1516,43 +1603,57 @@ class KelompokPenerimaManfaatController extends Controller
                         $totalInsentifGlobal = 0;
                     }
 
-                    // Tentukan Label Tingkat Skema 3B
-                    if ($totalPmGlobal <= 100) $skemaTier = "≤ 100 PM 3B (Tingkat 1)";
-                    elseif ($totalPmGlobal <= 300) $skemaTier = "101 - 300 PM 3B (Tingkat 2)";
-                    elseif ($totalPmGlobal <= 500) $skemaTier = "301 - 500 PM 3B (Tingkat 3)";
-                    elseif ($totalPmGlobal <= 1000) $skemaTier = "501 - 1.000 PM 3B (Tingkat 4)";
-                    elseif ($totalPmGlobal <= 1500) $skemaTier = "1.001 - 1.500 PM 3B (Tingkat 5)";
-                    else $skemaTier = "> 1.500 PM 3B (Tingkat 6)";
+                    // Tentukan Label Tingkat Skema 3B (SK No. 63551 Tahun 2026)
+                    if ($totalPmGlobal <= 0) $skemaTier = "0 PM 3B (Tidak Ada Sasaran)";
+                    elseif ($totalPmGlobal <= 60) $skemaTier = "1 - 60 PM 3B (Tingkat Khusus: Rp 1.000/PM)";
+                    elseif ($totalPmGlobal <= 100) $skemaTier = "61 - 100 PM 3B (Tingkat 1: Rp 60.000/hari)";
+                    elseif ($totalPmGlobal <= 150) $skemaTier = "101 - 150 PM 3B (Tingkat Khusus: Rp 1.000/PM)";
+                    elseif ($totalPmGlobal <= 300) $skemaTier = "151 - 300 PM 3B (Tingkat 2: Rp 150.000/hari)";
+                    elseif ($totalPmGlobal <= 500) $skemaTier = "301 - 500 PM 3B (Tingkat 3: Rp 250.000/hari)";
+                    elseif ($totalPmGlobal <= 1000) $skemaTier = "501 - 1.000 PM 3B (Tingkat 4: Rp 400.000/hari)";
+                    elseif ($totalPmGlobal <= 1500) $skemaTier = "1.001 - 1.500 PM 3B (Tingkat 5: Rp 550.000/hari)";
+                    else $skemaTier = "> 1.500 PM 3B (Tingkat 6: Rp 700.000/hari)";
 
                     $deskripsiTarif = "Rp " . number_format($tarifHarianGlobal, 0, ',', '.') . "/hari";
 
                     // Rincian posyandu penyusun skema 3B
                     $countPos = $posyanduKelompoks->count();
-                    $nominalRata = $countPos > 0 ? (int) floor($totalInsentifGlobal / $countPos) : 0;
                     $rincianPosyandu = [];
                     $allocatedSum = 0;
 
                     $sortedPosyandus = $posyanduKelompoks->sortByDesc('total_penerima')->values();
+                    // Filter posyandu yang benar-benar ada catatan distribusi (hari_distribusi > 0)
+                    $activePosyandus = $sortedPosyandus->filter(function ($pos) use ($posyanduStats) {
+                        return (int)($posyanduStats[$pos->id]['hari_distribusi'] ?? 0) > 0;
+                    })->values();
 
-                    foreach ($sortedPosyandus as $idx => $pos) {
+                    $totalPmActive = $activePosyandus->sum('total_penerima');
+                    $activeCount = $activePosyandus->count();
+
+                    foreach ($sortedPosyandus as $pos) {
                         $pStats = $posyanduStats[$pos->id] ?? [
                             'hari_distribusi' => 0,
                             'total_pm_akumulasi' => 0,
                             'last_pm' => (int)$pos->total_penerima
                         ];
-                        $pDays = $pStats['hari_distribusi'] > 0 ? $pStats['hari_distribusi'] : ($hariDistribusiGlobal > 0 ? 1 : 0);
+                        $pDays = (int)($pStats['hari_distribusi'] ?? 0);
                         $pPm = (int)$pos->total_penerima;
 
-                        $persentase = $totalPmGlobal > 0 ? ($pPm / $totalPmGlobal) * 100 : ($countPos > 0 ? 100 / $countPos : 0);
-
-                        if ($idx === $countPos - 1) {
-                            $nominalProporsional = max(0, $totalInsentifGlobal - $allocatedSum);
+                        if ($pDays > 0 && $totalInsentifGlobal > 0) {
+                            $persentase = $totalPmActive > 0 ? ($pPm / $totalPmActive) * 100 : ($activeCount > 0 ? 100 / $activeCount : 0);
+                            $activeIdx = $activePosyandus->search(fn($item) => $item->id === $pos->id);
+                            if ($activeIdx === $activeCount - 1) {
+                                $nominalProporsional = max(0, $totalInsentifGlobal - $allocatedSum);
+                            } else {
+                                $nominalProporsional = (int) round(($persentase / 100) * $totalInsentifGlobal);
+                                $allocatedSum += $nominalProporsional;
+                            }
+                            $tarifHarianPos = $pDays > 0 ? (int) round($nominalProporsional / $pDays) : 0;
                         } else {
-                            $nominalProporsional = (int) round(($persentase / 100) * $totalInsentifGlobal);
-                            $allocatedSum += $nominalProporsional;
+                            $persentase = 0;
+                            $nominalProporsional = 0;
+                            $tarifHarianPos = 0;
                         }
-
-                        $tarifHarianPos = $pDays > 0 ? (int) round($nominalProporsional / $pDays) : 0;
 
                         $rincianPosyandu[] = [
                             'id' => $pos->id,
@@ -1571,7 +1672,7 @@ class KelompokPenerimaManfaatController extends Controller
                             'hari_operasional' => $pDays,
                             'hari_rentang' => $hariOperasional,
                             'nominal_proporsional' => $nominalProporsional,
-                            'nominal_rata' => $nominalRata,
+                            'nominal_rata' => $activeCount > 0 ? (int) floor($totalInsentifGlobal / $activeCount) : 0,
                             'amount' => $nominalProporsional,
                             'tarif_harian' => $tarifHarianPos,
                             'skema_tier' => 'Porsi ' . round($persentase, 1) . '% (' . $pPm . ' PM)',
@@ -1643,6 +1744,22 @@ class KelompokPenerimaManfaatController extends Controller
             $distribusiCountMap[$item['id']] = $item['hari_distribusi'];
         }
 
+        // Cek status transaksi pengajuan pembayaran insentif untuk rentang tanggal aktif
+        $refTag = "[REF:INSENTIF-KPM:{$startDate->format('Y-m-d')}_{$endDate->format('Y-m-d')}]";
+        $existingTrx = TransaksiKeuangan::where('unit_sppg_id', $unitSppg?->id)
+            ->whereIn('kategori', ['Operasional', 'Insentif Fasilitas'])
+            ->where('arus', 'Keluar')
+            ->where('keterangan', 'like', "%{$refTag}%")
+            ->latest('id')
+            ->first();
+
+        $transaksiPengajuan = $existingTrx ? [
+            'id' => $existingTrx->id,
+            'nomor_transaksi' => $existingTrx->nomor_transaksi,
+            'status' => $existingTrx->status,
+            'nominal' => (float) $existingTrx->nominal,
+        ] : null;
+
         return Inertia::render('PenerimaManfaat/PembayaranInsentif', [
             'user' => $user,
             'unitSppg' => $unitSppg,
@@ -1653,10 +1770,13 @@ class KelompokPenerimaManfaatController extends Controller
             'summary' => $summary,
             'stats' => $summary,
             'aturan' => $aturan,
+            'komponenSekolah' => $komponenSekolah,
             'initialMode' => $mode,
             'initialTanggalMulai' => $startDate->format('Y-m-d'),
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
             'initialPeriodeId' => $periodeId ?? 'all',
+            'transaksiPengajuan' => $transaksiPengajuan,
+            'statusPengajuan' => $transaksiPengajuan['status'] ?? null,
             'filters' => [
                 'mode' => $mode,
                 'tanggal_mulai' => $startDate->format('Y-m-d'),
@@ -1665,6 +1785,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'kategori' => $kategoriFilter,
                 'search' => $search,
                 'aturan' => $aturan,
+                'komponen_sekolah' => $komponenSekolah,
             ],
         ]);
     }
@@ -1852,8 +1973,17 @@ class KelompokPenerimaManfaatController extends Controller
             }
 
             $startRow = 9;
-            $items = array_values($validated['items']);
+            // Filter tegas server side: HANYA yang benar-benar terdistribusi aktif (hari_distribusi > 0 dan amount > 0)
+            $items = array_values(array_filter($validated['items'], function ($it) {
+                $hari = (float)($it['hari_distribusi'] ?? 0);
+                $amt = (float)($it['amount'] ?? 0);
+                return $hari > 0 && $amt > 0;
+            }));
             $count = count($items);
+
+            if ($count === 0) {
+                return response()->json(['error' => 'Tidak ada data relawan yang terdistribusi (hari distribusi > 0) untuk diunduh.'], 422);
+            }
 
             for ($i = 0; $i < $count; $i++) {
                 $item = $items[$i];
@@ -1871,8 +2001,10 @@ class KelompokPenerimaManfaatController extends Controller
                     $peran = $item['peran'];
                 }
 
-                $hariKerja = (float)($item['hari_distribusi'] ?? 1);
-                if ($hariKerja <= 0) $hariKerja = 1;
+                $hariKerja = (float)($item['hari_distribusi'] ?? 0);
+                if ($hariKerja <= 0) {
+                    continue;
+                }
 
                 $besaranHarian = (float)($item['tarif_harian'] ?? 0);
                 if ($besaranHarian <= 0 && !empty($item['amount']) && $hariKerja > 0) {
@@ -1986,5 +2118,112 @@ class KelompokPenerimaManfaatController extends Controller
         $cleaned = preg_replace('/\s+/', ' ', $cleaned);
         $cleaned = trim($cleaned);
         return mb_substr($cleaned, 0, $maxLen);
+    }
+
+    /**
+     * Ajukan Transaksi Pembayaran Insentif Penanggung Jawab KPM ke Menu Keuangan (Status Ditunda).
+     */
+    public function ajukanPembayaranInsentif(Request $request)
+    {
+        $validated = $request->validate([
+            'tanggal_transaksi' => ['required', 'date'],
+            'tanggal_mulai' => ['nullable', 'date'],
+            'tanggal_selesai' => ['nullable', 'date'],
+            'periode_id' => ['nullable'],
+            'periode_label' => ['nullable', 'string', 'max:255'],
+            'nominal' => ['required', 'numeric', 'min:1'],
+            'total_titik' => ['nullable', 'integer'],
+            'total_pm' => ['nullable', 'integer'],
+            'metode_bayar' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $tglTransaksi = $validated['tanggal_transaksi'];
+        $tglMulai = $validated['tanggal_mulai'] ?: $tglTransaksi;
+        $tglSelesai = $validated['tanggal_selesai'] ?: $tglTransaksi;
+        $label = $validated['periode_label'] ?: ($tglMulai === $tglSelesai ? Carbon::parse($tglTransaksi)->translatedFormat('d F Y') : Carbon::parse($tglMulai)->translatedFormat('d M Y') . ' s/d ' . Carbon::parse($tglSelesai)->translatedFormat('d M Y'));
+
+        $namaTransaksi = "Pembayaran Insentif Penanggung Jawab KPM - " . $label;
+        $refTag = "[REF:INSENTIF-KPM:{$tglMulai}_{$tglSelesai}]";
+
+        // Cek apakah transaksi pengajuan insentif untuk rentang ini sudah pernah dibuat
+        $existing = TransaksiKeuangan::where('unit_sppg_id', $unitSppg?->id)
+            ->whereIn('kategori', ['Operasional', 'Insentif Fasilitas'])
+            ->where('arus', 'Keluar')
+            ->where('keterangan', 'like', "%{$refTag}%")
+            ->first();
+
+        $titikCount = $validated['total_titik'] ?? 0;
+        $pmCount = $validated['total_pm'] ?? 0;
+        $keteranganDetail = "Pengajuan otomatis Pembayaran Insentif Penanggung Jawab KPM (Satdik & Posyandu) ({$label}) sejumlah {$titikCount} titik terlayani ({$pmCount} PM). {$refTag}";
+
+        if ($existing) {
+            if ($existing->status === 'Disetujui') {
+                return response()->json([
+                    'status' => 'already_approved',
+                    'message' => "Pengajuan pembayaran insentif untuk periode ini sudah pernah DISETUJUI pada Menu Transaksi ({$existing->nomor_transaksi}) dan tidak dapat diajukan kembali.",
+                    'data' => $existing,
+                ], 422);
+            }
+
+            if ($existing->status === 'Ditunda') {
+                return response()->json([
+                    'status' => 'already_pending',
+                    'message' => "Pengajuan pembayaran insentif untuk periode ini sudah TELAH DIAJUKAN dengan status DITUNDA pada Menu Transaksi ({$existing->nomor_transaksi}). Pengajuan hanya bisa dilakukan 1 kali dan tidak boleh duplikasi.",
+                    'data' => $existing,
+                ], 422);
+            }
+
+            // Jika status sebelumnya Ditolak atau Dibatalkan, perbarui nominal dan datanya kembali ke status Ditunda (diajukan ulang)
+            $existing->update([
+                'tanggal' => $tglTransaksi,
+                'tanggal_pesanan' => $tglTransaksi,
+                'kategori' => 'Operasional',
+                'nama_transaksi' => $namaTransaksi,
+                'nominal' => $validated['nominal'],
+                'volume' => $titikCount > 0 ? $titikCount : 1,
+                'satuan' => 'Titik',
+                'status' => 'Ditunda',
+                'metode_bayar' => $validated['metode_bayar'] ?: 'Tunai',
+                'keterangan' => $keteranganDetail,
+            ]);
+
+            return response()->json([
+                'status' => 'updated',
+                'message' => "Pengajuan ulang pembayaran insentif berhasil dikirim ke Menu Transaksi dengan status DITUNDA (Nomor: {$existing->nomor_transaksi}). Silakan disetujui di Menu Keuangan agar sah terhitung.",
+                'data' => $existing,
+            ]);
+        }
+
+        // Buat transaksi baru
+        $tglStr = date('Ymd', strtotime($tglTransaksi));
+        $countToday = TransaksiKeuangan::whereDate('created_at', now()->toDateString())->count() + 1;
+        $nomorTrx = 'TRX-' . $tglStr . '-' . str_pad($countToday, 4, '0', STR_PAD_LEFT);
+
+        $newTrx = TransaksiKeuangan::create([
+            'unit_sppg_id' => $unitSppg?->id,
+            'user_id' => $user->id,
+            'nomor_transaksi' => $nomorTrx,
+            'tanggal' => $tglTransaksi,
+            'tanggal_pesanan' => $tglTransaksi,
+            'kategori' => 'Operasional',
+            'arus' => 'Keluar',
+            'nama_transaksi' => $namaTransaksi,
+            'volume' => $titikCount > 0 ? $titikCount : 1,
+            'satuan' => 'Titik',
+            'nominal' => $validated['nominal'],
+            'status' => 'Ditunda',
+            'perlu_npo' => false,
+            'metode_bayar' => $validated['metode_bayar'] ?: 'Tunai',
+            'keterangan' => $keteranganDetail,
+        ]);
+
+        return response()->json([
+            'status' => 'created',
+            'message' => "Pengajuan pembayaran insentif sebesar Rp " . number_format($validated['nominal'], 0, ',', '.') . " berhasil masuk ke Menu Transaksi dengan status DITUNDA (Nomor: {$newTrx->nomor_transaksi}). Silakan disetujui di Menu Keuangan agar sah terhitung.",
+            'data' => $newTrx,
+        ]);
     }
 }

@@ -28,6 +28,8 @@ import {
     ArrowRight,
     RefreshCw,
     FileText,
+    Coins,
+    Edit3,
 } from "lucide-vue-next";
 import { 
     downloadRekapAbsenGajiExcel, 
@@ -285,6 +287,169 @@ const dateColumns = computed(() => {
 const matrixPresensi = ref({});
 const isDirty = ref(false);
 const isSaving = ref(false);
+
+const presensiDetailsMap = ref(JSON.parse(JSON.stringify(props.initialPresensiDetailsMap || {})));
+
+watch(
+    () => props.initialPresensiDetailsMap,
+    (newMap) => {
+        presensiDetailsMap.value = JSON.parse(JSON.stringify(newMap || {}));
+    },
+    { deep: true }
+);
+
+function isGajiCustom(p, dateStr) {
+    if (!p || !dateStr) return false;
+    const snap = getDailySnapshot(p.id, dateStr);
+    if (snap && snap.gaji_harian_bgn !== undefined && snap.gaji_harian_bgn !== null) {
+        return Number(snap.gaji_harian_bgn) !== (Number(p.gaji_harian_bgn) || 0);
+    }
+    return false;
+}
+
+// ─── Modal Ubah Gaji Harian Petugas ─────────────────────────────────────────
+const showEditGajiModal = ref(false);
+const isSubmittingGaji = ref(false);
+const editGajiForm = ref({
+    petugas_id: null,
+    petugas_nama: "",
+    petugas_nik: "",
+    petugas_jabatan: "",
+    petugas_master_gaji: 0,
+    tanggal: "",
+    tanggal_formatted: "",
+    day_name: "",
+    status_presensi: "",
+    gaji_harian_bgn: 0,
+    raw_input: "",
+    apply_to_period: false,
+});
+
+function openEditGajiHarianModal(petugas, dateStr) {
+    if (!petugas || !dateStr) return;
+    const currentRate = getDailyGaji(petugas, dateStr);
+    const masterRate = Number(petugas.gaji_harian_bgn) || 0;
+    const snap = getDailySnapshot(petugas.id, dateStr);
+    const st = matrixPresensi.value[petugas.id]?.[dateStr] || snap?.status || "";
+
+    let formattedDate = dateStr;
+    let dayName = "";
+    try {
+        const d = new Date(dateStr + "T00:00:00");
+        const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        dayName = days[d.getDay()];
+        formattedDate = `${dayName}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    } catch (e) {
+        // fallback
+    }
+
+    editGajiForm.value = {
+        petugas_id: petugas.id,
+        petugas_nama: petugas.nama,
+        petugas_nik: petugas.nik || "-",
+        petugas_jabatan: getDailyJabatan(petugas, dateStr),
+        petugas_master_gaji: masterRate,
+        tanggal: dateStr,
+        tanggal_formatted: formattedDate,
+        day_name: dayName,
+        status_presensi: st,
+        gaji_harian_bgn: currentRate,
+        raw_input: currentRate > 0 ? currentRate.toLocaleString("id-ID") : "0",
+        apply_to_period: false,
+    };
+
+    showEditGajiModal.value = true;
+}
+
+function closeEditGajiModal() {
+    if (isSubmittingGaji.value) return;
+    showEditGajiModal.value = false;
+}
+
+function onGajiHarianInput(event) {
+    const val = event.target.value.replace(/[^0-9]/g, "");
+    const num = parseInt(val, 10) || 0;
+    editGajiForm.value.gaji_harian_bgn = num;
+    editGajiForm.value.raw_input = num > 0 ? num.toLocaleString("id-ID") : "";
+}
+
+function useMasterGajiRate() {
+    const masterRate = editGajiForm.value.petugas_master_gaji || 0;
+    editGajiForm.value.gaji_harian_bgn = masterRate;
+    editGajiForm.value.raw_input = masterRate > 0 ? masterRate.toLocaleString("id-ID") : "0";
+}
+
+function submitEditGajiHarian() {
+    if (isSubmittingGaji.value) return;
+    const form = editGajiForm.value;
+    if (!form.petugas_id || !form.tanggal) return;
+
+    isSubmittingGaji.value = true;
+
+    // Update optimis ke presensiDetailsMap
+    if (!presensiDetailsMap.value[form.petugas_id]) {
+        presensiDetailsMap.value[form.petugas_id] = {};
+    }
+
+    if (form.apply_to_period) {
+        dateColumns.value.forEach((dt) => {
+            if (!presensiDetailsMap.value[form.petugas_id][dt.dateStr]) {
+                presensiDetailsMap.value[form.petugas_id][dt.dateStr] = {
+                    status: matrixPresensi.value[form.petugas_id]?.[dt.dateStr] || "H",
+                    nama: form.petugas_nama,
+                    nik: form.petugas_nik,
+                    jabatan: form.petugas_jabatan,
+                    gaji_harian_bgn: form.gaji_harian_bgn,
+                };
+            } else {
+                presensiDetailsMap.value[form.petugas_id][dt.dateStr].gaji_harian_bgn = form.gaji_harian_bgn;
+            }
+        });
+    } else {
+        if (!presensiDetailsMap.value[form.petugas_id][form.tanggal]) {
+            presensiDetailsMap.value[form.petugas_id][form.tanggal] = {
+                status: form.status_presensi || "H",
+                nama: form.petugas_nama,
+                nik: form.petugas_nik,
+                jabatan: form.petugas_jabatan,
+                gaji_harian_bgn: form.gaji_harian_bgn,
+            };
+        } else {
+            presensiDetailsMap.value[form.petugas_id][form.tanggal].gaji_harian_bgn = form.gaji_harian_bgn;
+        }
+    }
+
+    router.post(
+        route("petugas.rekap-kehadiran.update-gaji-harian"),
+        {
+            petugas_id: form.petugas_id,
+            tanggal: form.tanggal,
+            gaji_harian_bgn: form.gaji_harian_bgn,
+            apply_to_period: form.apply_to_period,
+            tanggal_mulai: tanggalMulai.value,
+            tanggal_selesai: tanggalSelesai.value,
+            status: form.status_presensi || matrixPresensi.value[form.petugas_id]?.[form.tanggal] || "H",
+        },
+        {
+            preserveScroll: true,
+            preserveState: false,
+            onSuccess: () => {
+                isSubmittingGaji.value = false;
+                showEditGajiModal.value = false;
+                showToast("Nominal gaji harian petugas berhasil diperbarui!");
+            },
+            onError: (errors) => {
+                console.error("Gagal update gaji harian:", errors);
+                isSubmittingGaji.value = false;
+                showToast("Gagal memperbarui nominal gaji: Silakan coba lagi.");
+            },
+            onFinish: () => {
+                isSubmittingGaji.value = false;
+            },
+        }
+    );
+}
 
 function initMatrixPresensi() {
     const map = {};
@@ -552,6 +717,30 @@ function formatRibuan(num) {
     return new Intl.NumberFormat("id-ID").format(num);
 }
 
+// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas)
+function parseJabatanList(str) {
+    if (!str) return [];
+    const normalized = str
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
+}
+
+// Helper Filter Multi-Jabatan
+function matchJabatan(petugasJabatan, filterVal) {
+    if (!filterVal || filterVal === "all") return true;
+    const list = parseJabatanList(petugasJabatan);
+    return (
+        list.some((j) => j.toLowerCase() === filterVal.toLowerCase()) ||
+        (petugasJabatan || "").toLowerCase().includes(filterVal.toLowerCase())
+    );
+}
+
 function getJabatanBadgeClass(jabatan) {
     if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
     const j = jabatan.toLowerCase();
@@ -604,14 +793,12 @@ const filteredPetugas = computed(() => {
             const q = searchQuery.value.toLowerCase().trim();
             const matchNama = (p.nama || "").toLowerCase().includes(q);
             const matchNik = (p.nik || "").toLowerCase().includes(q);
-            const matchJabatan = (p.jabatan || "").toLowerCase().includes(q);
+            const matchJabatan = parseJabatanList(p.jabatan).some((j) => j.toLowerCase().includes(q)) || (p.jabatan || "").toLowerCase().includes(q);
             if (!matchNama && !matchNik && !matchJabatan) return false;
         }
 
         if (selectedJabatanFilter.value !== "all") {
-            const jabStr = (p.jabatan || "").toLowerCase();
-            const filterVal = selectedJabatanFilter.value.toLowerCase();
-            if (!jabStr.includes(filterVal)) {
+            if (!matchJabatan(p.jabatan, selectedJabatanFilter.value)) {
                 return false;
             }
         }
@@ -638,7 +825,7 @@ const computedPetugasStats = computed(() => {
 
         dateColumns.value.forEach((dt) => {
             const st = pAtt[dt.dateStr] || "";
-            const snap = props.initialPresensiDetailsMap?.[p.id]?.[dt.dateStr];
+            const snap = presensiDetailsMap.value?.[p.id]?.[dt.dateStr];
             const dailyGaji = (snap && snap.gaji_harian_bgn !== undefined && snap.gaji_harian_bgn !== null)
                 ? Number(snap.gaji_harian_bgn)
                 : defaultRate;
@@ -803,7 +990,7 @@ async function downloadHariIniDirect() {
             petugas: props.petugas,
             presensiMap: matrixPresensi.value,
             kehadiranMap: matrixPresensi.value,
-            presensiDetailsMap: props.initialPresensiDetailsMap,
+            presensiDetailsMap: presensiDetailsMap.value,
             dateList: exportDateList,
             startDate: todayStr.value,
             endDate: todayStr.value,
@@ -843,7 +1030,7 @@ async function downloadTandaTerimaHarianDirect() {
             petugas: props.petugas,
             presensiMap: matrixPresensi.value,
             kehadiranMap: matrixPresensi.value,
-            presensiDetailsMap: props.initialPresensiDetailsMap,
+            presensiDetailsMap: presensiDetailsMap.value,
             dateList: exportDateList,
             startDate: todayStr.value,
             endDate: todayStr.value,
@@ -885,7 +1072,7 @@ async function handleExecuteExport() {
                 petugas: props.petugas,
                 presensiMap: matrixPresensi.value,
                 kehadiranMap: matrixPresensi.value,
-                presensiDetailsMap: props.initialPresensiDetailsMap,
+                presensiDetailsMap: presensiDetailsMap.value,
                 dateList: exportDateList,
                 startDate: startStr,
                 endDate: endStr,
@@ -901,7 +1088,7 @@ async function handleExecuteExport() {
             await downloadSlipGajiPdf({
                 petugas: filteredPetugas.value,
                 presensiMap: matrixPresensi.value,
-                presensiDetailsMap: props.initialPresensiDetailsMap,
+                presensiDetailsMap: presensiDetailsMap.value,
                 dateList: exportDateList,
                 startDate: startStr,
                 endDate: endStr,
@@ -916,7 +1103,7 @@ async function handleExecuteExport() {
                 petugas: props.petugas,
                 presensiMap: matrixPresensi.value,
                 kehadiranMap: matrixPresensi.value,
-                presensiDetailsMap: props.initialPresensiDetailsMap,
+                presensiDetailsMap: presensiDetailsMap.value,
                 dateList: exportDateList,
                 startDate: startStr,
                 endDate: endStr,
@@ -960,7 +1147,7 @@ async function downloadSlipGajiDirect() {
         await downloadSlipGajiPdf({
             petugas: filteredPetugas.value,
             presensiMap: matrixPresensi.value,
-            presensiDetailsMap: props.initialPresensiDetailsMap,
+            presensiDetailsMap: presensiDetailsMap.value,
             dateList: exportDateList,
             startDate: startStr,
             endDate: endStr,
@@ -994,7 +1181,7 @@ async function downloadSlipSinglePetugas(p) {
         await downloadSlipGajiPdf({
             petugas: [p],
             presensiMap: matrixPresensi.value,
-            presensiDetailsMap: props.initialPresensiDetailsMap,
+            presensiDetailsMap: presensiDetailsMap.value,
             dateList: exportDateList,
             startDate: tanggalMulai.value,
             endDate: tanggalSelesai.value,
@@ -1046,7 +1233,7 @@ function toggleAllExpand() {
 }
 
 function getDailySnapshot(petugasId, dateStr) {
-    return props.initialPresensiDetailsMap?.[petugasId]?.[dateStr] || null;
+    return presensiDetailsMap.value?.[petugasId]?.[dateStr] || null;
 }
 
 function getDailyGaji(p, dateStr) {
@@ -1100,6 +1287,7 @@ const filteredDailyLogs = computed(() => {
 
             list.push({
                 petugasId: p.id,
+                petugasRaw: p,
                 dateStr: dt.dateStr,
                 dayName: dt.dayName,
                 nama: snap?.nama || p.nama,
@@ -1719,7 +1907,7 @@ const filteredDailyLogs = computed(() => {
                                                     Berhenti
                                                 </span>
                                                 <span
-                                                    v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                                    v-for="jab in parseJabatanList(p.jabatan)"
                                                     :key="jab"
                                                     :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
                                                 >
@@ -1936,8 +2124,23 @@ const filteredDailyLogs = computed(() => {
                                                                     {{ getDailyJabatan(p, dt.dateStr) }}
                                                                 </span>
                                                             </td>
-                                                            <td class="py-2 px-3 text-right font-mono text-slate-800">
-                                                                {{ formatRupiah(getDailyGaji(p, dt.dateStr)) }}
+                                                            <td class="py-2 px-3 text-right">
+                                                                <button
+                                                                    type="button"
+                                                                    @click.stop="openEditGajiHarianModal(p, dt.dateStr)"
+                                                                    class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-800 font-mono text-xs font-semibold hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200/60 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs group"
+                                                                    :class="{ 'bg-emerald-50/70 border-emerald-300 text-emerald-800 font-bold': isGajiCustom(p, dt.dateStr) }"
+                                                                    :title="`Klik untuk ubah nominal gaji harian (${dt.dateStr})${isGajiCustom(p, dt.dateStr) ? ' [Tarif Khusus/Kustom]' : ''}`"
+                                                                >
+                                                                    <span>{{ formatRupiah(getDailyGaji(p, dt.dateStr)) }}</span>
+                                                                    <span
+                                                                        v-if="isGajiCustom(p, dt.dateStr)"
+                                                                        class="px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-600 text-white"
+                                                                    >
+                                                                        Kustom
+                                                                    </span>
+                                                                    <Edit3 class="w-3 h-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                                                                </button>
                                                             </td>
                                                             <td class="py-2 px-3 text-right font-mono text-slate-500">
                                                                 {{ formatRupiah(getDailyBonus(p, dt.dateStr)) }}
@@ -2123,7 +2326,22 @@ const filteredDailyLogs = computed(() => {
                                     </span>
                                 </td>
                                 <td class="py-2 px-3 text-right font-mono text-slate-800">
-                                    {{ formatRupiah(log.gajiHarian) }}
+                                    <button
+                                        type="button"
+                                        @click.stop="openEditGajiHarianModal(log.petugasRaw, log.dateStr)"
+                                        class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-800 font-mono text-xs font-semibold hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200/60 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs group"
+                                        :class="{ 'bg-emerald-50/70 border-emerald-300 text-emerald-800 font-bold': isGajiCustom(log.petugasRaw, log.dateStr) }"
+                                        :title="`Klik untuk ubah nominal gaji harian (${log.dateStr})`"
+                                    >
+                                        <span>{{ formatRupiah(log.gajiHarian) }}</span>
+                                        <span
+                                            v-if="isGajiCustom(log.petugasRaw, log.dateStr)"
+                                            class="px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider bg-emerald-600 text-white"
+                                        >
+                                            Kustom
+                                        </span>
+                                        <Edit3 class="w-3 h-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                                    </button>
                                 </td>
                                 <td class="py-2 px-3 text-right font-mono text-slate-500">
                                     {{ formatRupiah(log.bonusHarian) }}
@@ -2408,9 +2626,13 @@ const filteredDailyLogs = computed(() => {
                             <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                                 <h4 class="font-bold text-slate-900 text-base leading-tight">{{ detailPetugas.nama }}</h4>
                                 <p class="text-xs text-slate-500 font-mono mt-0.5">NIK: {{ detailPetugas.nik }}</p>
-                                <div class="flex items-center gap-2 mt-2">
-                                    <span :class="['px-2 py-0.5 rounded text-[10px] font-semibold border', getJabatanBadgeClass(detailPetugas.jabatan)]">
-                                        {{ detailPetugas.jabatan }}
+                                <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    <span
+                                        v-for="jab in parseJabatanList(detailPetugas.jabatan)"
+                                        :key="jab"
+                                        :class="['px-2 py-0.5 rounded text-[10px] font-semibold border', getJabatanBadgeClass(jab)]"
+                                    >
+                                        {{ jab }}
                                     </span>
                                     <span class="text-[10px] text-slate-500 font-mono">
                                         Jam Kerja: {{ detailPetugas.jam_kerja }}
@@ -2543,11 +2765,34 @@ const filteredDailyLogs = computed(() => {
                                                         {{ getStatusLabel(matrixPresensi[detailPetugas.id]?.[dt.dateStr] || '') }}
                                                     </span>
                                                 </td>
-                                                <td class="py-1.5 px-2.5 text-slate-700">
-                                                    {{ getDailyJabatan(detailPetugas, dt.dateStr) }}
+                                                <td class="py-1.5 px-2.5">
+                                                    <div class="flex items-center gap-1 flex-wrap">
+                                                        <span
+                                                            v-for="jab in parseJabatanList(getDailyJabatan(detailPetugas, dt.dateStr))"
+                                                            :key="jab"
+                                                            :class="['px-1.5 py-0.5 rounded text-[9.5px] border font-medium leading-none', getJabatanBadgeClass(jab)]"
+                                                        >
+                                                            {{ jab }}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td class="py-1.5 px-2.5 text-right font-mono text-slate-600">
-                                                    {{ formatRupiah(getDailyGaji(detailPetugas, dt.dateStr)) }}
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="openEditGajiHarianModal(detailPetugas, dt.dateStr)"
+                                                        class="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 font-mono text-xs font-medium border border-transparent hover:border-emerald-300 transition-colors cursor-pointer group"
+                                                        :class="{ 'text-emerald-700 font-bold bg-emerald-50 border-emerald-300': isGajiCustom(detailPetugas, dt.dateStr) }"
+                                                        :title="`Klik untuk ubah nominal gaji harian (${dt.dateStr})`"
+                                                    >
+                                                        <span>{{ formatRupiah(getDailyGaji(detailPetugas, dt.dateStr)) }}</span>
+                                                        <span
+                                                            v-if="isGajiCustom(detailPetugas, dt.dateStr)"
+                                                            class="px-1 py-0.2 rounded text-[7px] font-bold uppercase tracking-wider bg-emerald-600 text-white"
+                                                        >
+                                                            Kustom
+                                                        </span>
+                                                        <Edit3 class="w-2.5 h-2.5 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                                                    </button>
                                                 </td>
                                                 <td class="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-700">
                                                     {{ formatRupiah(getDailyHonor(detailPetugas, dt.dateStr)) }}
@@ -2575,6 +2820,157 @@ const filteredDailyLogs = computed(() => {
                                 class="px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                             >
                                 Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Teleport>
+            <!-- MODAL UBAH GAJI HARIAN PETUGAS -->
+            <Teleport to="body">
+                <div
+                    v-if="showEditGajiModal"
+                    class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-all duration-300"
+                    @click.self="closeEditGajiModal"
+                >
+                    <div
+                        class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-md w-full overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200"
+                    >
+                        <!-- Header -->
+                        <div class="px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shadow-inner text-white">
+                                    <Coins class="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-base text-white leading-tight">Ubah Gaji Harian Petugas</h3>
+                                    <p class="text-emerald-100 text-xs">Penyesuaian nominal honor harian BGN</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                @click="closeEditGajiModal"
+                                class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                            >
+                                <X class="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="p-6 space-y-4">
+                            <!-- Petugas & Tanggal Card -->
+                            <div class="bg-slate-50 border border-slate-200/70 rounded-xl p-3.5 space-y-2.5">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <div class="font-bold text-slate-800 text-sm leading-snug">
+                                            {{ editGajiForm.petugas_nama }}
+                                        </div>
+                                        <div class="text-xs text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                                            <div class="flex items-center gap-1 flex-wrap">
+                                                <span
+                                                    v-for="jab in parseJabatanList(editGajiForm.petugas_jabatan)"
+                                                    :key="jab"
+                                                    :class="['px-1.5 py-0.5 rounded text-[9.5px] border font-medium leading-none', getJabatanBadgeClass(jab)]"
+                                                >
+                                                    {{ jab }}
+                                                </span>
+                                            </div>
+                                            <span v-if="editGajiForm.petugas_nik && editGajiForm.petugas_nik !== '-'">
+                                                NIK: {{ editGajiForm.petugas_nik }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="px-2 py-0.5 rounded text-[11px] font-bold border"
+                                        :class="getStatusBadgeStyle(editGajiForm.status_presensi)"
+                                    >
+                                        {{ getStatusTitle(editGajiForm.status_presensi) }}
+                                    </span>
+                                </div>
+
+                                <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-600">
+                                    <div class="flex items-center gap-1.5 font-medium">
+                                        <Calendar class="w-3.5 h-3.5 text-emerald-600" />
+                                        <span>{{ editGajiForm.tanggal_formatted }}</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500">
+                                        Tarif Master: <span class="font-semibold text-slate-700">{{ formatRupiah(editGajiForm.petugas_master_gaji) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Nominal Input -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block text-xs font-bold text-slate-700">
+                                        Nominal Gaji Harian BGN <span class="text-rose-500">*</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        @click="useMasterGajiRate"
+                                        class="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                        title="Gunakan nominal standar dari profil master petugas"
+                                    >
+                                        <RotateCcw class="w-3 h-3" />
+                                        <span>Gunakan Tarif Master ({{ formatRupiah(editGajiForm.petugas_master_gaji) }})</span>
+                                    </button>
+                                </div>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">
+                                        Rp
+                                    </span>
+                                    <input
+                                        type="text"
+                                        :value="editGajiForm.raw_input"
+                                        @input="onGajiHarianInput"
+                                        placeholder="0"
+                                        class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 font-mono text-base font-bold shadow-2xs transition-all"
+                                        autofocus
+                                    />
+                                </div>
+                                <p class="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                                    Nominal ini dihitung utuh jika Hadir Penuh (H), 50% jika Hadir Setengah Hari (½), dan 0 jika Libur / Tidak Masuk.
+                                </p>
+                            </div>
+
+                            <!-- Checkbox Apply to Period -->
+                            <div class="p-3 bg-emerald-50/50 border border-emerald-200/60 rounded-xl">
+                                <label class="flex items-start gap-2.5 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        v-model="editGajiForm.apply_to_period"
+                                        class="mt-0.5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                                    />
+                                    <div class="text-xs">
+                                        <span class="font-bold text-emerald-900 block">
+                                            Terapkan ke seluruh tanggal dalam periode aktif
+                                        </span>
+                                        <span class="text-emerald-700 text-[11px] leading-snug block mt-0.5">
+                                            Rentang: <span class="font-semibold">{{ tanggalMulai }}</span> s/d <span class="font-semibold">{{ tanggalSelesai }}</span> ({{ dateColumns.length }} hari).
+                                        </span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Footer Actions -->
+                        <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                            <button
+                                type="button"
+                                @click="closeEditGajiModal"
+                                :disabled="isSubmittingGaji"
+                                class="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                @click="submitEditGajiHarian"
+                                :disabled="isSubmittingGaji"
+                                class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                                <RefreshCw v-if="isSubmittingGaji" class="w-3.5 h-3.5 animate-spin" />
+                                <Check v-else class="w-3.5 h-3.5" />
+                                <span>{{ isSubmittingGaji ? 'Menyimpan...' : 'Simpan Nominal' }}</span>
                             </button>
                         </div>
                     </div>

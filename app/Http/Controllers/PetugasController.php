@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AbsensiPetugas;
 use App\Models\Periode;
 use App\Models\Petugas;
-use App\Models\ShiftingPetugas;
+use App\Models\TransaksiKeuangan;
 use App\Models\UnitSppg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,155 +76,7 @@ class PetugasController extends Controller
         ]);
     }
 
-    /**
-     * Menampilkan halaman Shifting (Tabel Bantu Konfigurasi Hari Kerja Petugas SPPG).
-     */
-    public function shifting(Request $request): Response
-    {
-        $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
 
-        $petugas = [];
-        $summary = [
-            'total_petugas' => 0,
-            'total_aktif' => 0,
-            'total_nonaktif' => 0,
-        ];
-        $daftarJabatan = [];
-        $periodes = [];
-        $shiftingMap = [];
-
-        // Mode: 'bulanan' (28 hari) atau 'periodik' (14 hari) atau 'custom'
-        $mode = $request->input('mode', 'bulanan');
-        $tglMulai = $request->input('tanggal_mulai');
-        $tglSelesai = $request->input('tanggal_selesai');
-        $periodeId = $request->input('periode_id');
-
-        // Tentukan rentang tanggal
-        if ($tglMulai && $tglSelesai) {
-            $startDate = Carbon::parse($tglMulai)->startOfDay();
-            $endDate = Carbon::parse($tglSelesai)->startOfDay();
-        } elseif ($periodeId && $periodeId !== 'all') {
-            $p = Periode::find($periodeId);
-            if ($p && $p->tanggal_mulai && $p->tanggal_selesai) {
-                $startDate = $p->tanggal_mulai->copy()->startOfDay();
-                $endDate = $p->tanggal_selesai->copy()->startOfDay();
-            } else {
-                $startDate = Carbon::today();
-                $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
-            }
-        } else {
-            $latestPeriode = Periode::orderBy('nomor_periode', 'desc')->orderBy('tanggal_mulai', 'desc')->first();
-            $today = Carbon::today();
-
-            $targetPeriode = null;
-            if (
-                $latestPeriode &&
-                $latestPeriode->tanggal_mulai &&
-                $latestPeriode->tanggal_selesai &&
-                $today->between($latestPeriode->tanggal_mulai->copy()->startOfDay(), $latestPeriode->tanggal_selesai->copy()->startOfDay())
-            ) {
-                $targetPeriode = $latestPeriode;
-            } else {
-                $activePeriodeDb = Periode::whereDate('tanggal_mulai', '<=', $today->format('Y-m-d'))
-                    ->whereDate('tanggal_selesai', '>=', $today->format('Y-m-d'))
-                    ->orderBy('nomor_periode', 'desc')
-                    ->first();
-                if ($activePeriodeDb) {
-                    $targetPeriode = $activePeriodeDb;
-                }
-            }
-
-            if ($targetPeriode) {
-                $startDate = $targetPeriode->tanggal_mulai->copy()->startOfDay();
-                $endDate = $targetPeriode->tanggal_selesai->copy()->startOfDay();
-                $periodeId = (string) $targetPeriode->id;
-                $diffDays = $startDate->diffInDays($endDate) + 1;
-                $mode = $diffDays <= 14 ? 'periodik' : ($diffDays <= 28 ? 'bulanan' : 'custom');
-            } else {
-                $startDate = Carbon::today();
-                if ($mode === 'periodik') {
-                    $endDate = $startDate->copy()->addDays(13);
-                } else {
-                    $endDate = $startDate->copy()->addDays(27);
-                }
-            }
-        }
-
-        if ($endDate->lt($startDate)) {
-            $endDate = $startDate->copy()->addDays($mode === 'periodik' ? 13 : 27);
-        }
-
-        if (!$periodeId || $periodeId === 'all') {
-            $matchedPeriode = Periode::whereDate('tanggal_mulai', $startDate->format('Y-m-d'))
-                ->whereDate('tanggal_selesai', $endDate->format('Y-m-d'))
-                ->first();
-            if ($matchedPeriode) {
-                $periodeId = (string) $matchedPeriode->id;
-            }
-        }
-
-        if ($unitSppg) {
-            $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
-                ->orderBy('urutan', 'asc')
-                ->orderBy('id', 'asc')
-                ->get();
-
-            $summary['total_petugas'] = $petugas->count();
-            $summary['total_aktif'] = $petugas->where('status', 'Aktif')->count();
-            $summary['total_nonaktif'] = $petugas->where('status', 'Nonaktif')->count();
-
-            $daftarJabatan = $this->extractDaftarJabatan($petugas);
-
-            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
-                $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
-                $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
-                return [
-                    'id' => $p->id,
-                    'nomor_periode' => $p->nomor_periode,
-                    'tanggal_mulai' => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
-                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
-                    'status' => $p->status,
-                    'label' => "Periode {$p->nomor_periode} ({$mulai} – {$selesai})",
-                ];
-            });
-
-            $petugasIds = $petugas->pluck('id')->all();
-            $shiftingRecords = ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
-                ->whereIn('petugas_id', $petugasIds)
-                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                ->get();
-
-            $initialTarifMap = [];
-            foreach ($petugas as $p) {
-                if ($p->gaji_harian_shifting !== null) {
-                    $initialTarifMap[$p->id] = (int) $p->gaji_harian_shifting;
-                }
-            }
-
-            foreach ($shiftingRecords as $rec) {
-                $tglStr = $rec->tanggal instanceof Carbon ? $rec->tanggal->format('Y-m-d') : substr((string)$rec->tanggal, 0, 10);
-                $shiftingMap[$rec->petugas_id][$tglStr] = $rec->status;
-                if ($rec->tarif_harian !== null && !isset($initialTarifMap[$rec->petugas_id])) {
-                    $initialTarifMap[$rec->petugas_id] = (int) $rec->tarif_harian;
-                }
-            }
-        }
-
-        return Inertia::render('Petugas/Shifting', [
-            'petugas' => $petugas,
-            'summary' => $summary,
-            'daftarJabatan' => $daftarJabatan,
-            'periodes' => $periodes,
-            'unitSppg' => $unitSppg,
-            'initialMode' => $mode,
-            'initialTanggalMulai' => $startDate->format('Y-m-d'),
-            'initialTanggalSelesai' => $endDate->format('Y-m-d'),
-            'initialPeriodeId' => $periodeId ?? 'all',
-            'initialShiftingMap' => $shiftingMap,
-            'initialTarifMap' => $initialTarifMap ?? [],
-        ]);
-    }
 
     /**
      * Menampilkan halaman Rekap Kehadiran Petugas SPPG.
@@ -676,17 +528,26 @@ class PetugasController extends Controller
                     $existKey = ((int) $petugasId) . '_' . $tgl;
                     $exist = $existingRecords->get($existKey);
 
-                    // Jika catatan di hari lampau sudah memiliki snapshot petugas, pertahankan snapshot lampau tersebut
-                    // agar rekap historis masa lalu tidak terdistorsi jika data master petugas diubah di masa depan.
-                    if ($exist && !empty($exist->nama) && $exist->gaji_harian_bgn !== null && $tgl < $todayStr) {
-                        $pNama = $exist->nama;
-                        $pNik = $exist->nik;
-                        $pJabatan = $exist->jabatan;
+                    // Jika catatan presensi sudah ada dan memiliki gaji_harian_bgn (atau snapshot), pertahankan nilai tersebut
+                    // agar kustomisasi gaji harian maupun rekap historis masa lalu tidak tertimpa data master petugas.
+                    if ($exist && $exist->gaji_harian_bgn !== null) {
+                        $pNama = !empty($exist->nama) ? $exist->nama : ($p?->nama ?? '-');
+                        $pNik = $exist->nik ?? ($p?->nik ?? '-');
+                        $pJabatan = $exist->jabatan ?? ($p?->jabatan ?? '-');
                         $pGaji = (int) $exist->gaji_harian_bgn;
-                        $pBonus = (int) $exist->bonus_harian_mitra;
-                        $pBpjs = (int) $exist->iuran_bpjs_tk;
-                        $pStatus = $exist->status_petugas ?? 'Aktif';
-                        $pSnapshot = is_array($exist->snapshot_petugas) ? json_encode($exist->snapshot_petugas) : $exist->snapshot_petugas;
+                        $pBonus = (int) ($exist->bonus_harian_mitra ?? ($p?->bonus_harian_mitra ?? 0));
+                        $pBpjs = (int) ($exist->iuran_bpjs_tk ?? ($p?->iuran_bpjs_tk ?? 0));
+                        $pStatus = $exist->status_petugas ?? ($p?->status ?? 'Aktif');
+                        $pSnapshot = is_array($exist->snapshot_petugas) ? json_encode($exist->snapshot_petugas) : ($exist->snapshot_petugas ?? json_encode([
+                            'nama' => $pNama,
+                            'nik' => $pNik,
+                            'jabatan' => $pJabatan,
+                            'jam_kerja' => $p?->jam_kerja ?? '-',
+                            'gaji_harian_bgn' => $pGaji,
+                            'bonus_harian_mitra' => $pBonus,
+                            'iuran_bpjs_tk' => $pBpjs,
+                            'status' => $pStatus,
+                        ]));
                     } else {
                         // Untuk hari ini, masa depan, atau yang belum punya snapshot: gunakan profil master petugas saat ini
                         $pNama = $p?->nama;
@@ -784,159 +645,109 @@ class PetugasController extends Controller
     }
 
     /**
-     * Menyimpan konfigurasi jadwal shifting petugas ke database (tabel shifting_petugas, terpisah dari absensi_petugas).
+     * Update nominal gaji harian BGN presensi per personil pada tanggal tertentu atau periode aktif.
      */
-    public function simpanShifting(Request $request): RedirectResponse
+    public function updateGajiHarianPresensi(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
-
-        if (! $unitSppg) {
-            return back()->with('error', 'Unit SPPG tidak ditemukan.');
-        }
-
-        $matrix = [];
-        if ($request->filled('json_data')) {
-            $matrix = json_decode($request->input('json_data'), true) ?? [];
-        } elseif ($request->has('items') && is_array($request->input('items'))) {
-            foreach ($request->input('items') as $it) {
-                if (isset($it['petugas_id'], $it['tanggal'], $it['status'])) {
-                    $matrix[$it['petugas_id']][$it['tanggal']] = $it['status'];
-                }
-            }
-        }
-
-        if (empty($matrix)) {
-            return back()->with('error', 'Tidak ada data shifting yang dikirim.');
-        }
-
-        // Simpan penyesuaian tarif harian khusus shifting jika dikirim
-        $customTarifMap = [];
-        if ($request->has('custom_tarif')) {
-            $rawTarif = $request->input('custom_tarif');
-            if (is_string($rawTarif)) {
-                $rawTarif = json_decode($rawTarif, true) ?? [];
-            }
-            if (is_array($rawTarif)) {
-                foreach ($rawTarif as $pId => $val) {
-                    $valInt = ($val !== null && $val !== '' && (int) $val >= 0) ? (int) $val : null;
-                    $customTarifMap[(int) $pId] = $valInt;
-                    Petugas::where('id', (int) $pId)
-                        ->where('unit_sppg_id', $unitSppg->id)
-                        ->update([
-                            'gaji_harian_shifting' => $valInt,
-                        ]);
-                }
-            }
-        }
-
-        $allowedStatuses = ['H', 'H2', 'L', 'I', 'S', 'TK'];
-        $now = Carbon::now();
-        $records = [];
-        $deleteByPetugas = [];
-
-        foreach ($matrix as $petugasId => $dates) {
-            if (! is_array($dates)) {
-                continue;
-            }
-
-            foreach ($dates as $tgl => $status) {
-                if (in_array($status, $allowedStatuses)) {
-                    $tarifVal = $customTarifMap[(int) $petugasId] ?? null;
-                    $records[] = [
-                        'unit_sppg_id' => $unitSppg->id,
-                        'petugas_id' => (int) $petugasId,
-                        'tanggal' => $tgl,
-                        'status' => $status,
-                        'tarif_harian' => $tarifVal,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
-                } elseif ($status === '' || $status === null || $status === '-') {
-                    $deleteByPetugas[(int) $petugasId][] = $tgl;
-                }
-            }
-        }
-
-        DB::transaction(function () use ($records, $deleteByPetugas, $unitSppg) {
-            if (! empty($records)) {
-                foreach (array_chunk($records, 500) as $chunk) {
-                    ShiftingPetugas::upsert(
-                        $chunk,
-                        ['unit_sppg_id', 'petugas_id', 'tanggal'],
-                        ['status', 'tarif_harian', 'updated_at']
-                    );
-                }
-            }
-
-            if (! empty($deleteByPetugas)) {
-                foreach ($deleteByPetugas as $pId => $tglList) {
-                    ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
-                        ->where('petugas_id', $pId)
-                        ->whereIn('tanggal', $tglList)
-                        ->delete();
-                }
-            }
-        });
-
-        $mode = $request->input('mode', 'bulanan');
-        $tglMulai = $request->input('tanggal_mulai');
-        $tglSelesai = $request->input('tanggal_selesai');
-        $periodeId = $request->input('periode_id', 'all');
-
-        $redirectParams = ['mode' => $mode];
-        if ($tglMulai) $redirectParams['tanggal_mulai'] = $tglMulai;
-        if ($tglSelesai) $redirectParams['tanggal_selesai'] = $tglSelesai;
-        if ($periodeId && $periodeId !== 'all') $redirectParams['periode_id'] = $periodeId;
-
-        return redirect()->route('petugas.shifting', $redirectParams)
-            ->with('success', 'Konfigurasi jadwal shifting petugas berhasil disimpan.');
-    }
-
-    /**
-     * Memperbarui tarif harian khusus shifting untuk personil tertentu.
-     * Hanya berlaku untuk shifting, tidak mengubah gaji_harian_bgn (master).
-     */
-    public function updateTarifShifting(Request $request): RedirectResponse
-    {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
-
-        if (! $unitSppg) {
-            return back()->with('error', 'Unit SPPG tidak ditemukan.');
-        }
-
         $request->validate([
-            'petugas_id' => ['required', 'integer'],
-            'tarif_harian' => ['nullable', 'numeric', 'min:0'],
-            'is_reset' => ['nullable', 'boolean'],
+            'petugas_id' => 'required|exists:petugas,id',
+            'tanggal' => 'required|date_format:Y-m-d',
+            'gaji_harian_bgn' => 'required|numeric|min:0',
+            'apply_to_period' => 'nullable|boolean',
+            'tanggal_mulai' => 'nullable|date_format:Y-m-d',
+            'tanggal_selesai' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|string',
         ]);
 
-        $petugasId = (int) $request->input('petugas_id');
-        $isReset = $request->boolean('is_reset');
-        $newTarif = $isReset ? null : ($request->filled('tarif_harian') ? (int) $request->input('tarif_harian') : null);
+        $user = $request->user();
+        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
 
-        Petugas::where('id', $petugasId)
-            ->where('unit_sppg_id', $unitSppg->id)
-            ->update([
-                'gaji_harian_shifting' => $newTarif,
-            ]);
-
-        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
-            ShiftingPetugas::where('unit_sppg_id', $unitSppg->id)
-                ->where('petugas_id', $petugasId)
-                ->whereBetween('tanggal', [$request->input('tanggal_mulai'), $request->input('tanggal_selesai')])
-                ->update(['tarif_harian' => $newTarif]);
+        if (! $unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
         }
 
-        $p = Petugas::find($petugasId);
-        $nama = $p?->nama ?? 'Personil';
-        $msg = $isReset
-            ? "Tarif shifting {$nama} dikembalikan ke tarif master utama BGN."
-            : "Tarif shifting {$nama} berhasil diatur ke Rp " . number_format($newTarif ?? 0, 0, ',', '.') . " / hari (tidak mengubah gaji master utama).";
+        $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)->findOrFail($request->input('petugas_id'));
+        $newGaji = max(0, (int) $request->input('gaji_harian_bgn'));
+        $applyToPeriod = filter_var($request->input('apply_to_period', false), FILTER_VALIDATE_BOOLEAN);
+        $targetTanggal = $request->input('tanggal');
+        $inputStatus = $request->input('status');
+
+        $targetDates = [$targetTanggal];
+
+        if ($applyToPeriod && $request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $startDate = Carbon::parse($request->input('tanggal_mulai'))->startOfDay();
+            $endDate = Carbon::parse($request->input('tanggal_selesai'))->startOfDay();
+            if ($endDate->gte($startDate)) {
+                $targetDates = [];
+                $curr = $startDate->copy();
+                while ($curr->lte($endDate)) {
+                    $targetDates[] = $curr->format('Y-m-d');
+                    $curr->addDay();
+                }
+            }
+        }
+
+        $existing = AbsensiPetugas::where('unit_sppg_id', $unitSppg->id)
+            ->where('petugas_id', $petugas->id)
+            ->whereIn('tanggal', $targetDates)
+            ->get()
+            ->keyBy(fn ($r) => $r->tanggal instanceof Carbon ? $r->tanggal->format('Y-m-d') : substr((string) $r->tanggal, 0, 10));
+
+        foreach ($targetDates as $tgl) {
+            $rec = $existing->get($tgl);
+            if ($rec) {
+                $snapshot = is_array($rec->snapshot_petugas) ? $rec->snapshot_petugas : (json_decode($rec->snapshot_petugas, true) ?? []);
+                $snapshot['gaji_harian_bgn'] = $newGaji;
+                $snapshot['nama'] = $rec->nama ?: $petugas->nama;
+                $snapshot['jabatan'] = $rec->jabatan ?: $petugas->jabatan;
+
+                $updateData = [
+                    'gaji_harian_bgn' => $newGaji,
+                    'snapshot_petugas' => $snapshot,
+                ];
+                if ($inputStatus && empty($rec->status)) {
+                    $updateData['status'] = $inputStatus;
+                }
+                $rec->update($updateData);
+            } else {
+                $recStatus = ($tgl === $targetTanggal && $inputStatus) ? $inputStatus : 'H';
+                $snapshot = [
+                    'nama' => $petugas->nama,
+                    'nik' => $petugas->nik,
+                    'jabatan' => $petugas->jabatan,
+                    'jam_kerja' => $petugas->jam_kerja ?? '-',
+                    'gaji_harian_bgn' => $newGaji,
+                    'bonus_harian_mitra' => (int) ($petugas->bonus_harian_mitra ?? 0),
+                    'iuran_bpjs_tk' => (int) ($petugas->iuran_bpjs_tk ?? 0),
+                    'status' => $petugas->status ?? 'Aktif',
+                ];
+
+                AbsensiPetugas::create([
+                    'petugas_id' => $petugas->id,
+                    'unit_sppg_id' => $unitSppg->id,
+                    'tanggal' => $tgl,
+                    'status' => $recStatus,
+                    'nama' => $petugas->nama,
+                    'nik' => $petugas->nik,
+                    'jabatan' => $petugas->jabatan,
+                    'gaji_harian_bgn' => $newGaji,
+                    'bonus_harian_mitra' => (int) ($petugas->bonus_harian_mitra ?? 0),
+                    'iuran_bpjs_tk' => (int) ($petugas->iuran_bpjs_tk ?? 0),
+                    'status_petugas' => $petugas->status ?? 'Aktif',
+                    'snapshot_petugas' => $snapshot,
+                ]);
+            }
+        }
+
+        $formattedNominal = 'Rp ' . number_format($newGaji, 0, ',', '.');
+        $msg = $applyToPeriod
+            ? "Gaji harian {$petugas->nama} berhasil diatur menjadi {$formattedNominal} untuk seluruh tanggal pada rentang periode ini."
+            : "Gaji harian {$petugas->nama} pada tanggal " . Carbon::parse($targetTanggal)->translatedFormat('d F Y') . " berhasil diubah menjadi {$formattedNominal}.";
 
         return back()->with('success', $msg);
     }
+
+
 
     /**
      * Menyimpan data petugas baru.
@@ -1335,6 +1146,22 @@ class PetugasController extends Controller
             $summary['total_rekening_kosong'] = $petugas->where('status', 'Aktif')->filter(fn($p) => empty($p->nomor_rekening))->count();
         }
 
+        // Cek status transaksi pengajuan pembayaran gaji untuk rentang tanggal aktif
+        $refTag = "[REF:GAJI-PETUGAS:{$startDate->format('Y-m-d')}_{$endDate->format('Y-m-d')}]";
+        $existingTrx = TransaksiKeuangan::where('unit_sppg_id', $unitSppg?->id)
+            ->where('kategori', 'Operasional')
+            ->where('arus', 'Keluar')
+            ->where('keterangan', 'like', "%{$refTag}%")
+            ->latest('id')
+            ->first();
+
+        $transaksiPengajuan = $existingTrx ? [
+            'id' => $existingTrx->id,
+            'nomor_transaksi' => $existingTrx->nomor_transaksi,
+            'status' => $existingTrx->status,
+            'nominal' => (float) $existingTrx->nominal,
+        ] : null;
+
         return Inertia::render('Petugas/PembayaranGaji', [
             'petugas' => $petugas,
             'summary' => $summary,
@@ -1349,6 +1176,8 @@ class PetugasController extends Controller
             'initialPresensiDetailsMap' => $presensiDetailsMap ?? [],
             'mandaysMap' => $mandaysMap,
             'initialSelectedDates' => $selectedDatesList,
+            'transaksiPengajuan' => $transaksiPengajuan,
+            'statusPengajuan' => $transaksiPengajuan['status'] ?? null,
         ]);
     }
 
@@ -1891,5 +1720,111 @@ class PetugasController extends Controller
 
         sort($all);
         return $all;
+    }
+
+    /**
+     * Ajukan Transaksi Pembayaran Gaji Petugas SPPG ke Menu Keuangan (Status Ditunda).
+     */
+    public function ajukanPembayaranGaji(Request $request)
+    {
+        $validated = $request->validate([
+            'tanggal_transaksi' => ['required', 'date'],
+            'tanggal_mulai' => ['nullable', 'date'],
+            'tanggal_selesai' => ['nullable', 'date'],
+            'periode_id' => ['nullable'],
+            'periode_label' => ['nullable', 'string', 'max:255'],
+            'nominal' => ['required', 'numeric', 'min:1'],
+            'total_personil' => ['nullable', 'integer'],
+            'total_mandays' => ['nullable', 'numeric'],
+            'metode_bayar' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $tglTransaksi = $validated['tanggal_transaksi'];
+        $tglMulai = $validated['tanggal_mulai'] ?: $tglTransaksi;
+        $tglSelesai = $validated['tanggal_selesai'] ?: $tglTransaksi;
+        $label = $validated['periode_label'] ?: ($tglMulai === $tglSelesai ? Carbon::parse($tglTransaksi)->translatedFormat('d F Y') : Carbon::parse($tglMulai)->translatedFormat('d M Y') . ' s/d ' . Carbon::parse($tglSelesai)->translatedFormat('d M Y'));
+
+        $namaTransaksi = "Pembayaran Gaji Petugas SPPG - " . $label;
+        $refTag = "[REF:GAJI-PETUGAS:{$tglMulai}_{$tglSelesai}]";
+
+        // Cek apakah transaksi pengajuan gaji untuk rentang ini sudah pernah dibuat
+        $existing = TransaksiKeuangan::where('unit_sppg_id', $unitSppg?->id)
+            ->where('kategori', 'Operasional')
+            ->where('arus', 'Keluar')
+            ->where('keterangan', 'like', "%{$refTag}%")
+            ->first();
+
+        $personilCount = $validated['total_personil'] ?? 0;
+        $mandaysCount = $validated['total_mandays'] ?? 0;
+        $keteranganDetail = "Pengajuan otomatis Pembayaran Gaji Petugas SPPG ({$label}) sejumlah {$personilCount} personil ({$mandaysCount} mandays/hari kerja). {$refTag}";
+
+        if ($existing) {
+            if ($existing->status === 'Disetujui') {
+                return response()->json([
+                    'status' => 'already_approved',
+                    'message' => "Pengajuan pembayaran gaji untuk periode ini sudah pernah DISETUJUI pada Menu Transaksi ({$existing->nomor_transaksi}) dan tidak dapat diajukan kembali.",
+                    'data' => $existing,
+                ], 422);
+            }
+
+            if ($existing->status === 'Ditunda') {
+                return response()->json([
+                    'status' => 'already_pending',
+                    'message' => "Pengajuan pembayaran gaji untuk periode ini sudah TELAH DIAJUKAN dengan status DITUNDA pada Menu Transaksi ({$existing->nomor_transaksi}). Pengajuan hanya bisa dilakukan 1 kali dan tidak boleh duplikasi.",
+                    'data' => $existing,
+                ], 422);
+            }
+
+            // Jika status sebelumnya Ditolak atau Dibatalkan, perbarui transaksi tersebut kembali ke status Ditunda (diajukan ulang)
+            $existing->update([
+                'tanggal' => $tglTransaksi,
+                'tanggal_pesanan' => $tglTransaksi,
+                'nama_transaksi' => $namaTransaksi,
+                'nominal' => $validated['nominal'],
+                'volume' => $personilCount > 0 ? $personilCount : 1,
+                'satuan' => 'Personil',
+                'status' => 'Ditunda',
+                'metode_bayar' => $validated['metode_bayar'] ?: 'Transfer',
+                'keterangan' => $keteranganDetail,
+            ]);
+
+            return response()->json([
+                'status' => 'updated',
+                'message' => "Pengajuan ulang pembayaran gaji berhasil dikirim ke Menu Transaksi dengan status DITUNDA (Nomor: {$existing->nomor_transaksi}). Silakan disetujui di Menu Keuangan agar sah terhitung.",
+                'data' => $existing,
+            ]);
+        }
+
+        // Buat transaksi baru
+        $tglStr = date('Ymd', strtotime($tglTransaksi));
+        $countToday = TransaksiKeuangan::whereDate('created_at', now()->toDateString())->count() + 1;
+        $nomorTrx = 'TRX-' . $tglStr . '-' . str_pad($countToday, 4, '0', STR_PAD_LEFT);
+
+        $newTrx = TransaksiKeuangan::create([
+            'unit_sppg_id' => $unitSppg?->id,
+            'user_id' => $user->id,
+            'nomor_transaksi' => $nomorTrx,
+            'tanggal' => $tglTransaksi,
+            'tanggal_pesanan' => $tglTransaksi,
+            'kategori' => 'Operasional',
+            'arus' => 'Keluar',
+            'nama_transaksi' => $namaTransaksi,
+            'volume' => $personilCount > 0 ? $personilCount : 1,
+            'satuan' => 'Personil',
+            'nominal' => $validated['nominal'],
+            'status' => 'Ditunda',
+            'perlu_npo' => false,
+            'metode_bayar' => $validated['metode_bayar'] ?: 'Transfer',
+            'keterangan' => $keteranganDetail,
+        ]);
+
+        return response()->json([
+            'status' => 'created',
+            'message' => "Pengajuan pembayaran gaji sebesar Rp " . number_format($validated['nominal'], 0, ',', '.') . " berhasil masuk ke Menu Transaksi dengan status DITUNDA (Nomor: {$newTrx->nomor_transaksi}). Silakan disetujui di Menu Keuangan agar sah terhitung.",
+            'data' => $newTrx,
+        ]);
     }
 }

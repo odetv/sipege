@@ -9,6 +9,9 @@ use App\Models\Supplier;
 use App\Models\SurveiHargaPasar;
 use App\Models\WorkOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\TransaksiKeuangan;
+use App\Models\KeuanganSaldoAwal;
+use App\Models\KeuanganPenyesuaian;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,11 +21,11 @@ use Inertia\Response;
 class KeuanganController extends Controller
 {
     /**
-     * Tampilkan halaman tata kelola keuangan (default ke sub menu Anggaran).
+     * Tampilkan halaman tata kelola keuangan (default ke sub menu Persetujuan).
      */
     public function index(Request $request): Response
     {
-        return $this->renderKeuanganView($request, 'anggaran');
+        return $this->renderKeuanganView($request, 'verifikasi-po');
     }
 
     /**
@@ -31,6 +34,14 @@ class KeuanganController extends Controller
     public function anggaran(Request $request): Response
     {
         return $this->renderKeuanganView($request, 'anggaran');
+    }
+
+    /**
+     * Sub-menu: Persetujuan (yang awalnya bernama Verifikasi).
+     */
+    public function persetujuan(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'verifikasi-po');
     }
 
     /**
@@ -179,8 +190,499 @@ class KeuanganController extends Controller
     }
 
     /**
+     * Simpan transaksi manual baru (tunggal atau delegasi ke batch jika array items dikirim).
+     */
+    public function storeTransaksi(Request $request): RedirectResponse
+    {
+        if ($request->has('items') && is_array($request->items)) {
+            return $this->storeTransaksiBatch($request);
+        }
+
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'tanggal_pesanan' => ['nullable', 'date'],
+            'kategori' => ['required', 'string', 'in:Bahan Baku,Operasional,Insentif Fasilitas,Dana Bantuan Pemerintah'],
+            'arus' => ['required', 'string', 'in:Masuk,Keluar'],
+            'nama_transaksi' => ['required', 'string', 'max:255'],
+            'volume' => ['nullable', 'numeric', 'min:0'],
+            'satuan' => ['nullable', 'string', 'max:50'],
+            'nominal' => ['required', 'numeric', 'min:0'],
+            'status' => ['required', 'string', 'in:Disetujui,Ditunda,Ditolak,Dibatalkan'],
+            'perlu_npo' => ['nullable', 'boolean'],
+            'supplier_id' => ['nullable'],
+            'work_order_id' => ['nullable'],
+            'vendor' => ['nullable', 'string', 'max:255'],
+            'keterangan' => ['nullable', 'string', 'max:1000'],
+            'metode_bayar' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $isSimplified = in_array($validated['kategori'], ['Insentif Fasilitas', 'Dana Bantuan Pemerintah']);
+
+        if (!$isSimplified) {
+            if (empty($validated['supplier_id'])) {
+                return back()->withErrors(['supplier_id' => 'Supplier wajib dipilih untuk kategori Bahan Baku dan Operasional.']);
+            }
+            if (!isset($validated['volume']) || $validated['volume'] === '' || $validated['volume'] === null) {
+                return back()->withErrors(['volume' => 'Volume (jumlah) wajib diisi.']);
+            }
+            if (empty($validated['satuan'])) {
+                return back()->withErrors(['satuan' => 'Satuan wajib dipilih.']);
+            }
+            if (empty($validated['work_order_id'])) {
+                return back()->withErrors(['work_order_id' => 'Sandingkan Work Order wajib dipilih.']);
+            }
+        }
+
+        if ($isSimplified) {
+            $perluNpo = false;
+            $tanggalPesanan = $validated['tanggal'];
+            $workOrderId = null;
+            $volume = 1;
+            $satuan = '-';
+            $supplierId = null;
+            $vendorName = '-';
+        } else {
+            $perluNpo = isset($validated['perlu_npo']) ? (bool) $validated['perlu_npo'] : true;
+            $tanggalPesanan = $perluNpo ? (!empty($validated['tanggal_pesanan']) ? $validated['tanggal_pesanan'] : $validated['tanggal']) : $validated['tanggal'];
+            $rawWoId = $validated['work_order_id'] ?? null;
+            $workOrderId = (is_numeric($rawWoId) && (int)$rawWoId > 0) ? (int)$rawWoId : null;
+            $volume = $validated['volume'] ?? 1;
+            $satuan = $validated['satuan'] ?? 'Kg';
+            $supplierId = $validated['supplier_id'] ?? null;
+            $vendorName = $validated['vendor'] ?? null;
+            if (!empty($supplierId)) {
+                $sup = Supplier::find($supplierId);
+                if ($sup) {
+                    $vendorName = $sup->nama_usaha;
+                }
+            }
+        }
+
+        $tglStr = date('Ymd', strtotime($validated['tanggal']));
+        $countToday = TransaksiKeuangan::whereDate('created_at', now()->toDateString())->count() + 1;
+        $nomorTrx = 'TRX-' . $tglStr . '-' . str_pad($countToday, 4, '0', STR_PAD_LEFT);
+
+        TransaksiKeuangan::create([
+            'unit_sppg_id' => $unitSppg ? $unitSppg->id : null,
+            'user_id' => $user->id,
+            'nomor_transaksi' => $nomorTrx,
+            'tanggal' => $validated['tanggal'],
+            'tanggal_pesanan' => $tanggalPesanan,
+            'kategori' => $validated['kategori'],
+            'arus' => $validated['arus'],
+            'nama_transaksi' => $validated['nama_transaksi'],
+            'volume' => $volume,
+            'satuan' => $satuan,
+            'nominal' => $validated['nominal'],
+            'status' => $validated['status'],
+            'perlu_npo' => $perluNpo,
+            'supplier_id' => $supplierId,
+            'work_order_id' => $workOrderId,
+            'vendor' => $vendorName,
+            'keterangan' => $validated['keterangan'] ?? null,
+            'metode_bayar' => $validated['metode_bayar'] ?? null,
+        ]);
+
+        return back()->with('success', 'Transaksi berhasil ditambahkan.');
+    }
+
+    /**
+     * Simpan transaksi multi / batch (input tabel banyak baris atau tempel dari Excel).
+     */
+    public function storeTransaksiBatch(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.tanggal' => ['required', 'date'],
+            'items.*.tanggal_pesanan' => ['nullable', 'date'],
+            'items.*.kategori' => ['required', 'string', 'in:Bahan Baku,Operasional,Insentif Fasilitas,Dana Bantuan Pemerintah'],
+            'items.*.arus' => ['required', 'string', 'in:Masuk,Keluar'],
+            'items.*.nama_transaksi' => ['required', 'string', 'max:255'],
+            'items.*.volume' => ['nullable', 'numeric', 'min:0'],
+            'items.*.satuan' => ['nullable', 'string', 'max:50'],
+            'items.*.nominal' => ['required', 'numeric', 'min:0'],
+            'items.*.status' => ['required', 'string', 'in:Disetujui,Ditunda,Ditolak,Dibatalkan'],
+            'items.*.perlu_npo' => ['nullable', 'boolean'],
+            'items.*.supplier_id' => ['nullable'],
+            'items.*.work_order_id' => ['nullable'],
+            'items.*.vendor' => ['nullable', 'string', 'max:255'],
+            'items.*.keterangan' => ['nullable', 'string', 'max:1000'],
+            'items.*.metode_bayar' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $suppliersCache = Supplier::pluck('nama_usaha', 'id')->toArray();
+        $todayStr = now()->toDateString();
+        $countToday = TransaksiKeuangan::whereDate('created_at', $todayStr)->count();
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $user, $unitSppg, $suppliersCache, &$countToday) {
+            foreach ($validated['items'] as $item) {
+                $isSimplified = in_array($item['kategori'], ['Insentif Fasilitas', 'Dana Bantuan Pemerintah']);
+
+                if ($isSimplified) {
+                    $perluNpo = false;
+                    $tanggalPesanan = $item['tanggal'];
+                    $workOrderId = null;
+                    $volume = 1;
+                    $satuan = '-';
+                    $supplierId = null;
+                    $vendorName = '-';
+                } else {
+                    $perluNpo = isset($item['perlu_npo']) ? (bool) $item['perlu_npo'] : true;
+                    $tanggalPesanan = $perluNpo ? (!empty($item['tanggal_pesanan']) ? $item['tanggal_pesanan'] : $item['tanggal']) : $item['tanggal'];
+                    $rawWoId = $item['work_order_id'] ?? null;
+                    $workOrderId = (is_numeric($rawWoId) && (int)$rawWoId > 0) ? (int)$rawWoId : null;
+                    $volume = isset($item['volume']) && $item['volume'] !== '' && $item['volume'] !== null ? $item['volume'] : 1;
+                    $satuan = !empty($item['satuan']) && $item['satuan'] !== '-' ? $item['satuan'] : 'Kg';
+                    $supplierId = !empty($item['supplier_id']) ? $item['supplier_id'] : null;
+                    $vendorName = $item['vendor'] ?? null;
+                    if (!empty($supplierId) && isset($suppliersCache[$supplierId])) {
+                        $vendorName = $suppliersCache[$supplierId];
+                    }
+                }
+
+                $countToday++;
+                $tglStr = date('Ymd', strtotime($item['tanggal']));
+                $nomorTrx = 'TRX-' . $tglStr . '-' . str_pad($countToday, 4, '0', STR_PAD_LEFT);
+
+                TransaksiKeuangan::create([
+                    'unit_sppg_id' => $unitSppg ? $unitSppg->id : null,
+                    'user_id' => $user->id,
+                    'nomor_transaksi' => $nomorTrx,
+                    'tanggal' => $item['tanggal'],
+                    'tanggal_pesanan' => $tanggalPesanan,
+                    'kategori' => $item['kategori'],
+                    'arus' => $item['arus'] ?? 'Keluar',
+                    'nama_transaksi' => $item['nama_transaksi'],
+                    'volume' => $volume,
+                    'satuan' => $satuan,
+                    'nominal' => $item['nominal'],
+                    'status' => $item['status'],
+                    'perlu_npo' => $perluNpo,
+                    'supplier_id' => $supplierId,
+                    'work_order_id' => $workOrderId,
+                    'vendor' => $vendorName,
+                    'keterangan' => $item['keterangan'] ?? null,
+                    'metode_bayar' => $item['metode_bayar'] ?? 'Tunai',
+                ]);
+            }
+        });
+
+        $totalInserted = count($validated['items']);
+        return back()->with('success', "{$totalInserted} data transaksi berhasil ditambahkan sekaligus.");
+    }
+
+    /**
+     * Update transaksi manual.
+     */
+    public function updateTransaksi(Request $request, $id): RedirectResponse
+    {
+        $trx = TransaksiKeuangan::findOrFail($id);
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'tanggal_pesanan' => ['nullable', 'date'],
+            'kategori' => ['required', 'string', 'in:Bahan Baku,Operasional,Insentif Fasilitas,Dana Bantuan Pemerintah'],
+            'arus' => ['required', 'string', 'in:Masuk,Keluar'],
+            'nama_transaksi' => ['required', 'string', 'max:255'],
+            'volume' => ['nullable', 'numeric', 'min:0'],
+            'satuan' => ['nullable', 'string', 'max:50'],
+            'nominal' => ['required', 'numeric', 'min:0'],
+            'status' => ['required', 'string', 'in:Disetujui,Ditunda,Ditolak,Dibatalkan'],
+            'perlu_npo' => ['nullable', 'boolean'],
+            'supplier_id' => ['nullable'],
+            'work_order_id' => ['nullable'],
+            'vendor' => ['nullable', 'string', 'max:255'],
+            'keterangan' => ['nullable', 'string', 'max:1000'],
+            'metode_bayar' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $isSimplified = in_array($validated['kategori'], ['Insentif Fasilitas', 'Dana Bantuan Pemerintah']);
+
+        if (!$isSimplified) {
+            if (empty($validated['supplier_id'])) {
+                return back()->withErrors(['supplier_id' => 'Supplier wajib dipilih untuk kategori Bahan Baku dan Operasional.']);
+            }
+            if (!isset($validated['volume']) || $validated['volume'] === '' || $validated['volume'] === null) {
+                return back()->withErrors(['volume' => 'Volume (jumlah) wajib diisi.']);
+            }
+            if (empty($validated['satuan'])) {
+                return back()->withErrors(['satuan' => 'Satuan wajib dipilih.']);
+            }
+            if (empty($validated['work_order_id'])) {
+                return back()->withErrors(['work_order_id' => 'Sandingkan Work Order wajib dipilih.']);
+            }
+        }
+
+        if ($isSimplified) {
+            $perluNpo = false;
+            $tanggalPesanan = $validated['tanggal'];
+            $workOrderId = null;
+            $volume = 1;
+            $satuan = '-';
+            $supplierId = null;
+            $vendorName = '-';
+        } else {
+            $perluNpo = isset($validated['perlu_npo']) ? (bool) $validated['perlu_npo'] : true;
+            $tanggalPesanan = $perluNpo ? (!empty($validated['tanggal_pesanan']) ? $validated['tanggal_pesanan'] : $validated['tanggal']) : $validated['tanggal'];
+            $rawWoId = $validated['work_order_id'] ?? null;
+            $workOrderId = (is_numeric($rawWoId) && (int)$rawWoId > 0) ? (int)$rawWoId : null;
+            $volume = $validated['volume'] ?? 1;
+            $satuan = $validated['satuan'] ?? 'Kg';
+            $supplierId = $validated['supplier_id'] ?? null;
+            $vendorName = $validated['vendor'] ?? $trx->vendor;
+            if (!empty($supplierId)) {
+                $sup = Supplier::find($supplierId);
+                if ($sup) {
+                    $vendorName = $sup->nama_usaha;
+                }
+            }
+        }
+
+        $trx->update([
+            'tanggal' => $validated['tanggal'],
+            'tanggal_pesanan' => $tanggalPesanan,
+            'kategori' => $validated['kategori'],
+            'arus' => $validated['arus'],
+            'nama_transaksi' => $validated['nama_transaksi'],
+            'volume' => $volume,
+            'satuan' => $satuan,
+            'nominal' => $validated['nominal'],
+            'status' => $validated['status'],
+            'perlu_npo' => $perluNpo,
+            'supplier_id' => $supplierId,
+            'work_order_id' => $workOrderId,
+            'vendor' => $vendorName,
+            'keterangan' => $validated['keterangan'] ?? null,
+            'metode_bayar' => $validated['metode_bayar'] ?? null,
+        ]);
+
+        return back()->with('success', 'Transaksi berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus transaksi manual.
+     */
+    public function destroyTransaksi(Request $request, $id): RedirectResponse
+    {
+        $trx = TransaksiKeuangan::findOrFail($id);
+        $trx->delete();
+
+        return back()->with('success', 'Transaksi berhasil dihapus.');
+    }
+
+    /**
+     * Perbarui status transaksi langsung (Setujui / Tunda / Tolak / Batalkan).
+     */
+    public function updateStatusTransaksi(Request $request, $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:Disetujui,Ditunda,Ditolak,Dibatalkan'],
+        ]);
+
+        $trx = TransaksiKeuangan::findOrFail($id);
+        $trx->update([
+            'status' => $validated['status'],
+        ]);
+
+        $statusMsg = match ($validated['status']) {
+            'Disetujui' => "Transaksi {$trx->nomor_transaksi} berhasil disetujui dan kini sah terhitung dalam realisasi keuangan.",
+            'Ditunda' => "Status transaksi {$trx->nomor_transaksi} berhasil diubah menjadi Ditunda.",
+            'Ditolak' => "Status transaksi {$trx->nomor_transaksi} berhasil diubah menjadi Ditolak.",
+            'Dibatalkan' => "Status transaksi {$trx->nomor_transaksi} berhasil diubah menjadi Dibatalkan.",
+            default => 'Status transaksi berhasil diperbarui.',
+        };
+
+        return back()->with('success', $statusMsg);
+    }
+
+    /**
      * Sub-menu 3: Transaksi & Riwayat Pengeluaran/Penerimaan.
      */
+    /**
+     * Sub-menu Penyesuaian Keuangan & Saldo Awal.
+     */
+    public function penyesuaian(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'penyesuaian');
+    }
+
+    /**
+     * Simpan Saldo Awal.
+     */
+    public function storeSaldoAwal(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'nominal' => ['required', 'numeric', 'min:0'],
+            'keterangan' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        KeuanganSaldoAwal::updateOrCreate(
+            ['unit_sppg_id' => $unitSppg->id],
+            [
+                'user_id' => $user->id,
+                'tanggal' => $validated['tanggal'],
+                'nominal' => $validated['nominal'],
+                'keterangan' => $validated['keterangan'] ?: 'Saldo Awal Kas / Bank Unit SPPG',
+                'is_locked' => false,
+            ]
+        );
+
+        return back()->with('success', 'Saldo Awal berhasil disimpan.');
+    }
+
+    /**
+     * Perbarui Saldo Awal (dapat diubah kembali).
+     */
+    public function updateSaldoAwal(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'nominal' => ['required', 'numeric', 'min:0'],
+            'keterangan' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $saldo = KeuanganSaldoAwal::where('unit_sppg_id', $unitSppg->id)->first();
+        if ($saldo) {
+            $saldo->update([
+                'user_id' => $user->id,
+                'tanggal' => $validated['tanggal'],
+                'nominal' => $validated['nominal'],
+                'keterangan' => $validated['keterangan'] ?: 'Saldo Awal Kas / Bank Unit SPPG',
+            ]);
+        } else {
+            KeuanganSaldoAwal::create([
+                'unit_sppg_id' => $unitSppg->id,
+                'user_id' => $user->id,
+                'tanggal' => $validated['tanggal'],
+                'nominal' => $validated['nominal'],
+                'keterangan' => $validated['keterangan'] ?: 'Saldo Awal Kas / Bank Unit SPPG',
+                'is_locked' => false,
+            ]);
+        }
+
+        return back()->with('success', 'Saldo Awal berhasil diperbarui.');
+    }
+
+    /**
+     * Tarik / Reset Saldo Awal agar bisa diisi ulang.
+     */
+    public function destroySaldoAwal(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if (!$unitSppg) {
+            return back()->with('error', 'Unit SPPG tidak ditemukan.');
+        }
+
+        KeuanganSaldoAwal::where('unit_sppg_id', $unitSppg->id)->delete();
+
+        return back()->with('success', 'Saldo Awal berhasil ditarik / direset.');
+    }
+
+    /**
+     * Simpan Penyesuaian Keuangan (Uang Masuk / Keluar).
+     */
+    public function storePenyesuaian(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'arah' => ['required', 'in:masuk,keluar'],
+            'jenis' => ['required', 'string', 'max:100'],
+            'jumlah' => ['required', 'numeric', 'min:0.01'],
+            'alasan' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $tglStr = date('Ymd', strtotime($validated['tanggal']));
+        $countToday = KeuanganPenyesuaian::whereDate('created_at', now()->toDateString())->count() + 1;
+        $nomorPenyesuaian = 'ADJ-' . $tglStr . '-' . str_pad($countToday, 4, '0', STR_PAD_LEFT);
+
+        KeuanganPenyesuaian::create([
+            'unit_sppg_id' => $unitSppg ? $unitSppg->id : null,
+            'user_id' => $user->id,
+            'nomor_penyesuaian' => $nomorPenyesuaian,
+            'tanggal' => $validated['tanggal'],
+            'arah' => $validated['arah'],
+            'jenis' => $validated['jenis'],
+            'jumlah' => $validated['jumlah'],
+            'alasan' => $validated['alasan'],
+        ]);
+
+        return back()->with('success', 'Penyesuaian keuangan berhasil disimpan.');
+    }
+
+    /**
+     * Perbarui Penyesuaian Keuangan.
+     */
+    public function updatePenyesuaian(Request $request, $id): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $penyesuaian = KeuanganPenyesuaian::where('id', $id)
+            ->when($unitSppg, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'arah' => ['required', 'in:masuk,keluar'],
+            'jenis' => ['required', 'string', 'max:100'],
+            'jumlah' => ['required', 'numeric', 'min:0.01'],
+            'alasan' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $penyesuaian->update([
+            'tanggal' => $validated['tanggal'],
+            'arah' => $validated['arah'],
+            'jenis' => $validated['jenis'],
+            'jumlah' => $validated['jumlah'],
+            'alasan' => $validated['alasan'],
+        ]);
+
+        return back()->with('success', 'Penyesuaian keuangan berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus Penyesuaian Keuangan.
+     */
+    public function destroyPenyesuaian(Request $request, $id): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        $penyesuaian = KeuanganPenyesuaian::where('id', $id)
+            ->when($unitSppg, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))
+            ->firstOrFail();
+
+        $penyesuaian->delete();
+
+        return back()->with('success', 'Penyesuaian keuangan berhasil dihapus.');
+    }
+
     public function transaksi(Request $request): Response
     {
         return $this->renderKeuanganView($request, 'transaksi');
@@ -232,6 +734,22 @@ class KeuanganController extends Controller
     public function bpFasilitas(Request $request): Response
     {
         return $this->renderKeuanganView($request, 'bp-fasilitas');
+    }
+
+    /**
+     * Sub-menu: LPDH (Laporan Pertanggungjawaban Dana Harian - Segera Hadir).
+     */
+    public function lpdh(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'lpdh');
+    }
+
+    /**
+     * Sub-menu: Neraca (Neraca Keuangan SPPG - Segera Hadir).
+     */
+    public function neraca(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'neraca');
     }
 
     /**
@@ -920,6 +1438,8 @@ class KeuanganController extends Controller
                             'satuan' => $it->satuan ?: ($woItem ? ($woItem->satuan ?: 'Kg') : 'Kg'),
                             'jenis' => $it->jenis ?: ($woItem ? ($woItem->jenis ?: 'bahan_baku') : 'bahan_baku'),
                             'kategori' => $it->kategori ?: ($woItem ? $woItem->kategori : 'Lainnya'),
+                            'jenis_transaksi' => in_array($it->jenis_transaksi, ['Bahan Baku', 'Operasional', 'Insentif Fasilitas']) ? $it->jenis_transaksi : 'Bahan Baku',
+                            'perlu_npo' => $it->perlu_npo !== null ? (bool)$it->perlu_npo : true,
                             'tipe_porsi' => strtolower($it->tipe ?: ($woItem ? $woItem->tipe_porsi : 'normal')),
                             'tipe' => $it->tipe,
                             'jenis_alergi' => $woItem ? ($woItem->jenis_alergi ?: '') : '',
@@ -1107,7 +1627,170 @@ class KeuanganController extends Controller
             ];
         });
 
+        // Work Orders untuk pengaitan transaksi
+        $woQuery = WorkOrder::query();
+        if ($unitSppg) {
+            $woQuery->where('unit_sppg_id', $unitSppg->id);
+        }
+        $workOrdersList = $woQuery->orderBy('tanggal_distribusi', 'desc')
+            ->get(['id', 'nomor_wo', 'nama_menu', 'tanggal_distribusi', 'status', 'metode_wo'])
+            ->map(function ($wo) {
+                return [
+                    'id' => $wo->id,
+                    'nomor_wo' => $wo->nomor_wo,
+                    'nama_menu' => $wo->nama_menu,
+                    'tanggal_distribusi' => $wo->tanggal_distribusi ? $wo->tanggal_distribusi->format('Y-m-d') : null,
+                    'status' => $wo->status,
+                    'metode_wo' => $wo->metode_wo,
+                ];
+            })->values()->all();
+
+        // 4. Data Transaksi SPPG (Gabungan PO Rancang Menu Disetujui/Ditolak & Transaksi Manual)
+        $manualTransaksi = TransaksiKeuangan::with(['supplier', 'workOrder'])->where(function ($q) use ($unitSppg, $user) {
+            if ($unitSppg) {
+                $q->where('unit_sppg_id', $unitSppg->id);
+            } else {
+                $q->where('user_id', $user->id);
+            }
+        })->orderBy('tanggal', 'desc')->orderBy('id', 'desc')->get();
+
+        $transaksiItems = collect();
+
+        if (isset($allDbPo)) {
+            $poForTransaksi = $allDbPo->filter(function ($po) {
+                return in_array($po->status_po, ['Disetujui', 'Terverifikasi', 'Siap Produksi', 'Selesai', 'Ditunda', 'Ditolak', 'Dibatalkan']);
+            });
+
+            foreach ($poForTransaksi as $po) {
+                $statusTrx = 'Disetujui';
+                if ($po->status_po === 'Ditolak') {
+                    $statusTrx = 'Ditolak';
+                } elseif ($po->status_po === 'Ditunda') {
+                    $statusTrx = 'Ditunda';
+                } elseif ($po->status_po === 'Dibatalkan') {
+                    $statusTrx = 'Dibatalkan';
+                }
+                $tglStr = $po->tanggal ? $po->tanggal->format('Y-m-d') : ($po->created_at ? $po->created_at->format('Y-m-d') : now()->toDateString());
+                $menuName = $po->workOrder ? $po->workOrder->nama_menu : ($po->nama_menu ?: 'PO Rancang Menu');
+                $vendorName = $po->supplier ? $po->supplier->nama_usaha : ($po->vendor && $po->vendor !== 'Rekanan Pangan SPPG' ? $po->vendor : '-');
+
+                foreach ($po->items as $it) {
+                    $subtotal = (float)($it->subtotal_aktual !== null ? $it->subtotal_aktual : (($it->qty_beli_po_kg !== null ? $it->qty_beli_po_kg : $it->gross_kg) * ($it->harga_aktual ?: $it->harga_master)));
+                    $kategoriTrx = $it->jenis_transaksi ?: 'Bahan Baku';
+                    if (!in_array($kategoriTrx, ['Bahan Baku', 'Operasional', 'Insentif Fasilitas'])) {
+                        $kategoriTrx = 'Bahan Baku';
+                    }
+
+                    $transaksiItems->push([
+                        'id' => 'PO-' . $po->id . '-ITEM-' . $it->id,
+                        'source_type' => 'po',
+                        'po_id' => $po->id,
+                        'po_item_id' => $it->id,
+                        'work_order_id' => $po->work_order_id,
+                        'work_order' => $po->workOrder ? [
+                            'id' => $po->workOrder->id,
+                            'nomor_wo' => $po->workOrder->nomor_wo,
+                            'nama_menu' => $po->workOrder->nama_menu,
+                            'tanggal_distribusi' => $po->workOrder->tanggal_distribusi ? $po->workOrder->tanggal_distribusi->format('Y-m-d') : null,
+                        ] : null,
+                        'nomor_transaksi' => $po->nomor_po,
+                        'tanggal' => $tglStr,
+                        'kategori' => $kategoriTrx,
+                        'arus' => 'Keluar',
+                        'nama_transaksi' => $it->nama . ($menuName ? " ({$menuName})" : ""),
+                        'nominal' => $subtotal,
+                        'status' => $statusTrx,
+                        'perlu_npo' => $it->perlu_npo !== null ? (bool)$it->perlu_npo : true,
+                        'vendor' => $it->supplier ? $it->supplier->nama_usaha : $vendorName,
+                        'keterangan' => $it->keterangan ?: ($po->catatan ?: '-'),
+                        'satuan' => $it->satuan ?: 'Kg',
+                        'qty' => (float)($it->qty_beli_po_kg !== null ? $it->qty_beli_po_kg : $it->gross_kg),
+                        'harga_satuan' => (float)($it->harga_aktual ?: $it->harga_master),
+                        'created_at' => $po->created_at ? $po->created_at->format('Y-m-d H:i:s') : null,
+                    ]);
+                }
+            }
+        }
+
+        foreach ($manualTransaksi as $mt) {
+            $transaksiItems->push([
+                'id' => 'MANUAL-' . $mt->id,
+                'source_type' => 'manual',
+                'manual_id' => $mt->id,
+                'po_id' => null,
+                'po_item_id' => null,
+                'work_order_id' => $mt->work_order_id,
+                'work_order' => $mt->workOrder ? [
+                    'id' => $mt->workOrder->id,
+                    'nomor_wo' => $mt->workOrder->nomor_wo,
+                    'nama_menu' => $mt->workOrder->nama_menu,
+                    'tanggal_distribusi' => $mt->workOrder->tanggal_distribusi ? $mt->workOrder->tanggal_distribusi->format('Y-m-d') : null,
+                ] : null,
+                'nomor_transaksi' => $mt->nomor_transaksi,
+                'tanggal' => $mt->tanggal ? $mt->tanggal->format('Y-m-d') : ($mt->created_at ? $mt->created_at->format('Y-m-d') : now()->toDateString()),
+                'tanggal_pesanan' => $mt->tanggal_pesanan ? $mt->tanggal_pesanan->format('Y-m-d') : ($mt->tanggal ? $mt->tanggal->format('Y-m-d') : null),
+                'kategori' => $mt->kategori ?: 'Operasional',
+                'arus' => $mt->arus ?: ($mt->kategori === 'Dana Bantuan Pemerintah' ? 'Masuk' : 'Keluar'),
+                'nama_transaksi' => $mt->nama_transaksi,
+                'volume' => $mt->volume !== null ? (float)$mt->volume : null,
+                'satuan' => $mt->satuan ?: 'Kg',
+                'nominal' => (float)$mt->nominal,
+                'status' => in_array($mt->status, ['Disetujui', 'Ditunda', 'Ditolak', 'Dibatalkan'], true) ? $mt->status : 'Disetujui',
+                'perlu_npo' => (bool)$mt->perlu_npo,
+                'supplier_id' => $mt->supplier_id,
+                'vendor' => $mt->supplier ? $mt->supplier->nama_usaha : ($mt->vendor ?: '-'),
+                'keterangan' => $mt->keterangan ?: '-',
+                'qty' => $mt->volume !== null ? (float)$mt->volume : 1,
+                'harga_satuan' => (float)$mt->nominal,
+                'created_at' => $mt->created_at ? $mt->created_at->format('Y-m-d H:i:s') : null,
+            ]);
+        }
+
+        $allTransaksiList = $transaksiItems->sortByDesc('tanggal')->values()->all();
+
+        $saldoAwal = null;
+        $penyesuaianList = [];
+
+        if ($unitSppg) {
+            $dbSaldo = KeuanganSaldoAwal::where('unit_sppg_id', $unitSppg->id)->first();
+            if ($dbSaldo) {
+                $saldoAwal = [
+                    'id' => $dbSaldo->id,
+                    'tanggal' => $dbSaldo->tanggal ? $dbSaldo->tanggal->format('Y-m-d') : null,
+                    'nominal' => (float)$dbSaldo->nominal,
+                    'keterangan' => $dbSaldo->keterangan,
+                    'is_locked' => (bool)$dbSaldo->is_locked,
+                    'user_name' => $dbSaldo->user?->name ?? 'Admin Keuangan',
+                    'created_at' => $dbSaldo->created_at ? $dbSaldo->created_at->format('Y-m-d H:i:s') : null,
+                ];
+            }
+
+            $penyesuaianList = KeuanganPenyesuaian::where('unit_sppg_id', $unitSppg->id)
+                ->with('user:id,name')
+                ->orderBy('tanggal', 'desc')
+                ->orderBy('id', 'desc')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'nomor_penyesuaian' => $item->nomor_penyesuaian,
+                        'tanggal' => $item->tanggal ? $item->tanggal->format('Y-m-d') : null,
+                        'arah' => $item->arah,
+                        'jenis' => $item->jenis,
+                        'jumlah' => (float)$item->jumlah,
+                        'alasan' => $item->alasan,
+                        'user_name' => $item->user?->name ?? 'Admin Keuangan',
+                        'created_at' => $item->created_at ? $item->created_at->format('Y-m-d H:i:s') : null,
+                    ];
+                })
+                ->all();
+        }
+
         return Inertia::render('Keuangan/Index', [
+            'transaksiList' => $allTransaksiList,
+            'saldoAwal' => $saldoAwal,
+            'penyesuaianList' => $penyesuaianList,
+            'workOrdersList' => $workOrdersList,
             'user' => $user,
             'unitSppg' => $unitSppg,
             'kelompokList' => $kelompokList,

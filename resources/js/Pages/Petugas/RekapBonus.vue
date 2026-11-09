@@ -393,6 +393,30 @@ function formatRibuan(num) {
     return new Intl.NumberFormat("id-ID").format(num);
 }
 
+// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas)
+function parseJabatanList(str) {
+    if (!str) return [];
+    const normalized = str
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
+}
+
+// Helper Filter Multi-Jabatan
+function matchJabatan(petugasJabatan, filterVal) {
+    if (!filterVal || filterVal === "all") return true;
+    const list = parseJabatanList(petugasJabatan);
+    return (
+        list.some((j) => j.toLowerCase() === filterVal.toLowerCase()) ||
+        (petugasJabatan || "").toLowerCase().includes(filterVal.toLowerCase())
+    );
+}
+
 function getJabatanBadgeClass(jabatan) {
     if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
     const j = jabatan.toLowerCase();
@@ -445,14 +469,12 @@ const filteredPetugas = computed(() => {
             const q = searchQuery.value.toLowerCase().trim();
             const matchNama = (p.nama || "").toLowerCase().includes(q);
             const matchNik = (p.nik || "").toLowerCase().includes(q);
-            const matchJabatan = (p.jabatan || "").toLowerCase().includes(q);
+            const matchJabatan = parseJabatanList(p.jabatan).some((j) => j.toLowerCase().includes(q)) || (p.jabatan || "").toLowerCase().includes(q);
             if (!matchNama && !matchNik && !matchJabatan) return false;
         }
 
         if (selectedJabatanFilter.value !== "all") {
-            const jabStr = (p.jabatan || "").toLowerCase();
-            const filterVal = selectedJabatanFilter.value.toLowerCase();
-            if (!jabStr.includes(filterVal)) return false;
+            if (!matchJabatan(p.jabatan, selectedJabatanFilter.value)) return false;
         }
 
         if (selectedStatusFilter.value !== "all" && p.status !== selectedStatusFilter.value) {
@@ -1461,7 +1483,7 @@ async function downloadSlipBonusSinglePetugas(p) {
                                             </div>
                                             <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                                                 <span
-                                                    v-for="jab in (p.jabatan || '').split(/[,&/]/).map(s => s.trim()).filter(Boolean)"
+                                                    v-for="jab in parseJabatanList(p.jabatan)"
                                                     :key="jab"
                                                     :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
                                                 >
@@ -2140,9 +2162,13 @@ async function downloadSlipBonusSinglePetugas(p) {
                             <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                                 <h4 class="font-bold text-slate-900 text-base leading-tight">{{ detailPetugas.nama }}</h4>
                                 <p class="text-xs text-slate-500 font-mono mt-0.5">NIK: {{ detailPetugas.nik }}</p>
-                                <div class="flex items-center gap-2 mt-2">
-                                    <span :class="['px-2 py-0.5 rounded text-[10px] font-semibold border', getJabatanBadgeClass(detailPetugas.jabatan)]">
-                                        {{ detailPetugas.jabatan }}
+                                <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    <span
+                                        v-for="jab in parseJabatanList(detailPetugas.jabatan)"
+                                        :key="jab"
+                                        :class="['px-2 py-0.5 rounded text-[10px] font-semibold border', getJabatanBadgeClass(jab)]"
+                                    >
+                                        {{ jab }}
                                     </span>
                                     <span class="text-[10px] text-slate-500 font-mono">
                                         Rek: {{ detailPetugas.jenis_bank || 'BNI' }} - {{ detailPetugas.nomor_rekening || '-' }}
@@ -2275,8 +2301,16 @@ async function downloadSlipBonusSinglePetugas(p) {
                                                         {{ getStatusLabel(matrixPresensi[detailPetugas.id]?.[dt.dateStr] || '') }}
                                                     </span>
                                                 </td>
-                                                <td class="py-1.5 px-2.5 text-slate-700">
-                                                    {{ getDailyJabatan(detailPetugas, dt.dateStr) }}
+                                                <td class="py-1.5 px-2.5">
+                                                    <div class="flex items-center gap-1 flex-wrap">
+                                                        <span
+                                                            v-for="jab in parseJabatanList(getDailyJabatan(detailPetugas, dt.dateStr))"
+                                                            :key="jab"
+                                                            :class="['px-1.5 py-0.5 rounded text-[9.5px] border font-medium leading-none', getJabatanBadgeClass(jab)]"
+                                                        >
+                                                            {{ jab }}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td class="py-1.5 px-2.5 text-right font-mono text-slate-600">
                                                     {{ formatRupiah(getDailyBonus(detailPetugas, dt.dateStr)) }}

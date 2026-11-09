@@ -107,6 +107,114 @@ class DashboardController extends Controller
                 ->first();
         }
 
+        // Ringkasan Keuangan: Saldo Akhir, Uang Masuk Hari Ini, Uang Keluar Hari Ini, dan Transaksi Tertunda
+        $todayStr = now()->toDateString();
+        $keuanganSummary = [
+            'saldo_akhir' => 0,
+            'saldo_awal' => 0,
+            'has_saldo_awal' => false,
+            'uang_masuk_hari_ini' => 0,
+            'uang_keluar_hari_ini' => 0,
+            'net_hari_ini' => 0,
+            'tanggal_hari_ini' => $todayStr,
+            'jumlah_tertunda' => 0,
+            'nominal_tertunda' => 0,
+        ];
+
+        if ($unitSppg) {
+            $saldoAwalRow = \App\Models\KeuanganSaldoAwal::where('unit_sppg_id', $unitSppg->id)->first();
+            $saldoAwalNominal = $saldoAwalRow ? (float)$saldoAwalRow->nominal : 0;
+
+            // Masuk hari ini (Penyesuaian Masuk + Transaksi Masuk)
+            $masukHariIni = (float)\App\Models\KeuanganPenyesuaian::where('unit_sppg_id', $unitSppg->id)
+                ->whereDate('tanggal', $todayStr)
+                ->where('arah', 'masuk')
+                ->sum('jumlah')
+                + (float)\App\Models\TransaksiKeuangan::where('unit_sppg_id', $unitSppg->id)
+                ->whereDate('tanggal', $todayStr)
+                ->where('status', 'Disetujui')
+                ->where(function ($q) {
+                    $q->where('arus', 'Masuk')
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('arus')->where('kategori', 'Dana Bantuan Pemerintah');
+                      });
+                })
+                ->sum('nominal');
+
+            // Keluar hari ini (Penyesuaian Keluar + Transaksi Keluar + PO Terverifikasi hari ini)
+            $keluarHariIni = (float)\App\Models\KeuanganPenyesuaian::where('unit_sppg_id', $unitSppg->id)
+                ->whereDate('tanggal', $todayStr)
+                ->where('arah', 'keluar')
+                ->sum('jumlah')
+                + (float)\App\Models\TransaksiKeuangan::where('unit_sppg_id', $unitSppg->id)
+                ->whereDate('tanggal', $todayStr)
+                ->where('status', 'Disetujui')
+                ->where(function ($q) {
+                    $q->where('arus', 'Keluar')
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('arus')->where('kategori', '!=', 'Dana Bantuan Pemerintah');
+                      });
+                })
+                ->sum('nominal')
+                + (float)\App\Models\PurchaseOrderItem::whereHas('purchaseOrder', function ($q) use ($unitSppg, $todayStr) {
+                    $q->where('unit_sppg_id', $unitSppg->id)
+                        ->whereDate('tanggal', $todayStr)
+                        ->whereIn('status_po', ['Terverifikasi', 'Siap Produksi', 'Selesai']);
+                })->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(subtotal_aktual, COALESCE(qty_beli_po_kg, gross_kg) * COALESCE(harga_aktual, harga_master))'));
+
+            // Total Seluruh Uang Masuk Akumulasi
+            $totalMasuk = (float)\App\Models\KeuanganPenyesuaian::where('unit_sppg_id', $unitSppg->id)
+                ->where('arah', 'masuk')
+                ->sum('jumlah')
+                + (float)\App\Models\TransaksiKeuangan::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Disetujui')
+                ->where(function ($q) {
+                    $q->where('arus', 'Masuk')
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('arus')->where('kategori', 'Dana Bantuan Pemerintah');
+                      });
+                })
+                ->sum('nominal');
+
+            // Total Seluruh Uang Keluar Akumulasi
+            $totalKeluar = (float)\App\Models\KeuanganPenyesuaian::where('unit_sppg_id', $unitSppg->id)
+                ->where('arah', 'keluar')
+                ->sum('jumlah')
+                + (float)\App\Models\TransaksiKeuangan::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Disetujui')
+                ->where(function ($q) {
+                    $q->where('arus', 'Keluar')
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('arus')->where('kategori', '!=', 'Dana Bantuan Pemerintah');
+                      });
+                })
+                ->sum('nominal')
+                + (float)\App\Models\PurchaseOrderItem::whereHas('purchaseOrder', function ($q) use ($unitSppg) {
+                    $q->where('unit_sppg_id', $unitSppg->id)
+                        ->whereIn('status_po', ['Terverifikasi', 'Siap Produksi', 'Selesai']);
+                })->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(subtotal_aktual, COALESCE(qty_beli_po_kg, gross_kg) * COALESCE(harga_aktual, harga_master))'));
+
+            $saldoAkhir = $saldoAwalNominal + $totalMasuk - $totalKeluar;
+
+            // Transaksi Tertunda (Status Ditunda yang perlu verifikasi/persetujuan)
+            $trxTertundaQuery = \App\Models\TransaksiKeuangan::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Ditunda');
+            $jumlahTertunda = (int) $trxTertundaQuery->count();
+            $nominalTertunda = (float) $trxTertundaQuery->sum('nominal');
+
+            $keuanganSummary = [
+                'saldo_akhir' => (float)$saldoAkhir,
+                'saldo_awal' => (float)$saldoAwalNominal,
+                'has_saldo_awal' => (bool)$saldoAwalRow,
+                'uang_masuk_hari_ini' => (float)$masukHariIni,
+                'uang_keluar_hari_ini' => (float)$keluarHariIni,
+                'net_hari_ini' => (float)($masukHariIni - $keluarHariIni),
+                'tanggal_hari_ini' => $todayStr,
+                'jumlah_tertunda' => $jumlahTertunda,
+                'nominal_tertunda' => $nominalTertunda,
+            ];
+        }
+
         return Inertia::render('Dashboard/Index', [
             'user' => $user,
             'unitSppg' => $unitSppg,
@@ -114,6 +222,7 @@ class DashboardController extends Controller
             'workOrders' => $workOrders,
             'pengawasGizi' => $pengawasGizi,
             'pengawasKeuangan' => $pengawasKeuangan,
+            'keuanganSummary' => $keuanganSummary,
             'needs_onboarding' => !$user->isProfileCompleted(),
         ]);
     }

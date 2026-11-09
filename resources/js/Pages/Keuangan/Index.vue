@@ -4,6 +4,7 @@ import { Head } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
 // Partials
+import KeuanganPenyesuaianTab from "@/Pages/Keuangan/Partials/KeuanganPenyesuaianTab.vue";
 import KeuanganAnggaranTab from "@/Pages/Keuangan/Partials/KeuanganAnggaranTab.vue";
 import KeuanganVerifikasiPoTab from "@/Pages/Keuangan/Partials/KeuanganVerifikasiPoTab.vue";
 import KeuanganDaftarPoTab from "@/Pages/Keuangan/Partials/KeuanganDaftarPoTab.vue";
@@ -21,6 +22,8 @@ import KeuanganStokTab from "@/Pages/Keuangan/Partials/KeuanganStokTab.vue";
 import KeuanganLaporanHarianTab from "@/Pages/Keuangan/Partials/KeuanganLaporanHarianTab.vue";
 import KeuanganLaporanPeriodikTab from "@/Pages/Keuangan/Partials/KeuanganLaporanPeriodikTab.vue";
 import KeuanganSurveiHargaTab from "@/Pages/Keuangan/Partials/KeuanganSurveiHargaTab.vue";
+import KeuanganLpdhTab from "@/Pages/Keuangan/Partials/KeuanganLpdhTab.vue";
+import KeuanganNeracaTab from "@/Pages/Keuangan/Partials/KeuanganNeracaTab.vue";
 
 const props = defineProps({
     user: {
@@ -55,6 +58,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    workOrdersList: {
+        type: Array,
+        default: () => [],
+    },
     suppliers: {
         type: Array,
         default: () => [],
@@ -64,6 +71,18 @@ const props = defineProps({
         default: () => [],
     },
     defaultSurveiItems: {
+        type: Array,
+        default: () => [],
+    },
+    transaksiList: {
+        type: Array,
+        default: () => [],
+    },
+    saldoAwal: {
+        type: Object,
+        default: null,
+    },
+    penyesuaianList: {
         type: Array,
         default: () => [],
     },
@@ -85,16 +104,19 @@ const props = defineProps({
 });
 
 const normalizeTab = (tab) => {
-    if (tab === "verifikasi-po" || tab === "verifikasi_po") return "verifikasi_po";
+    if (tab === "penyesuaian" || tab === "penyesuaian-keuangan" || tab === "saldo-awal") return "penyesuaian";
+    if (tab === "persetujuan" || tab === "verifikasi" || tab === "verifikasi-po" || tab === "verifikasi_po") return "verifikasi_po";
+    if (tab === "transaksi" || tab === "arus_kas") return "transaksi";
     if (tab === "daftar-po" || tab === "daftar_po") return "daftar_po";
     if (tab === "ringkasan" || tab === "anggaran") return "anggaran";
-    if (tab === "transaksi" || tab === "arus_kas") return "transaksi";
     if (tab === "bku") return "bku";
     if (tab === "bp-bank" || tab === "bp_bank" || tab === "bp-bbank") return "bp_bank";
     if (tab === "bp-petty-cash" || tab === "bp_petty_cash") return "bp_petty_cash";
-    if (tab === "bp-bahan-baku" || tab === "bp_bahan_baku") return "bp_bahan_baku";
-    if (tab === "bp-operasional" || tab === "bp_operasional") return "bp_operasional";
-    if (tab === "bp-fasilitas" || tab === "bp_fasilitas") return "bp_fasilitas";
+    if (tab === "bp-bahan-baku" || tab === "bp_bahan_baku" || tab === "bahan-baku") return "bp_bahan_baku";
+    if (tab === "bp-operasional" || tab === "bp_operasional" || tab === "operasional") return "bp_operasional";
+    if (tab === "bp-fasilitas" || tab === "bp_fasilitas" || tab === "insentif-fasilitas" || tab === "fasilitas") return "bp_fasilitas";
+    if (tab === "lpdh") return "lpdh";
+    if (tab === "neraca") return "neraca";
     if (tab === "lpa") return "lpa";
     if (tab === "sptj") return "sptj";
     if (tab === "bapsd") return "bapsd";
@@ -102,7 +124,7 @@ const normalizeTab = (tab) => {
     if (tab === "laporan-harian" || tab === "laporan_harian") return "laporan_harian";
     if (tab === "laporan-periodik" || tab === "laporan_periodik") return "laporan_periodik";
     if (tab === "survei-harga-pasar" || tab === "survei-harga" || tab === "survei_harga" || tab === "survei") return "survei_harga";
-    return tab || "anggaran";
+    return tab || "transaksi";
 };
 
 const activeTab = ref(normalizeTab(props.activeTab));
@@ -276,100 +298,37 @@ const bpPettyCashList = ref([
     },
 ]);
 
-// 6. DATA BP BAHAN BAKU (70%)
-const bpBahanBakuList = ref([
-    {
-        kode: "BB-01",
-        kelompok: "Bahan Pokok",
-        item: "Beras Premium Lokal, Minyak Goreng, Garam Beryodium",
-        realisasi: 4850000,
-        pagu_pos: 6000000,
-        status: "Normal",
-    },
-    {
-        kode: "BB-02",
-        kelompok: "Lauk Hewani",
-        item: "Daging Ayam Broiler Segar, Ikan Kembung, Telur Ayam",
-        realisasi: 14500000,
-        pagu_pos: 16000000,
-        status: "Normal",
-    },
-    {
-        kode: "BB-03",
-        kelompok: "Lauk Nabati",
-        item: "Tempe Kedelai Lokal, Tahu Putih Organik",
-        realisasi: 3200000,
-        pagu_pos: 4000000,
-        status: "Normal",
-    },
-    {
-        kode: "BB-04",
-        kelompok: "Sayuran Segar",
-        item: "Bayam Hijau, Jagung Manis, Buncis, Wortel, Brokoli",
-        realisasi: 3850000,
-        pagu_pos: 4500000,
-        status: "Normal",
-    },
-    {
-        kode: "BB-05",
-        kelompok: "Buah-buahan",
-        item: "Pisang Cavendish, Jeruk Manis, Semangka Merah",
-        realisasi: 4200000,
-        pagu_pos: 5000000,
-        status: "Normal",
-    },
-]);
+// 6. DATA BP BAHAN BAKU (70%) - Filter riil dari Transaksi Disetujui
+const realBahanBakuList = computed(() => {
+    return (props.transaksiList || []).filter(
+        (t) =>
+            (t.kategori === "Bahan Baku" || t.kategori === "Bahan Baku Pangan") &&
+            t.status === "Disetujui" &&
+            (t.arus === "Keluar" || !t.arus)
+    );
+});
 
-// 7. DATA BP OPERASIONAL (20%)
-const bpOperasionalList = ref([
-    {
-        kode: "OP-01",
-        rincian: "Insentif Tenaga Masak & Tim Dapur SPPG",
-        realisasi: 7200000,
-        pagu_pos: 8000000,
-    },
-    {
-        kode: "OP-02",
-        rincian: "Bahan Bakar & Distribusi Armada MBG ke Sekolah",
-        realisasi: 1850000,
-        pagu_pos: 2500000,
-    },
-    {
-        kode: "OP-03",
-        rincian: "Gas LPG 50kg / 12kg & Listrik Dapur",
-        realisasi: 1450000,
-        pagu_pos: 2000000,
-    },
-    {
-        kode: "OP-04",
-        rincian: "Air Bersih PDAM & Pengujian Higiene Sanitasi",
-        realisasi: 650000,
-        pagu_pos: 1000000,
-    },
-]);
+// 7. DATA BP OPERASIONAL (20%) - Filter riil dari Transaksi Disetujui
+const realOperasionalList = computed(() => {
+    return (props.transaksiList || []).filter(
+        (t) =>
+            (t.kategori === "Operasional" || t.kategori === "Biaya Operasional") &&
+            t.status === "Disetujui" &&
+            (t.arus === "Keluar" || !t.arus)
+    );
+});
 
-// 8. DATA BP FASILITAS (10%)
-const bpFasilitasList = ref([
-    {
-        kode: "FAS-01",
-        rincian: "Sewa Tempat Dapur & Area Distribusi SPPG",
-        realisasi: 3500000,
-        pagu_pos: 4000000,
-    },
-    {
-        kode: "FAS-02",
-        rincian:
-            "Pengadaan & Perawatan Wadah Ompreng Stainless Steel Food Grade",
-        realisasi: 1200000,
-        pagu_pos: 1500000,
-    },
-    {
-        kode: "FAS-03",
-        rincian: "Peralatan Masak Besar & Sterilisator Uap",
-        realisasi: 850000,
-        pagu_pos: 1000000,
-    },
-]);
+// 8. DATA BP FASILITAS (10%) - Filter riil dari Transaksi Disetujui
+const realFasilitasList = computed(() => {
+    return (props.transaksiList || []).filter(
+        (t) =>
+            (t.kategori === "Insentif Fasilitas" ||
+                t.kategori === "Fasilitas" ||
+                t.kategori === "Fasilitas & Sarpras") &&
+            t.status === "Disetujui" &&
+            (t.arus === "Keluar" || !t.arus)
+    );
+});
 
 // 9. DATA BAPSD
 const bapsdList = ref([
@@ -437,10 +396,13 @@ function formatTanggalIndo(tgl) {
 
 const pageTitle = computed(() => {
     switch (activeTab.value) {
+        case "penyesuaian":
+            return "Penyesuaian Keuangan - SIPEGE";
         case "anggaran":
             return "Anggaran - SIPEGE";
         case "verifikasi_po":
-            return "Verifikasi PO - SIPEGE";
+        case "verifikasi":
+            return "Verifikasi - SIPEGE";
         case "daftar_po":
             return "Daftar PO - SIPEGE";
         case "survei_harga":
@@ -486,6 +448,17 @@ const pageTitle = computed(() => {
         <Head :title="pageTitle" />
 
         <div class="space-y-6">
+            <!-- 0. PENYESUAIAN KEUANGAN & SALDO AWAL (PALING ATAS) -->
+            <KeuanganPenyesuaianTab
+                v-if="activeTab === 'penyesuaian'"
+                :saldo-awal="props.saldoAwal"
+                :penyesuaian-list="props.penyesuaianList || []"
+                :periodes="props.periodes || []"
+                :unit-sppg="props.unitSppg"
+                :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
+            />
+
             <!-- 1. ANGGARAN & BIAYA PER PORSI -->
             <KeuanganAnggaranTab
                 v-if="activeTab === 'anggaran'"
@@ -515,10 +488,14 @@ const pageTitle = computed(() => {
                 :format-tanggal-indo="formatTanggalIndo"
             />
 
-            <!-- 3. TRANSAKSI -->
+            <!-- TRANSAKSI -->
             <KeuanganTransaksiTab
                 v-if="activeTab === 'transaksi'"
-                :transaksi-list="transaksiList"
+                :transaksi-list="props.transaksiList || []"
+                :suppliers="props.suppliers || []"
+                :work-orders-list="props.workOrdersList || []"
+                :periodes="props.periodes || []"
+                :unit-sppg="props.unitSppg"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
             />
@@ -550,22 +527,25 @@ const pageTitle = computed(() => {
             <!-- 7. BP BAHAN BAKU -->
             <KeuanganBpBahanBakuTab
                 v-if="activeTab === 'bp_bahan_baku'"
-                :bp-bahan-baku-list="bpBahanBakuList"
+                :bp-bahan-baku-list="realBahanBakuList"
                 :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
             />
 
             <!-- 8. BP OPERASIONAL -->
             <KeuanganBpOperasionalTab
                 v-if="activeTab === 'bp_operasional'"
-                :bp-operasional-list="bpOperasionalList"
+                :bp-operasional-list="realOperasionalList"
                 :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
             />
 
             <!-- 9. BP FASILITAS -->
             <KeuanganBpFasilitasTab
                 v-if="activeTab === 'bp_fasilitas'"
-                :bp-fasilitasList="bpFasilitasList"
+                :bp-fasilitas-list="realFasilitasList"
                 :format-rupiah="formatRupiah"
+                :format-tanggal-indo="formatTanggalIndo"
             />
 
             <!-- 10. LPA -->
@@ -624,6 +604,18 @@ const pageTitle = computed(() => {
                 :default-survei-items="defaultSurveiItems"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
+            />
+
+            <!-- 17. LPDH (SEGERA HADIR) -->
+            <KeuanganLpdhTab
+                v-if="activeTab === 'lpdh'"
+                :unit-sppg="unitSppg"
+            />
+
+            <!-- 18. NERACA (SEGERA HADIR) -->
+            <KeuanganNeracaTab
+                v-if="activeTab === 'neraca'"
+                :unit-sppg="unitSppg"
             />
         </div>
     </AppLayout>

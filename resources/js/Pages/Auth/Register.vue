@@ -455,7 +455,7 @@ const submit = () => {
                                 <span>Integritas & Akurasi Data Operasional SPPG</span>
                             </h4>
                             <p class="pl-5.5 text-[11.5px] text-slate-600">
-                                Pengguna bertanggung jawab penuh atas keabsahan seluruh data yang dimasukkan ke dalam sistem, meliputi perencanaan Work Order (WO), perhitungan formula porsi gizi makanan, data kelompok penerima manfaat (KPM), serta penjadwalan dan absensi shifting personil petugas.
+                                Pengguna bertanggung jawab penuh atas keabsahan seluruh data yang dimasukkan ke dalam sistem, meliputi perencanaan Work Order (WO), perhitungan formula porsi gizi makanan, data kelompok penerima manfaat (KPM), serta penjadwalan dan absensi personil petugas.
                             </p>
                         </div>
 

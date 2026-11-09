@@ -5,7 +5,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 
 import DashboardHeroBanner from "@/Pages/Dashboard/Partials/DashboardHeroBanner.vue";
 import DashboardMetricCards from "@/Pages/Dashboard/Partials/DashboardMetricCards.vue";
-import DashboardWoTrackingBar from "@/Pages/Dashboard/Partials/DashboardWoTrackingBar.vue";
+import DashboardKeuanganSummaryBar from "@/Pages/Dashboard/Partials/DashboardKeuanganSummaryBar.vue";
 import DashboardNavTabs from "@/Pages/Dashboard/Partials/DashboardNavTabs.vue";
 import DashboardUnitTab from "@/Pages/Dashboard/Partials/DashboardUnitTab.vue";
 import DashboardProfileTab from "@/Pages/Dashboard/Partials/DashboardProfileTab.vue";
@@ -39,6 +39,10 @@ const props = defineProps({
     pengawasKeuangan: {
         type: Object,
         default: null,
+    },
+    keuanganSummary: {
+        type: Object,
+        default: () => ({}),
     },
 });
 
@@ -192,9 +196,9 @@ function switchTab(tab) {
             :status-variant="statusVariant"
         />
 
-        <!-- Tracking Bar Status Work Order ke Siap Produksi -->
-        <DashboardWoTrackingBar
-            :work-orders="workOrders"
+        <!-- Ringkasan Keuangan SPPG: Saldo Akhir, Uang Masuk Hari Ini, Uang Keluar Hari Ini -->
+        <DashboardKeuanganSummaryBar
+            :summary="keuanganSummary"
         />
 
         <!-- Navigation Tabs -->

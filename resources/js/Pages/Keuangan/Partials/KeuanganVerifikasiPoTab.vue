@@ -163,10 +163,19 @@ const inputCatatanBaru = ref("");
 const searchQuery = ref("");
 const statusFilter = ref("semua");
 
-// Filter Waktu (PeriodDateFilterBar)
-const filterStartDate = ref("");
-const filterEndDate = ref("");
-const filterDateMode = ref("");
+// Format today's date YYYY-MM-DD
+const getTodayStr = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+// Filter Waktu (PeriodDateFilterBar - default hari ini)
+const filterStartDate = ref(getTodayStr());
+const filterEndDate = ref(getTodayStr());
+const filterDateMode = ref("today");
 const filterPeriodeId = ref("");
 const isFilterAllTime = ref(false);
 
@@ -399,6 +408,14 @@ function openVerificationModal(po, readOnly = false) {
                 item.sumber_pengadaan = "Beli PO";
             }
         }
+        if (!item.jenis_transaksi || !["Bahan Baku", "Operasional", "Insentif Fasilitas"].includes(item.jenis_transaksi)) {
+            item.jenis_transaksi = item.jenis === "operasional" ? "Operasional" : "Bahan Baku";
+        }
+        if (item.perlu_npo === undefined || item.perlu_npo === null) {
+            item.perlu_npo = true;
+        } else {
+            item.perlu_npo = Boolean(item.perlu_npo);
+        }
     });
     selectedPo.value.riwayat_verifikasi =
         po.riwayat_verifikasi ||
@@ -408,6 +425,20 @@ function openVerificationModal(po, readOnly = false) {
     inputCatatanBaru.value = "";
     isReadOnlyMode.value = readOnly;
     showDetailModal.value = true;
+}
+
+function setAllJenisTransaksi(category) {
+    if (!selectedPo.value || !selectedPo.value.items) return;
+    selectedPo.value.items.forEach((it) => {
+        it.jenis_transaksi = category;
+    });
+}
+
+function setAllPerluNpo(val) {
+    if (!selectedPo.value || !selectedPo.value.items) return;
+    selectedPo.value.items.forEach((it) => {
+        it.perlu_npo = val;
+    });
 }
 
 function onStokChange(item) {
@@ -585,6 +616,7 @@ function saveAsDraftVerification() {
             onSuccess: () => {
                 isProcessing.value = false;
                 showDetailModal.value = false;
+                router.visit("/keuangan/transaksi");
             },
             onError: () => {
                 isProcessing.value = false;
@@ -593,7 +625,7 @@ function saveAsDraftVerification() {
     );
 }
 
-// Aksi 2: Setujui & Lanjutkan ke Daftar PO Resmi
+// Aksi 2: Setujui & Terbitkan ke Transaksi
 function approveAndProceedToPoList() {
     if (!selectedPo.value) return;
     isProcessing.value = true;
@@ -601,7 +633,7 @@ function approveAndProceedToPoList() {
     router.post(
         "/keuangan/po/" + selectedPo.value.db_id + "/verifikasi",
         {
-            status_po: "Terverifikasi",
+            status_po: "Disetujui",
             catatan: inputCatatanBaru.value,
             items: selectedPo.value.items,
         },
@@ -610,8 +642,8 @@ function approveAndProceedToPoList() {
             onSuccess: () => {
                 isProcessing.value = false;
                 showDetailModal.value = false;
-                // Navigasi ke Daftar PO resmi
-                router.visit("/keuangan/daftar-po");
+                // Navigasi langsung ke Transaksi
+                router.visit("/keuangan/transaksi");
             },
             onError: () => {
                 isProcessing.value = false;
@@ -1397,8 +1429,24 @@ function rejectPo() {
                                         <th class="p-3 text-center min-w-[80px]">
                                             SATUAN
                                         </th>
-                                        <th class="p-3 text-center min-w-[110px]">
-                                            JENIS
+                                        <th class="p-3 text-center min-w-[155px]">
+                                            <div class="flex flex-col items-center gap-1">
+                                                <span class="text-slate-800">KATEGORI TRANSAKSI</span>
+                                                <div v-if="!isReadOnlyMode" class="flex items-center gap-1">
+                                                    <button type="button" @click="setAllJenisTransaksi('Bahan Baku')" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 cursor-pointer shadow-2xs">Bahan Baku</button>
+                                                    <button type="button" @click="setAllJenisTransaksi('Operasional')" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-800 cursor-pointer shadow-2xs">Ops</button>
+                                                    <button type="button" @click="setAllJenisTransaksi('Insentif Fasilitas')" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-800 cursor-pointer shadow-2xs">Fasilitas</button>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th class="p-3 text-center min-w-[125px]">
+                                            <div class="flex flex-col items-center gap-1">
+                                                <span class="text-slate-800">PERLU NPO?</span>
+                                                <div v-if="!isReadOnlyMode" class="flex items-center gap-1">
+                                                    <button type="button" @click="setAllPerluNpo(true)" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 cursor-pointer shadow-2xs">Semua Ya</button>
+                                                    <button type="button" @click="setAllPerluNpo(false)" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer shadow-2xs">Semua Tdk</button>
+                                                </div>
+                                            </div>
                                         </th>
                                         <th
                                             class="p-3 text-center min-w-[95px]"
@@ -1568,17 +1616,61 @@ function rejectPo() {
                                             </span>
                                         </td>
 
-                                        <!-- 7. JENIS -->
-                                        <td class="p-3 text-center">
+                                        <!-- 7. KATEGORI TRANSAKSI -->
+                                        <td class="p-2.5 text-center">
+                                            <select
+                                                v-if="!isReadOnlyMode"
+                                                v-model="b.jenis_transaksi"
+                                                class="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-800 shadow-2xs"
+                                            >
+                                                <option value="Bahan Baku">🥗 Bahan Baku</option>
+                                                <option value="Operasional">📦 Operasional</option>
+                                                <option value="Insentif Fasilitas">🏢 Insentif Fasilitas</option>
+                                            </select>
                                             <span
+                                                v-else
                                                 :class="[
                                                     'px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1',
-                                                    (b.jenis || 'bahan_baku') === 'operasional'
+                                                    b.jenis_transaksi === 'Operasional'
                                                         ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                                        : b.jenis_transaksi === 'Insentif Fasilitas'
+                                                        ? 'bg-blue-50 text-blue-800 border-blue-200'
                                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                                 ]"
                                             >
-                                                {{ (b.jenis || 'bahan_baku') === 'operasional' ? '📦 Operasional' : '🥗 Bahan Baku' }}
+                                                {{ b.jenis_transaksi || 'Bahan Baku' }}
+                                            </span>
+                                        </td>
+
+                                        <!-- 7b. PERLU NPO (NOTA PO) -->
+                                        <td class="p-2.5 text-center">
+                                            <label v-if="!isReadOnlyMode" class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    v-model="b.perlu_npo"
+                                                    class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                />
+                                                <span
+                                                    :class="[
+                                                        'text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors',
+                                                        b.perlu_npo
+                                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                    ]"
+                                                >
+                                                    {{ b.perlu_npo ? 'Perlu NPO' : 'Tanpa NPO' }}
+                                                </span>
+                                            </label>
+                                            <span
+                                                v-else
+                                                :class="[
+                                                    'px-2 py-0.5 rounded-full text-[10px] font-bold border inline-block',
+                                                    b.perlu_npo
+                                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                ]"
+                                            >
+                                                {{ b.perlu_npo ? 'Perlu NPO' : 'Tanpa NPO' }}
                                             </span>
                                         </td>
 
@@ -1876,9 +1968,9 @@ function rejectPo() {
                                         >
                                             Total Rekapitulasi
                                         </td>
-                                        <!-- Col 3-9: (7 columns) Sub Menu, Tipe, Kategori, Satuan, Jenis, Gramasi, BDD -->
+                                        <!-- Col 3-10: (8 columns) Sub Menu, Tipe, Kategori, Satuan, Kategori Trx, NPO, Gramasi, BDD -->
                                         <td
-                                            colspan="7"
+                                            colspan="8"
                                             class="p-3.5 text-right uppercase text-[11px] text-slate-600 font-extrabold bg-slate-50"
                                         >
                                             Kebutuhan & Pembelian PO:
@@ -2120,7 +2212,7 @@ function rejectPo() {
                             <span>Simpan Draft Verifikasi</span>
                         </button>
 
-                        <!-- 3. Setujui & Lanjutkan ke Daftar PO -->
+                        <!-- 3. Setujui & Terbitkan ke Transaksi -->
                         <button
                             type="button"
                             @click="approveAndProceedToPoList"
@@ -2128,7 +2220,7 @@ function rejectPo() {
                             class="px-5 py-2 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                             <CheckCircle2 class="h-4 w-4" />
-                            <span>Setujui & Lanjutkan ke Daftar PO</span>
+                            <span>Setujui & Terbitkan ke Transaksi</span>
                         </button>
                     </div>
                 </div>

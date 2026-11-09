@@ -5216,6 +5216,7 @@ export async function exportPoExcel(po, options = {}) {
         }
 
         // 2. Parse Tanggal Order & Tanggal Kirim
+        // Aturan: Tanggal Order = H-1 dari Tanggal Pesanan, Tanggal Kirim = H+1 dari Tanggal Pesanan
         const DAYS_INDO = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const MONTHS_INDO = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -5227,22 +5228,31 @@ export async function exportPoExcel(po, options = {}) {
             return `${dayName}, ${d} ${m} ${y}`;
         }
 
-        let kirimDateObj = po.tanggal ? new Date(po.tanggal) : new Date();
-        if (isNaN(kirimDateObj.getTime())) kirimDateObj = new Date();
-
-        let orderDateObj = null;
-        if (options.orderDate) {
-            orderDateObj = new Date(options.orderDate);
-        } else if (po.created_at) {
-            orderDateObj = new Date(po.created_at);
-            if (isNaN(orderDateObj.getTime())) orderDateObj = null;
+        function parseLocalDate(val) {
+            if (!val) return new Date();
+            if (val instanceof Date) return new Date(val.getTime());
+            const str = String(val).substring(0, 10);
+            const parts = str.split('-');
+            if (parts.length === 3) {
+                const y = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10) - 1;
+                const d = parseInt(parts[2], 10);
+                return new Date(y, m, d, 12, 0, 0);
+            }
+            const dObj = new Date(val);
+            return isNaN(dObj.getTime()) ? new Date() : dObj;
         }
 
-        if (!orderDateObj) {
-            // Default tanggal order H-1 sebelum tanggal kirim
-            orderDateObj = new Date(kirimDateObj);
-            orderDateObj.setDate(orderDateObj.getDate() - 1);
-        }
+        // Tentukan Tanggal Pesanan (Base Date)
+        const rawPesananDate = options.tanggalPesanan || po.tanggal_pesanan || options.orderDate || po.tanggal || po.created_at;
+        const pesananDateObj = parseLocalDate(rawPesananDate);
+
+        // Tanggal Order = H-1 dari Tanggal Pesanan
+        const orderDateObj = new Date(pesananDateObj);
+        orderDateObj.setDate(orderDateObj.getDate() - 1);
+
+        // Tanggal Kirim = Tanggal Pesanan
+        const kirimDateObj = new Date(pesananDateObj);
 
         const orderDateFormatted = formatIndoFull(orderDateObj);
         const kirimDateFormatted = formatIndoFull(kirimDateObj);
@@ -5254,7 +5264,7 @@ export async function exportPoExcel(po, options = {}) {
         const orderDateSlash = `${ddOrder}/${mmOrder}/${yyyyOrder}`;
         const orderDateHyphen = `${ddOrder}-${mmOrder}-${yyyyOrder}`;
 
-        const filename = `NPO-${orderDateHyphen}.xlsx`;
+        const filename = options.filename || `NPO-${orderDateHyphen}.xlsx`;
 
         // 3. Klasifikasi Item (BB vs OPS)
         function isItemOps(it) {
@@ -6322,52 +6332,72 @@ export async function exportPoExcel(po, options = {}) {
             rSig4.height = 18;
         }
 
-        // 4. Generate Rekap Sheets (Rekap BB, Rekap OPS, dan Rekap Akhir)
-        buildRekapSheet('BB');
-        buildRekapSheet('OPS');
-        buildRekapAkhirSheet();
+        if (options.singleOnly) {
+            // Khusus download per baris: hanya buat 1 sheet Nota Pesanan resmi untuk transaksi/supplier tersebut
+            const isOps = po.kategori && String(po.kategori).toLowerCase().includes('operasional');
+            const classification = isOps ? 'OPS' : 'BB';
+            const grpList = isOps
+                ? (opsSupplierGroups.length > 0 ? opsSupplierGroups : bbSupplierGroups)
+                : (bbSupplierGroups.length > 0 ? bbSupplierGroups : opsSupplierGroups);
+            const targetGrp = grpList[0] || {
+                supplier: po.supplier || { namaUsaha: po.vendor || 'Supplier' },
+                items: po.items || []
+            };
+            const poNumber = options.poNumber || po.nomor_transaksi || po.nomor_po || `001/PO/${classification}/${orderDateSlash}`;
+            buildSupplierSheet({
+                classification,
+                poNumber,
+                supplier: targetGrp.supplier,
+                items: targetGrp.items,
+            });
+        } else {
+            // 4. Generate Rekap Sheets (Rekap BB, Rekap OPS, dan Rekap Akhir)
+            buildRekapSheet('BB');
+            buildRekapSheet('OPS');
+            buildRekapAkhirSheet();
 
-        // 5. Generate Supplier Sheets untuk Bahan Baku (BB)
-        // Penomoran urut start dari 001/PO/BB/DD/MM/YYYY
-        if (bbSupplierGroups.length > 0) {
-            bbSupplierGroups.forEach((grp, idx) => {
-                const seqStr = String(idx + 1).padStart(3, '0');
-                const poNumber = `${seqStr}/PO/BB/${orderDateSlash}`;
+            // 5. Generate Supplier Sheets untuk Bahan Baku (BB)
+            // Penomoran urut start dari 001/PO/BB/DD/MM/YYYY
+            if (bbSupplierGroups.length > 0) {
+                bbSupplierGroups.forEach((grp, idx) => {
+                    const seqStr = String(idx + 1).padStart(3, '0');
+                    const poNumber = `${seqStr}/PO/BB/${orderDateSlash}`;
+                    buildSupplierSheet({
+                        classification: 'BB',
+                        poNumber,
+                        supplier: grp.supplier,
+                        items: grp.items,
+                    });
+                });
+            } else {
+                // Default blank supplier sheet for BB
+                const poNumber = `001/PO/BB/${orderDateSlash}`;
                 buildSupplierSheet({
                     classification: 'BB',
                     poNumber,
-                    supplier: grp.supplier,
-                    items: grp.items,
+                    supplier: {
+                        namaUsaha: po.supplier?.nama_usaha || po.vendor || 'Rumah Tempe',
+                        namaPemilik: po.supplier?.nama_pemilik || 'Noer Hakim',
+                        alamat: po.supplier?.alamat_lengkap || 'Jl. Pulau Sugara No. 31',
+                    },
+                    items: [],
                 });
-            });
-        } else {
-            // Default blank supplier sheet for BB
-            const poNumber = `001/PO/BB/${orderDateSlash}`;
-            buildSupplierSheet({
-                classification: 'BB',
-                poNumber,
-                supplier: {
-                    namaUsaha: po.supplier?.nama_usaha || po.vendor || 'Rumah Tempe',
-                    namaPemilik: po.supplier?.nama_pemilik || 'Noer Hakim',
-                    alamat: po.supplier?.alamat_lengkap || 'Jl. Pulau Sugara No. 31',
-                },
-                items: [],
-            });
-        }
+            }
 
-        // 6. Generate Supplier Sheets untuk Operasional (OPS)
-        // Penomoran urut start dari 001/PO/OPS/DD/MM/YYYY
-        if (opsSupplierGroups.length > 0) {
-            opsSupplierGroups.forEach((grp, idx) => {
-                const seqStr = String(idx + 1).padStart(3, '0');
-                const poNumber = `${seqStr}/PO/OPS/${orderDateSlash}`;
-                buildSupplierSheet({
-                    classification: 'OPS',
-                    poNumber,
-                    supplier: grp.supplier,
-                    items: grp.items,
+            // 6. Generate Supplier Sheets untuk Operasional (OPS)
+            // Penomoran urut start dari 001/PO/OPS/DD/MM/YYYY
+            if (opsSupplierGroups.length > 0) {
+                opsSupplierGroups.forEach((grp, idx) => {
+                    const seqStr = String(idx + 1).padStart(3, '0');
+                    const poNumber = `${seqStr}/PO/OPS/${orderDateSlash}`;
+                    buildSupplierSheet({
+                        classification: 'OPS',
+                        poNumber,
+                        supplier: grp.supplier,
+                        items: grp.items,
+                    });
                 });
-            });
+            }
         }
 
         // 7. Write to Buffer & Trigger Download
