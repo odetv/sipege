@@ -1174,7 +1174,12 @@ watch(
                             <tr
                                 v-for="(p, idx) in filteredPetugas"
                                 :key="p.id"
-                                class="hover:bg-slate-50/80 transition-colors group"
+                                :class="[
+                                    'transition-all duration-150 group',
+                                    p.status === 'Nonaktif'
+                                        ? 'bg-slate-50/70 opacity-60 hover:opacity-95 hover:bg-slate-100/60'
+                                        : 'bg-white hover:bg-slate-50/80'
+                                ]"
                             >
                                 <!-- No -->
                                 <td class="px-3.5 py-3.5 text-center text-slate-400 font-medium text-[11px]">
@@ -1187,9 +1192,11 @@ watch(
                                         <div
                                             :class="[
                                                 'h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5',
-                                                p.jenis_kelamin === 'L'
-                                                    ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                                                    : 'bg-rose-50 text-rose-600 border border-rose-200'
+                                                p.status === 'Nonaktif'
+                                                    ? 'bg-slate-100 text-slate-400 border border-slate-200'
+                                                    : (p.jenis_kelamin === 'L'
+                                                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                                        : 'bg-rose-50 text-rose-600 border border-rose-200')
                                             ]"
                                         >
                                             {{ p.nama ? p.nama.charAt(0).toUpperCase() : 'P' }}
@@ -1199,14 +1206,19 @@ watch(
                                                 <button
                                                     type="button"
                                                     @click="openDetailModal(p)"
-                                                    class="font-bold text-slate-900 hover:text-primary transition-colors text-left truncate cursor-pointer"
+                                                    :class="[
+                                                        'font-bold hover:text-primary transition-colors text-left truncate cursor-pointer',
+                                                        p.status === 'Nonaktif' ? 'text-slate-600' : 'text-slate-900'
+                                                    ]"
                                                 >
                                                     {{ p.nama }}
                                                 </button>
                                                 <span
                                                     :class="[
                                                         'text-[9.5px] px-1.5 py-0.5 rounded font-semibold',
-                                                        p.jenis_kelamin === 'L' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700'
+                                                        p.status === 'Nonaktif'
+                                                            ? 'bg-slate-100 text-slate-400 border border-slate-200'
+                                                            : (p.jenis_kelamin === 'L' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700')
                                                     ]"
                                                 >
                                                     {{ p.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan' }}
@@ -1300,7 +1312,7 @@ watch(
                                             'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold border',
                                             p.status === 'Aktif'
                                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                : 'bg-slate-100 text-slate-500 border-slate-300'
                                         ]"
                                     >
                                         <span

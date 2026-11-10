@@ -262,6 +262,46 @@ function handleDateFilterChange(filterPayload) {
 }
 
 // State Modal Tambah/Edit Transaksi
+const JENIS_TRANSAKSI_OPERASIONAL = [
+    "Gaji Pengawas Gizi",
+    "Gaji Pengawas Keuangan",
+    "Gaji Relawan",
+    "Insentif Satuan Pendidikan",
+    "Insentif Satuan Posyandu",
+    "Iuran Sampah",
+    "Iuran BPJS Ketenagakerjaan",
+    "Bensin",
+    "Gas",
+    "Listrik",
+    "Air Desa",
+    "Air PDAM",
+    "Air Galon",
+    "Air Minum Kemasan",
+    "Internet Pulsa",
+    "Internet Kuota",
+    "Internet Wifi",
+    "ATK Pulpen",
+    "ATK Map Berkas",
+    "ATK Kertas",
+    "ATK Tinta Printer",
+    "APD Masker Hijab",
+    "APD Masker Non-Hijab",
+    "APD Sarung Tangan Plastik",
+    "APD Sarung Tangan Karet",
+    "APD Penutup Kepala",
+    "Tali Rafia",
+    "Trash Bag",
+    "Kresek",
+    "Plastik",
+    "Cairan Pembersih",
+    "Sabun Cuci",
+    "Tisu",
+    "Wrap Makanan",
+    "Perjalanan Survei Pasar",
+    "Rapat",
+    "Lainnya",
+];
+
 const showManualModal = ref(false);
 const isEditing = ref(false);
 const editingId = ref(null);
@@ -273,6 +313,7 @@ const manualForm = ref({
     tanggal: "", // Tanggal Pembayaran
     work_order_id: "", // Sandingkan Work Order (awalnya kosong)
     kategori: "",
+    jenis_transaksi: "", // Khusus Operasional
     arus: "Keluar", // 'Masuk' atau 'Keluar' (wajib diisi disemua kategori)
     nama_transaksi: "", // Nama Barang/Bahan / Uraian Transaksi
     volume: "",
@@ -285,6 +326,11 @@ const manualForm = ref({
     metode_bayar: "Tunai",
 });
 
+
+function onJenisOperasionalChange() {
+    // Tetap kosongkan / jangan otomatis isi nama_transaksi agar diisi secara manual oleh pengguna
+}
+
 // Kategori yang disederhanakan: Insentif Fasilitas & Dana Bantuan Pemerintah
 const isSimplifiedCategory = computed(() => {
     return ["Insentif Fasilitas", "Dana Bantuan Pemerintah"].includes(manualForm.value.kategori);
@@ -294,6 +340,9 @@ const isSimplifiedCategory = computed(() => {
 watch(
     () => manualForm.value.kategori,
     (newKat) => {
+        if (newKat !== "Operasional") {
+            manualForm.value.jenis_transaksi = "";
+        }
         if (newKat === "Dana Bantuan Pemerintah" && !isEditing.value) {
             manualForm.value.arus = "Masuk";
         }
@@ -394,6 +443,7 @@ const multiBatchDefaults = ref({
     tanggal: getTodayStr(),
     tanggal_pesanan: getTodayStr(),
     kategori: "Bahan Baku",
+    jenis_transaksi: "",
     arus: "Keluar",
     status: "Disetujui",
     perlu_npo: true,
@@ -412,11 +462,21 @@ function createNewMultiRow(overrides = {}) {
 
     const rowArus = overrides.arus || (kat === "Dana Bantuan Pemerintah" ? "Masuk" : (multiBatchDefaults.value.arus || "Keluar"));
 
+    let jenisOp = overrides.jenis_transaksi || "";
+    if (kat === "Operasional" && !jenisOp && overrides.nama_transaksi) {
+        if (JENIS_TRANSAKSI_OPERASIONAL.includes(overrides.nama_transaksi)) {
+            jenisOp = overrides.nama_transaksi;
+        } else {
+            jenisOp = "Lainnya";
+        }
+    }
+
     return {
         id: "mrow_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
         tanggal: tgl,
         tanggal_pesanan: isSimp ? tgl : (overrides.tanggal_pesanan || multiBatchDefaults.value.tanggal_pesanan || tgl),
         kategori: kat,
+        jenis_transaksi: jenisOp,
         arus: rowArus,
         status: overrides.status || multiBatchDefaults.value.status || "Disetujui",
         perlu_npo: isSimp ? false : (overrides.perlu_npo !== undefined ? overrides.perlu_npo : multiBatchDefaults.value.perlu_npo),
@@ -435,6 +495,9 @@ function onMultiRowCategoryChange(row) {
     if (row.kategori === "Dana Bantuan Pemerintah") {
         row.arus = "Masuk";
     }
+    if (row.kategori !== "Operasional") {
+        row.jenis_transaksi = "";
+    }
     if (["Insentif Fasilitas", "Dana Bantuan Pemerintah"].includes(row.kategori)) {
         row.perlu_npo = false;
         row.tanggal_pesanan = row.tanggal;
@@ -448,6 +511,11 @@ function onMultiRowCategoryChange(row) {
         if (row.vendor === "-") row.vendor = "";
         if (row.volume === 1) row.volume = "";
     }
+}
+
+
+function onMultiRowJenisOperasionalChange(row) {
+    // Tetap kosongkan / jangan otomatis isi row.nama_transaksi agar diisi secara manual oleh pengguna
 }
 
 function onMultiRowDateChange(row) {
@@ -496,6 +564,13 @@ function applyDefaultsToAllRows() {
         row.kategori = def.kategori;
         row.arus = def.arus || "Keluar";
         row.status = def.status;
+        if (def.kategori === "Operasional") {
+            if (def.jenis_transaksi) {
+                row.jenis_transaksi = def.jenis_transaksi;
+            }
+        } else {
+            row.jenis_transaksi = "";
+        }
         if (isSimp) {
             row.perlu_npo = false;
             row.tanggal_pesanan = def.tanggal;
@@ -746,7 +821,18 @@ function handleTablePasteEvent(event, targetRowIdx = null) {
 }
 
 function submitMultiTransactions() {
-    const filledRows = multiRows.value.filter((r) => r.nama_transaksi && r.nama_transaksi.trim());
+    const filledRows = multiRows.value.filter((r) => (r.nama_transaksi && r.nama_transaksi.trim()) || (r.kategori === 'Operasional' && r.jenis_transaksi));
+    for (let i = 0; i < filledRows.length; i++) {
+        const r = filledRows[i];
+        if (r.kategori === 'Operasional' && !r.jenis_transaksi) {
+            alert("Baris ke-" + (i + 1) + ": Jenis transaksi operasional wajib dipilih.");
+            return;
+        }
+        if (r.kategori === 'Operasional' && r.jenis_transaksi === 'Lainnya' && (!r.nama_transaksi || !r.nama_transaksi.trim())) {
+            alert("Baris ke-" + (i + 1) + ": Rincian transaksi operasional wajib diisi untuk pilihan 'Lainnya'.");
+            return;
+        }
+    }
 
     if (filledRows.length === 0) {
         alert("Harap isi setidaknya satu baris transaksi pada kolom Nama Barang / Uraian.");
@@ -1384,6 +1470,7 @@ function openAddManualModal() {
         tanggal: "",
         work_order_id: "",
         kategori: "",
+        jenis_transaksi: "",
         arus: "Keluar",
         nama_transaksi: "",
         volume: "",
@@ -1416,12 +1503,22 @@ function openEditManualModal(trx) {
         }
     }
 
+    let jenisOperasional = "";
+    if (trx.kategori === "Operasional") {
+        if (trx.nama_transaksi && JENIS_TRANSAKSI_OPERASIONAL.includes(trx.nama_transaksi)) {
+            jenisOperasional = trx.nama_transaksi;
+        } else if (trx.nama_transaksi) {
+            jenisOperasional = "Lainnya";
+        }
+    }
+
     manualForm.value = {
         perlu_npo: trx.perlu_npo !== undefined ? Boolean(trx.perlu_npo) : true,
         tanggal_pesanan: trx.tanggal_pesanan || trx.tanggal || getTodayStr(),
         tanggal: trx.tanggal || getTodayStr(),
         work_order_id: trx.work_order_id || (trx.work_order?.id || "manual"),
         kategori: trx.kategori || "Bahan Baku",
+        jenis_transaksi: jenisOperasional,
         arus: trx.arus || (trx.kategori === "Dana Bantuan Pemerintah" ? "Masuk" : "Keluar"),
         nama_transaksi: trx.nama_transaksi || "",
         volume: trx.volume !== undefined && trx.volume !== null ? trx.volume : (trx.qty || ""),
@@ -1440,6 +1537,10 @@ function openEditManualModal(trx) {
 function submitManualTransaction() {
     if (!manualForm.value.kategori) {
         alert("Kategori transaksi wajib dipilih.");
+        return;
+    }
+    if (manualForm.value.kategori === "Operasional" && !manualForm.value.jenis_transaksi) {
+        alert("Jenis transaksi operasional wajib dipilih.");
         return;
     }
     if (!manualForm.value.arus) {
@@ -2746,6 +2847,20 @@ onUnmounted(() => {
                                 </select>
                             </div>
 
+                            <!-- Default Jenis Transaksi (Khusus Operasional) -->
+                            <div v-if="multiBatchDefaults.kategori === 'Operasional'" class="flex items-center gap-1.5">
+                                <span class="text-amber-800 font-bold">Jenis:</span>
+                                <select
+                                    v-model="multiBatchDefaults.jenis_transaksi"
+                                    class="h-8 px-2 text-xs font-semibold rounded-lg border border-amber-300 bg-amber-50/50 max-w-[150px] truncate"
+                                >
+                                    <option value="">-- Tanpa Default --</option>
+                                    <option v-for="item in JENIS_TRANSAKSI_OPERASIONAL" :key="item" :value="item">
+                                        {{ item }}
+                                    </option>
+                                </select>
+                            </div>
+
                             <!-- Default Arus Transaksi -->
                             <div class="flex items-center gap-1.5">
                                 <span class="text-slate-600 font-bold">Arus:</span>
@@ -2920,12 +3035,13 @@ onUnmounted(() => {
 
                 <!-- TABEL INPUT MULTI TRANSAKSI -->
                 <div class="overflow-x-auto border border-slate-200/90 rounded-2xl bg-white flex-1 min-h-[300px] max-h-[55vh] shadow-inner overflow-y-auto">
-                    <table class="w-full text-left text-xs border-collapse min-w-[1250px]">
+                    <table class="w-full text-left text-xs border-collapse min-w-[1400px]">
                         <thead class="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                             <tr>
                                 <th class="p-2.5 text-center w-12 bg-slate-100">#</th>
                                 <th class="p-2.5 w-32 bg-slate-100">Tgl Pembayaran *</th>
                                 <th class="p-2.5 w-40 bg-slate-100">Kategori *</th>
+                                <th class="p-2.5 w-48 bg-slate-100">Jenis Transaksi</th>
                                 <th class="p-2.5 w-28 bg-slate-100">Arus *</th>
                                 <th class="p-2.5 w-32 bg-slate-100">Status *</th>
                                 <th class="p-2.5 text-center w-24 bg-slate-100">PO</th>
@@ -2976,6 +3092,25 @@ onUnmounted(() => {
                                         <option value="Insentif Fasilitas">Insentif Fasilitas</option>
                                         <option value="Dana Bantuan Pemerintah">Dana Bantuan Pemerintah</option>
                                     </select>
+                                </td>
+
+                                <!-- 3a. Jenis Transaksi (Khusus Operasional) -->
+                                <td class="p-2">
+                                    <select
+                                        v-if="row.kategori === 'Operasional'"
+                                        v-model="row.jenis_transaksi"
+                                        @change="onMultiRowJenisOperasionalChange(row)"
+                                        required
+                                        class="h-8 w-full px-2 text-xs font-semibold rounded-lg border border-amber-300 bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800"
+                                    >
+                                        <option value="" disabled>-- Pilih Jenis --</option>
+                                        <option v-for="item in JENIS_TRANSAKSI_OPERASIONAL" :key="item" :value="item">
+                                            {{ item }}
+                                        </option>
+                                    </select>
+                                    <span v-else class="text-xs text-slate-400 font-bold block text-center">
+                                        -
+                                    </span>
                                 </td>
 
                                 <!-- 3b. Arus Transaksi (Masuk / Keluar) -->
@@ -3071,7 +3206,7 @@ onUnmounted(() => {
                                         v-model="row.nama_transaksi"
                                         type="text"
                                         required
-                                        :placeholder="['Insentif Fasilitas', 'Dana Bantuan Pemerintah'].includes(row.kategori) ? 'Uraian transaksi...' : 'Nama barang / bahan...'"
+                                        :placeholder="['Insentif Fasilitas', 'Dana Bantuan Pemerintah'].includes(row.kategori) ? 'Uraian transaksi...' : (row.kategori === 'Operasional' ? 'Nama barang / bahan / uraian...' : 'Nama barang / bahan...')"
                                         class="h-8 w-full px-2.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-300"
                                     />
                                 </td>
@@ -3303,6 +3438,27 @@ onUnmounted(() => {
                         </div>
                     </div>
 
+                    <!-- 1b. Jenis Transaksi Khusus Operasional -->
+                    <div v-if="manualForm.kategori === 'Operasional'" class="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200">
+                        <label class="block font-bold text-amber-950 mb-1 text-xs">
+                            Jenis Transaksi <span class="text-rose-500">*</span>
+                        </label>
+                        <select
+                            v-model="manualForm.jenis_transaksi"
+                            @change="onJenisOperasionalChange"
+                            required
+                            class="w-full h-[36px] px-3 py-1.5 border border-amber-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-xs font-bold text-slate-800"
+                        >
+                            <option value="" disabled>-- Pilih Jenis Transaksi Operasional --</option>
+                            <option v-for="item in JENIS_TRANSAKSI_OPERASIONAL" :key="item" :value="item">
+                                {{ item }}
+                            </option>
+                        </select>
+                        <p class="text-[11px] text-amber-800/80 mt-1">
+                            Pilih jenis operasional standar. Nama barang/bahan/rincian diisi secara manual di bawah.
+                        </p>
+                    </div>
+
                     <!-- 2. Pertanyaan Perlu NPO (Nota PO)? (Hanya Untuk Bahan Baku & Operasional, Dikunci Tidak untuk Insentif & Dana Bantuan) -->
                     <div v-if="!isSimplifiedCategory" class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -3430,13 +3586,13 @@ onUnmounted(() => {
                     <!-- 5. Nama Barang/Bahan ATAU Uraian Transaksi -->
                     <div>
                         <label class="block font-bold text-slate-700 mb-1">
-                            {{ isSimplifiedCategory ? 'Uraian Transaksi' : 'Nama Barang/Bahan' }} <span class="text-rose-500">*</span>
+                            {{ manualForm.kategori === 'Operasional' ? 'Nama Barang / Bahan (Operasional)' : (isSimplifiedCategory ? 'Uraian Transaksi' : 'Nama Barang/Bahan') }} <span class="text-rose-500">*</span>
                         </label>
                         <input
                             v-model="manualForm.nama_transaksi"
                             type="text"
                             required
-                            :placeholder="isSimplifiedCategory ? 'Contoh: Pembayaran insentif sarana prasarana unit SPPG, Penyaluran dana bantuan operasional...' : 'Contoh: Daging Ayam, Beras, Gas LPG 12kg, Sayur Bayam...'"
+                            :placeholder="manualForm.kategori === 'Operasional' ? 'Tuliskan nama atau rincian operasional...' : (isSimplifiedCategory ? 'Contoh: Pembayaran insentif sarana prasarana unit SPPG, Penyaluran dana bantuan operasional...' : 'Contoh: Daging Ayam, Beras, Gas LPG 12kg, Sayur Bayam...')"
                             class="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-xs"
                         />
                     </div>

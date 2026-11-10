@@ -1907,7 +1907,7 @@ const filteredDailyLogs = computed(() => {
                                                     Berhenti
                                                 </span>
                                                 <span
-                                                    v-for="jab in parseJabatanList(p.jabatan)"
+                                                    v-for="jab in parseJabatanList(p.jabatan).slice(0, 1)"
                                                     :key="jab"
                                                     :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
                                                 >

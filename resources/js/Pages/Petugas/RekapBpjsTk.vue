@@ -63,14 +63,19 @@ function formatRibuan(val) {
     return new Intl.NumberFormat("id-ID").format(n);
 }
 
-// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas, Rekap Kehadiran, Rekap Bonus, & Pembayaran Gaji)
+// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas)
 function parseJabatanList(str) {
     if (!str || str === "-") return [];
     if (Array.isArray(str)) return str;
-    return String(str)
-        .split(/[;,/|\n]+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+    const normalized = String(str)
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
 }
 
 // Helper Filter Multi-Jabatan
@@ -410,20 +415,13 @@ function getJabatanBadgeClass(jabatan) {
                                 </td>
 
                                 <td class="py-2.5 px-3 border-r border-slate-200">
-                                    <p class="font-bold text-slate-900 leading-snug">{{ p.nama }}</p>
-                                    <div class="flex items-center gap-1 mt-1 flex-wrap">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <p class="font-bold text-slate-900 leading-snug">{{ p.nama }}</p>
                                         <span
                                             v-if="p.status === 'Nonaktif'"
                                             class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
                                         >
                                             Berhenti
-                                        </span>
-                                        <span
-                                            v-for="jab in parseJabatanList(p.jabatan)"
-                                            :key="jab"
-                                            :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
-                                        >
-                                            {{ jab }}
                                         </span>
                                     </div>
                                     <p class="text-[10px] text-slate-400 font-mono mt-0.5">NIK: {{ p.nik }}</p>
@@ -443,7 +441,10 @@ function getJabatanBadgeClass(jabatan) {
                                         <span
                                             v-for="jab in parseJabatanList(p.jabatan)"
                                             :key="jab"
-                                            :class="['px-1.5 py-0.5 rounded text-[9.5px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                            :class="[
+                                                'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border font-medium',
+                                                getJabatanBadgeClass(jab)
+                                            ]"
                                         >
                                             {{ jab }}
                                         </span>
