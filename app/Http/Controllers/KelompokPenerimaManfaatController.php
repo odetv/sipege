@@ -1122,9 +1122,9 @@ class KelompokPenerimaManfaatController extends Controller
             $aturan = 'aturan_2';
         }
 
-        $komponenSekolah = $request->input('komponen_sekolah') ?: $request->input('komponen', 'semua');
+        $komponenSekolah = $request->input('komponen_sekolah') ?: $request->input('komponen', 'siswa');
         if (!in_array($komponenSekolah, ['semua', 'siswa', 'guru', 'tendik', 'guru_tendik'], true)) {
-            $komponenSekolah = 'semua';
+            $komponenSekolah = 'siswa';
         }
 
         // Normalisasi mode jika ada format lama

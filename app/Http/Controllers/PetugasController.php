@@ -176,6 +176,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
                 ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
@@ -337,6 +338,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
                 ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
@@ -423,6 +425,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
                 ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
@@ -1039,6 +1042,7 @@ class PetugasController extends Controller
 
         if ($unitSppg) {
             $petugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->orderByRaw("CASE WHEN status = 'Nonaktif' THEN 1 ELSE 0 END ASC")
                 ->orderBy('urutan', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();

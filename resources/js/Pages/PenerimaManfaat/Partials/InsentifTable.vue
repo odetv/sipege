@@ -18,7 +18,7 @@ const props = defineProps({
     items: { type: Array, default: () => [] },
     selectedIds: { type: Array, default: () => [] },
     isAllSelected: { type: Boolean, default: false },
-    komponenSekolah: { type: String, default: "semua" },
+    komponenSekolah: { type: String, default: "siswa" },
 });
 
 const emit = defineEmits([

@@ -40,7 +40,7 @@ const props = defineProps({
     searchQuery: { type: String, default: "" },
     selectedKategoriFilter: { type: String, default: "all" },
     selectedAturan: { type: String, default: "aturan_2" },
-    selectedKomponenSekolah: { type: String, default: "semua" },
+    selectedKomponenSekolah: { type: String, default: "siswa" },
     unitSppg: { type: Object, default: null },
     isExporting: { type: Boolean, default: false },
     isExportingRelawan: { type: Boolean, default: false },

@@ -22,7 +22,7 @@ const props = defineProps({
     summary: { type: Object, default: () => ({}) },
     stats: { type: Object, default: () => ({}) },
     aturan: { type: String, default: "aturan_2" },
-    komponenSekolah: { type: String, default: "semua" },
+    komponenSekolah: { type: String, default: "siswa" },
     initialMode: { type: String, default: "hari_ini" },
     initialTanggalMulai: { type: String, default: "" },
     initialTanggalSelesai: { type: String, default: "" },
@@ -60,7 +60,7 @@ const tanggalSelesai = ref(props.initialTanggalSelesai || todayStr.value);
 const selectedPeriodeId = ref(props.initialPeriodeId !== undefined ? String(props.initialPeriodeId) : "all");
 const searchQuery = ref("");
 const selectedKategoriFilter = ref("all");
-const selectedKomponenSekolah = ref(props.komponenSekolah || props.filters?.komponen_sekolah || "semua");
+const selectedKomponenSekolah = ref(props.komponenSekolah || props.filters?.komponen_sekolah || "siswa");
 
 watch(
     () => [props.komponenSekolah, props.filters?.komponen_sekolah],

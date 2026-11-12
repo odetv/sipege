@@ -107,6 +107,11 @@ const filteredPetugas = computed(() => {
         else if (filterBpjsStatus.value === "belum") matchesStatus = !isTerdaftar;
 
         return matchesSearch && matchesJabatan && matchesStatus;
+    }).slice().sort((a, b) => {
+        const aNon = a.status === 'Nonaktif' ? 1 : 0;
+        const bNon = b.status === 'Nonaktif' ? 1 : 0;
+        if (aNon !== bNon) return aNon - bNon;
+        return (a.urutan ?? 0) - (b.urutan ?? 0) || (a.id ?? 0) - (b.id ?? 0);
     });
 });
 

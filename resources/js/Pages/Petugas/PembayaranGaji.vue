@@ -976,6 +976,11 @@ const filteredRows = computed(() => {
         if (filterRekening.value === "valid" && !hasRek) return false;
 
         return true;
+    }).slice().sort((a, b) => {
+        const aNon = a.petugas?.status === 'Nonaktif' ? 1 : 0;
+        const bNon = b.petugas?.status === 'Nonaktif' ? 1 : 0;
+        if (aNon !== bNon) return aNon - bNon;
+        return ((a.petugas?.urutan ?? 0) - (b.petugas?.urutan ?? 0)) || ((a.petugas?.id ?? 0) - (b.petugas?.id ?? 0));
     });
 });
 
