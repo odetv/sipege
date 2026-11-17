@@ -925,27 +925,11 @@ export async function printPdfSingleMode({
  * label akan dipisahkan halamannya (tidak disambung isian per labelnya).
  */
 export function getLabelGroupKey(item) {
-    if (!item) return "";
-    const isItem =
-        typeof item === "object" &&
-        ("tipeLabel" in item || "kelompok" in item);
-    const k = isItem ? item.kelompok : item;
-    const tipe = isItem ? item.tipeLabel || "normal" : "normal";
-    const subTambahan = isItem ? item.subTipeTambahan || "" : "";
-    const alergi = isItem ? (item.jenisAlergi || "").trim().toLowerCase() : "";
-    const tag = isItem ? (item.tagAlergi || "").trim() : "";
-    const kId =
-        k?.id !== undefined && k?.id !== null
-            ? String(k.id)
-            : String(k?.nama_kelompok || k?.nama || "0");
-
-    if (tipe === "tambahan") {
-        return `tambahan_${subTambahan || tag || "umum"}`;
-    }
-    if (tipe === "alergi") {
-        return `alergi_${kId}_${alergi}_${tag}`;
-    }
-    return `normal_${kId}`;
+    if (!item) return "normal";
+    const tipe = typeof item === "object" && item.tipeLabel ? item.tipeLabel : "normal";
+    if (tipe === "tambahan") return "tambahan";
+    if (tipe === "alergi") return "alergi";
+    return "normal";
 }
 
 /**

@@ -1159,108 +1159,134 @@ function quickAddBufferTambahan(amount) {
 }
 
 function autoFillA4EmptySlots() {
-    // 1. Normal
+    // 1. Normal: jika ada sisa slot pada lembar normal
+    let totalNormal = 0;
     if (labelMode.value === "manual") {
-        const count = Number(manualPorsiNormal.value) || 0;
-        const rem = count % 9;
-        const empty = rem > 0 ? 9 - rem : 0;
-        setManualNormalBuffer(empty);
+        totalNormal = (Number(manualPorsiNormal.value) || 0) + getExtraBufferForManualNormal();
+        const remNormal = totalNormal % 9;
+        if (totalNormal > 0 && remNormal > 0) {
+            setManualNormalBuffer(getExtraBufferForManualNormal() + (9 - remNormal));
+        }
     } else {
-        const updatedNormal = { ...extraLabelBuffers.value.normal };
         printableKelompokList.value.forEach((k) => {
-            const base = getKelompokNormalBaseCount(k);
-            const rem = base % 9;
-            updatedNormal[k.id] = rem > 0 ? 9 - rem : 0;
+            totalNormal += getKelompokNormalBaseCount(k) + getExtraBufferForKelompok(k.id);
         });
-        extraLabelBuffers.value.normal = updatedNormal;
+        const remNormal = totalNormal % 9;
+        if (totalNormal > 0 && remNormal > 0) {
+            const kList = printableKelompokList.value;
+            if (kList.length > 0) {
+                const lastK = kList[kList.length - 1];
+                setExtraBufferForKelompok(
+                    lastK.id,
+                    getExtraBufferForKelompok(lastK.id) + (9 - remNormal),
+                );
+            }
+        }
     }
 
-    // 2. Alergi
-    const updatedAlergi = { ...extraLabelBuffers.value.alergi };
+    // 2. Alergi: jika ada sisa slot pada lembar alergi
+    let totalAlergi = 0;
     if (labelMode.value === "manual") {
         selectedManualAllergies.value.forEach((al) => {
-            const cfg = manualAllergyConfigs.value[al];
-            const base = Number(cfg?.porsi) || 0;
-            const rem = base % 9;
-            const key = `manual_${al.trim().toLowerCase()}`;
-            updatedAlergi[key] = rem > 0 ? 9 - rem : 0;
+            totalAlergi += (Number(manualAllergyConfigs.value[al]?.porsi) || 0) + getExtraBufferForAlergiItem(null, al);
         });
+        const remAlergi = totalAlergi % 9;
+        if (totalAlergi > 0 && remAlergi > 0 && selectedManualAllergies.value.length > 0) {
+            const lastAl = selectedManualAllergies.value[selectedManualAllergies.value.length - 1];
+            setManualAllergyBuffer(lastAl, getExtraBufferForAlergiItem(null, lastAl) + (9 - remAlergi));
+        }
     } else {
         printableKelompokList.value.forEach((k) => {
             const breakdown = getKelompokAlergiBreakdown(k);
             breakdown.forEach((b) => {
-                const rem = b.count % 9;
-                const key = `${k.id}_${b.jenis.trim().toLowerCase()}`;
-                updatedAlergi[key] = rem > 0 ? 9 - rem : 0;
+                totalAlergi += b.count + getExtraBufferForAlergiItem(k.id, b.jenis);
             });
         });
+        const remAlergi = totalAlergi % 9;
+        if (totalAlergi > 0 && remAlergi > 0) {
+            const kList = printableKelompokList.value;
+            let filled = false;
+            for (let i = kList.length - 1; i >= 0 && !filled; i--) {
+                const k = kList[i];
+                const breakdown = getKelompokAlergiBreakdown(k);
+                if (breakdown.length > 0) {
+                    const lastB = breakdown[breakdown.length - 1];
+                    setExtraBufferForAlergiItem(
+                        k.id,
+                        lastB.jenis,
+                        getExtraBufferForAlergiItem(k.id, lastB.jenis) + (9 - remAlergi),
+                    );
+                    filled = true;
+                }
+            }
+        }
     }
-    extraLabelBuffers.value.alergi = updatedAlergi;
 
-    // 3. Tambahan
+    // 3. Tambahan: jika ada sisa slot pada lembar tambahan
     if (labelMode.value === "auto") {
         const pt = porsiTambahanData.value;
-        const updatedTambahan = { ...extraLabelBuffers.value.tambahan };
-        if (pt.organoleptik > 0) {
-            const rem = pt.organoleptik % 9;
-            updatedTambahan.organoleptik = rem > 0 ? 9 - rem : 0;
+        const totalTambahan =
+            (pt.organoleptik + getExtraBufferForTambahan("organoleptik")) +
+            (pt.sampel + getExtraBufferForTambahan("sampel")) +
+            (pt.buffer + getExtraBufferForTambahan("buffer"));
+        const remTambahan = totalTambahan % 9;
+        if (totalTambahan > 0 && remTambahan > 0) {
+            const curBuf = extraLabelBuffers.value.tambahan?.buffer || 0;
+            extraLabelBuffers.value.tambahan = {
+                ...extraLabelBuffers.value.tambahan,
+                buffer: curBuf + (9 - remTambahan),
+            };
         }
-        if (pt.sampel > 0) {
-            const rem = pt.sampel % 9;
-            updatedTambahan.sampel = rem > 0 ? 9 - rem : 0;
-        }
-        if (pt.buffer > 0) {
-            const rem = pt.buffer % 9;
-            updatedTambahan.buffer = rem > 0 ? 9 - rem : 0;
-        }
-        extraLabelBuffers.value.tambahan = updatedTambahan;
     }
 }
 
 const totalA4EmptySlots = computed(() => {
     let empty = 0;
-    // Normal
+
+    // 1. Normal
+    let totalNormal = 0;
     if (labelMode.value === "manual") {
-        const rem = (Number(manualPorsiNormal.value) || 0) % 9;
-        if (rem > 0) empty += 9 - rem;
+        totalNormal = (Number(manualPorsiNormal.value) || 0) + getExtraBufferForManualNormal();
     } else {
         printableKelompokList.value.forEach((k) => {
-            const rem = getKelompokNormalBaseCount(k) % 9;
-            if (rem > 0) empty += 9 - rem;
+            totalNormal += getKelompokNormalBaseCount(k) + getExtraBufferForKelompok(k.id);
         });
     }
-    // Alergi
+    if (filterCetakTipe.value === "semua" || filterCetakTipe.value === "normal" || filterCetakTipe.value === "pm") {
+        const rem = totalNormal % 9;
+        if (totalNormal > 0 && rem > 0) empty += 9 - rem;
+    }
+
+    // 2. Alergi (semua jenis alergi dari seluruh sekolah digabung)
+    let totalAlergi = 0;
     if (labelMode.value === "manual") {
         selectedManualAllergies.value.forEach((al) => {
-            const base = Number(manualAllergyConfigs.value[al]?.porsi) || 0;
-            const rem = base % 9;
-            if (rem > 0) empty += 9 - rem;
+            totalAlergi += (Number(manualAllergyConfigs.value[al]?.porsi) || 0) + getExtraBufferForAlergiItem(null, al);
         });
     } else {
         printableKelompokList.value.forEach((k) => {
             const breakdown = getKelompokAlergiBreakdown(k);
             breakdown.forEach((b) => {
-                const rem = b.count % 9;
-                if (rem > 0) empty += 9 - rem;
+                totalAlergi += b.count + getExtraBufferForAlergiItem(k.id, b.jenis);
             });
         });
     }
-    // Tambahan
-    if (labelMode.value === "auto") {
-        const pt = porsiTambahanData.value;
-        if (pt.organoleptik > 0) {
-            const rem = pt.organoleptik % 9;
-            if (rem > 0) empty += 9 - rem;
-        }
-        if (pt.sampel > 0) {
-            const rem = pt.sampel % 9;
-            if (rem > 0) empty += 9 - rem;
-        }
-        if (pt.buffer > 0) {
-            const rem = pt.buffer % 9;
-            if (rem > 0) empty += 9 - rem;
-        }
+    if (filterCetakTipe.value === "semua" || filterCetakTipe.value === "alergi" || filterCetakTipe.value === "pm") {
+        const rem = totalAlergi % 9;
+        if (totalAlergi > 0 && rem > 0) empty += 9 - rem;
     }
+
+    // 3. Tambahan (organoleptik, sampel, dan buffer digabung)
+    if (labelMode.value === "auto" && (filterCetakTipe.value === "semua" || filterCetakTipe.value.startsWith("tambahan"))) {
+        const pt = porsiTambahanData.value;
+        const totalTambahan =
+            (pt.organoleptik + getExtraBufferForTambahan("organoleptik")) +
+            (pt.sampel + getExtraBufferForTambahan("sampel")) +
+            (pt.buffer + getExtraBufferForTambahan("buffer"));
+        const rem = totalTambahan % 9;
+        if (totalTambahan > 0 && rem > 0) empty += 9 - rem;
+    }
+
     return empty;
 });
 
@@ -3008,28 +3034,9 @@ const expandedPrintableItems = computed(() => {
 });
 
 // Daftar expanded khusus untuk mode Lembar A4 (9 label/halaman)
-// Cadangan label langsung mengisi area kosong pada lembar jenis porsi tersebut tanpa membuat lembaran baru
+// Seluruh label digabungkan penuh menyatu menjadi satu (tidak dipisah per sekolah)
 const expandedPrintableItemsA4 = computed(() => {
-    const expanded = [];
-    for (const item of printableItems.value) {
-        const base = Number(item.baseCount ?? item.count) || 0;
-        const extra = Number(item.extraCount) || 0;
-        if (base <= 0 && extra <= 0) continue;
-
-        let totalForThisItem = base;
-        if (extra > 0) {
-            const rem = base % 9;
-            const emptySlotsOnSheet = rem > 0 ? 9 - rem : 0;
-            // Cadangan mengisi area kosong pada lembar jenis porsi tersebut (tidak membuat lembaran baru)
-            const allowedExtra = Math.min(extra, emptySlotsOnSheet);
-            totalForThisItem = base + allowedExtra;
-        }
-
-        for (let i = 0; i < totalForThisItem; i++) {
-            expanded.push(item);
-        }
-    }
-    return expanded;
+    return expandedPrintableItems.value;
 });
 
 
@@ -5394,9 +5401,7 @@ async function startPrintDirect() {
                                             >Mode Lembar A4 (9
                                             Label/Halaman):</strong
                                         >
-                                        Cadangan otomatis langsung mengisi area
-                                        kosong pada lembar jenis porsi tersebut
-                                        tanpa membuat lembaran baru.
+                                        Porsi normal menyatu penuh, porsi alergi dipisah di halaman baru (semua variasi alergi digabung), dan porsi tambahan di halaman baru (organoleptik, sampel, dan buffer digabung).
                                     </span>
                                 </div>
                             </div>
@@ -5488,26 +5493,7 @@ async function startPrintDirect() {
                                                 {{ manualPorsiNormal || 0 }}
                                                 Label</span
                                             >
-                                            <span
-                                                v-if="
-                                                    (Number(
-                                                        manualPorsiNormal,
-                                                    ) || 0) %
-                                                        9 >
-                                                    0
-                                                "
-                                                class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
-                                                title="Sisa slot kosong di lembar A4 terakhir sebelum lembar baru"
-                                            >
-                                                Area Kosong A4:
-                                                {{
-                                                    9 -
-                                                    ((Number(
-                                                        manualPorsiNormal,
-                                                    ) || 0) %
-                                                        9)
-                                                }}
-                                            </span>
+                                            
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
@@ -5581,26 +5567,7 @@ async function startPrintDirect() {
                                                     }}
                                                     pcs</span
                                                 >
-                                                <span
-                                                    v-if="
-                                                        getKelompokNormalBaseCount(
-                                                            k,
-                                                        ) %
-                                                            9 >
-                                                        0
-                                                    "
-                                                    class="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200 font-semibold"
-                                                    title="Sisa slot kosong di lembar A4 terakhir kelompok ini"
-                                                >
-                                                    Area Kosong A4:
-                                                    {{
-                                                        9 -
-                                                        (getKelompokNormalBaseCount(
-                                                            k,
-                                                        ) %
-                                                            9)
-                                                    }}
-                                                </span>
+                                                
                                             </div>
                                         </div>
                                         <div

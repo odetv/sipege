@@ -17,6 +17,7 @@ use App\Http\Controllers\PeriodeController;
 use App\Http\Controllers\PetugasController;
 use App\Http\Controllers\PetunjukController;
 use App\Http\Controllers\ResiduController;
+use App\Http\Controllers\KeamananController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WilayahController;
 use App\Http\Controllers\WorkOrderController;
@@ -40,6 +41,20 @@ Route::prefix('api/wilayah')->group(function () {
     Route::get('/districts/{regencyCode}', [WilayahController::class, 'districts']);
     Route::get('/villages/{districtCode}', [WilayahController::class, 'villages']);
 });
+
+// Link Mandiri Formulir Input Petugas Keamanan (Akses Cepat Smartphone Tanpa Login Ala Google Form)
+Route::prefix('lapor-keamanan')->name('keamanan.public-')->group(function () {
+    Route::get('/{token}', [KeamananController::class, 'publicForm'])->name('form');
+    Route::post('/{token}/jam', [KeamananController::class, 'publicStoreJam'])->name('store-jam');
+    Route::post('/{token}/izin', [KeamananController::class, 'publicStoreIzin'])->name('store-izin');
+    Route::put('/{token}/izin/{id}/kembali', [KeamananController::class, 'publicKembaliIzin'])->name('kembali-izin');
+    Route::post('/{token}/sedang-diluar', [KeamananController::class, 'publicStoreSedangDiluar'])->name('store-sedang-diluar');
+    Route::post('/{token}/kembali-jaga', [KeamananController::class, 'publicStoreKembaliJaga'])->name('store-kembali-jaga');
+    Route::post('/{token}/serah-terima', [KeamananController::class, 'publicStoreSerahTerima'])->name('store-serah-terima');
+});
+
+// Link Khusus Monitoring Keamanan Realtime (Tampilan Data Terkini Masing-Masing Petugas)
+Route::get('/monitoring-keamanan/{token}', [KeamananController::class, 'publicMonitoring'])->name('keamanan.public-monitoring');
 
 // Alur Pendaftaran Bertahap: Paket Langganan & Onboarding Pengisian Data
 Route::middleware(['auth'])->group(function () {
@@ -172,6 +187,9 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
     Route::prefix('keuangan')->name('keuangan.')->group(function () {
         Route::get('/', [KeuanganController::class, 'persetujuan'])->name('index');
         Route::get('/persetujuan', [KeuanganController::class, 'persetujuan'])->name('persetujuan');
+        Route::get('/rab', [KeuanganController::class, 'rab'])->name('rab');
+        Route::post('/rab', [KeuanganController::class, 'storeRab'])->name('rab.store');
+        Route::delete('/rab/{id}', [KeuanganController::class, 'destroyRab'])->name('rab.destroy');
         Route::get('/penyesuaian', [KeuanganController::class, 'penyesuaian'])->name('penyesuaian');
         Route::post('/saldo-awal', [KeuanganController::class, 'storeSaldoAwal'])->name('saldo-awal.store');
         Route::put('/saldo-awal', [KeuanganController::class, 'updateSaldoAwal'])->name('saldo-awal.update');
@@ -234,6 +252,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
 
     // Petugas SPPG (Daftar Petugas, Rekap Kehadiran, Rekap Bonus, Rekap Asuransi & Pembayaran Gaji BNI Direct)
     Route::get('/petugas/daftar-petugas', fn() => redirect()->route('petugas.index'))->name('petugas.daftar-petugas');
+    Route::get('/petugas/shifting', fn() => redirect()->route('petugas.index'))->name('petugas.shifting');
     Route::get('/petugas/rekap-kehadiran', [PetugasController::class, 'rekapKehadiran'])->name('petugas.rekap-kehadiran');
     Route::post('/petugas/rekap-kehadiran/simpan', [PetugasController::class, 'simpanPresensi'])->name('petugas.rekap-kehadiran.simpan');
     Route::post('/petugas/rekap-kehadiran/update-gaji-harian', [PetugasController::class, 'updateGajiHarianPresensi'])->name('petugas.rekap-kehadiran.update-gaji-harian');
@@ -248,7 +267,7 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
     Route::post('/petugas/pembayaran-gaji/download-xls', [PetugasController::class, 'downloadBniDirectXls'])->name('petugas.pembayaran-gaji.download-xls');
     Route::post('/petugas/pembayaran-gaji/download-relawan-harian', [PetugasController::class, 'downloadDaftarRelawanHarian'])->name('petugas.pembayaran-gaji.download-relawan-harian');
     Route::post('/petugas/pembayaran-gaji/ajukan-pembayaran', [PetugasController::class, 'ajukanPembayaranGaji'])->name('petugas.pembayaran-gaji.ajukan-pembayaran');
-    Route::resource('petugas', PetugasController::class);
+    Route::resource('petugas', PetugasController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // Label SPPG (Menu Langsung)
     Route::prefix('label')->name('label.')->group(function () {
@@ -268,6 +287,23 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
         Route::delete('/{id}', [ResiduController::class, 'destroy'])->name('destroy');
     });
 
+    // Menu Keamanan (Laporan Mutasi & Patroli Keamanan)
+    Route::prefix('keamanan')->name('keamanan.')->group(function () {
+        Route::get('/', [KeamananController::class, 'index'])->name('index');
+        Route::post('/', [KeamananController::class, 'storeOrUpdate'])->name('store');
+        Route::post('/quick-check', [KeamananController::class, 'quickCheck'])->name('quick-check');
+        Route::delete('/detail/{id}', [KeamananController::class, 'destroyDetail'])->name('detail.destroy');
+        Route::post('/izin', [KeamananController::class, 'storeIzin'])->name('izin.store');
+        Route::put('/izin/{id}', [KeamananController::class, 'updateIzin'])->name('izin.update');
+        Route::put('/izin/{id}/kembali', [KeamananController::class, 'updateIzinKembali'])->name('izin.kembali');
+        Route::delete('/izin/{id}', [KeamananController::class, 'destroyIzin'])->name('izin.destroy');
+        Route::put('/serah-terima/{id}', [KeamananController::class, 'updateSerahTerima'])->name('serah-terima.update');
+        Route::delete('/serah-terima/{id}', [KeamananController::class, 'destroySerahTerima'])->name('serah-terima.destroy');
+        Route::post('/regenerate-token', [KeamananController::class, 'regenerateToken'])->name('regenerate-token');
+        Route::post('/regenerate-monitoring-token', [KeamananController::class, 'regenerateMonitoringToken'])->name('regenerate-monitoring-token');
+        Route::delete('/{id}', [KeamananController::class, 'destroy'])->name('destroy');
+    });
+
     // Menu Laporan SPPG
     Route::prefix('laporan')->name('laporan.')->group(function () {
         Route::get('/', [LaporanController::class, 'harianLintasSektor'])->name('index');
@@ -277,6 +313,8 @@ Route::middleware(['auth', 'verified', 'subscription.active'])->group(function (
     });
 
     // Periode Operasional SPPG
+    Route::post('periode/penyesuaian', [PeriodeController::class, 'penyesuaian'])->name('periode.penyesuaian');
+    Route::patch('periode/{periode}/toggle-visibility', [PeriodeController::class, 'toggleVisibility'])->name('periode.toggle-visibility');
     Route::resource('periode', PeriodeController::class)
         ->names('periode')
         ->only(['index', 'store', 'update', 'destroy']);
@@ -335,6 +373,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         // Layanan Terpadu (Database, Storage, Mail, AI)
         Route::prefix('layanan')->name('layanan.')->group(function () {
             Route::get('/', [\App\Http\Controllers\LayananController::class, 'index'])->name('index');
+            Route::post('/database', [\App\Http\Controllers\LayananController::class, 'updateDatabase'])->name('update-database');
             Route::post('/storage', [\App\Http\Controllers\LayananController::class, 'updateStorage'])->name('update-storage');
             Route::post('/mail', [\App\Http\Controllers\LayananController::class, 'updateMail'])->name('update-mail');
             Route::post('/ai',  [\App\Http\Controllers\LayananController::class, 'updateAi'])->name('update-ai');

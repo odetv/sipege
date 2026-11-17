@@ -93,6 +93,25 @@ export function terbilangPorsi(n) {
 }
 
 /**
+ * Label deskriptif komponen PM sekolah yang dihitung
+ */
+export function getKomponenSekolahLabel(komponen) {
+    switch (komponen) {
+        case 'semua':
+            return 'Semua (Siswa, Guru, Tendik)';
+        case 'guru':
+            return 'Guru Saja';
+        case 'tendik':
+            return 'Tendik Saja';
+        case 'guru_tendik':
+            return 'Guru & Tendik';
+        case 'siswa':
+        default:
+            return 'Siswa Saja';
+    }
+}
+
+/**
  * Ekstrak data porsi harian riil dari Work Order (WO) untuk kelompok tertentu pada tanggal tertentu
  */
 export function getDailyPorsiItem(item, dateStr, matrixDetailMap = null, woByDateMap = null) {
@@ -243,6 +262,7 @@ export async function downloadRekapDistribusiExcel({
     periode = null,
     petugas = [],
     user = null,
+    komponenSekolah = 'siswa',
 }) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SIPEGE SPPG Buleleng';
@@ -297,6 +317,7 @@ export async function downloadRekapDistribusiExcel({
                     dayName: dayNames[dayIdx],
                     isWeekend: dayIdx === 0 || dayIdx === 6,
                     isSunday: dayIdx === 0,
+                    isSaturday: dayIdx === 6,
                     index: count + 1,
                     label: `${d}/${m}`,
                 });
@@ -337,7 +358,8 @@ export async function downloadRekapDistribusiExcel({
 
         sheetMatriks.getRow(7).height = 18;
         sheetMatriks.mergeCells(`A7:${lastColLetterMatriks}7`);
-        sheetMatriks.getCell('A7').value = `${periodeText} (${validDates.length} Hari Kerja)`;
+        const komponenText = `PM Sekolah: ${getKomponenSekolahLabel(komponenSekolah)}`;
+        sheetMatriks.getCell('A7').value = `${periodeText} (${validDates.length} Hari Kerja) | ${komponenText}`;
         sheetMatriks.getCell('A7').font = { name: 'Arial', size: 10, italic: true };
         sheetMatriks.getCell('A7').alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -645,7 +667,7 @@ export async function downloadRekapDistribusiExcel({
 
     sheetRingkasan.getRow(7).height = 18;
     sheetRingkasan.mergeCells(`A7:${lastColLetterRingkasan}7`);
-    sheetRingkasan.getCell('A7').value = periodeText;
+    sheetRingkasan.getCell('A7').value = `${periodeText} | ${komponenText}`;
     sheetRingkasan.getCell('A7').font = { name: 'Arial', size: 10, italic: true };
     sheetRingkasan.getCell('A7').alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -831,6 +853,7 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
     periode = null,
     petugas = [],
     user = null,
+    komponenSekolah = 'siswa',
 }) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SIPEGE SPPG Buleleng';
@@ -889,6 +912,7 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
                     dayName: dayNames[dayIdx],
                     isWeekend: dayIdx === 0 || dayIdx === 6,
                     isSunday: dayIdx === 0,
+                    isSaturday: dayIdx === 6,
                     index: count + 1,
                     label: `${d}/${m}`,
                 });
@@ -951,8 +975,9 @@ export async function downloadBukuTandaTerimaDistribusiHarianExcel({
         const woInfoForDate = woByDateMap?.[dt.dateStr] || null;
         const woText = woInfoForDate ? ` | No. WO: ${woInfoForDate.nomor_wo || '-'} (Menu: ${woInfoForDate.nama_menu || '-'})` : '';
 
+        const komponenText = `PM Sekolah: ${getKomponenSekolahLabel(komponenSekolah)}`;
         const rSub = sheet.addRow([
-            `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | Hari & Tanggal: ${dayName ? dayName + ', ' : ''}${formatTanggalIndo(dt.dateStr)} | ${periodeNama}${woText}`
+            `Unit: ${unitSppg?.nama || 'SPPG Buleleng Sukasada Tegallinggah'} | Hari & Tanggal: ${dayName ? dayName + ', ' : ''}${formatTanggalIndo(dt.dateStr)} | ${periodeNama} | ${komponenText}${woText}`
         ]);
         sheet.mergeCells(`A${rSub.number}:K${rSub.number}`);
         rSub.getCell(1).font = { name: 'Arial', size: 9.5, italic: true, color: { argb: 'FF475569' } };
@@ -1163,6 +1188,7 @@ export async function downloadBuktiDistribusiPdf({
     periode = null,
     petugas = [],
     user = null,
+    komponenSekolah = 'siswa',
 }) {
     if (!distribusiList || distribusiList.length === 0) {
         throw new Error('Tidak ada data penerima manfaat untuk dicetak bukti distribusi.');
@@ -1505,7 +1531,7 @@ export async function downloadBuktiDistribusiPdf({
 
         // 7. Catatan Resmi Box (Rata Tengah Vertikal Presisi)
         const noteY = calloutY + calloutH + 2.5;
-        const noteH = 13.0;
+        const noteH = 16.5;
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.25);
@@ -1519,8 +1545,9 @@ export async function downloadBuktiDistribusiPdf({
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.2);
         doc.setTextColor(100, 116, 139);
-        doc.text('1. Besaran nominal hak insentif penanggung jawab/kader dihitung harian berdasarkan porsi riil sesuai Keputusan BGN RI.', 20, noteY + 7.4);
-        doc.text('2. Rincian porsi harian mengikuti Work Order (WO) operasional SPPG dan telah diverifikasi oleh petugas distribusi.', 20, noteY + 10.7);
+        doc.text('1. Besaran nominal hak insentif penanggung jawab/kader dihitung harian berdasarkan porsi riil sesuai Keputusan BGN RI.', 20, noteY + 7.2);
+        doc.text('2. Rincian porsi harian mengikuti Work Order (WO) operasional SPPG dan telah diverifikasi oleh petugas distribusi.', 20, noteY + 10.4);
+        doc.text(`3. Komponen PM Sekolah yang diperhitungkan: ${getKomponenSekolahLabel(komponenSekolah)}.`, 20, noteY + 13.6);
 
         // 8. Tanda Tangan Pengesahan (3 Pihak: Penerima Satuan PM, Petugas Distribusi, Mengetahui Kepala SPPG)
         // Penempatan proporsional di bagian bawah kartu dokumen

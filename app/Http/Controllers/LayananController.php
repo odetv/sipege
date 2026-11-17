@@ -96,9 +96,53 @@ class LayananController extends Controller
         $rawUser = (string) ($dbConfig['username'] ?? '');
         $maskedUser = strlen($rawUser) > 10 ? substr($rawUser, 0, 8) . '...' . substr($rawUser, -4) : $rawUser;
 
+        // Ambil konfigurasi tersimpan untuk Lokal & Cloud
+        $dbConfigFile = storage_path('app/database_config.json');
+        $savedDbConfig = [];
+        if (file_exists($dbConfigFile)) {
+            $savedDbConfig = json_decode(file_get_contents($dbConfigFile), true) ?: [];
+        }
+
+        $currentEnvHost = env('DB_HOST', 'aws-0-ap-southeast-1.pooler.supabase.com');
+        $isCurrentLocal = in_array(strtolower($currentEnvHost), ['127.0.0.1', 'localhost', '::1', 'db']);
+
+        $cloudConfig = $savedDbConfig['cloud'] ?? [
+            'driver' => env('DB_CONNECTION', 'pgsql'),
+            'host' => env('DB_HOST', 'aws-0-ap-southeast-1.pooler.supabase.com'),
+            'port' => (int) env('DB_PORT', 6543),
+            'database' => env('DB_DATABASE', 'postgres'),
+            'username' => env('DB_USERNAME', 'postgres.xgmcjadwhlphedfkoehu'),
+            'password' => env('DB_PASSWORD', 'Plenger@BGN!27'),
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+        ];
+
+        $localConfig = $savedDbConfig['local'] ?? [
+            'driver' => 'pgsql',
+            'host' => '127.0.0.1',
+            'port' => 5432,
+            'database' => 'sipege',
+            'username' => 'postgres',
+            'password' => '',
+            'sslmode' => 'prefer',
+        ];
+
+        $activeTarget = $savedDbConfig['active_target'] ?? ($isCurrentLocal ? 'local' : 'cloud');
+
+        if (!file_exists($dbConfigFile)) {
+            @file_put_contents($dbConfigFile, json_encode([
+                'active_target' => $activeTarget,
+                'cloud' => $cloudConfig,
+                'local' => $localConfig,
+            ], JSON_PRETTY_PRINT));
+        }
+
+        $driverLabel = $activeTarget === 'cloud'
+            ? 'PostgreSQL (Supabase Cloud)'
+            : ($dbDefault === 'pgsql' ? 'PostgreSQL (Server Lokal)' : strtoupper($dbDefault) . ' (Server Lokal)');
+
         $databaseInfo = [
             'driver' => $dbDefault,
-            'driver_label' => $dbDefault === 'pgsql' ? 'PostgreSQL (Supabase Cloud)' : strtoupper($dbDefault),
+            'driver_label' => $driverLabel,
             'host' => $dbConfig['host'] ?? '127.0.0.1',
             'port' => $dbConfig['port'] ?? ($dbDefault === 'pgsql' ? '5432' : '3306'),
             'database' => $dbConfig['database'] ?? '',
@@ -108,6 +152,10 @@ class LayananController extends Controller
             'version' => $dbVersion,
             'tables_count' => $dbTablesCount,
             'sslmode' => $dbConfig['sslmode'] ?? 'prefer',
+            // Konfigurasi 2 target (Lokal & Cloud)
+            'active_target' => $activeTarget,
+            'cloud' => $cloudConfig,
+            'local' => $localConfig,
         ];
 
         // ── 3. Data Layanan Storage (Global Database Setting) ───────
@@ -765,10 +813,146 @@ class LayananController extends Controller
     }
 
     /**
-     * Uji Ping Koneksi Database
+     * Simpan & Terapkan Konfigurasi Database (Lokal vs Cloud)
      */
-    public function testDatabase(): JsonResponse
+    public function updateDatabase(Request $request): RedirectResponse
     {
+        $validated = $request->validate([
+            'active_target' => ['required', 'string', 'in:local,cloud'],
+            'cloud' => ['required', 'array'],
+            'cloud.driver' => ['required', 'string', 'in:pgsql,mysql,mariadb,sqlite'],
+            'cloud.host' => ['required', 'string'],
+            'cloud.port' => ['required', 'numeric'],
+            'cloud.database' => ['required', 'string'],
+            'cloud.username' => ['nullable', 'string'],
+            'cloud.password' => ['nullable', 'string'],
+            'cloud.sslmode' => ['nullable', 'string'],
+            'local' => ['required', 'array'],
+            'local.driver' => ['required', 'string', 'in:pgsql,mysql,mariadb,sqlite'],
+            'local.host' => ['required', 'string'],
+            'local.port' => ['required', 'numeric'],
+            'local.database' => ['required', 'string'],
+            'local.username' => ['nullable', 'string'],
+            'local.password' => ['nullable', 'string'],
+            'local.sslmode' => ['nullable', 'string'],
+        ]);
+
+        $activeTarget = $validated['active_target'];
+        $cloudConfig = $validated['cloud'];
+        $localConfig = $validated['local'];
+
+        // 1. Simpan salinan konfigurasi lokal dan cloud ke storage file JSON
+        $dbConfigFile = storage_path('app/database_config.json');
+        @file_put_contents($dbConfigFile, json_encode([
+            'active_target' => $activeTarget,
+            'cloud' => $cloudConfig,
+            'local' => $localConfig,
+            'updated_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT));
+
+        // 2. Simpan juga ke PengaturanLayanan jika koneksi database aktif
+        try {
+            PengaturanLayanan::updateOrCreate(
+                ['kategori' => 'database'],
+                [
+                    'driver' => $activeTarget,
+                    'konfigurasi' => [
+                        'active_target' => $activeTarget,
+                        'cloud' => $cloudConfig,
+                        'local' => $localConfig,
+                    ],
+                    'is_active' => true,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning("Gagal menyimpan database config ke tabel pengaturan_layanans: " . $e->getMessage());
+        }
+
+        // 3. Terapkan konfigurasi target terpilih langsung ke berkas .env
+        $targetConfig = $activeTarget === 'cloud' ? $cloudConfig : $localConfig;
+        $this->setEnvValues([
+            'DB_CONNECTION' => $targetConfig['driver'],
+            'DB_HOST' => $targetConfig['host'],
+            'DB_PORT' => (string) $targetConfig['port'],
+            'DB_DATABASE' => $targetConfig['database'],
+            'DB_USERNAME' => (string) ($targetConfig['username'] ?? ''),
+            'DB_PASSWORD' => (string) ($targetConfig['password'] ?? ''),
+        ]);
+
+        // 4. Bersihkan cache bootstrap Laravel agar konfigurasi baru segera aktif
+        try {
+            \Illuminate\Support\Facades\Artisan::call('config:clear');
+        } catch (\Throwable $e) {
+            // Abaikan jika artisan gagal
+        }
+
+        $targetLabel = $activeTarget === 'cloud' ? 'Cloud (Supabase)' : 'Lokal (Server)';
+        return back()->with('success', "Konfigurasi Database {$targetLabel} berhasil disimpan dan diterapkan ke sistem.");
+    }
+
+    /**
+     * Uji Koneksi / Ping Database (Mendukung parameter form langsung atau koneksi default sistem)
+     */
+    public function testDatabase(Request $request): JsonResponse
+    {
+        $host = trim((string) $request->input('host', ''));
+
+        // Jika user mengoper parameter form, lakukan live test via PDO
+        if (!empty($host)) {
+            $driver = $request->input('driver', 'pgsql');
+            $port = (int) $request->input('port', $driver === 'pgsql' ? 5432 : 3306);
+            $database = trim((string) $request->input('database', 'postgres'));
+            $username = trim((string) $request->input('username', ''));
+            $password = (string) $request->input('password', '');
+            $sslmode = trim((string) $request->input('sslmode', 'prefer'));
+
+            try {
+                $start = microtime(true);
+                if ($driver === 'pgsql') {
+                    $dsn = "pgsql:host={$host};port={$port};dbname={$database};sslmode={$sslmode}";
+                    $pdo = new \PDO($dsn, $username, $password, [
+                        \PDO::ATTR_TIMEOUT => 6,
+                        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    ]);
+                    $latency = round((microtime(true) - $start) * 1000, 2);
+                    $v = $pdo->query("SELECT version()")->fetchColumn();
+                    $t = $pdo->query("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")->fetchColumn();
+                } elseif ($driver === 'mysql' || $driver === 'mariadb') {
+                    $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
+                    $pdo = new \PDO($dsn, $username, $password, [
+                        \PDO::ATTR_TIMEOUT => 6,
+                        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    ]);
+                    $latency = round((microtime(true) - $start) * 1000, 2);
+                    $v = $pdo->query("SELECT VERSION()")->fetchColumn();
+                    $t = $pdo->query("SELECT count(*) FROM information_schema.tables WHERE table_schema = DATABASE()")->fetchColumn();
+                } else {
+                    throw new Exception("Driver {$driver} belum didukung untuk live test.");
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'status' => 'terhubung',
+                    'latency_ms' => $latency,
+                    'version' => $v,
+                    'tables_count' => (int) $t,
+                    'message' => "Koneksi database ({$driver}://{$host}:{$port}) berhasil dihubungi dengan latency {$latency} ms.",
+                    'tested_at' => now()->format('d/m/Y H:i:s'),
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'success' => false,
+                    'status' => 'gagal',
+                    'latency_ms' => 0,
+                    'version' => null,
+                    'tables_count' => 0,
+                    'message' => 'Gagal menghubungi database: ' . $e->getMessage(),
+                    'tested_at' => now()->format('d/m/Y H:i:s'),
+                ], 500);
+            }
+        }
+
+        // Fallback: Uji koneksi aktif sistem saat ini
         try {
             $start = microtime(true);
             DB::connection()->getPdo();
@@ -776,12 +960,17 @@ class LayananController extends Controller
 
             $dbDefault = config('database.default', 'pgsql');
             $version = 'Active';
+            $tablesCount = 0;
             if ($dbDefault === 'pgsql') {
                 $v = DB::select("SELECT version()");
                 $version = $v[0]->version ?? 'PostgreSQL';
+                $tables = DB::select("SELECT count(*) as total FROM information_schema.tables WHERE table_schema = 'public'");
+                $tablesCount = (int) ($tables[0]->total ?? 0);
             } elseif ($dbDefault === 'mysql') {
                 $v = DB::select("SELECT VERSION() as version");
                 $version = $v[0]->version ?? 'MySQL';
+                $tables = DB::select("SELECT count(*) as total FROM information_schema.tables WHERE table_schema = DATABASE()");
+                $tablesCount = (int) ($tables[0]->total ?? 0);
             }
 
             return response()->json([
@@ -789,7 +978,8 @@ class LayananController extends Controller
                 'status' => 'terhubung',
                 'latency_ms' => $latency,
                 'version' => $version,
-                'message' => "Koneksi database {$dbDefault} berhasil dihubungi dengan waktu respon {$latency} ms.",
+                'tables_count' => $tablesCount,
+                'message' => "Koneksi database aktif ({$dbDefault}) berhasil dihubungi dengan latency {$latency} ms.",
                 'tested_at' => now()->format('d/m/Y H:i:s'),
             ]);
         } catch (\Throwable $e) {
@@ -798,9 +988,37 @@ class LayananController extends Controller
                 'status' => 'gagal',
                 'latency_ms' => 0,
                 'version' => null,
+                'tables_count' => 0,
                 'message' => 'Gagal menghubungi database: ' . $e->getMessage(),
                 'tested_at' => now()->format('d/m/Y H:i:s'),
             ], 500);
         }
+    }
+
+    /**
+     * Tulis / Perbarui pasangan key=value pada berkas .env sistem
+     */
+    protected function setEnvValues(array $values): void
+    {
+        $envPath = base_path('.env');
+        if (!file_exists($envPath)) {
+            return;
+        }
+
+        $envContent = file_get_contents($envPath);
+
+        foreach ($values as $key => $value) {
+            $escaped = (str_contains($value, ' ') || str_contains($value, '#') || str_contains($value, '$') || str_contains($value, '"'))
+                ? '"' . addcslashes($value, '"\\$') . '"'
+                : $value;
+
+            if (preg_match("/^{$key}=.*/m", $envContent)) {
+                $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$escaped}", $envContent);
+            } else {
+                $envContent .= "\n{$key}={$escaped}";
+            }
+        }
+
+        @file_put_contents($envPath, $envContent);
     }
 }

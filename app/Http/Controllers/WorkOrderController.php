@@ -105,7 +105,7 @@ class WorkOrderController extends Controller
             }
         }
 
-        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+        $periodes = Periode::getUntukDropdown()->map(function ($p) {
             $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->translatedFormat('d M Y') : '-';
             $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->translatedFormat('d M Y') : '-';
             return [

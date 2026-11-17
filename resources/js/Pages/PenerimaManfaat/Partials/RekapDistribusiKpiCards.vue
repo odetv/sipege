@@ -14,6 +14,23 @@ const props = defineProps({
     stats: { type: Object, default: () => ({}) },
     dateColumns: { type: Array, default: () => [] },
     modeSkala: { type: String, default: "bulanan" },
+    komponenSekolah: { type: String, default: "siswa" },
+});
+
+const sasaranPmSubtext = computed(() => {
+    switch (props.komponenSekolah) {
+        case "semua":
+            return "Semua (Siswa, Guru, Tendik)";
+        case "guru":
+            return "Guru Saja & Posyandu";
+        case "tendik":
+            return "Tendik Saja & Posyandu";
+        case "guru_tendik":
+            return "Guru & Tendik + Posyandu";
+        case "siswa":
+        default:
+            return "Siswa, Balita & Bumil";
+    }
 });
 
 const activeSummary = computed(() => {
@@ -94,8 +111,8 @@ function formatNumber(num) {
             <p class="text-base sm:text-lg font-black text-indigo-700 mt-1">
                 {{ formatNumber(activeSummary.total_penerima) }} <span class="text-xs font-normal text-slate-500">PM</span>
             </p>
-            <p class="text-[10px] text-slate-500 mt-0.5 truncate">
-                Siswa, Balita & Bumil
+            <p class="text-[10px] text-slate-500 mt-0.5 truncate" :title="sasaranPmSubtext">
+                {{ sasaranPmSubtext }}
             </p>
         </div>
 

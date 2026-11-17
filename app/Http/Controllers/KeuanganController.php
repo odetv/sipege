@@ -12,6 +12,10 @@ use App\Models\PurchaseOrderItem;
 use App\Models\TransaksiKeuangan;
 use App\Models\KeuanganSaldoAwal;
 use App\Models\KeuanganPenyesuaian;
+use App\Models\RabAnggaran;
+use App\Models\Petugas;
+use App\Models\RekeningBank;
+use App\Models\SettingKopDokumen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +46,85 @@ class KeuanganController extends Controller
     public function persetujuan(Request $request): Response
     {
         return $this->renderKeuanganView($request, 'verifikasi-po');
+    }
+
+    /**
+     * Sub-menu: RAB (Rencana Anggaran Biaya).
+     */
+    public function rab(Request $request): Response
+    {
+        return $this->renderKeuanganView($request, 'rab');
+    }
+
+    /**
+     * Simpan atau perbarui data RAB Bulanan.
+     */
+    public function storeRab(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if (!$unitSppg) {
+            return back()->withErrors(['message' => 'Unit SPPG tidak ditemukan.']);
+        }
+
+        $validated = $request->validate([
+            'tahun' => ['required', 'integer'],
+            'bulan' => ['required', 'integer', 'min:1', 'max:12'],
+            'hari_efektif' => ['required', 'integer', 'min:1', 'max:31'],
+            'rincian_porsi' => ['required', 'array'],
+            'rincian_operasional' => ['nullable', 'array'],
+            'rincian_operasional_bantu' => ['nullable', 'array'],
+            'jadwal_pm_harian' => ['nullable', 'array'],
+            'total_biaya_per_hari' => ['required', 'numeric'],
+            'total_biaya_2mingguan' => ['required', 'numeric'],
+            'total_biaya_per_bulan' => ['required', 'numeric'],
+            'catatan' => ['nullable', 'string'],
+            'kepala_sppg_nama' => ['nullable', 'string', 'max:255'],
+            'pengawas_keuangan_nama' => ['nullable', 'string', 'max:255'],
+            'pengawas_gizi_nama' => ['nullable', 'string', 'max:255'],
+            'nama_yayasan' => ['nullable', 'string', 'max:255'],
+            'nomor_rekening_yayasan' => ['nullable', 'string', 'max:255'],
+            'npwp' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        RabAnggaran::updateOrCreate(
+            [
+                'unit_sppg_id' => $unitSppg->id,
+                'tahun' => $validated['tahun'],
+                'bulan' => $validated['bulan'],
+            ],
+            $validated
+        );
+
+        $namaBulan = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+        $bulanText = $namaBulan[$validated['bulan']] ?? "Bulan {$validated['bulan']}";
+
+        return back()->with('success', "RAB {$bulanText} {$validated['tahun']} berhasil disimpan.");
+    }
+
+    /**
+     * Hapus / Reset data RAB Bulanan.
+     */
+    public function destroyRab(Request $request, $id): RedirectResponse
+    {
+        $rab = RabAnggaran::findOrFail($id);
+        $user = $request->user();
+        $unitSppg = $user->getCachedUnitSppg();
+
+        if ($unitSppg && $rab->unit_sppg_id !== $unitSppg->id) {
+            abort(403, 'Akses tidak diizinkan.');
+        }
+
+        $bulan = $rab->bulan;
+        $tahun = $rab->tahun;
+        $rab->delete();
+
+        return back()->with('success', "RAB Bulan {$bulan} Tahun {$tahun} berhasil dihapus/direset.");
     }
 
     /**
@@ -1615,7 +1698,7 @@ class KeuanganController extends Controller
 
         $defaultSurveiItems = self::getDefaultSurveiItems();
 
-        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+        $periodes = Periode::getUntukDropdown()->map(function ($p) {
             $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
             $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
             return [
@@ -1784,7 +1867,122 @@ class KeuanganController extends Controller
                     ];
                 })
                 ->all();
+
+            // Data RAB (Rencana Anggaran Biaya)
+            $selectedYear = (int) $request->input('tahun', now()->year);
+            $rabList = RabAnggaran::where('unit_sppg_id', $unitSppg->id)
+                ->where('tahun', $selectedYear)
+                ->orderBy('bulan', 'asc')
+                ->get();
+
+            $kopDokumen = SettingKopDokumen::where('unit_sppg_id', $unitSppg->id)->first();
+
+            $kepalaSppg = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('jabatan', 'like', '%Kepala SPPG%')
+                ->first();
+            $pengawasKeuangan = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('jabatan', 'like', '%Pengawas Keuangan%')
+                ->first();
+            $pengawasGizi = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('jabatan', 'like', '%Pengawas Gizi%')
+                ->first();
+
+            $pejabatSppg = [
+                'kepala_sppg' => $kepalaSppg ? $kepalaSppg->nama : '',
+                'pengawas_keuangan' => $pengawasKeuangan ? $pengawasKeuangan->nama : '',
+                'pengawas_gizi' => $pengawasGizi ? $pengawasGizi->nama : '',
+            ];
+
+            $rekeningUtama = RekeningBank::where('unit_sppg_id', $unitSppg->id)
+                ->orderByDesc('is_utama')
+                ->first();
+
+            // Hitungan parameter otomatis Bab V Rincian Operasional
+            $relawan = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Aktif')
+                ->where(function ($q) {
+                    $q->whereNull('jabatan')
+                      ->orWhere(function ($sub) {
+                          $sub->where('jabatan', 'not like', '%Kepala SPPG%')
+                              ->where('jabatan', 'not like', '%Pengawas Gizi%')
+                              ->where('jabatan', 'not like', '%Pengawas Keuangan%');
+                      });
+                })->get();
+
+            $semuaPetugas = Petugas::where('unit_sppg_id', $unitSppg->id)
+                ->where('status', 'Aktif')
+                ->get();
+            $bpjsTotal = (float) $semuaPetugas->sum('iuran_bpjs_tk');
+            if ($bpjsTotal == 0 && $semuaPetugas->count() > 0) {
+                $bpjsTotal = $semuaPetugas->count() * 16800;
+            }
+
+            $satuanPendidikanList = KelompokPenerimaManfaat::where('unit_sppg_id', $unitSppg->id)->get();
+            $satuanCount = 0;
+            $satuanHarian = 0;
+            $posyanduCount = 0;
+            $pm3bCount = 0;
+            $harian3b = 0;
+
+            foreach ($satuanPendidikanList as $kpm) {
+                $is3b = str_contains(strtolower($kpm->kategori ?? ''), 'posyandu') || str_contains(strtolower($kpm->nama_kelompok ?? ''), 'posyandu') || str_contains(strtolower($kpm->kategori ?? ''), '3b');
+                $pm = (int) $kpm->total_penerima;
+
+                if ($is3b) {
+                    $posyanduCount++;
+                    $pm3bCount += $pm;
+                    $harian3b += ($pm * 1000);
+                } else {
+                    $satuanCount++;
+                    if ($pm < 100) $tarif = 20000;
+                    elseif ($pm <= 500) $tarif = 30000;
+                    elseif ($pm <= 750) $tarif = 50000;
+                    elseif ($pm <= 1000) $tarif = 60000;
+                    elseif ($pm <= 2000) $tarif = 100000;
+                    else $tarif = 200000;
+                    $satuanHarian += $tarif;
+                }
+            }
+
+            $autoOperasional = [
+                'relawan_count' => $relawan->count(),
+                'relawan_gaji_harian' => (float) $relawan->sum('gaji_harian_bgn'),
+                'bpjs_tk_total' => $bpjsTotal,
+                'petugas_aktif_count' => $semuaPetugas->count(),
+                'satuan_pendidikan_count' => $satuanCount,
+                'satuan_pendidikan_harian' => $satuanHarian,
+                'kelompok_3b_count' => $posyanduCount,
+                'total_pm_3b' => $pm3bCount,
+                'insentif_3b_harian' => $harian3b,
+                'gaji_pengawas_total' => 10000000,
+                'gaji_pengawas_gizi' => 5000000,
+                'gaji_pengawas_keuangan' => 5000000,
+            ];
         }
+
+        $selectedYear = (int) $request->input('tahun', now()->year);
+        $rabList = $rabList ?? collect();
+        $kopDokumen = $kopDokumen ?? null;
+        $pejabatSppg = $pejabatSppg ?? [
+            'kepala_sppg' => '',
+            'pengawas_keuangan' => '',
+            'pengawas_gizi' => '',
+        ];
+        $rekeningUtama = $rekeningUtama ?? null;
+        $autoOperasional = $autoOperasional ?? [
+            'relawan_count' => 0,
+            'relawan_gaji_harian' => 0,
+            'bpjs_tk_total' => 0,
+            'petugas_aktif_count' => 0,
+            'satuan_pendidikan_count' => 0,
+            'satuan_pendidikan_harian' => 0,
+            'kelompok_3b_count' => 0,
+            'total_pm_3b' => 0,
+            'insentif_3b_harian' => 0,
+            'gaji_pengawas_total' => 10000000,
+            'gaji_pengawas_gizi' => 5000000,
+            'gaji_pengawas_keuangan' => 5000000,
+        ];
 
         return Inertia::render('Keuangan/Index', [
             'transaksiList' => $allTransaksiList,
@@ -1802,6 +2000,12 @@ class KeuanganController extends Controller
             'suppliers' => $suppliers ?? [],
             'surveiHargaList' => $surveiHargaList,
             'defaultSurveiItems' => $defaultSurveiItems,
+            'rabList' => $rabList,
+            'selectedYear' => $selectedYear,
+            'pejabatSppg' => $pejabatSppg,
+            'rekeningUtama' => $rekeningUtama,
+            'kopDokumen' => $kopDokumen,
+            'autoOperasional' => $autoOperasional,
             'stats' => [
                 'total_penerima' => $totalPenerima,
                 'total_porsi_kecil' => $totalPorsiKecil,

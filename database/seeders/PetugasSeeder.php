@@ -54,10 +54,10 @@ class PetugasSeeder extends Seeder
             );
         }
 
-        // Hapus petugas yang tidak ada lagi di file master jika ada
+        // Nonaktifkan petugas yang tidak ada lagi di file master jika ada
         Petugas::where('unit_sppg_id', $unitSppgId)
             ->whereNotIn('nik', $niks)
-            ->delete();
+            ->update(['status' => 'Nonaktif']);
 
         $this->command->info('Berhasil menyinkronkan ' . count($petugasList) . ' data petugas.');
     }

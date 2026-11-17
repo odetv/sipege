@@ -631,7 +631,7 @@ class KelompokPenerimaManfaatController extends Controller
         $unitSppg = $user->getCachedUnitSppg();
 
         // Format dropdown periode lengkap dengan rentang tanggalnya (identik Rekap Kehadiran)
-        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+        $periodes = Periode::getUntukDropdown()->map(function ($p) {
             $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
             $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
             return [
@@ -651,6 +651,88 @@ class KelompokPenerimaManfaatController extends Controller
         $kategoriFilter = $request->input('kategori', 'all');
         $statusFilter = $request->input('status', 'all');
         $search = trim($request->input('search', ''));
+        $komponenSekolah = $request->input('komponen_sekolah', 'siswa');
+        if (!in_array($komponenSekolah, ['siswa', 'semua', 'guru', 'tendik', 'guru_tendik'], true)) {
+            $komponenSekolah = 'siswa';
+        }
+
+        // Helper perhitungan alokasi porsi KPM berdasarkan komponen sekolah terpilih
+        $countPorsiByKomponen = function ($rincianItems, string $komponen, bool $isPosyandu, int $fallbackPk = 0, int $fallbackPb = 0, int $fallbackTotal = 0, int $fallbackL = 0, int $fallbackP = 0, string $kategoriKpm = '') {
+            if ($isPosyandu) {
+                return [
+                    'pk' => $fallbackPk,
+                    'pb' => $fallbackPb,
+                    'total' => $fallbackTotal > 0 ? $fallbackTotal : ($fallbackPk + $fallbackPb),
+                    'l' => $fallbackL,
+                    'p' => $fallbackP,
+                ];
+            }
+
+            if (empty($rincianItems) || (is_countable($rincianItems) && count($rincianItems) === 0)) {
+                return [
+                    'pk' => $fallbackPk,
+                    'pb' => $fallbackPb,
+                    'total' => $fallbackTotal > 0 ? $fallbackTotal : ($fallbackPk + $fallbackPb),
+                    'l' => $fallbackL,
+                    'p' => $fallbackP,
+                ];
+            }
+
+            $sumPk = 0;
+            $sumPb = 0;
+            $sumL = 0;
+            $sumP = 0;
+
+            foreach ($rincianItems as $r) {
+                $sub = is_array($r) ? ($r['sub_kategori'] ?? '') : ($r->sub_kategori ?? '');
+                $l = is_array($r) ? (int)($r['jumlah_laki_laki'] ?? 0) : (int)($r->jumlah_laki_laki ?? 0);
+                $p = is_array($r) ? (int)($r['jumlah_perempuan'] ?? 0) : (int)($r->jumlah_perempuan ?? 0);
+                $total = is_array($r) ? (int)($r['total'] ?? ($l + $p)) : (int)($r->total ?? ($l + $p));
+                $jenisPorsi = is_array($r) ? ($r['jenis_porsi'] ?? null) : ($r->jenis_porsi ?? null);
+                if (!$jenisPorsi) {
+                    $jenisPorsi = self::determineJenisPorsi($sub, $kategoriKpm);
+                }
+
+                $subLower = strtolower($sub);
+                $isGuru = str_contains($subLower, 'guru');
+                $isTendik = str_contains($subLower, 'tenaga kependidikan')
+                    || str_contains($subLower, 'tendik')
+                    || str_contains($subLower, 'satpam')
+                    || (str_starts_with($sub, 'Pendukung') && !$isGuru);
+                $isSiswa = !$isGuru && !$isTendik;
+
+                $included = false;
+                if ($komponen === 'semua') {
+                    $included = true;
+                } elseif ($komponen === 'siswa' && $isSiswa) {
+                    $included = true;
+                } elseif ($komponen === 'guru' && $isGuru) {
+                    $included = true;
+                } elseif ($komponen === 'tendik' && $isTendik) {
+                    $included = true;
+                } elseif ($komponen === 'guru_tendik' && ($isGuru || $isTendik)) {
+                    $included = true;
+                }
+
+                if ($included) {
+                    if ($jenisPorsi === 'Porsi Kecil') {
+                        $sumPk += $total;
+                    } else {
+                        $sumPb += $total;
+                    }
+                    $sumL += $l;
+                    $sumP += $p;
+                }
+            }
+
+            return [
+                'pk' => $sumPk,
+                'pb' => $sumPb,
+                'total' => $sumPk + $sumPb,
+                'l' => $sumL,
+                'p' => $sumP,
+            ];
+        };
 
         // Normalisasi mode jika ada format lama
         if ($mode === 'periodik') $mode = 'periode';
@@ -758,16 +840,29 @@ class KelompokPenerimaManfaatController extends Controller
                 $wo->sub_menu_5,
             ]));
 
-            $woKelompoks = $wo->kelompoks->map(function ($wk) {
+            $woKelompoks = $wo->kelompoks->map(function ($wk) use ($komponenSekolah, $countPorsiByKomponen) {
+                $isPosyanduWk = $wk->kategori === 'Posyandu';
+                $porsiWk = $countPorsiByKomponen(
+                    $wk->rincian ?: [],
+                    $komponenSekolah,
+                    $isPosyanduWk,
+                    (int) $wk->porsi_kecil,
+                    (int) $wk->porsi_besar,
+                    (int) $wk->total_penerima,
+                    0,
+                    0,
+                    $wk->kategori ?? ''
+                );
+
                 return [
                     'id' => $wk->id,
                     'kelompok_id' => $wk->kelompok_id,
                     'nama_kelompok' => $wk->nama_kelompok,
                     'kategori' => $wk->kategori,
                     'is_menerima' => (bool) $wk->is_menerima,
-                    'porsi_kecil' => (int) $wk->porsi_kecil,
-                    'porsi_besar' => (int) $wk->porsi_besar,
-                    'total_penerima' => (int) $wk->total_penerima,
+                    'porsi_kecil' => $porsiWk['pk'],
+                    'porsi_besar' => $porsiWk['pb'],
+                    'total_penerima' => $porsiWk['total'],
                     'status_alergi' => (bool) $wk->status_alergi,
                     'detail_alergi' => $wk->detail_alergi ?: [],
                     'rincian' => $wk->rincian ?: [],
@@ -812,11 +907,26 @@ class KelompokPenerimaManfaatController extends Controller
             $kId = $kpm->id;
             $matrixDetailMap[$kId] = [];
             $matrixDistribusiMap[$kId] = [];
+            $isPosyandu = $kpm->kategori === 'Posyandu';
+            $basePorsi = $countPorsiByKomponen(
+                $kpm->rincian,
+                $komponenSekolah,
+                $isPosyandu,
+                (int)$kpm->total_porsi_kecil,
+                (int)$kpm->total_porsi_besar,
+                (int)$kpm->total_penerima,
+                (int)$kpm->total_laki_laki,
+                (int)$kpm->total_perempuan,
+                $kpm->kategori ?? ''
+            );
+            $basePk = $basePorsi['pk'];
+            $basePb = $basePorsi['pb'];
+            $baseTotal = $basePorsi['total'];
 
             $curDate = $startDate->copy();
             while ($curDate->lte($endDate)) {
                 $dateStr = $curDate->format('Y-m-d');
-                $isSunday = $curDate->isSunday();
+                $isWeekend = $curDate->isWeekend(); // Sabtu & Minggu
 
                 $woInfo = $woByDateMap[$dateStr] ?? null;
                 $wok = null;
@@ -845,10 +955,19 @@ class KelompokPenerimaManfaatController extends Controller
                     }
                 } elseif ($savedStatus !== null && $savedStatus !== '') {
                     $finalStatus = $savedStatus;
-                } elseif ($isSunday) {
-                    $finalStatus = 'L';
+                } elseif ($isWeekend) {
+                    $finalStatus = 'L'; // Sabtu & Minggu otomatis default libur (namun tetap bisa diubah)
                 } else {
                     $finalStatus = '';
+                }
+
+                $curPk = $basePk;
+                $curPb = $basePb;
+                $curTotal = $baseTotal;
+                if ($wok) {
+                    $curPk = (int)$wok['porsi_kecil'];
+                    $curPb = (int)$wok['porsi_besar'];
+                    $curTotal = (int)$wok['total_penerima'];
                 }
 
                 $matrixDistribusiMap[$kId][$dateStr] = $finalStatus;
@@ -864,9 +983,9 @@ class KelompokPenerimaManfaatController extends Controller
                     'wo_status' => $woInfo ? $woInfo['status'] : null,
                     'sub_menus' => $woInfo ? $woInfo['sub_menus'] : [],
                     'is_menerima' => $wok ? $wok['is_menerima'] : ($woInfo ? false : null),
-                    'porsi_kecil' => $wok ? $wok['porsi_kecil'] : (int)$kpm->total_porsi_kecil,
-                    'porsi_besar' => $wok ? $wok['porsi_besar'] : (int)$kpm->total_porsi_besar,
-                    'total_penerima' => $wok ? $wok['total_penerima'] : (int)$kpm->total_penerima,
+                    'porsi_kecil' => $curPk,
+                    'porsi_besar' => $curPb,
+                    'total_penerima' => $curTotal,
                     'status_alergi' => $wok ? $wok['status_alergi'] : false,
                     'detail_alergi' => $wok ? $wok['detail_alergi'] : [],
                     'rincian' => $wok ? $wok['rincian'] : ($kpm->rincian ?? []),
@@ -876,12 +995,27 @@ class KelompokPenerimaManfaatController extends Controller
             }
         }
 
-        $distribusiList = $allKelompok->map(function ($kpm) use ($matrixDistribusiMap, $matrixDetailMap, $totalHari) {
+        $distribusiList = $allKelompok->map(function ($kpm) use ($matrixDistribusiMap, $matrixDetailMap, $totalHari, $komponenSekolah, $countPorsiByKomponen) {
             $kId = $kpm->id;
-            $basePk = (int) $kpm->total_porsi_kecil;
-            $basePb = (int) $kpm->total_porsi_besar;
-            $baseTotal = (int) $kpm->total_penerima;
+            $isPosyandu = $kpm->kategori === 'Posyandu';
+            $basePorsi = $countPorsiByKomponen(
+                $kpm->rincian,
+                $komponenSekolah,
+                $isPosyandu,
+                (int) $kpm->total_porsi_kecil,
+                (int) $kpm->total_porsi_besar,
+                (int) $kpm->total_penerima,
+                (int) $kpm->total_laki_laki,
+                (int) $kpm->total_perempuan,
+                $kpm->kategori ?? ''
+            );
+
+            $basePk = $basePorsi['pk'];
+            $basePb = $basePorsi['pb'];
+            $baseTotal = $basePorsi['total'];
             $totalPorsiHarian = $basePk + $basePb;
+            $baseL = $basePorsi['l'];
+            $baseP = $basePorsi['p'];
 
             // Hitung akumulasi riil dari porsi WO pada tanggal-tanggal berstatus 'T'
             $kpmDates = $matrixDistribusiMap[$kId] ?? [];
@@ -923,8 +1057,8 @@ class KelompokPenerimaManfaatController extends Controller
                 'telepon_pic' => $kpm->telepon_pic,
                 'nama_kepala' => $kpm->nama_kepala,
                 'telepon_kepala' => $kpm->telepon_kepala,
-                'total_laki_laki' => (int) $kpm->total_laki_laki,
-                'total_perempuan' => (int) $kpm->total_perempuan,
+                'total_laki_laki' => $baseL,
+                'total_perempuan' => $baseP,
                 'total_penerima' => $baseTotal,
                 'jumlah_kader' => (int) $kpm->jumlah_kader,
                 'porsi_kecil_harian' => $basePk,
@@ -938,6 +1072,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'persentase_layanan' => $totalHari > 0 ? round(($totalHariKirim / $totalHari) * 100) : 0,
                 'history_dates' => $kpmDates,
                 'history_details' => $kpmDetails,
+                'rincian' => $kpm->rincian ?? [],
             ];
         });
 
@@ -968,6 +1103,7 @@ class KelompokPenerimaManfaatController extends Controller
             'distribusiList' => $distribusiList,
             'summary' => $summary,
             'stats' => $summary,
+            'komponenSekolah' => $komponenSekolah,
             'initialMode' => $mode,
             'initialTanggalMulai' => $startDate->format('Y-m-d'),
             'initialTanggalSelesai' => $endDate->format('Y-m-d'),
@@ -983,6 +1119,7 @@ class KelompokPenerimaManfaatController extends Controller
                 'kategori' => $kategoriFilter,
                 'status' => $statusFilter,
                 'search' => $search,
+                'komponen_sekolah' => $komponenSekolah,
             ],
         ]);
     }
@@ -1098,7 +1235,7 @@ class KelompokPenerimaManfaatController extends Controller
         $unitSppg = $user->getCachedUnitSppg();
 
         // Format dropdown periode lengkap dengan rentang tanggalnya (identik Pembayaran Gaji)
-        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+        $periodes = Periode::getUntukDropdown()->map(function ($p) {
             $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
             $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
             return [

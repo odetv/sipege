@@ -32,6 +32,7 @@ const props = defineProps({
     woByDateMap: { type: Object, default: () => ({}) },
     matrixDetailMap: { type: Object, default: () => ({}) },
     filters: { type: Object, default: () => ({}) },
+    komponenSekolah: { type: String, default: "siswa" },
 });
 
 // ─── Tanggal Hari Ini (Today) ──────────────────────────────────────────────────
@@ -112,8 +113,13 @@ const tanggalMulai = ref(initialDateState.start);
 const tanggalSelesai = ref(initialDateState.end);
 const selectedPeriodeId = ref(initialDateState.periodeId);
 const searchQuery = ref("");
+const selectedKomponenSekolah = ref(props.filters?.komponen_sekolah || props.komponenSekolah || "siswa");
 const selectedKategoriFilter = ref("all");
 const selectedStatusFilter = ref("all");
+
+watch(selectedKomponenSekolah, () => {
+    applyFilterTanggal();
+});
 
 // Helper cari periode yang cocok dengan rentang tanggal
 function findMatchingPeriode(startStr, endStr) {
@@ -201,8 +207,11 @@ function initMatrixDistribusi() {
         const rowDb = dbMap[item.id] || {};
 
         dateColumns.value.forEach((col) => {
-            if (rowDb[col.dateStr] !== undefined) {
+            if (rowDb[col.dateStr] !== undefined && rowDb[col.dateStr] !== null && rowDb[col.dateStr] !== "") {
                 map[item.id][col.dateStr] = rowDb[col.dateStr];
+            } else if (col.isWeekend) {
+                // Hari Sabtu dan Minggu otomatis default Libur (L), namun tetap bisa diubah
+                map[item.id][col.dateStr] = "L";
             } else {
                 // Default KOSONG jika belum ada catatan pencatatan
                 map[item.id][col.dateStr] = "";
@@ -293,7 +302,7 @@ function setSemuaTerkirim() {
     props.distribusiList.forEach((it) => {
         if (!matrixDistribusi.value[it.id]) matrixDistribusi.value[it.id] = {};
         dateColumns.value.forEach((col) => {
-            if (!col.isSunday) {
+            if (!col.isWeekend) {
                 matrixDistribusi.value[it.id][col.dateStr] = "T";
             }
         });
@@ -370,7 +379,9 @@ function applyFilterTanggal() {
             tanggal_selesai: tanggalSelesai.value,
             periode_id: selectedPeriodeId.value,
             kategori: selectedKategoriFilter.value,
+            status: selectedStatusFilter.value,
             search: searchQuery.value,
+            komponen_sekolah: selectedKomponenSekolah.value,
         },
         {
             preserveState: true,
@@ -394,7 +405,9 @@ function onDateFilterChange(filter) {
             tanggal_selesai: filter.end,
             periode_id: filter.periodeId,
             kategori: selectedKategoriFilter.value,
+            status: selectedStatusFilter.value,
             search: searchQuery.value,
+            komponen_sekolah: selectedKomponenSekolah.value,
         },
         {
             preserveState: true,
@@ -489,7 +502,7 @@ const computedSummary = computed(() => {
     // Hitung total akumulasi riil dari data matrix & persentase layanan
     let totalPorsiAkumulasi = 0;
     let totalSlotTerkirim = 0;
-    const totalHariKerja = dateColumns.value.filter(col => !col.isSunday).length || dateColumns.value.length || 1;
+    const totalHariKerja = dateColumns.value.filter(col => !col.isWeekend).length || dateColumns.value.length || 1;
     const totalSlotHarusKirim = list.length * totalHariKerja;
 
     list.forEach(it => {
@@ -604,6 +617,7 @@ async function handleExecuteExport(typeOrDate = null, customStart = null, custom
                 periode: activePeriode,
                 petugas: props.petugas || [],
                 user: props.user,
+                komponenSekolah: selectedKomponenSekolah.value,
             });
             const labelHasil = sDate === eDate 
                 ? `Hari Ini (${formatTanggalIndo(sDate)})` 
@@ -622,6 +636,7 @@ async function handleExecuteExport(typeOrDate = null, customStart = null, custom
                 periode: activePeriode,
                 petugas: props.petugas || [],
                 user: props.user,
+                komponenSekolah: selectedKomponenSekolah.value,
             });
             const labelHasil = sDate === eDate ? `Hari Ini (${formatTanggalIndo(sDate)})` : `${days} Hari`;
             showToast(`Bukti Tanda Terima Distribusi PDF (${labelHasil}) berhasil didownload!`);
@@ -640,6 +655,7 @@ async function handleExecuteExport(typeOrDate = null, customStart = null, custom
                 periode: activePeriode,
                 petugas: props.petugas || [],
                 user: props.user,
+                komponenSekolah: selectedKomponenSekolah.value,
             });
             const labelHasil = sDate === eDate ? `Hari Ini (${formatTanggalIndo(sDate)})` : `${days} Hari`;
             showToast(`File Excel Rekap Matriks Distribusi (${labelHasil}) berhasil didownload!`);
@@ -694,6 +710,7 @@ async function downloadTandaTerimaHarianDirect() {
             periode: activePeriode,
             petugas: props.petugas || [],
             user: props.user,
+            komponenSekolah: selectedKomponenSekolah.value,
         });
 
         showToast(`Buku Tanda Terima Distribusi Hari Ini (${formatTanggalIndo(todayStr.value)}) berhasil didownload!`);
@@ -726,6 +743,7 @@ async function downloadBuktiDistribusiDirect() {
             periode: activePeriode,
             petugas: props.petugas || [],
             user: props.user,
+            komponenSekolah: selectedKomponenSekolah.value,
         });
 
         const labelHasil = days === 1 ? `Hari Ini (${formatTanggalIndo(tanggalMulai.value)})` : `${days} Hari`;
@@ -782,6 +800,7 @@ function showToast(msg) {
             <RekapDistribusiControlBar
                 v-model:modeSkala="modeSkala"
                 v-model:searchQuery="searchQuery"
+                v-model:selectedKomponenSekolah="selectedKomponenSekolah"
                 v-model:selectedKategoriFilter="selectedKategoriFilter"
                 v-model:selectedStatusFilter="selectedStatusFilter"
                 :selectedPeriodeId="selectedPeriodeId"
@@ -815,6 +834,7 @@ function showToast(msg) {
                 :stats="computedSummary"
                 :dateColumns="dateColumns"
                 :modeSkala="modeSkala"
+                :komponenSekolah="selectedKomponenSekolah"
             />
 
             <!-- ─── Komponen 3: Matriks Harian Distribusi (Identik Presensi) ───── -->
@@ -860,6 +880,7 @@ function showToast(msg) {
             :periodes="periodes"
             :totalDays="dateColumns.length"
             :unitSppg="unitSppg"
+            :komponenSekolah="selectedKomponenSekolah"
             :isExporting="isExporting"
             @close="showExportModal = false"
             @confirm="handleExecuteExport"

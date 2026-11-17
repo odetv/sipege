@@ -533,6 +533,33 @@ function nextCalMonth() {
     }
 }
 
+function onMonth1Change(e) {
+    calMonth1.value = parseInt(e.target.value);
+}
+
+function onYear1Change(e) {
+    calYear1.value = parseInt(e.target.value);
+}
+
+function onMonth2Change(e) {
+    const val = parseInt(e.target.value);
+    if (val === 0) {
+        calMonth1.value = 11;
+        calYear1.value = calYear2.value - 1;
+    } else {
+        calMonth1.value = val - 1;
+    }
+}
+
+function onYear2Change(e) {
+    const val = parseInt(e.target.value);
+    if (calMonth1.value === 11) {
+        calYear1.value = val - 1;
+    } else {
+        calYear1.value = val;
+    }
+}
+
 function buildMonthDays(monthIdx, yearVal) {
     const firstDay = new Date(yearVal, monthIdx, 1);
     const startDayOffset = (firstDay.getDay() + 6) % 7;
@@ -595,24 +622,69 @@ const month2Days = computed(() =>
     buildMonthDays(calMonth2.value, calYear2.value),
 );
 
+// State Modal Popover Multi-Date Picker (Persis DateRangePicker)
+const isCustomDatePickerOpen = ref(false);
+const tempSelectedDates = ref([...selectedDates.value]);
+
+const customDatesSummaryLabel = computed(() => {
+    if (selectedDates.value.length === 0) {
+        return "Pilih Tanggal Presensi";
+    }
+    if (selectedDates.value.length === 1) {
+        return formatTanggalIndo(selectedDates.value[0]);
+    }
+    return `${selectedDates.value.length} Hari Terpilih`;
+});
+
+function toggleCustomDatePicker() {
+    if (!isCustomDatePickerOpen.value) {
+        tempSelectedDates.value = [...selectedDates.value];
+        isCustomDatePickerOpen.value = true;
+    } else {
+        isCustomDatePickerOpen.value = false;
+    }
+}
+
+function cancelCustomDatePicker() {
+    tempSelectedDates.value = [...selectedDates.value];
+    isCustomDatePickerOpen.value = false;
+}
+
+function applyTempDatesAndClose() {
+    if (tempSelectedDates.value.length === 0) return;
+    selectedDates.value = [...tempSelectedDates.value].sort();
+    isCustomDatePickerOpen.value = false;
+    applyCustomDatesFilter();
+}
+
+function toggleTempDate(dateStr) {
+    const idx = tempSelectedDates.value.indexOf(dateStr);
+    if (idx >= 0) {
+        tempSelectedDates.value.splice(idx, 1);
+    } else {
+        tempSelectedDates.value.push(dateStr);
+        tempSelectedDates.value.sort();
+    }
+}
+
+function isTempDateSelected(dateStr) {
+    return tempSelectedDates.value.includes(dateStr);
+}
+
 function isDateSelected(dateStr) {
     return selectedDates.value.includes(dateStr);
 }
 
 function toggleDate(dateStr) {
-    const idx = selectedDates.value.indexOf(dateStr);
-    if (idx >= 0) {
-        selectedDates.value.splice(idx, 1);
-    } else {
-        selectedDates.value.push(dateStr);
-        selectedDates.value.sort();
-    }
+    toggleTempDate(dateStr);
 }
 
 function removeSelectedDate(dateStr) {
     const idx = selectedDates.value.indexOf(dateStr);
     if (idx >= 0) {
         selectedDates.value.splice(idx, 1);
+        tempSelectedDates.value = [...selectedDates.value];
+        applyCustomDatesFilter();
     }
 }
 
@@ -627,8 +699,8 @@ function selectWorkdays(monthIdx, yearVal, includeSaturday = false) {
             toAdd.push(formatDateStr(yearVal, monthIdx, d));
         }
     }
-    const set = new Set([...selectedDates.value, ...toAdd]);
-    selectedDates.value = Array.from(set).sort();
+    const set = new Set([...tempSelectedDates.value, ...toAdd]);
+    tempSelectedDates.value = Array.from(set).sort();
 }
 
 function selectAllMonthDays(monthIdx, yearVal) {
@@ -637,22 +709,47 @@ function selectAllMonthDays(monthIdx, yearVal) {
     for (let d = 1; d <= daysInMonth; d++) {
         toAdd.push(formatDateStr(yearVal, monthIdx, d));
     }
-    const set = new Set([...selectedDates.value, ...toAdd]);
-    selectedDates.value = Array.from(set).sort();
+    const set = new Set([...tempSelectedDates.value, ...toAdd]);
+    tempSelectedDates.value = Array.from(set).sort();
 }
 
 function selectTodayOnly() {
-    selectedDates.value = [todayStr.value];
+    tempSelectedDates.value = [todayStr.value];
 }
 
 function clearAllSelectedDates() {
+    tempSelectedDates.value = [];
+}
+
+function applyWorkdaysBar(monthIdx, yearVal, includeSaturday = false) {
+    selectWorkdays(monthIdx, yearVal, includeSaturday);
+    selectedDates.value = [...tempSelectedDates.value];
+    applyCustomDatesFilter();
+}
+
+function applyAllMonthDaysBar(monthIdx, yearVal) {
+    selectAllMonthDays(monthIdx, yearVal);
+    selectedDates.value = [...tempSelectedDates.value];
+    applyCustomDatesFilter();
+}
+
+function applyTodayOnlyBar() {
+    selectTodayOnly();
+    selectedDates.value = [...tempSelectedDates.value];
+    applyCustomDatesFilter();
+}
+
+function clearAllSelectedDatesBar() {
+    clearAllSelectedDates();
     selectedDates.value = [];
 }
 
 function convertRangeToCustomDates() {
     const list = getDatesInRange(tanggalMulai.value, tanggalSelesai.value);
     selectedDates.value = list.length > 0 ? list : [todayStr.value];
+    tempSelectedDates.value = [...selectedDates.value];
     dateSelectionType.value = "custom_dates";
+    isCustomDatePickerOpen.value = true;
 }
 
 function switchDateSelectionType(type) {
@@ -660,6 +757,7 @@ function switchDateSelectionType(type) {
     dateSelectionType.value = type;
 
     if (type === "range") {
+        isCustomDatePickerOpen.value = false;
         if (selectedPeriodeId.value && selectedPeriodeId.value !== "all") {
             modeSkala.value = "periode";
         } else {
@@ -679,6 +777,8 @@ function switchDateSelectionType(type) {
                 selectedDates.value = [todayStr.value];
             }
         }
+        tempSelectedDates.value = [...selectedDates.value];
+        isCustomDatePickerOpen.value = true;
     }
 }
 
@@ -2218,96 +2318,280 @@ function copyRowRekening(id, text) {
                     </PeriodDateFilterBar>
                 </div>
 
-                <!-- ─── Panel 2: Multi-Date Calendar (Pilih Tanggal Bebas) ─── -->
+                <!-- ─── Panel 2: Multi-Date Filter Bar & Modal Popover (Pilih Tanggal Bebas) ─── -->
                 <div
                     v-show="dateSelectionType === 'custom_dates'"
-                    class="bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200"
+                    class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-2.5 relative animate-in fade-in duration-200"
                 >
-                    <!-- Top Toolbar: Navigasi Bulan & Tombol Preset Cepat -->
-                    <div
-                        class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100"
-                    >
-                        <!-- Navigasi Bulan -->
-                        <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Capsule Button untuk Memicu Modal Popover Kalender (Persis DateRangePicker) -->
+                        <div class="relative">
                             <button
                                 type="button"
-                                @click="prevCalMonth"
-                                class="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-                                title="Bulan Sebelumnya"
+                                @click="toggleCustomDatePicker"
+                                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-emerald-300 hover:border-emerald-500 shadow-2xs text-xs font-bold text-slate-800 transition-all cursor-pointer group"
+                                title="Klik untuk membuka kalender pilih tanggal"
                             >
-                                <ChevronLeft class="h-4 w-4" />
+                                <CalendarCheck class="h-4 w-4 text-emerald-600 shrink-0" />
+                                <span class="text-emerald-700 font-extrabold truncate">
+                                    {{ customDatesSummaryLabel }}
+                                </span>
+                                <ChevronDown
+                                    class="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform shrink-0"
+                                    :class="{ 'rotate-180': isCustomDatePickerOpen }"
+                                />
                             </button>
 
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-sm font-bold text-slate-800">
-                                    {{ monthNamesIndo[calMonth1] }}
-                                    {{ calYear1 }}
-                                </span>
-                                <span
-                                    class="text-slate-400 font-bold hidden sm:inline"
-                                    >&amp;</span
+                            <!-- Backdrop Click Outside -->
+                            <div
+                                v-if="isCustomDatePickerOpen"
+                                class="fixed inset-0 z-40 bg-black/20 sm:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none transition-opacity"
+                                @click="cancelCustomDatePicker"
+                            ></div>
+
+                            <!-- Popover / Modal Kalender (PERSIS DateRangePicker: style, ukuran, layout) -->
+                            <div
+                                v-if="isCustomDatePickerOpen"
+                                class="fixed inset-x-2 top-24 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 z-50 flex justify-center sm:block"
+                            >
+                                <div
+                                    class="bg-white rounded-2xl border border-slate-200/90 shadow-2xl p-3.5 sm:p-5 select-none w-full max-w-[340px] sm:max-w-none sm:w-[650px] md:w-[680px] text-slate-800 animate-in fade-in zoom-in-95 duration-150"
                                 >
-                                <span
-                                    class="text-sm font-bold text-slate-800 hidden sm:inline"
-                                >
-                                    {{ monthNamesIndo[calMonth2] }}
-                                    {{ calYear2 }}
-                                </span>
+                                    <!-- ─── TWO MONTHS GRID CONTAINER (Persis DateRangePicker) ──── -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-7">
+                                        <!-- ─── BULAN 1 (KIRI) ───────────────────────────────────────── -->
+                                        <div class="w-full">
+                                            <!-- Header Bulan 1: Dropdown Bulan, Tahun & Prev Chevron -->
+                                            <div class="flex items-center justify-between gap-1 pb-3 border-b border-slate-100">
+                                                <div class="flex items-center gap-1.5">
+                                                    <select
+                                                        :value="calMonth1"
+                                                        @change="onMonth1Change"
+                                                        class="pl-2.5 pr-7 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 outline-none cursor-pointer"
+                                                    >
+                                                        <option v-for="(mName, idx) in monthNamesIndo" :key="idx" :value="idx">
+                                                            {{ mName }}
+                                                        </option>
+                                                    </select>
+
+                                                    <select
+                                                        :value="calYear1"
+                                                        @change="onYear1Change"
+                                                        class="pl-2.5 pr-7 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 outline-none cursor-pointer"
+                                                    >
+                                                        <option v-for="y in availableYears" :key="y" :value="y">
+                                                            {{ y }}
+                                                        </option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Nav Chevrons -->
+                                                <div class="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        @click="prevCalMonth"
+                                                        class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                                                        title="Bulan Sebelumnya"
+                                                    >
+                                                        <ChevronLeft class="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="nextCalMonth"
+                                                        class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer sm:hidden"
+                                                        title="Bulan Berikutnya"
+                                                    >
+                                                        <ChevronRight class="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Day Headers: Sen, Sel, Rab, Kam, Jum, Sab, Min -->
+                                            <div class="grid grid-cols-7 text-center pt-2.5 pb-1">
+                                                <div
+                                                    v-for="day in dayHeaders"
+                                                    :key="day"
+                                                    class="h-7 flex items-center justify-center text-[11px] font-semibold text-slate-500"
+                                                >
+                                                    {{ day }}
+                                                </div>
+                                            </div>
+
+                                            <!-- Days Grid Bulan 1 -->
+                                            <div class="grid grid-cols-7 text-center text-xs">
+                                                <div
+                                                    v-for="(item, idx) in month1Days"
+                                                    :key="idx"
+                                                    class="relative h-9 flex items-center justify-center cursor-pointer group"
+                                                    @click="toggleTempDate(item.dateStr)"
+                                                >
+                                                    <div
+                                                        :class="[
+                                                            'relative z-10 w-8 h-8 flex items-center justify-center text-xs transition-all select-none',
+                                                            isTempDateSelected(item.dateStr)
+                                                                ? 'bg-[#0e1f38] text-white font-black rounded-lg shadow-xs scale-105'
+                                                                : item.isCurrentMonth
+                                                                ? 'text-slate-800 hover:bg-slate-200/80 rounded-lg font-medium'
+                                                                : 'text-slate-400/80 font-normal hover:bg-slate-100 rounded-lg',
+                                                        ]"
+                                                    >
+                                                        {{ item.dayNum }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- ─── BULAN 2 (KANAN - Hanya Tampil di Tablet & Desktop) ──────── -->
+                                        <div class="hidden sm:block w-full">
+                                            <!-- Header Bulan 2: Dropdown Bulan, Tahun & Next Chevron -->
+                                            <div class="flex items-center justify-between gap-1 pb-3 border-b border-slate-100">
+                                                <div class="flex items-center gap-1.5">
+                                                    <select
+                                                        :value="calMonth2"
+                                                        @change="onMonth2Change"
+                                                        class="pl-2.5 pr-7 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 outline-none cursor-pointer"
+                                                    >
+                                                        <option v-for="(mName, idx) in monthNamesIndo" :key="idx" :value="idx">
+                                                            {{ mName }}
+                                                        </option>
+                                                    </select>
+
+                                                    <select
+                                                        :value="calYear2"
+                                                        @change="onYear2Change"
+                                                        class="pl-2.5 pr-7 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 outline-none cursor-pointer"
+                                                    >
+                                                        <option v-for="y in availableYears" :key="y" :value="y">
+                                                            {{ y }}
+                                                        </option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Next Button -->
+                                                <button
+                                                    type="button"
+                                                    @click="nextCalMonth"
+                                                    class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                                                    title="Bulan Berikutnya"
+                                                >
+                                                    <ChevronRight class="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+
+                                            <!-- Day Headers: Sen, Sel, Rab, Kam, Jum, Sab, Min -->
+                                            <div class="grid grid-cols-7 text-center pt-2.5 pb-1">
+                                                <div
+                                                    v-for="day in dayHeaders"
+                                                    :key="day"
+                                                    class="h-7 flex items-center justify-center text-[11px] font-semibold text-slate-500"
+                                                >
+                                                    {{ day }}
+                                                </div>
+                                            </div>
+
+                                            <!-- Days Grid Bulan 2 -->
+                                            <div class="grid grid-cols-7 text-center text-xs">
+                                                <div
+                                                    v-for="(item, idx) in month2Days"
+                                                    :key="idx"
+                                                    class="relative h-9 flex items-center justify-center cursor-pointer group"
+                                                    @click="toggleTempDate(item.dateStr)"
+                                                >
+                                                    <div
+                                                        :class="[
+                                                            'relative z-10 w-8 h-8 flex items-center justify-center text-xs transition-all select-none',
+                                                            isTempDateSelected(item.dateStr)
+                                                                ? 'bg-[#0e1f38] text-white font-black rounded-lg shadow-xs scale-105'
+                                                                : item.isCurrentMonth
+                                                                ? 'text-slate-800 hover:bg-slate-200/80 rounded-lg font-medium'
+                                                                : 'text-slate-400/80 font-normal hover:bg-slate-100 rounded-lg',
+                                                        ]"
+                                                    >
+                                                        {{ item.dayNum }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- ─── FOOTER BAR (AKSI - Persis DateRangePicker) ────────────── -->
+                                    <div
+                                        class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5"
+                                    >
+                                        <!-- Status Info -->
+                                        <div class="flex items-center justify-between sm:justify-start gap-2 text-xs">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-slate-500 font-medium">Rentang:</span>
+                                                <span
+                                                    v-if="tempSelectedDates.length > 0"
+                                                    class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+                                                >
+                                                    {{ tempSelectedDates.length }} Hari Terpilih
+                                                </span>
+                                                <span v-else class="text-slate-400 italic">Pilih tanggal yang diinginkan</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Action Buttons (Icon Saja - Persis DateRangePicker) -->
+                                        <div class="flex items-center gap-1.5 w-auto">
+                                            <button
+                                                type="button"
+                                                @click="cancelCustomDatePicker"
+                                                class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center justify-center shadow-2xs"
+                                                title="Batal"
+                                            >
+                                                <X class="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="applyTempDatesAndClose"
+                                                :disabled="tempSelectedDates.length === 0"
+                                                class="p-2 rounded-xl bg-[#0e1f38] hover:bg-slate-800 text-white shadow-2xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                                                title="Terapkan Tanggal Terpilih"
+                                            >
+                                                <Check class="h-4 w-4 text-emerald-400" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-
-                            <button
-                                type="button"
-                                @click="nextCalMonth"
-                                class="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-                                title="Bulan Berikutnya"
-                            >
-                                <ChevronRight class="h-4 w-4" />
-                            </button>
                         </div>
 
-                        <!-- Tombol Preset Cepat -->
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <span
-                                class="text-[11px] text-slate-400 font-medium mr-1"
-                                >Preset Cepat:</span
-                            >
+                        <!-- Preset Cepat di Bar -->
+                        <div class="hidden sm:flex items-center gap-1.5 flex-wrap">
                             <button
                                 type="button"
-                                @click="
-                                    selectWorkdays(calMonth1, calYear1, false)
-                                "
-                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                                @click="applyWorkdaysBar(calMonth1, calYear1, false)"
+                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
                             >
                                 + Sen-Jum ({{ monthNamesIndo[calMonth1] }})
                             </button>
                             <button
                                 type="button"
-                                @click="
-                                    selectWorkdays(calMonth1, calYear1, true)
-                                "
-                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                                @click="applyWorkdaysBar(calMonth1, calYear1, true)"
+                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
                             >
                                 + Sen-Sab ({{ monthNamesIndo[calMonth1] }})
                             </button>
                             <button
                                 type="button"
-                                @click="selectAllMonthDays(calMonth1, calYear1)"
-                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                                @click="applyAllMonthDaysBar(calMonth1, calYear1)"
+                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
                             >
-                                + Semua Hari ({{ monthNamesIndo[calMonth1] }})
+                                + Semua Hari
                             </button>
                             <button
                                 type="button"
-                                @click="selectTodayOnly"
-                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
+                                @click="applyTodayOnlyBar"
+                                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-semibold text-slate-700 transition-colors cursor-pointer"
                             >
                                 Hari Ini
                             </button>
                             <button
                                 type="button"
-                                @click="clearAllSelectedDates"
+                                @click="clearAllSelectedDatesBar"
                                 class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-rose-700 transition-colors cursor-pointer"
-                                title="Bersihkan semua tanggal yang dipilih"
+                                title="Bersihkan semua tanggal"
                             >
                                 <Trash2 class="h-3 w-3" />
                                 <span>Hapus Semua</span>
@@ -2315,193 +2599,10 @@ function copyRowRekening(id, text) {
                         </div>
                     </div>
 
-                    <!-- Kalender 2 Bulan Bersebelahan (Grid) -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Bulan 1 -->
-                        <div
-                            class="p-3 rounded-xl border border-slate-100 bg-slate-50/40"
-                        >
-                            <div
-                                class="text-center font-bold text-xs text-slate-800 mb-2"
-                            >
-                                {{ monthNamesIndo[calMonth1] }} {{ calYear1 }}
-                            </div>
-                            <!-- Day Headers -->
-                            <div
-                                class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1"
-                            >
-                                <span
-                                    v-for="h in dayHeaders"
-                                    :key="h"
-                                    :class="h === 'Min' ? 'text-rose-400' : ''"
-                                >
-                                    {{ h }}
-                                </span>
-                            </div>
-                            <!-- Days Grid -->
-                            <div class="grid grid-cols-7 gap-1">
-                                <button
-                                    v-for="d in month1Days"
-                                    :key="d.dateStr"
-                                    type="button"
-                                    @click="
-                                        d.isCurrentMonth &&
-                                        toggleDate(d.dateStr)
-                                    "
-                                    :disabled="!d.isCurrentMonth"
-                                    :class="[
-                                        'h-8 sm:h-9 rounded-lg text-xs font-semibold flex items-center justify-center relative transition-all cursor-pointer',
-                                        !d.isCurrentMonth
-                                            ? 'opacity-20 pointer-events-none text-slate-400'
-                                            : isDateSelected(d.dateStr)
-                                              ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-600'
-                                              : d.dateStr === todayStr
-                                                ? 'border-2 border-emerald-400 text-emerald-800 font-bold hover:bg-emerald-50'
-                                                : d.dayOfWeek === 6
-                                                  ? 'text-rose-500 hover:bg-rose-50'
-                                                  : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800',
-                                    ]"
-                                >
-                                    <span>{{ d.dayNum }}</span>
-                                    <span
-                                        v-if="isDateSelected(d.dateStr)"
-                                        class="absolute bottom-0.5 right-1 text-[8px] font-black"
-                                    >
-                                        ✓
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Bulan 2 -->
-                        <div
-                            class="p-3 rounded-xl border border-slate-100 bg-slate-50/40"
-                        >
-                            <div
-                                class="text-center font-bold text-xs text-slate-800 mb-2"
-                            >
-                                {{ monthNamesIndo[calMonth2] }} {{ calYear2 }}
-                            </div>
-                            <!-- Day Headers -->
-                            <div
-                                class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1"
-                            >
-                                <span
-                                    v-for="h in dayHeaders"
-                                    :key="h"
-                                    :class="h === 'Min' ? 'text-rose-400' : ''"
-                                >
-                                    {{ h }}
-                                </span>
-                            </div>
-                            <!-- Days Grid -->
-                            <div class="grid grid-cols-7 gap-1">
-                                <button
-                                    v-for="d in month2Days"
-                                    :key="d.dateStr"
-                                    type="button"
-                                    @click="
-                                        d.isCurrentMonth &&
-                                        toggleDate(d.dateStr)
-                                    "
-                                    :disabled="!d.isCurrentMonth"
-                                    :class="[
-                                        'h-8 sm:h-9 rounded-lg text-xs font-semibold flex items-center justify-center relative transition-all cursor-pointer',
-                                        !d.isCurrentMonth
-                                            ? 'opacity-20 pointer-events-none text-slate-400'
-                                            : isDateSelected(d.dateStr)
-                                              ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-600'
-                                              : d.dateStr === todayStr
-                                                ? 'border-2 border-emerald-400 text-emerald-800 font-bold hover:bg-emerald-50'
-                                                : d.dayOfWeek === 6
-                                                  ? 'text-rose-500 hover:bg-rose-50'
-                                                  : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800',
-                                    ]"
-                                >
-                                    <span>{{ d.dayNum }}</span>
-                                    <span
-                                        v-if="isDateSelected(d.dateStr)"
-                                        class="absolute bottom-0.5 right-1 text-[8px] font-black"
-                                    >
-                                        ✓
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tray Chips Tanggal yang Dipilih -->
-                    <div
-                        class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2"
-                    >
-                        <div class="flex items-center justify-between text-xs">
-                            <span
-                                class="font-bold text-slate-700 flex items-center gap-1.5"
-                            >
-                                <span>Daftar Tanggal Terpilih:</span>
-                                <span
-                                    class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                >
-                                    {{ selectedDates.length }} Tanggal
-                                </span>
-                            </span>
-                            <span class="text-[11px] text-slate-400">
-                                Klik tanda ✕ pada tanggal untuk menghapus
-                            </span>
-                        </div>
-
-                        <!-- Scrollable / Wrapping Chips -->
-                        <div
-                            v-if="selectedDates.length > 0"
-                            class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1"
-                        >
-                            <span
-                                v-for="dStr in selectedDates"
-                                :key="dStr"
-                                class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-emerald-300 text-[11px] font-semibold text-emerald-900 shadow-2xs group"
-                            >
-                                <span>{{ formatDateIndo(dStr) }}</span>
-                                <button
-                                    type="button"
-                                    @click="removeSelectedDate(dStr)"
-                                    class="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Hapus tanggal ini"
-                                >
-                                    <X class="h-3 w-3" />
-                                </button>
-                            </span>
-                        </div>
-                        <div v-else class="text-xs text-slate-400 italic py-1">
-                            Belum ada tanggal yang dipilih. Klik tanggal pada
-                            kalender di atas atau gunakan preset cepat.
-                        </div>
-                    </div>
-
-                    <!-- Action Button: Terapkan Tanggal Pilihan -->
-                    <div
-                        class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2"
-                    >
-                        <p class="text-[11px] text-slate-500">
-                            💡 <b>Info:</b> Mandays presensi dan gaji petugas
-                            akan dihitung otomatis sesuai kehadiran personil
-                            pada <b>{{ selectedDates.length }} tanggal</b> yang
-                            dipilih di atas.
-                        </p>
-
-                        <button
-                            type="button"
-                            @click="applyCustomDatesFilter"
-                            :disabled="selectedDates.length === 0"
-                            class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
-                        >
-                            <Check class="h-4 w-4" />
-                            <span
-                                >Terapkan Tanggal Terpilih ({{
-                                    selectedDates.length
-                                }}
-                                Hari)</span
-                            >
-                        </button>
+                    <!-- Keterangan Status Ringkas / Info -->
+                    <div class="flex items-center gap-2 text-xs text-slate-500">
+                        <span class="font-medium">Total:</span>
+                        <span class="font-bold text-emerald-700">{{ selectedDates.length }} Tanggal Aktif</span>
                     </div>
                 </div>
 

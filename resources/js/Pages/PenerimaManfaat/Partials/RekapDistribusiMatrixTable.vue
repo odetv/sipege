@@ -67,21 +67,21 @@ function getCategoryBadge(kategori) {
     }
 }
 
-// Ambil status sel: default kosong "" jika belum ada pencatatan (kecuali Minggu default "L")
-function getCellStatus(itemId, dateStr, isSunday) {
+// Ambil status sel: default kosong "" jika belum ada pencatatan (kecuali Sabtu & Minggu default "L")
+function getCellStatus(itemId, dateStr, isWeekend) {
     const row = activeMatrix.value[itemId];
-    if (row && row[dateStr] !== undefined) {
+    if (row && row[dateStr] !== undefined && row[dateStr] !== null && row[dateStr] !== "") {
         return row[dateStr];
     }
-    // Hari Minggu jika belum diset bisa default L atau kosong
-    return isSunday ? "L" : "";
+    // Hari Sabtu dan Minggu jika belum diset otomatis default Libur (L) namun tetap bisa diubah
+    return isWeekend ? "L" : "";
 }
 
 // Hitung hari kirim riil (hanya status 'T') per baris
 function getRowHariKirim(item) {
     let count = 0;
     props.dateColumns.forEach((col) => {
-        const st = getCellStatus(item.id, col.dateStr, col.isSunday);
+        const st = getCellStatus(item.id, col.dateStr, col.isWeekend);
         if (st === "T") count++;
     });
     return count;
@@ -91,7 +91,7 @@ function getRowHariKirim(item) {
 function getRowTotalAkumulasi(item) {
     let sum = 0;
     props.dateColumns.forEach((col) => {
-        const st = getCellStatus(item.id, col.dateStr, col.isSunday);
+        const st = getCellStatus(item.id, col.dateStr, col.isWeekend);
         if (st === "T") {
             const det = props.matrixDetailMap?.[item.id]?.[col.dateStr];
             if (det && det.has_wo) {
@@ -106,10 +106,9 @@ function getRowTotalAkumulasi(item) {
 
 // Total porsi terkirim pada kolom tanggal tertentu
 function getColTotalPorsi(col) {
-    if (col.isSunday) return 0;
     let sum = 0;
     props.items.forEach((it) => {
-        const st = getCellStatus(it.id, col.dateStr, col.isSunday);
+        const st = getCellStatus(it.id, col.dateStr, col.isWeekend);
         if (st === "T") {
             const det = props.matrixDetailMap?.[it.id]?.[col.dateStr];
             if (det && det.has_wo) {
@@ -326,7 +325,7 @@ const totalHariAdaWo = computed(() => {
                             <div class="flex items-center justify-center relative">
                                 <!-- Status: T (Terkirim - Emerald) -->
                                 <button
-                                    v-if="getCellStatus(item.id, col.dateStr, col.isSunday) === 'T'"
+                                    v-if="getCellStatus(item.id, col.dateStr, col.isWeekend) === 'T'"
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] flex items-center justify-center shadow-2xs transition-transform active:scale-95 cursor-pointer"
@@ -339,12 +338,12 @@ const totalHariAdaWo = computed(() => {
 
                                 <!-- Status: P (Proses / Terjadwal - Biru) -->
                                 <button
-                                    v-else-if="getCellStatus(item.id, col.dateStr, col.isSunday) === 'P'"
+                                    v-else-if="getCellStatus(item.id, col.dateStr, col.isWeekend) === 'P'"
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] flex items-center justify-center shadow-2xs transition-transform active:scale-95 cursor-pointer"
                                     :title="matrixDetailMap?.[item.id]?.[col.dateStr]?.has_wo
-                                        ? `${item.nama_kelompok} (${col.dateStr})\nWO: ${matrixDetailMap[item.id][col.dateStr].nomor_wo} - ${matrixDetailMap[item.id][col.dateStr].nama_menu} (${matrixDetailMap[item.id][col.dateStr].wo_status})\nPorsi Terjadwal: ${matrixDetailMap[item.id][col.dateStr].total_penerima} PM\nStatus Distribusi: Proses / Terjadwal (P)\nKlik tombol untuk ubah ke Libur.`
+                                        ? `${item.nama_kelompok} (${col.dateStr})\nWO: ${matrixDetailMap[item.id][col.dateStr].nomor_wo} - ${matrixDetailMap[item.id][col.dateStr].nama_menu} (${matrixDetailMap[item.id][col.dateStr].wo_status})\nPorsi Terjadwal: ${matrixDetailMap[item.id][col.dateStr].total_penerima} PM)\nStatus Distribusi: Proses / Terjadwal (P)\nKlik tombol untuk ubah ke Libur.`
                                         : `${item.nama_kelompok} (${col.dateStr}): Terjadwal/Proses. Klik untuk ubah ke Libur.`"
                                 >
                                     P
@@ -352,7 +351,7 @@ const totalHariAdaWo = computed(() => {
 
                                 <!-- Status: L (Libur Operasional - Slate) -->
                                 <button
-                                    v-else-if="getCellStatus(item.id, col.dateStr, col.isSunday) === 'L'"
+                                    v-else-if="getCellStatus(item.id, col.dateStr, col.isWeekend) === 'L'"
                                     type="button"
                                     @click="$emit('cycleStatus', item.id, col.dateStr)"
                                     class="w-6 h-6 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
@@ -436,7 +435,7 @@ const totalHariAdaWo = computed(() => {
                             :key="'tot-' + col.dateStr"
                             class="py-2 px-0.5 text-center text-[10px] font-black border-r border-slate-200"
                         >
-                            <span v-if="col.isSunday" class="text-slate-400">-</span>
+                            <span v-if="getColTotalPorsi(col) === 0" class="text-slate-400">-</span>
                             <span v-else class="text-emerald-800">
                                 {{ formatNumber(getColTotalPorsi(col)) }}
                             </span>

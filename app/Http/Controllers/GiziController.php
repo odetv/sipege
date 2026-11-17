@@ -949,7 +949,7 @@ class GiziController extends Controller
             default => (!empty($xlsxData) ? $xlsxData : (!empty($csvData) ? $csvData : $ftaData)),
         };
 
-        $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+        $periodes = Periode::getUntukDropdown()->map(function ($p) {
             return [
                 'id'              => $p->id,
                 'nomor_periode'   => $p->nomor_periode,

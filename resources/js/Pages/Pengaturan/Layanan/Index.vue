@@ -100,19 +100,51 @@ function setActiveTab(tab) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TAB 1: DATABASE STATE & TESTING
+// TAB 1: DATABASE STATE, FORM & TESTING (Lokal vs Cloud Supabase)
 // ═══════════════════════════════════════════════════════════════════════════
+const selectedDbTab = ref(
+    props.databaseInfo?.active_target === "local" ? "local" : "cloud"
+); // 'cloud' | 'local'
+const showDbPassword = ref(false);
+
+const formDatabase = useForm({
+    active_target: props.databaseInfo?.active_target === "local" ? "local" : "cloud",
+    cloud: {
+        driver: props.databaseInfo?.cloud?.driver || "pgsql",
+        host: props.databaseInfo?.cloud?.host || "aws-0-ap-southeast-1.pooler.supabase.com",
+        port: props.databaseInfo?.cloud?.port || 6543,
+        database: props.databaseInfo?.cloud?.database || "postgres",
+        username: props.databaseInfo?.cloud?.username || "postgres.xgmcjadwhlphedfkoehu",
+        password: props.databaseInfo?.cloud?.password || "Plenger@BGN!27",
+        sslmode: props.databaseInfo?.cloud?.sslmode || "prefer",
+    },
+    local: {
+        driver: props.databaseInfo?.local?.driver || "pgsql",
+        host: props.databaseInfo?.local?.host || "127.0.0.1",
+        port: props.databaseInfo?.local?.port || 5432,
+        database: props.databaseInfo?.local?.database || "sipege",
+        username: props.databaseInfo?.local?.username || "postgres",
+        password: props.databaseInfo?.local?.password || "",
+        sslmode: props.databaseInfo?.local?.sslmode || "prefer",
+    },
+});
+
+const activeDbConfig = computed(() => {
+    return formDatabase[selectedDbTab.value] || formDatabase.cloud;
+});
+
 const isDbTesting = ref(false);
 const dbTestResult = ref(null);
-const liveDbLatency = ref(props.databaseInfo.latency_ms || 0);
+const liveDbLatency = ref(props.databaseInfo?.latency_ms || 0);
 
 async function runTestDatabase() {
     isDbTesting.value = true;
     dbTestResult.value = null;
     try {
-        const res = await axios.post(route("admin.pengaturan.layanan.test-database"));
+        const targetConfig = formDatabase[selectedDbTab.value] || formDatabase.cloud;
+        const res = await axios.post(route("admin.pengaturan.layanan.test-database"), targetConfig);
         dbTestResult.value = res.data;
-        if (res.data.latency_ms) {
+        if (res.data?.latency_ms) {
             liveDbLatency.value = res.data.latency_ms;
         }
     } catch (err) {
@@ -123,6 +155,15 @@ async function runTestDatabase() {
     } finally {
         isDbTesting.value = false;
     }
+}
+
+function submitFormDatabase() {
+    formDatabase.post(route("admin.pengaturan.layanan.update-database"), {
+        preserveScroll: true,
+        onSuccess: () => {
+            dbTestResult.value = null;
+        },
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -765,64 +806,242 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <!-- Kartu Parameter Database & Diagnostik Ping -->
+                <!-- PILIH TARGET DATABASE (Lokal vs Cloud) -->
+                <div class="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1.5 w-full">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                        PILIH KONEKSI DATABASE (RDBMS TARGET):
+                    </span>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                        <!-- Opsi 1: Cloud Database (Supabase) -->
+                        <button
+                            type="button"
+                            @click="selectedDbTab = 'cloud'"
+                            :class="[
+                                'p-3 rounded-lg border text-left transition-all flex items-start gap-3 relative cursor-pointer',
+                                selectedDbTab === 'cloud'
+                                    ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-medium ring-1 ring-emerald-600 shadow-2xs'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700',
+                            ]"
+                        >
+                            <div class="p-2 rounded-lg bg-white border border-slate-200 shadow-2xs shrink-0 text-amber-600 mt-0.5">
+                                <Cloud class="h-4 w-4" />
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-1">
+                                    <span class="text-xs font-bold text-slate-900">Database Cloud (Supabase)</span>
+                                    <span
+                                        v-if="formDatabase.active_target === 'cloud'"
+                                        class="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    >
+                                        AKTIF DIGUNAKAN
+                                    </span>
+                                    <span v-else class="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-slate-100 text-slate-600">
+                                        Cloud
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                                    PostgreSQL terkelola di cloud Supabase dengan pooler port 6543 dan enkripsi SSL end-to-end.
+                                </p>
+                            </div>
+                        </button>
+
+                        <!-- Opsi 2: Database Lokal -->
+                        <button
+                            type="button"
+                            @click="selectedDbTab = 'local'"
+                            :class="[
+                                'p-3 rounded-lg border text-left transition-all flex items-start gap-3 relative cursor-pointer',
+                                selectedDbTab === 'local'
+                                    ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-medium ring-1 ring-emerald-600 shadow-2xs'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700',
+                            ]"
+                        >
+                            <div class="p-2 rounded-lg bg-white border border-slate-200 shadow-2xs shrink-0 text-blue-600 mt-0.5">
+                                <Server class="h-4 w-4" />
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-1">
+                                    <span class="text-xs font-bold text-slate-900">Database Lokal (Server / Localhost)</span>
+                                    <span
+                                        v-if="formDatabase.active_target === 'local'"
+                                        class="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    >
+                                        AKTIF DIGUNAKAN
+                                    </span>
+                                    <span v-else class="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-slate-100 text-slate-600">
+                                        Lokal
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                                    Instance PostgreSQL atau MySQL di localhost (127.0.0.1) untuk server lokal atau pengujian mandiri.
+                                </p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kartu Parameter Database & Form Input Langsung -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 w-full">
-                    <div class="lg:col-span-2 p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                            <h3 class="font-bold text-xs sm:text-sm text-slate-900 flex items-center gap-2">
-                                <Server class="h-4 w-4 text-emerald-600" />
-                                <span>Parameter Koneksi Database</span>
-                            </h3>
-                            <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                                Read Only View
-                            </span>
+                    <div class="lg:col-span-2 p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <component :is="selectedDbTab === 'cloud' ? Cloud : Server" :class="['h-4 w-4', selectedDbTab === 'cloud' ? 'text-amber-600' : 'text-blue-600']" />
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-900">
+                                    Parameter {{ selectedDbTab === 'cloud' ? 'Database Cloud (Supabase)' : 'Database Lokal (Server)' }}
+                                </h3>
+                            </div>
+
+                            <!-- Tombol Jadikan Database Aktif -->
+                            <button
+                                type="button"
+                                @click="formDatabase.active_target = selectedDbTab"
+                                :class="[
+                                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer',
+                                    formDatabase.active_target === selectedDbTab
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs'
+                                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200',
+                                ]"
+                            >
+                                <Check v-if="formDatabase.active_target === selectedDbTab" class="h-3.5 w-3.5 text-emerald-700" />
+                                <span>{{ formDatabase.active_target === selectedDbTab ? 'Koneksi Ini Aktif Dipakai' : 'Jadikan Database Aktif' }}</span>
+                            </button>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Database Host</span>
-                                <span class="font-mono text-slate-900 text-xs font-semibold block truncate mt-0.5">{{ databaseInfo.host }}</span>
+                        <!-- Form Input Parameter Database -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs w-full">
+                            <!-- Driver / Engine -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Driver / Engine RDBMS <span class="text-rose-500">*</span>
+                                </label>
+                                <select
+                                    v-model="activeDbConfig.driver"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-bold bg-white cursor-pointer"
+                                >
+                                    <option value="pgsql">PostgreSQL (pgsql)</option>
+                                    <option value="mysql">MySQL / MariaDB (mysql)</option>
+                                </select>
                             </div>
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Port Koneksi</span>
-                                <span class="font-mono text-slate-900 text-xs font-semibold block mt-0.5">{{ databaseInfo.port }}</span>
+
+                            <!-- Port Koneksi -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Port Koneksi <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="activeDbConfig.port"
+                                    type="number"
+                                    placeholder="5432"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono"
+                                />
                             </div>
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Nama Database</span>
-                                <span class="font-mono text-slate-900 text-xs font-semibold block mt-0.5">{{ databaseInfo.database }}</span>
+
+                            <!-- Database Host -->
+                            <div class="space-y-1 sm:col-span-2">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Database Host / Alamat Server <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="activeDbConfig.host"
+                                    type="text"
+                                    placeholder="Contoh: aws-0-ap-southeast-1.pooler.supabase.com atau 127.0.0.1"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono"
+                                />
                             </div>
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Username Pengguna</span>
-                                <span class="font-mono text-slate-900 text-xs font-semibold block mt-0.5">{{ databaseInfo.username_masked }}</span>
+
+                            <!-- Nama Database -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Nama Database <span class="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    v-model="activeDbConfig.database"
+                                    type="text"
+                                    placeholder="postgres"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono"
+                                />
                             </div>
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">SSL Mode</span>
-                                <span class="font-mono text-emerald-700 text-xs font-bold block mt-0.5 uppercase">{{ databaseInfo.sslmode }}</span>
+
+                            <!-- Username Pengguna -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Username Database
+                                </label>
+                                <input
+                                    v-model="activeDbConfig.username"
+                                    type="text"
+                                    placeholder="postgres"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono"
+                                />
                             </div>
-                            <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Versi Server RDBMS</span>
-                                <span class="font-mono text-slate-700 text-[11px] block truncate mt-0.5" :title="databaseInfo.version">{{ databaseInfo.version }}</span>
+
+                            <!-- Password / Sandi Database -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    Password Database
+                                </label>
+                                <div class="relative">
+                                    <input
+                                        v-model="activeDbConfig.password"
+                                        :type="showDbPassword ? 'text' : 'password'"
+                                        placeholder="••••••••••••••••"
+                                        class="w-full pl-3 pr-9 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        @click="showDbPassword = !showDbPassword"
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                    >
+                                        <EyeOff v-if="showDbPassword" class="h-3.5 w-3.5" />
+                                        <Eye v-else class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- SSL Mode -->
+                            <div class="space-y-1">
+                                <label class="block text-[11px] font-bold text-slate-700">
+                                    SSL Mode
+                                </label>
+                                <select
+                                    v-model="activeDbConfig.sslmode"
+                                    class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-xs font-mono bg-white cursor-pointer"
+                                >
+                                    <option value="prefer">PREFER (Rekomendasi Cloud)</option>
+                                    <option value="require">REQUIRE (Enkripsi Penuh)</option>
+                                    <option value="disable">DISABLE (Tanpa SSL / Lokal)</option>
+                                    <option value="allow">ALLOW</option>
+                                </select>
                             </div>
                         </div>
 
-                        <!-- Tombol Uji Ping Live -->
-                        <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                            <p class="text-[11px] text-slate-500">
-                                Lakukan pengujian koneksi langsung untuk mengukur latency query server database secara real-time.
-                            </p>
+                        <!-- Bar Tombol Aksi: Uji Ping & Simpan -->
+                        <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
                             <button
                                 type="button"
                                 @click="runTestDatabase"
                                 :disabled="isDbTesting"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-2xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                             >
                                 <Loader2 v-if="isDbTesting" class="h-3.5 w-3.5 animate-spin" />
-                                <Activity v-else class="h-3.5 w-3.5" />
-                                <span>{{ isDbTesting ? 'Menguji Koneksi...' : 'Uji Koneksi (Ping)' }}</span>
+                                <Activity v-else class="h-3.5 w-3.5 text-emerald-600" />
+                                <span>{{ isDbTesting ? 'Menguji Koneksi...' : 'Uji Koneksi (' + (selectedDbTab === 'cloud' ? 'Cloud' : 'Lokal') + ')' }}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click="submitFormDatabase"
+                                :disabled="formDatabase.processing"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                <Loader2 v-if="formDatabase.processing" class="h-3.5 w-3.5 animate-spin" />
+                                <Save v-else class="h-3.5 w-3.5" />
+                                <span>Simpan & Terapkan Konfigurasi</span>
                             </button>
                         </div>
 
-                        <!-- Hasil Uji Ping -->
+                        <!-- Hasil Uji Ping Live -->
                         <div
                             v-if="dbTestResult"
                             :class="[
@@ -831,12 +1050,15 @@ onMounted(() => {
                             ]"
                         >
                             <div class="flex items-center gap-1.5 font-bold mb-0.5">
-                                <CheckCircle2 v-if="dbTestResult.success" class="h-3.5 w-3.5 text-emerald-600" />
-                                <AlertCircle v-else class="h-3.5 w-3.5 text-rose-600" />
+                                <CheckCircle2 v-if="dbTestResult.success" class="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <AlertCircle v-else class="h-3.5 w-3.5 text-rose-600 shrink-0" />
                                 <span>{{ dbTestResult.message }}</span>
                             </div>
                             <p v-if="dbTestResult.tested_at" class="text-[10px] text-slate-500">
                                 Waktu tes: {{ dbTestResult.tested_at }} • Latency: {{ dbTestResult.latency_ms }} ms
+                                <template v-if="dbTestResult.tables_count !== undefined">
+                                    • Total Tabel: {{ dbTestResult.tables_count }}
+                                </template>
                             </p>
                         </div>
                     </div>
@@ -846,19 +1068,21 @@ onMounted(() => {
                         <div class="space-y-2.5">
                             <div class="flex items-center gap-2 text-emerald-400">
                                 <ShieldCheck class="h-4 w-4" />
-                                <span class="font-bold text-xs uppercase tracking-wider">Keamanan & Backup</span>
+                                <span class="font-bold text-xs uppercase tracking-wider">Keamanan & Koneksi</span>
                             </div>
                             <p class="text-xs text-slate-300 leading-relaxed">
-                                Database SIPEGE beroperasi menggunakan PostgreSQL di cloud Supabase dengan enkripsi SSL/TLS secara end-to-end.
+                                {{ selectedDbTab === 'cloud'
+                                    ? 'Database SIPEGE beroperasi menggunakan PostgreSQL di cloud Supabase dengan pooler port 6543 dan enkripsi SSL/TLS secara end-to-end.'
+                                    : 'Database lokal beroperasi langsung di server/localhost Anda, cocok untuk lingkungan pengujian terisolasi atau jaringan internal.' }}
                             </p>
                             <div class="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800">
                                 <div class="flex items-start gap-1.5">
                                     <Check class="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                                    <span>Pencadangan rutin otomatis via fitur Backup & Restore</span>
+                                    <span>Pencadangan rutin otomatis via modul Backup & Restore</span>
                                 </div>
                                 <div class="flex items-start gap-1.5">
                                     <Check class="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                                    <span>Pooler mode aktif pada port 6543</span>
+                                    <span>Peralihan cepat antara Server Lokal & Cloud tanpa perlu edit berkas manual</span>
                                 </div>
                                 <div class="flex items-start gap-1.5">
                                     <Check class="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
@@ -866,9 +1090,14 @@ onMounted(() => {
                                 </div>
                             </div>
                         </div>
+
+                        <div class="pt-3 border-t border-slate-800">
+                            <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded block text-center border border-emerald-800/60 truncate">
+                                {{ activeDbConfig.driver }}://{{ activeDbConfig.host }}:{{ activeDbConfig.port }}/{{ activeDbConfig.database }}
+                            </span>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </div></div>
 
             <!-- ═══════════════════════════════════════════════════════════════ -->
             <!-- CONTENT TAB 2: STORAGE (Lokal vs Cloudflare R2)                  -->

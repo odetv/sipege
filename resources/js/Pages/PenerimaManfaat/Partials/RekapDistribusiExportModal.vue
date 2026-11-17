@@ -23,11 +23,27 @@ const props = defineProps({
     isExporting: { type: Boolean, default: false },
     unitSppg: { type: Object, default: null },
     todayStr: { type: String, default: "" },
+    komponenSekolah: { type: String, default: "siswa" },
 });
 
 const emit = defineEmits(["close", "confirm", "confirmExport"]);
 
 const isModalVisible = computed(() => props.show || props.isOpen);
+const labelKomponenSekolah = computed(() => {
+    switch (props.komponenSekolah) {
+        case "semua":
+            return "Semua (Siswa, Guru, Tendik)";
+        case "guru":
+            return "Guru Saja";
+        case "tendik":
+            return "Tendik Saja";
+        case "guru_tendik":
+            return "Guru & Tendik";
+        case "siswa":
+        default:
+            return "Siswa Saja";
+    }
+});
 const effectiveStartDate = computed(() => props.startDate || props.tanggalMulai || props.todayStr);
 const effectiveEndDate = computed(() => props.endDate || props.tanggalSelesai || effectiveStartDate.value);
 
@@ -181,6 +197,10 @@ function onConfirmClick() {
                     <div class="flex items-center justify-between text-slate-700 font-semibold border-b border-slate-200/80 pb-2">
                         <span>Unit SPPG:</span>
                         <span class="text-slate-900 font-bold">{{ unitSppg?.nama ?? unitSppg?.nama_sppg ?? 'SPPG Buleleng Sukasada Tegallinggah' }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-700 font-semibold border-b border-slate-200/80 pb-2">
+                        <span>PM Sekolah yang Dihitung:</span>
+                        <span class="text-indigo-900 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 text-[11px]">{{ labelKomponenSekolah }}</span>
                     </div>
 
                     <!-- Preview Khusus Bukti Distribusi PM PDF -->

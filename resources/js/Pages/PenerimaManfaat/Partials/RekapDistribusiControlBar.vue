@@ -31,6 +31,7 @@ const props = defineProps({
     dateColumns: { type: Array, default: () => [] },
     labelSiklus: { type: String, default: "" },
     searchQuery: { type: String, default: "" },
+    selectedKomponenSekolah: { type: String, default: "siswa" },
     selectedKategoriFilter: { type: String, default: "all" },
     selectedStatusFilter: { type: String, default: "all" },
     unitSppg: { type: Object, default: null },
@@ -43,6 +44,7 @@ const props = defineProps({
 const emit = defineEmits([
     "update:modeSkala",
     "update:searchQuery",
+    "update:selectedKomponenSekolah",
     "update:selectedKategoriFilter",
     "update:selectedStatusFilter",
     "dateFilterChange",
@@ -295,10 +297,10 @@ function onApplyDateRange(newRange) {
             @change="(payload) => $emit('dateFilterChange', payload)"
         />
 
-        <!-- ─── Secondary Filter Bar (Search & Filter Kategori / Status) ───────── -->
+        <!-- ─── Secondary Filter Bar (Search & Filter Kategori / Status / PM Komponen) ───────── -->
         <div class="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
-            <!-- Search & Filter Kategori / Status -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <!-- Search & Filter Kategori / Status / PM Komponen -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div class="relative">
                     <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <input
@@ -308,6 +310,25 @@ function onApplyDateRange(newRange) {
                         placeholder="Cari sekolah, posyandu, NPSN, PIC..."
                         class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:ring-1 focus:ring-primary focus:border-primary bg-white outline-hidden"
                     />
+                </div>
+
+                <!-- Hitungan PM Sekolah (Semua, Siswa, Guru, Tendik, Guru & Tendik) -->
+                <div class="relative">
+                    <select
+                        :value="selectedKomponenSekolah"
+                        @change="$emit('update:selectedKomponenSekolah', $event.target.value)"
+                        class="w-full pl-3 pr-8 py-2 rounded-xl border text-xs font-bold bg-indigo-50/70 text-indigo-950 border-indigo-300 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer outline-hidden shadow-2xs"
+                        title="Pilih siapa saja yang dihitung dalam porsi KPM Sekolah saat rekap distribusi"
+                    >
+                        <option value="siswa">PM Sekolah: Siswa Saja</option>
+                        <option value="semua">PM Sekolah: Semua (Siswa, Guru, Tendik)</option>
+                        <option value="guru">PM Sekolah: Guru Saja</option>
+                        <option value="tendik">PM Sekolah: Tendik Saja</option>
+                        <option value="guru_tendik">PM Sekolah: Guru & Tendik</option>
+                    </select>
+                    <span class="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-700">
+                        <ChevronDown class="w-3.5 h-3.5" />
+                    </span>
                 </div>
 
                 <div>

@@ -5,6 +5,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 
 // Partials
 import KeuanganPenyesuaianTab from "@/Pages/Keuangan/Partials/KeuanganPenyesuaianTab.vue";
+import KeuanganRabTab from "@/Pages/Keuangan/Partials/KeuanganRabTab.vue";
 import KeuanganAnggaranTab from "@/Pages/Keuangan/Partials/KeuanganAnggaranTab.vue";
 import KeuanganVerifikasiPoTab from "@/Pages/Keuangan/Partials/KeuanganVerifikasiPoTab.vue";
 import KeuanganDaftarPoTab from "@/Pages/Keuangan/Partials/KeuanganDaftarPoTab.vue";
@@ -86,6 +87,42 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    rabList: {
+        type: Array,
+        default: () => [],
+    },
+    selectedYear: {
+        type: Number,
+        default: () => new Date().getFullYear(),
+    },
+    pejabatSppg: {
+        type: Object,
+        default: () => ({
+            kepala_sppg: "",
+            pengawas_keuangan: "",
+            pengawas_gizi: "",
+        }),
+    },
+    rekeningUtama: {
+        type: Object,
+        default: null,
+    },
+    kopDokumen: {
+        type: Object,
+        default: null,
+    },
+    autoOperasional: {
+        type: Object,
+        default: () => ({}),
+    },
+    stats: {
+        type: Object,
+        default: () => ({
+            total_penerima: 0,
+            total_porsi_kecil: 0,
+            total_porsi_besar: 0,
+        }),
+    },
     summary: {
         type: Object,
         default: () => ({
@@ -104,6 +141,7 @@ const props = defineProps({
 });
 
 const normalizeTab = (tab) => {
+    if (tab === "rab" || tab === "rab-anggaran" || tab === "rencana-anggaran-biaya") return "rab";
     if (tab === "penyesuaian" || tab === "penyesuaian-keuangan" || tab === "saldo-awal") return "penyesuaian";
     if (tab === "persetujuan" || tab === "verifikasi" || tab === "verifikasi-po" || tab === "verifikasi_po") return "verifikasi_po";
     if (tab === "transaksi" || tab === "arus_kas") return "transaksi";
@@ -396,6 +434,8 @@ function formatTanggalIndo(tgl) {
 
 const pageTitle = computed(() => {
     switch (activeTab.value) {
+        case "rab":
+            return "RAB - SIPEGE";
         case "penyesuaian":
             return "Penyesuaian Keuangan - SIPEGE";
         case "anggaran":
@@ -448,7 +488,7 @@ const pageTitle = computed(() => {
         <Head :title="pageTitle" />
 
         <div class="space-y-6">
-            <!-- 0. PENYESUAIAN KEUANGAN & SALDO AWAL (PALING ATAS) -->
+            <!-- 0. PENYESUAIAN KEUANGAN & SALDO AWAL -->
             <KeuanganPenyesuaianTab
                 v-if="activeTab === 'penyesuaian'"
                 :saldo-awal="props.saldoAwal"
@@ -457,6 +497,21 @@ const pageTitle = computed(() => {
                 :unit-sppg="props.unitSppg"
                 :format-rupiah="formatRupiah"
                 :format-tanggal-indo="formatTanggalIndo"
+            />
+
+            <!-- RAB (RENCANA ANGGARAN BIAYA) - SETELAH PENYESUAIAN -->
+            <KeuanganRabTab
+                v-if="activeTab === 'rab'"
+                :rab-list="props.rabList || []"
+                :selected-year="props.selectedYear"
+                :pejabat-sppg="props.pejabatSppg"
+                :rekening-utama="props.rekeningUtama"
+                :kop-dokumen="props.kopDokumen"
+                :auto-operasional="props.autoOperasional"
+                :unit-sppg="props.unitSppg"
+                :stats="props.stats"
+                :kelompok-list="props.kelompokList || []"
+                :format-rupiah="formatRupiah"
             />
 
             <!-- 1. ANGGARAN & BIAYA PER PORSI -->

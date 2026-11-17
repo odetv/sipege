@@ -36,6 +36,8 @@ class UnitSppg extends Model
             'tanggal_operasional' => 'date',
             'latitude' => 'float',
             'longitude' => 'float',
+            'old_tokens_keamanan' => 'array',
+            'old_tokens_monitoring' => 'array',
         ];
     }
 

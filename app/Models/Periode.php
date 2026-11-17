@@ -13,12 +13,37 @@ class Periode extends Model
         'nomor_periode',
         'tanggal_mulai',
         'tanggal_selesai',
+        'is_penyesuaian',
+        'tampilkan_di_list',
+        'keterangan',
     ];
 
     protected $casts = [
-        'tanggal_mulai'   => 'date',
-        'tanggal_selesai' => 'date',
+        'tanggal_mulai'     => 'date',
+        'tanggal_selesai'   => 'date',
+        'is_penyesuaian'    => 'boolean',
+        'tampilkan_di_list' => 'boolean',
     ];
+
+    /**
+     * Scope untuk mengambil periode yang diizinkan tampil di dropdown & list umum
+     */
+    public function scopeUntukList($query)
+    {
+        return $query->where('tampilkan_di_list', true);
+    }
+
+    /**
+     * Helper untuk mengambil list periode untuk dropdown (mengikuti preferensi tampilkan_di_list pengguna)
+     */
+    public static function getUntukDropdown()
+    {
+        $list = static::untukList()->orderBy('nomor_periode', 'asc')->get();
+        if ($list->isEmpty()) {
+            $list = static::orderBy('nomor_periode', 'asc')->get();
+        }
+        return $list;
+    }
 
     /**
      * Status otomatis berdasarkan tanggal hari ini:

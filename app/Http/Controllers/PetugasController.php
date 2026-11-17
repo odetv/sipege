@@ -195,7 +195,7 @@ class PetugasController extends Controller
             $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
             // Format dropdown periode lengkap dengan rentang tanggalnya
-            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            $periodes = Periode::getUntukDropdown()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
                 $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
                 return [
@@ -354,7 +354,7 @@ class PetugasController extends Controller
 
             $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
-            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            $periodes = Periode::getUntukDropdown()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
                 $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
                 return [
@@ -1049,7 +1049,7 @@ class PetugasController extends Controller
 
             $daftarJabatan = $this->extractDaftarJabatan($petugas);
 
-            $periodes = Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            $periodes = Periode::getUntukDropdown()->map(function ($p) {
                 $mulai = $p->tanggal_mulai ? $p->tanggal_mulai->format('d M Y') : '-';
                 $selesai = $p->tanggal_selesai ? $p->tanggal_selesai->format('d M Y') : '-';
                 return [

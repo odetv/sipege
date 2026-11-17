@@ -56,6 +56,7 @@ import {
     Server,
     Sparkles,
     Scale,
+    Calculator,
 } from "lucide-vue-next";
 import Button from "@/Components/ui/Button.vue";
 import { formatNamaLengkap } from "@/Services/wilayah";
@@ -260,6 +261,14 @@ const isLabelActive = computed(() => {
 const isResiduActive = computed(() => {
     try {
         return route().current("residu.*");
+    } catch {
+        return false;
+    }
+});
+
+const isKeamananActive = computed(() => {
+    try {
+        return route().current("keamanan.*");
     } catch {
         return false;
     }
@@ -1287,6 +1296,22 @@ function logout() {
                             <span class="truncate">Penyesuaian</span>
                         </Link>
 
+                        <!-- 3. RAB (Rencana Anggaran Biaya) -->
+                        <Link
+                            :href="route('keuangan.rab')"
+                            :class="[
+                                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                                route().current('keuangan.rab') ||
+                                (route().current('keuangan.*') &&
+                                    page.props.activeTab === 'rab')
+                                    ? 'bg-primary/10 text-primary font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                        >
+                            <Calculator class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">RAB</span>
+                        </Link>
+
                         <!-- 3. Pembelanjaan (Collapsible Parent) -->
                         <div class="space-y-0.5">
                             <button
@@ -1663,6 +1688,39 @@ function logout() {
                     >
                     <div
                         v-if="route().current('residu.*')"
+                        :class="[
+                            'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
+                            isCollapsed
+                                ? 'inline-block lg:hidden'
+                                : 'inline-block',
+                        ]"
+                    ></div>
+                </Link>
+
+                <!-- 9. Menu Keamanan (Laporan Mutasi Keamanan) -->
+                <Link
+                    :href="route('keamanan.index')"
+                    :title="isCollapsed ? 'Keamanan' : ''"
+                    :class="[
+                        'flex items-center rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                        route().current('keamanan.*')
+                            ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        isCollapsed
+                            ? 'px-3.5 py-2.5 gap-3 lg:justify-center lg:p-2.5 lg:h-10 lg:w-full lg:gap-0'
+                            : 'px-3.5 py-2.5 gap-3',
+                    ]"
+                >
+                    <ShieldCheck class="h-4 w-4 shrink-0" />
+                    <span
+                        :class="[
+                            'flex-1 truncate',
+                            isCollapsed ? 'inline lg:hidden' : 'inline',
+                        ]"
+                        >Keamanan</span
+                    >
+                    <div
+                        v-if="route().current('keamanan.*')"
                         :class="[
                             'h-2 w-2 rounded-full bg-primary animate-pulse shrink-0',
                             isCollapsed

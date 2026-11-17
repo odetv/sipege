@@ -47,13 +47,15 @@ class HandleInertiaRequests extends Middleware
                 'initialization_success' => fn () => $request->session()->get('initialization_success'),
             ],
             'unitSppg' => $user?->unitSppg,
-            'periodes' => fn () => $user ? \App\Models\Periode::orderBy('nomor_periode', 'asc')->get()->map(function ($p) {
+            'periodes' => fn () => $user ? \App\Models\Periode::getUntukDropdown()->map(function ($p) {
                 return [
-                    'id'              => $p->id,
-                    'nomor_periode'   => $p->nomor_periode,
-                    'tanggal_mulai'   => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
-                    'tanggal_selesai' => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
-                    'status'          => $p->status,
+                    'id'                => $p->id,
+                    'nomor_periode'     => $p->nomor_periode,
+                    'tanggal_mulai'     => $p->tanggal_mulai ? $p->tanggal_mulai->format('Y-m-d') : null,
+                    'tanggal_selesai'   => $p->tanggal_selesai ? $p->tanggal_selesai->format('Y-m-d') : null,
+                    'status'            => $p->status,
+                    'is_penyesuaian'    => (bool) $p->is_penyesuaian,
+                    'tampilkan_di_list' => (bool) $p->tampilkan_di_list,
                 ];
             }) : [],
             'periodeAlert' => fn () => $user ? $this->getPeriodeExpirationAlert() : null,
