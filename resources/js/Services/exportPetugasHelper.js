@@ -1544,7 +1544,7 @@ function buildRekapSheet(workbook, {
         const rowValues = [
             idx + 1,
             p.nama || '-',
-            p.jabatan || '-',
+            formatJabatanStandard(p.jabatan),
             ...dayMarks,
             // S
             { formula: `COUNTIF(${letterDayStart}${rowNum}:${letterDayEnd}${rowNum},"S")`, result: effSakit },
@@ -2996,7 +2996,7 @@ export async function downloadRekapBonusExcel({
         const row = sheet.addRow([
             idx + 1,
             p.nama || '-',
-            p.jabatan || '-',
+            formatJabatanStandard(p.jabatan),
             rateBonus,
             effHadirPenuh,
             effHadirSetengah,
@@ -3127,6 +3127,20 @@ export async function downloadRekapBonusExcel({
 }
 
 /**
+ * Helper Format Jabatan Standar (Sinkronisasi Multi-Jabatan)
+ */
+export function formatJabatanStandard(str) {
+    if (!str || str === '-') return '-';
+    const normalized = String(str)
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/).map(s => s.trim().replace(/^[\s()]+|[\s()]+$/g, "")).filter(Boolean);
+    return parts.length ? parts.join(", ") : '-';
+}
+
+/**
  * Export File Excel untuk Rekapitulasi Iuran BPJS Ketenagakerjaan Petugas SPPG
  */
 export async function downloadRekapBpjsTkExcel({
@@ -3242,7 +3256,7 @@ export async function downloadRekapBpjsTkExcel({
             p.jenis_kelamin || '-',
             p.tanggal_lahir ? formatTanggalIndo(p.tanggal_lahir) : '-',
             p.umur ? `${p.umur} th` : '-',
-            p.jabatan || '-',
+            formatJabatanStandard(p.jabatan),
             p.status || 'Aktif',
             iuran,
             iuran > 0 ? 'JKK & JKM (Aktif)' : 'Belum Didaftarkan',

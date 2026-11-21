@@ -34,10 +34,15 @@ class HandleInertiaRequests extends Middleware
             $user->loadMissing('unitSppg');
         }
 
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
+
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user,
+                'isSuperAdmin' => (bool) $user?->isSuperAdmin(),
+                'isSubscriptionActive' => (bool) $user?->isSubscriptionActive(),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
@@ -46,8 +51,8 @@ class HandleInertiaRequests extends Middleware
                 'info' => fn () => $request->session()->get('info'),
                 'initialization_success' => fn () => $request->session()->get('initialization_success'),
             ],
-            'unitSppg' => $user?->unitSppg,
-            'periodes' => fn () => $user ? \App\Models\Periode::getUntukDropdown()->map(function ($p) {
+            'unitSppg' => $unitSppg,
+            'periodes' => fn () => $user ? \App\Models\Periode::getUntukDropdown($unitId)->map(function ($p) {
                 return [
                     'id'                => $p->id,
                     'nomor_periode'     => $p->nomor_periode,
@@ -58,7 +63,7 @@ class HandleInertiaRequests extends Middleware
                     'tampilkan_di_list' => (bool) $p->tampilkan_di_list,
                 ];
             }) : [],
-            'periodeAlert' => fn () => $user ? $this->getPeriodeExpirationAlert() : null,
+            'periodeAlert' => fn () => $user ? $this->getPeriodeExpirationAlert($unitId) : null,
         ];
     }
 
@@ -68,10 +73,15 @@ class HandleInertiaRequests extends Middleware
      *
      * @return array|null
      */
-    protected function getPeriodeExpirationAlert(): ?array
+    protected function getPeriodeExpirationAlert(?int $unitId = null): ?array
     {
+        if (!$unitId) {
+            return null;
+        }
+
         $today = \Illuminate\Support\Carbon::today();
-        $periodes = \App\Models\Periode::orderBy('nomor_periode', 'asc')->get();
+        $query = \App\Models\Periode::where('unit_sppg_id', $unitId)->orderBy('nomor_periode', 'asc');
+        $periodes = $query->get();
 
         if ($periodes->isEmpty()) {
             return null;

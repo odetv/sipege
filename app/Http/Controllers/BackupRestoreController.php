@@ -16,7 +16,7 @@ class BackupRestoreController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         // Data statistik sistem & basis data (ringkasan informatif)
         $dbConnection = config('database.default');

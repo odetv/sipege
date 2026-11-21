@@ -622,14 +622,14 @@ function doDelete() {
 
         <!-- ═══════════════════ MODAL PENYESUAIAN PERIODE LAMPAU ═══════════════════ -->
         <Teleport to="body">
-            <div v-if="showPenyesuaian" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4">
+            <div v-if="showPenyesuaian" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
                 <div class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity" @click="showPenyesuaian = false" />
-                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+                <div class="relative w-full max-w-2xl lg:max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh] my-auto animate-in fade-in zoom-in-95 duration-200">
                     <!-- Header -->
-                    <div class="flex items-center justify-between px-6 sm:px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-amber-50/90 via-slate-50 to-white shrink-0 gap-4">
-                        <div class="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                            <div class="h-11 w-11 rounded-2xl bg-amber-500/15 border border-amber-300 text-amber-700 flex items-center justify-center shadow-2xs shrink-0">
-                                <SlidersHorizontal class="h-5 w-5" />
+                    <div class="flex items-center justify-between px-7 sm:px-8 py-5.5 sm:py-6 border-b border-slate-100 bg-gradient-to-r from-amber-50/90 via-slate-50 to-white shrink-0 gap-4">
+                        <div class="flex items-center gap-4 min-w-0 flex-1 pr-2">
+                            <div class="h-12 w-12 rounded-2xl bg-amber-500/15 border border-amber-300 text-amber-700 flex items-center justify-center shadow-2xs shrink-0">
+                                <SlidersHorizontal class="h-6 w-6" />
                             </div>
                             <div class="min-w-0 flex-1">
                                 <h3 class="font-extrabold text-slate-900 text-base sm:text-lg leading-tight">Penyesuaian Periode Awal</h3>

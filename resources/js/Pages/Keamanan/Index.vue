@@ -42,6 +42,7 @@ import {
     Eye,
     Radio,
     Download,
+    Truck,
 } from 'lucide-vue-next';
 import { exportKeamananExcel } from '@/Services/exportKeamananExcelHelper';
 import KeamananMapModal from './Partials/KeamananMapModal.vue';
@@ -59,6 +60,18 @@ const props = defineProps({
     selectedTanggal: {
         type: String,
         default: () => new Date().toISOString().split('T')[0],
+    },
+    hariPertama: {
+        type: String,
+        default: '',
+    },
+    hariKedua: {
+        type: String,
+        default: '',
+    },
+    labelRentangOperasional: {
+        type: String,
+        default: '',
     },
     selectedShift: {
         type: String,
@@ -117,33 +130,69 @@ const activeTab = ref('jurnal');
 const filterTanggal = ref(props.selectedTanggal);
 const filterShift = ref(props.selectedShift);
 
-// 24 Interval Jam Mutlak (00.00 - 01.00 WITA s/d 23.00 - 00.00 WITA)
+// 24 Interval Jam Patroli Siklus 24 Jam (06.00 WITA Hari Pertama s/d 06.00 WITA Hari Berikutnya)
 const FIXED_24_INTERVALS = [
-    '00.00 - 01.00 WITA',
-    '01.00 - 02.00 WITA',
-    '02.00 - 03.00 WITA',
-    '03.00 - 04.00 WITA',
-    '04.00 - 05.00 WITA',
-    '05.00 - 06.00 WITA',
-    '06.00 - 07.00 WITA',
-    '07.00 - 08.00 WITA',
-    '08.00 - 09.00 WITA',
-    '09.00 - 10.00 WITA',
-    '10.00 - 11.00 WITA',
-    '11.00 - 12.00 WITA',
-    '12.00 - 13.00 WITA',
-    '13.00 - 14.00 WITA',
-    '14.00 - 15.00 WITA',
-    '15.00 - 16.00 WITA',
-    '16.00 - 17.00 WITA',
-    '17.00 - 18.00 WITA',
-    '18.00 - 19.00 WITA',
-    '19.00 - 20.00 WITA',
-    '20.00 - 21.00 WITA',
-    '21.00 - 22.00 WITA',
-    '22.00 - 23.00 WITA',
-    '23.00 - 00.00 WITA',
+    { jam: '06.00 - 07.00 WITA', hour: 6, is_next_day: false },
+    { jam: '07.00 - 08.00 WITA', hour: 7, is_next_day: false },
+    { jam: '08.00 - 09.00 WITA', hour: 8, is_next_day: false },
+    { jam: '09.00 - 10.00 WITA', hour: 9, is_next_day: false },
+    { jam: '10.00 - 11.00 WITA', hour: 10, is_next_day: false },
+    { jam: '11.00 - 12.00 WITA', hour: 11, is_next_day: false },
+    { jam: '12.00 - 13.00 WITA', hour: 12, is_next_day: false },
+    { jam: '13.00 - 14.00 WITA', hour: 13, is_next_day: false },
+    { jam: '14.00 - 15.00 WITA', hour: 14, is_next_day: false },
+    { jam: '15.00 - 16.00 WITA', hour: 15, is_next_day: false },
+    { jam: '16.00 - 17.00 WITA', hour: 16, is_next_day: false },
+    { jam: '17.00 - 18.00 WITA', hour: 17, is_next_day: false },
+    { jam: '18.00 - 19.00 WITA', hour: 18, is_next_day: false },
+    { jam: '19.00 - 20.00 WITA', hour: 19, is_next_day: false },
+    { jam: '20.00 - 21.00 WITA', hour: 20, is_next_day: false },
+    { jam: '21.00 - 22.00 WITA', hour: 21, is_next_day: false },
+    { jam: '22.00 - 23.00 WITA', hour: 22, is_next_day: false },
+    { jam: '23.00 - 00.00 WITA', hour: 23, is_next_day: false },
+    { jam: '00.00 - 01.00 WITA', hour: 0, is_next_day: true },
+    { jam: '01.00 - 02.00 WITA', hour: 1, is_next_day: true },
+    { jam: '02.00 - 03.00 WITA', hour: 2, is_next_day: true },
+    { jam: '03.00 - 04.00 WITA', hour: 3, is_next_day: true },
+    { jam: '04.00 - 05.00 WITA', hour: 4, is_next_day: true },
+    { jam: '05.00 - 06.00 WITA', hour: 5, is_next_day: true },
 ];
+
+function formatIndoDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+const formattedHariPertama = computed(() => {
+    return formatIndoDate(props.hariPertama || props.selectedTanggal || form.value.tanggal);
+});
+
+const formattedHariKedua = computed(() => {
+    if (props.hariKedua) return formatIndoDate(props.hariKedua);
+    try {
+        const base = props.hariPertama || props.selectedTanggal || form.value.tanggal;
+        const d = new Date(base + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        return d.toLocaleDateString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+        });
+    } catch {
+        return '';
+    }
+});
 
 // State Form Mutasi Harian
 const form = ref({
@@ -159,7 +208,7 @@ const form = ref({
 const isSaving = ref(false);
 const saveSuccessMsg = ref('');
 
-// Inisialisasi daftar 24 Jam Penuh Mutlak (Sinkron dg Form Input Tim Keamanan, mendukung > 1 laporan per jam)
+// Inisialisasi daftar 24 Jam Patroli Siklus 06.00 s/d 06.00 WITA
 function init24JamDetails() {
     const existingDetails = props.mutasiAktif?.details || [];
     const detailsGrouped = {};
@@ -167,24 +216,45 @@ function init24JamDetails() {
     existingDetails.forEach((d) => {
         if (d.jam) {
             const key = d.jam.trim();
+            const groupKey = `${d.is_next_day ? 'next_' : 'cur_'}${key}`;
+            if (!detailsGrouped[groupKey]) detailsGrouped[groupKey] = [];
+            detailsGrouped[groupKey].push(d);
+
             if (!detailsGrouped[key]) detailsGrouped[key] = [];
             detailsGrouped[key].push(d);
         }
     });
 
-    form.value.details = FIXED_24_INTERVALS.map((intervalStr, idx) => {
-        const hourPrefix = String(idx).padStart(2, '0');
+    form.value.details = FIXED_24_INTERVALS.map((intObj) => {
+        const intervalStr = intObj.jam;
+        const hourPrefix = String(intObj.hour).padStart(2, '0');
         const legacyFormat = `${hourPrefix}:00`;
-        const list = detailsGrouped[intervalStr] || detailsGrouped[legacyFormat] || [];
+
+        const groupKey = `${intObj.is_next_day ? 'next_' : 'cur_'}${intervalStr}`;
+        const legacyGroupKey = `${intObj.is_next_day ? 'next_' : 'cur_'}${legacyFormat}`;
+
+        const list = detailsGrouped[groupKey] || detailsGrouped[legacyGroupKey] || detailsGrouped[intervalStr] || detailsGrouped[legacyFormat] || [];
+
+        // Filter jika list bercampur antara Hari Pertama dan Hari Berikutnya
+        const filteredList = list.filter((item) => {
+            if (typeof item.is_next_day !== 'undefined') {
+                return !!item.is_next_day === intObj.is_next_day;
+            }
+            return true;
+        });
+
+        const activeList = filteredList.length > 0 ? filteredList : list;
 
         // Urutkan laporan berdasarkan waktu_cek atau id secara kronologis
-        list.sort((a, b) => (a.waktu_cek || '').localeCompare(b.waktu_cek || '') || (a.id - b.id));
+        activeList.sort((a, b) => (a.waktu_cek || '').localeCompare(b.waktu_cek || '') || (a.id - b.id));
 
-        const reports = list.map((item) => {
+        const reports = activeList.map((item) => {
             const isRep = !!(item.waktu_cek || item.data_pengecekan || item.latitude || (item.petugas_id && item.uraian_kejadian));
             return {
                 id: item.id || null,
                 jam: intervalStr,
+                is_next_day: intObj.is_next_day,
+                hour: intObj.hour,
                 is_reported: isRep,
                 waktu_cek: item.waktu_cek || '',
                 petugas_id: item.petugas_id || null,
@@ -203,6 +273,8 @@ function init24JamDetails() {
 
         return {
             jam: intervalStr,
+            is_next_day: intObj.is_next_day,
+            hour: intObj.hour,
             is_reported: isReported,
             report_count: reports.length,
             reports: reports,
@@ -211,7 +283,7 @@ function init24JamDetails() {
             waktu_cek: primary?.waktu_cek || '',
             petugas_id: primary?.petugas_id || null,
             petugas_nama: primary?.petugas_nama || '',
-            kondisi: reports.some(r => r.kondisi === 'Tidak Aman') ? 'Tidak Aman' : (primary?.kondisi || (isReported ? 'Aman' : '')),
+            kondisi: reports.some((r) => r.kondisi === 'Tidak Aman') ? 'Tidak Aman' : (primary?.kondisi || (isReported ? 'Aman' : '')),
             uraian_kejadian: primary?.uraian_kejadian || '',
             data_pengecekan: primary?.data_pengecekan || null,
             latitude: primary?.latitude || null,
@@ -258,9 +330,34 @@ function getDetailInsights(item) {
         .map((a) => a.label);
 
     const highlights = [];
+    const routineActivities = [];
     (dp.pengecekan_umum || []).forEach((u) => {
-        if (u.status === 'Tidak Aman' || u.status === 'Ada') {
+        const isRoutine =
+            u.key === 'kunjungan_tamu' ||
+            u.key === 'kedatangan_supplier' ||
+            (u.label &&
+                (u.label.toLowerCase().includes('tamu') ||
+                    u.label.toLowerCase().includes('supplier')));
+
+        if (u.status === 'Ada') {
+            if (isRoutine) {
+                routineActivities.push({
+                    key: u.key,
+                    label: u.label,
+                    status: u.status,
+                    uraian: u.uraian,
+                });
+            } else {
+                highlights.push({
+                    key: u.key,
+                    label: u.label,
+                    status: u.status,
+                    uraian: u.uraian,
+                });
+            }
+        } else if (u.status === 'Tidak Aman') {
             highlights.push({
+                key: u.key,
                 label: u.label,
                 status: u.status,
                 uraian: u.uraian,
@@ -271,11 +368,18 @@ function getDetailInsights(item) {
     return {
         cuaca,
         cuacaBadge,
-        allAreasSafe: unsafeAreas.length === 0,
+        allAreasSafe: unsafeAreas.length === 0 && highlights.length === 0,
         unsafeAreas,
         highlights,
+        routineActivities,
         catatanTambahan: dp.catatan_tambahan || '',
     };
+}
+
+function formatWaktuWita(val) {
+    if (!val) return '-';
+    const clean = String(val).replace(/\s*WITA/gi, '').trim();
+    return clean ? `${clean} WITA` : '-';
 }
 
 // Modal Edit / Input Manual Cepat untuk Supervisor
@@ -300,6 +404,7 @@ function openManualEdit(it, idx) {
     manualForm.value = {
         index: idx,
         jam: it.jam,
+        is_next_day: it.is_next_day || false,
         petugas_id: it.petugas_id || defaultPet?.id || null,
         petugas_nama: it.petugas_nama || defaultPet?.nama || '',
         kondisi: it.kondisi || 'Aman',
@@ -344,6 +449,7 @@ function submitManualEdit() {
             tanggal: form.value.tanggal,
             shift: form.value.shift,
             jam: manualForm.value.jam,
+            is_next_day: manualForm.value.is_next_day || false,
             petugas_id: manualForm.value.petugas_id,
             kondisi: manualForm.value.kondisi,
             uraian_kejadian: manualForm.value.uraian_kejadian,
@@ -567,9 +673,17 @@ function submitForm() {
     const flatDetails = [];
     form.value.details.forEach((item) => {
         if (item.reports && item.reports.length > 0) {
-            item.reports.forEach((r) => flatDetails.push(r));
+            item.reports.forEach((r) => {
+                flatDetails.push({
+                    ...r,
+                    is_next_day: typeof r.is_next_day !== 'undefined' ? r.is_next_day : item.is_next_day,
+                });
+            });
         } else {
-            flatDetails.push(item);
+            flatDetails.push({
+                ...item,
+                is_next_day: item.is_next_day,
+            });
         }
     });
 
@@ -811,7 +925,7 @@ onBeforeUnmount(() => {
                                 </span>
                             </div>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Laporan dan Monitoring Petugas Keamanan SPPG
+                                Laporan dan Monitoring Petugas Keamanan
                             </p>
                         </div>
                     </div>
@@ -1071,13 +1185,17 @@ onBeforeUnmount(() => {
                     <div class="flex items-center gap-2 flex-wrap">
                         <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
                             <Calendar class="h-3.5 w-3.5 text-slate-400" />
-                            <span class="text-xs text-slate-500 font-medium">Tanggal:</span>
+                            <span class="text-xs text-slate-500 font-medium">Tanggal Shift:</span>
                             <input
                                 type="date"
                                 v-model="filterTanggal"
                                 @change="onFilterChange"
                                 class="border-none bg-transparent text-xs font-bold text-slate-800 p-0 focus:ring-0 cursor-pointer"
                             />
+                        </div>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
+                            <Clock class="h-3 w-3 text-sky-600" />
+                            <span>Siklus 24 Jam: {{ formattedHariPertama }} (06.00) s/d {{ formattedHariKedua }} (06.00)</span>
                         </div>
                     </div>
                 </div>
@@ -1090,7 +1208,7 @@ onBeforeUnmount(() => {
                     <!-- 1. Progres Laporan 24 Jam -->
                     <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
                         <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
-                            <span>Progres Patroli 24 Jam</span>
+                            <span>Progres Patroli (06.00 - 06.00 WITA)</span>
                             <Clock class="h-4 w-4 text-emerald-500" />
                         </div>
                         <div class="text-base sm:text-lg font-black text-slate-900">
@@ -1164,14 +1282,14 @@ onBeforeUnmount(() => {
                             <div class="flex items-center gap-2">
                                 <h4 class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
                                     <Clock class="h-4 w-4 text-emerald-600" />
-                                    <span>Jurnal Patroli 24 Jam (Hasil Input Formulir Petugas)</span>
+                                    <span>Jurnal Patroli Siklus 24 Jam (06.00 - 06.00 WITA)</span>
                                 </h4>
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                     {{ totalReportedCount }} / 24 Terisi
                                 </span>
                             </div>
                             <p class="text-[11px] text-slate-500 mt-0.5">
-                                Menampilkan data patroli yang dikirimkan langsung oleh petugas keamanan melalui link smartphone setiap jam.
+                                Siklus patroli: <strong class="text-slate-800">{{ labelRentangOperasional || (formattedHariPertama + ' s/d ' + formattedHariKedua) }}</strong>. Menampilkan data patroli yang dikirimkan langsung oleh petugas keamanan setiap jam.
                             </p>
                         </div>
 
@@ -1229,6 +1347,22 @@ onBeforeUnmount(() => {
                                         <span class="inline-block px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-900 text-[11px] border border-slate-200">
                                             {{ it.jam }}
                                         </span>
+                                        <!-- Badge Indikator Hari Pertama / Hari Berikutnya -->
+                                        <div class="mt-1 flex items-center gap-1 flex-wrap">
+                                            <span
+                                                v-if="it.is_next_day"
+                                                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                            >
+                                                <span>[Hari Berikutnya]</span>
+                                                <span class="font-semibold text-indigo-900">{{ formattedHariKedua }}</span>
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200"
+                                            >
+                                                <span>{{ formattedHariPertama }}</span>
+                                            </span>
+                                        </div>
                                         <div v-if="it.is_reported" class="mt-1 space-y-0.5">
                                             <div v-if="it.reports && it.reports.length > 1" class="flex items-center gap-1">
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200">
@@ -1238,7 +1372,7 @@ onBeforeUnmount(() => {
                                             </div>
                                             <div v-else class="flex items-center gap-1 text-[10.5px] font-bold text-emerald-700">
                                                 <CheckCircle2 class="h-3 w-3 text-emerald-600 shrink-0" />
-                                                <span>Terlapor: {{ it.waktu_cek || 'WITA' }}</span>
+                                                <span>Terlapor: {{ formatWaktuWita(it.waktu_cek) }}</span>
                                             </div>
                                         </div>
                                         <div v-else class="mt-1 flex items-center gap-1 text-[10.5px] text-slate-400 font-semibold">
@@ -1273,7 +1407,7 @@ onBeforeUnmount(() => {
                                                     </div>
                                                     <div class="min-w-0">
                                                         <span class="font-bold text-slate-900 block text-xs truncate">{{ rep.petugas_nama || 'Petugas' }}</span>
-                                                        <span class="text-[9.5px] text-slate-500 font-mono block">Pukul {{ rep.waktu_cek || '-' }} WITA</span>
+                                                        <span class="text-[9.5px] text-slate-500 font-mono block">Pukul {{ formatWaktuWita(rep.waktu_cek) }}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1376,14 +1510,28 @@ onBeforeUnmount(() => {
                                                         </span>
                                                     </div>
 
-                                                    <!-- Highlights Pengecekan Umum (Tamu / Supplier / Kendala) -->
+                                                    <!-- Aktivitas Rutin (Kedatangan Supplier / Kunjungan Tamu - BUKAN Kendala) -->
+                                                    <div v-if="getDetailInsights(it)?.routineActivities?.length > 0" class="flex flex-wrap gap-1">
+                                                        <span
+                                                            v-for="(r, rIdx) in getDetailInsights(it)?.routineActivities"
+                                                            :key="'rout-' + rIdx"
+                                                            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                                                        >
+                                                            <Truck v-if="r.key === 'kedatangan_supplier' || r.label?.toLowerCase().includes('supplier')" class="h-3 w-3 text-sky-600" />
+                                                            <Users v-else class="h-3 w-3 text-sky-600" />
+                                                            <span>{{ r.label }}: {{ r.uraian || 'Tercatat' }}</span>
+                                                        </span>
+                                                    </div>
+
+                                                    <!-- Highlights Pengecekan Umum Kendala / Perhatian Khusus -->
                                                     <div v-if="getDetailInsights(it)?.highlights.length > 0" class="flex flex-wrap gap-1">
                                                         <span
                                                             v-for="(h, hIdx) in getDetailInsights(it)?.highlights"
                                                             :key="hIdx"
-                                                            class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                                                            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300"
                                                         >
-                                                            ⚠️ {{ h.label }}: {{ h.status }} {{ h.uraian ? '(' + h.uraian + ')' : '' }}
+                                                            <AlertTriangle class="h-3 w-3" />
+                                                            <span>{{ h.label }}: {{ h.status }} {{ h.uraian ? '(' + h.uraian + ')' : '' }}</span>
                                                         </span>
                                                     </div>
 
@@ -1426,7 +1574,7 @@ onBeforeUnmount(() => {
                                                     <div class="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-1">
                                                         <span class="text-[10.5px] font-extrabold text-blue-900 flex items-center gap-1.5">
                                                             <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                                            <span>Laporan #{{ rIdx + 1 }} • {{ rep.petugas_nama || 'Petugas' }} (Pukul {{ rep.waktu_cek || '-' }} WITA)</span>
+                                                            <span>Laporan #{{ rIdx + 1 }} • {{ rep.petugas_nama || 'Petugas' }} (Pukul {{ formatWaktuWita(rep.waktu_cek) }})</span>
                                                         </span>
                                                         <button
                                                             type="button"

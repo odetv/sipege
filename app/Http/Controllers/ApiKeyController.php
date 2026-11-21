@@ -19,8 +19,8 @@ class ApiKeyController extends Controller
      */
     public function index(Request $request, AiResiduService $aiService): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $supportedProviders = $aiService->getSupportedProviders();
         $savedConfigs = [];
@@ -63,8 +63,8 @@ class ApiKeyController extends Controller
      */
     public function update(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -120,8 +120,8 @@ class ApiKeyController extends Controller
      */
     public function testKoneksi(Request $request, AiResiduService $aiService): JsonResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $provider = strtolower(trim((string) $request->input('provider', 'gemini')));
         $apiKey = trim((string) $request->input('api_key', ''));

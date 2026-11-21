@@ -139,7 +139,7 @@ class OnboardingController extends Controller
                 'status_onboarding' => 'selesai',
             ]);
 
-            UnitSppg::updateOrCreate(
+            $unit = UnitSppg::updateOrCreate(
                 ['user_id' => $user->id],
                 [
                     'id_sppg' => strtoupper($request->id_sppg),
@@ -158,6 +158,20 @@ class OnboardingController extends Controller
                     'photo' => null,
                 ]
             );
+
+            // Tautkan unit_sppg_id ke user pemilik dan upgrade role menjadi administrator (Tenant Admin)
+            $user->update([
+                'unit_sppg_id' => $unit->id,
+                'role' => $user->isSuperAdmin() ? User::ROLE_SUPERADMIN : User::ROLE_ADMINISTRATOR,
+            ]);
+
+            // Seed Kategori KPM standar BGN untuk unit SPPG baru jika belum ada
+            if (\App\Models\KategoriKpm::where('unit_sppg_id', $unit->id)->count() === 0) {
+                \App\Models\KategoriKpm::seedDefaults($unit->id);
+            }
+
+            // Inisialisasi Setting Kop Dokumen default untuk unit SPPG baru
+            \App\Models\SettingKopDokumen::getActiveConfig($unit->id);
         });
 
         return back()

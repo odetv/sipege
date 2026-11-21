@@ -20,7 +20,7 @@ class LaporanController extends Controller
     public function harianLintasSektor(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user->getCachedUnitSppg() ?? UnitSppg::first();
+        $unitSppg = $user->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         // Kop Dokumen aktif

@@ -103,8 +103,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function create(Request $request): Response|RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return redirect()->route('dashboard')->with('error', 'Silakan lengkapi profil Unit SPPG terlebih dahulu.');
@@ -121,8 +121,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return redirect()->route('dashboard')->with('error', 'Data Unit SPPG tidak ditemukan.');
@@ -272,8 +272,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function edit(Request $request, KelompokPenerimaManfaat $penerima_manfaat): Response|RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg || $penerima_manfaat->unit_sppg_id !== $unitSppg->id) {
             return redirect()->route('penerima-manfaat.index')->with('error', 'Akses tidak diizinkan atau data tidak ditemukan.');
@@ -415,8 +415,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function update(Request $request, KelompokPenerimaManfaat $penerima_manfaat): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg || $penerima_manfaat->unit_sppg_id !== $unitSppg->id) {
             return redirect()->route('penerima-manfaat.index')->with('error', 'Akses tidak diizinkan.');
@@ -568,8 +568,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function destroy(Request $request, KelompokPenerimaManfaat $penerima_manfaat): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg || $penerima_manfaat->unit_sppg_id !== $unitSppg->id) {
             return redirect()->route('penerima-manfaat.index')->with('error', 'Akses tidak diizinkan.');
@@ -1129,8 +1129,8 @@ class KelompokPenerimaManfaatController extends Controller
      */
     public function simpanDistribusi(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');

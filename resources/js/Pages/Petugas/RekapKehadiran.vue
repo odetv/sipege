@@ -1552,7 +1552,7 @@ const filteredDailyLogs = computed(() => {
                         <input
                             v-model="searchQuery"
                             type="text"
-                            placeholder="Cari personil, NIK, jabatan..."
+                            placeholder="Cari personil, NIK, divisi / jabatan..."
                             class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
                         />
                     </div>
@@ -1561,7 +1561,7 @@ const filteredDailyLogs = computed(() => {
                             v-model="selectedJabatanFilter"
                             class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden bg-white cursor-pointer"
                         >
-                            <option value="all">Semua Jabatan / Divisi ({{ daftarJabatan.length }})</option>
+                            <option value="all">Semua Divisi / Jabatan</option>
                             <option v-for="j in daftarJabatan" :key="j" :value="j">{{ j }}</option>
                         </select>
                     </div>
@@ -1907,12 +1907,12 @@ const filteredDailyLogs = computed(() => {
                                             <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                                                 <span
                                                     v-if="p.status === 'Nonaktif'"
-                                                    class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
+                                                    class="px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 font-semibold"
                                                 >
-                                                    Berhenti
+                                                    Nonaktif
                                                 </span>
                                                 <span
-                                                    v-for="jab in parseJabatanList(p.jabatan).slice(0, 1)"
+                                                    v-for="jab in parseJabatanList(p.jabatan)"
                                                     :key="jab"
                                                     :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
                                                 >

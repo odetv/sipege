@@ -33,7 +33,7 @@ class WorkOrderController extends Controller
     public function perencanaan(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $kelompokList = [];
         $workOrders = [];
@@ -84,7 +84,7 @@ class WorkOrderController extends Controller
     public function daftar(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $kelompokList = [];
         $workOrders = [];
@@ -132,7 +132,7 @@ class WorkOrderController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');
@@ -416,7 +416,7 @@ class WorkOrderController extends Controller
     public function updateManual(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');
@@ -470,7 +470,7 @@ class WorkOrderController extends Controller
     public function ajukanKeuangan(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
             ->where('id', $id)
@@ -490,7 +490,7 @@ class WorkOrderController extends Controller
     public function updateStatus(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');
@@ -527,7 +527,7 @@ class WorkOrderController extends Controller
     public function bulkUpdateStatus(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');
@@ -570,7 +570,7 @@ class WorkOrderController extends Controller
     public function bulkDestroy(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $request->validate([
             'ids' => ['required', 'array', 'min:1'],
@@ -627,7 +627,7 @@ class WorkOrderController extends Controller
     public function destroy(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $workOrder = WorkOrder::where('unit_sppg_id', $unitSppg->id)
             ->where(function ($query) use ($id) {

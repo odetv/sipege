@@ -161,10 +161,17 @@ class PaketLanggananController extends Controller
             ? 'Pengajuan Paket Free 3 Hari telah disetujui admin.'
             : 'Pembayaran paket langganan telah berhasil diverifikasi valid.';
 
+        $expiry = match ($user->siklus_langganan) {
+            User::SIKLUS_TRIAL_3_HARI => now()->addDays(3),
+            User::SIKLUS_TAHUNAN => now()->addYear(),
+            default => now()->addMonth(),
+        };
+
         $user->update([
             'role' => User::ROLE_MEMBER, // Ketika sudah membayar/disetujui baru dapat akses role member!
             'status_pembayaran' => 'lunas',
             'tgl_pembayaran' => now(),
+            'tgl_berakhir_langganan' => $expiry,
             'status_onboarding' => 'menunggu_data',
             'catatan_pembayaran' => $catatan,
         ]);

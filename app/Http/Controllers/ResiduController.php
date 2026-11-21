@@ -23,7 +23,7 @@ class ResiduController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $kopConfig = SettingKopDokumen::getActiveConfig($unitId);
@@ -199,7 +199,7 @@ class ResiduController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $validated = $request->validate([
             'tanggal' => ['required', 'date'],
@@ -236,7 +236,7 @@ class ResiduController extends Controller
     public function update(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $residu = ResiduLimbah::when($unitSppg?->id, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))->findOrFail($id);
 
@@ -273,7 +273,7 @@ class ResiduController extends Controller
     public function destroy(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $residu = ResiduLimbah::when($unitSppg?->id, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))->findOrFail($id);
         $nama = $residu->nama_limbah;
@@ -293,7 +293,7 @@ class ResiduController extends Controller
         ]);
 
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $ids = $request->input('ids', []);
@@ -483,7 +483,7 @@ class ResiduController extends Controller
         ]);
 
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $items = $request->input('items', []);

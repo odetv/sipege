@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -17,7 +18,11 @@ class User extends Authenticatable implements MustVerifyEmail
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    public const ROLE_SUPERADMIN = 'superadmin';
     public const ROLE_ADMINISTRATOR = 'administrator';
+    public const ROLE_STAF_GIZI = 'staf_gizi';
+    public const ROLE_STAF_KEUANGAN = 'staf_keuangan';
+    public const ROLE_PETUGAS_KEAMANAN = 'petugas_keamanan';
     public const ROLE_GUEST = 'guest';
     public const ROLE_MEMBER = 'member';
 
@@ -125,6 +130,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'tgl_pembayaran' => 'datetime',
+            'tgl_berakhir_langganan' => 'datetime',
             'nominal_langganan' => 'decimal:2',
             'tanggal_lahir' => 'date',
             'latitude_domisili' => 'float',
@@ -134,11 +140,60 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Cek apakah pengguna merupakan administrator utama sistem.
+     * Cek apakah pengguna merupakan Superadmin SaaS utama.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPERADMIN;
+    }
+
+    /**
+     * Cek apakah pengguna merupakan administrator sistem / SPPG.
      */
     public function isAdministrator(): bool
     {
-        return $this->role === self::ROLE_ADMINISTRATOR;
+        return $this->role === self::ROLE_ADMINISTRATOR || $this->role === self::ROLE_SUPERADMIN;
+    }
+
+    /**
+     * Cek apakah pengguna merupakan admin tenant SPPG.
+     */
+    public function isTenantAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMINISTRATOR || $this->isSuperAdmin();
+    }
+
+    /**
+     * Cek apakah langganan aktif / belum expired.
+     */
+    public function isSubscriptionActive(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->tgl_berakhir_langganan) {
+            return now()->lte($this->tgl_berakhir_langganan);
+        }
+
+        if (!$this->tgl_pembayaran) {
+            return $this->role === self::ROLE_MEMBER || $this->isAdministrator();
+        }
+
+        $graceDays = 3;
+        if ($this->siklus_langganan === self::SIKLUS_TRIAL_3_HARI) {
+            return now()->lte($this->tgl_pembayaran->copy()->addDays(3));
+        }
+
+        if ($this->siklus_langganan === self::SIKLUS_BULANAN) {
+            return now()->lte($this->tgl_pembayaran->copy()->addMonth()->addDays($graceDays));
+        }
+
+        if ($this->siklus_langganan === self::SIKLUS_TAHUNAN) {
+            return now()->lte($this->tgl_pembayaran->copy()->addYear()->addDays(7));
+        }
+
+        return true;
     }
 
     /**
@@ -191,11 +246,19 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Get the unit SPPG associated with the user (with cache support).
+     * Get the unit SPPG associated with the user (sebagai staf atau anggota).
      */
-    public function unitSppg(): HasOne
+    public function unitSppg(): BelongsTo
     {
-        return $this->hasOne(UnitSppg::class);
+        return $this->belongsTo(UnitSppg::class, 'unit_sppg_id');
+    }
+
+    /**
+     * Unit SPPG yang dimiliki / dibuat oleh pengguna ini.
+     */
+    public function ownedUnitSppg(): HasOne
+    {
+        return $this->hasOne(UnitSppg::class, 'user_id');
     }
 
     /**
@@ -203,10 +266,18 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function getCachedUnitSppg(): ?UnitSppg
     {
-        if ($this->relationLoaded('unitSppg')) {
+        if ($this->relationLoaded('unitSppg') && $this->getRelation('unitSppg')) {
             return $this->getRelation('unitSppg');
         }
-        $unit = $this->unitSppg()->first();
+
+        $unit = null;
+        if ($this->unit_sppg_id) {
+            $unit = UnitSppg::find($this->unit_sppg_id);
+        }
+        if (!$unit) {
+            $unit = $this->ownedUnitSppg()->first();
+        }
+
         if ($unit) {
             $this->setRelation('unitSppg', $unit);
         }

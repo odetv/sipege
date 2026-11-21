@@ -42,11 +42,27 @@ class UnitSppg extends Model
     }
 
     /**
-     * Get the user that owns the unit SPPG.
+     * Get the user that owns the unit SPPG (Owner/Pendaftar).
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Semua pengguna / staf yang bertugas di Unit SPPG ini.
+     */
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'unit_sppg_id');
+    }
+
+    /**
+     * Semua periode operasional milik Unit SPPG ini.
+     */
+    public function periodes(): HasMany
+    {
+        return $this->hasMany(Periode::class, 'unit_sppg_id');
     }
 
     /**

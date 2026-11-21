@@ -543,12 +543,23 @@ const isAdmin = computed(() => {
     );
 });
 
+const isSuperAdmin = computed(() => {
+    return (
+        Boolean(page.props.auth?.isSuperAdmin) ||
+        currentUser.value?.role === "superadmin"
+    );
+});
+
 function formatRole(role) {
     if (!role) return "Guest";
     const r = String(role).toLowerCase();
-    if (r === "administrator" || r === "superadmin") return "Administrator";
+    if (r === "superadmin") return "Superadmin";
+    if (r === "administrator") return "Administrator";
+    if (r === "staf_gizi") return "Staf Gizi";
+    if (r === "staf_keuangan") return "Staf Keuangan";
+    if (r === "petugas_keamanan") return "Petugas Keamanan";
     if (r === "member") return "Member";
-    return "Guest";
+    return role;
 }
 
 const isPenggunaAdminActive = computed(() => {
@@ -2116,8 +2127,9 @@ function logout() {
                                 <span class="truncate">Backup & Restore</span>
                             </Link>
 
-                            <!-- Sub-menu 2: Layanan -->
+                            <!-- Sub-menu 2: Layanan (Platform Config - Superadmin only) -->
                             <Link
+                                v-if="isSuperAdmin"
                                 :href="route('admin.pengaturan.layanan.index')"
                                 :class="[
                                     'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',

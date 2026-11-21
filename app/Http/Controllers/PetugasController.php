@@ -22,8 +22,8 @@ class PetugasController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $petugas = [];
         $summary = [
@@ -84,7 +84,7 @@ class PetugasController extends Controller
     public function rekapKehadiran(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $petugas = [];
         $summary = [
@@ -253,7 +253,7 @@ class PetugasController extends Controller
     public function rekapBonus(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $petugas = [];
         $summary = [
@@ -411,7 +411,7 @@ class PetugasController extends Controller
     public function rekapBpjsTk(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $petugas = [];
         $summary = [
@@ -452,8 +452,8 @@ class PetugasController extends Controller
      */
     public function updateIuranBpjsTk(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -483,8 +483,8 @@ class PetugasController extends Controller
      */
     public function simpanPresensi(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (! $unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -663,7 +663,7 @@ class PetugasController extends Controller
         ]);
 
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (! $unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -757,8 +757,8 @@ class PetugasController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (! $unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -836,8 +836,8 @@ class PetugasController extends Controller
      */
     public function update(Request $request, $id): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (! $unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -911,8 +911,8 @@ class PetugasController extends Controller
      */
     public function destroy(Request $request, $id): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (! $unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -953,7 +953,7 @@ class PetugasController extends Controller
     public function pembayaranGaji(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $petugas = [];
         $daftarJabatan = [];

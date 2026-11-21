@@ -61,7 +61,8 @@ class SettingKopDokumen extends Model
         $config = $query->first();
 
         if (!$config) {
-            $unit = $unitSppgId ? UnitSppg::find($unitSppgId) : UnitSppg::first();
+            $unitId = $unitSppgId ?: (\Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()?->getCachedUnitSppg()?->id : null);
+            $unit = $unitId ? UnitSppg::find($unitId) : null;
             $config = self::createDefaultFromUnit($unit);
         }
 

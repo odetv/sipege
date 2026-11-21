@@ -63,6 +63,18 @@ class EnsureSubscriptionAndProfileCompleted
             return redirect()->route('onboarding.index');
         }
 
+        // 4. Cek apakah masa aktif langganan masih berlaku (SaaS Subscription Expiry Guard)
+        if (!$user->isSubscriptionActive()) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Masa aktif langganan SPPG Anda telah berakhir. Silakan lakukan perpanjangan langganan.',
+                    'subscription_expired' => true,
+                ], 403);
+            }
+
+            return redirect()->route('paket-langganan.index')->with('warning', 'Masa aktif paket langganan SPPG Anda telah berakhir. Silakan pilih paket atau perpanjang sewa untuk melanjutkan operasional.');
+        }
+
         return $next($request);
     }
 }

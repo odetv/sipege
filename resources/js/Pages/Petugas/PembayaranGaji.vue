@@ -2859,7 +2859,7 @@ function copyRowRekening(id, text) {
                             <input
                                 v-model="searchQuery"
                                 type="text"
-                                placeholder="Cari personil, NIK, rekening..."
+                                placeholder="Cari personil, NIK, divisi / jabatan, rekening..."
                                 class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
                             />
                         </div>
@@ -2869,7 +2869,7 @@ function copyRowRekening(id, text) {
                             v-model="filterJabatan"
                             class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:ring-1 focus:ring-primary focus:border-primary bg-white cursor-pointer"
                         >
-                            <option value="all">Semua Jabatan</option>
+                            <option value="all">Semua Divisi / Jabatan</option>
                             <option
                                 v-for="j in daftarJabatan"
                                 :key="j"
@@ -3047,26 +3047,23 @@ function copyRowRekening(id, text) {
                                                     {{ r.petugas.nama }}
                                                 </p>
                                                 <div
-                                                    class="flex items-center gap-1.5 mt-0.5 flex-wrap"
+                                                    class="flex items-center gap-1 mt-0.5 flex-wrap"
                                                 >
-                                                    <span
-                                                        v-if="
-                                                            r.petugas.status !==
-                                                            'Aktif'
-                                                        "
-                                                        class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-slate-200 text-slate-600 border border-slate-300 shrink-0"
-                                                    >
-                                                        Berhenti
-                                                    </span>
                                                     <span
                                                         v-for="jab in parseJabatanList(r.petugas.jabatan)"
                                                         :key="jab"
                                                         :class="[
-                                                            'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border font-medium leading-none',
+                                                            'px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium',
                                                             getJabatanBadgeClass(jab),
                                                         ]"
                                                     >
                                                         {{ jab }}
+                                                    </span>
+                                                    <span
+                                                        v-if="r.petugas.status === 'Nonaktif'"
+                                                        class="px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 font-semibold"
+                                                    >
+                                                        Nonaktif
                                                     </span>
                                                     <span
                                                         class="text-[10px] text-slate-400 font-mono"

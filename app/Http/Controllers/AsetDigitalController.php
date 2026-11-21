@@ -159,7 +159,8 @@ class AsetDigitalController extends Controller
      */
     private function renderAsetView(string $activeTab, Request $request): Response
     {
-        $unitSppg = UnitSppg::first();
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $logoItems = [];
         $denahItems = [];
@@ -269,8 +270,9 @@ class AsetDigitalController extends Controller
             'extra_attributes' => 'nullable|array',
         ]);
 
-        $unit = UnitSppg::first();
-        $config = SettingKopDokumen::where('is_aktif', true)->first();
+        $unit = $request->user()?->getCachedUnitSppg();
+        $config = SettingKopDokumen::when($unit, fn($q) => $q->where('unit_sppg_id', $unit->id))
+            ->where('is_aktif', true)->first();
 
         if ($config) {
             $config->update($validated);
@@ -291,7 +293,7 @@ class AsetDigitalController extends Controller
     }
 
     /**
-     * Upload logo untuk Kop Dokumen.
+     * Upload logo untuk Kop Dokumen (Isolasi Storage per Tenant).
      */
     public function uploadKopLogo(Request $request)
     {
@@ -300,18 +302,21 @@ class AsetDigitalController extends Controller
             'position' => 'nullable|string|in:kiri,kanan',
         ]);
 
+        $unit = $request->user()?->getCachedUnitSppg();
+        $unitId = $unit?->id ?? 'shared';
+
         $file = $request->file('logo');
         $extension = $file->getClientOriginalExtension();
         $position = $request->input('position', 'kiri');
         $filename = 'kop_logo_' . $position . '_' . time() . '.' . $extension;
 
-        $destinationPath = public_path('images/kop');
+        $destinationPath = public_path("images/kop/tenant_{$unitId}");
         if (!File::exists($destinationPath)) {
             File::makeDirectory($destinationPath, 0755, true);
         }
 
         $file->move($destinationPath, $filename);
-        $url = '/images/kop/' . $filename;
+        $url = "/images/kop/tenant_{$unitId}/" . $filename;
 
         return response()->json([
             'success' => true,
@@ -326,7 +331,7 @@ class AsetDigitalController extends Controller
      */
     public function downloadKopTemplate(Request $request, string $format)
     {
-        $unit = UnitSppg::first();
+        $unit = $request->user()?->getCachedUnitSppg();
         $config = SettingKopDokumen::getActiveConfig($unit?->id);
         $orientation = $request->query('orientation', 'portrait');
 

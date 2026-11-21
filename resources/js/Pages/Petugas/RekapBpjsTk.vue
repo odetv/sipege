@@ -20,6 +20,7 @@ import {
     HeartPulse,
     Sliders,
     Sparkles,
+    Coins,
 } from "lucide-vue-next";
 import { downloadRekapBpjsTkExcel, formatTanggalIndo } from "@/Services/exportPetugasHelper";
 
@@ -33,6 +34,7 @@ const props = defineProps({
 const searchQuery = ref("");
 const filterJabatan = ref("all");
 const filterBpjsStatus = ref("all"); // 'all', 'terdaftar', 'belum'
+const filterStatusPegawai = ref("all"); // 'all', 'Aktif', 'Nonaktif'
 const isExporting = ref(false);
 
 // Modal Edit Iuran Per Personil
@@ -63,7 +65,7 @@ function formatRibuan(val) {
     return new Intl.NumberFormat("id-ID").format(n);
 }
 
-// Helper Parser Multi-Jabatan (Sinkron dengan Daftar Petugas)
+// Helper Parser Multi-Jabatan (Sinkron dengan Rekap Bonus)
 function parseJabatanList(str) {
     if (!str || str === "-") return [];
     if (Array.isArray(str)) return str;
@@ -88,6 +90,25 @@ function matchJabatan(petugasJabatan, filterVal) {
     );
 }
 
+function getJabatanBadgeClass(jabatan) {
+    if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
+    const j = jabatan.toLowerCase();
+    if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
+    if (j.includes("chef") || j.includes("koki")) return "bg-amber-50 text-amber-700 border-amber-200";
+    if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (j.includes("persiapan") || j.includes("potong")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
+    if (j.includes("pemorsian") || j.includes("packing") || j.includes("pengemasan")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("pengemudi") || j.includes("distribusi") || j.includes("driver") || j.includes("kurir")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
+    if (j.includes("admin") || j.includes("administrasi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("kebersihan") || j.includes("cleaning")) return "bg-purple-50 text-purple-700 border-purple-200";
+    if (j.includes("keamanan") || j.includes("security")) return "bg-rose-50 text-rose-700 border-rose-200";
+    return "bg-slate-50 text-slate-700 border-slate-200";
+}
+
 // Filter Data Petugas
 const filteredPetugas = computed(() => {
     const q = searchQuery.value.toLowerCase().trim();
@@ -106,7 +127,12 @@ const filteredPetugas = computed(() => {
         if (filterBpjsStatus.value === "terdaftar") matchesStatus = isTerdaftar;
         else if (filterBpjsStatus.value === "belum") matchesStatus = !isTerdaftar;
 
-        return matchesSearch && matchesJabatan && matchesStatus;
+        let matchesPegawai = true;
+        if (filterStatusPegawai.value !== "all") {
+            matchesPegawai = p.status === filterStatusPegawai.value;
+        }
+
+        return matchesSearch && matchesJabatan && matchesStatus && matchesPegawai;
     }).slice().sort((a, b) => {
         const aNon = a.status === 'Nonaktif' ? 1 : 0;
         const bNon = b.status === 'Nonaktif' ? 1 : 0;
@@ -222,60 +248,42 @@ async function handleExportExcel() {
         isExporting.value = false;
     }
 }
-
-function getJabatanBadgeClass(jabatan) {
-    if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
-    const j = jabatan.toLowerCase();
-    if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
-    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
-    if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
-    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
-    if (j.includes("chef") || j.includes("koki")) return "bg-amber-50 text-amber-700 border-amber-200";
-    if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
-    if (j.includes("persiapan") || j.includes("potong")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
-    if (j.includes("pemorsian") || j.includes("packing") || j.includes("pengemasan")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (j.includes("pengemudi") || j.includes("distribusi") || j.includes("driver") || j.includes("kurir")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
-    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
-    if (j.includes("admin") || j.includes("administrasi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (j.includes("kebersihan") || j.includes("cleaning")) return "bg-purple-50 text-purple-700 border-purple-200";
-    if (j.includes("keamanan") || j.includes("security")) return "bg-rose-50 text-rose-700 border-rose-200";
-    return "bg-slate-50 text-slate-700 border-slate-200";
-}
 </script>
 
 <template>
     <Head title="Rekap Asuransi - SIPEGE" />
 
     <AppLayout>
-        <div class="space-y-4 max-w-full pb-16">
-            <!-- ─── HEADER UTAMA ─── -->
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+        <div class="space-y-3.5 max-w-full pb-16">
+            <!-- ─── HEADER UTAMA (Style Rekap Bonus) ─── -->
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-2xs">
                 <div>
-                    <div class="flex items-center gap-2">
-                        <div class="p-2 rounded-lg bg-sky-50 text-sky-600 border border-sky-200 shadow-2xs">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2 sm:p-2.5 rounded-lg bg-sky-50 text-sky-600 border border-sky-200 shadow-2xs shrink-0">
                             <ShieldCheck class="h-5 w-5" />
                         </div>
                         <div>
-                            <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                                Rekap Asuransi Petugas
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
+                                Rekapitulasi Asuransi Petugas SPPG
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
                                     BPJS TK (JKK & JKM)
                                 </span>
                             </h1>
-                            <p class="text-xs text-slate-500">
-                                Rekapitulasi status kepesertaan dan iuran jaminan asuransi ketenagakerjaan (Kecelakaan Kerja & Kematian).
+                            <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                                Status kepesertaan jaminan perlindungan kerja & rekapitulasi iuran bulanan / periodik personil SPPG
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 self-start md:self-auto flex-wrap">
                     <button
                         type="button"
                         @click="openBatchModal"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        title="Setel nominal iuran serentak untuk seluruh petugas aktif"
                     >
-                        <Sliders class="h-4 w-4 text-slate-500" />
+                        <Sliders class="h-3.5 w-3.5 text-slate-500" />
                         <span>Set Iuran Serentak</span>
                     </button>
 
@@ -283,107 +291,121 @@ function getJabatanBadgeClass(jabatan) {
                         type="button"
                         @click="handleExportExcel"
                         :disabled="isExporting"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                        class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                        title="Download Rekap Asuransi format Excel"
                     >
-                        <FileSpreadsheet class="h-4 w-4" />
+                        <FileSpreadsheet class="h-3.5 w-3.5" />
                         <span>{{ isExporting ? 'Menyiapkan...' : 'Export Excel' }}</span>
                     </button>
                 </div>
             </div>
 
-            <!-- ─── KPI SUMMARY CARDS ─── -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <!-- ─── KPI SUMMARY CARDS (Style Rekap Bonus) ─── -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 <!-- Card 1: Total Personil -->
-                <div class="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3">
-                    <div class="p-2.5 rounded-lg bg-slate-100 text-slate-700">
-                        <Users class="h-5 w-5" />
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Total Personil</p>
+                        <Users class="h-3.5 w-3.5 text-slate-600" />
                     </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Personil</p>
-                        <p class="text-base font-bold text-slate-900 leading-tight">
-                            {{ kpiStats.totalPetugas }} <span class="text-xs font-normal text-slate-500">({{ kpiStats.totalAktif }} aktif)</span>
-                        </p>
-                    </div>
+                    <p class="text-base sm:text-lg font-bold text-slate-900 mt-1">
+                        {{ kpiStats.totalPetugas }} <span class="text-xs font-normal text-slate-500">orang</span>
+                    </p>
+                    <p class="text-[10px] text-slate-500 mt-0.5 truncate">
+                        {{ kpiStats.totalAktif }} personil aktif operasional
+                    </p>
                 </div>
 
                 <!-- Card 2: Terdaftar BPJS TK -->
-                <div class="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3">
-                    <div class="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
-                        <ShieldCheck class="h-5 w-5" />
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Terdaftar Asuransi</p>
+                        <ShieldCheck class="h-3.5 w-3.5 text-emerald-600" />
                     </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Terdaftar BPJS TK</p>
-                        <p class="text-base font-bold text-emerald-900 leading-tight">
-                            {{ kpiStats.terdaftar }} <span class="text-xs font-semibold text-emerald-700">({{ kpiStats.coverage }}%)</span>
-                        </p>
-                        <p class="text-[9.5px] text-slate-400 mt-0.5">{{ kpiStats.belum }} belum didaftarkan</p>
-                    </div>
+                    <p class="text-base sm:text-lg font-bold text-emerald-900 mt-1">
+                        {{ kpiStats.terdaftar }} <span class="text-xs font-semibold text-emerald-700">({{ kpiStats.coverage }}%)</span>
+                    </p>
+                    <p class="text-[10px] text-slate-500 mt-0.5 truncate">
+                        {{ kpiStats.belum }} personil belum didaftarkan
+                    </p>
                 </div>
 
                 <!-- Card 3: Total Iuran Bulanan -->
-                <div class="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 shadow-2xs flex items-center gap-3">
-                    <div class="p-2.5 rounded-lg bg-sky-600 text-white shadow-xs">
-                        <DollarSign class="h-5 w-5" />
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider">Iuran Premi / Bulan</p>
+                        <DollarSign class="h-3.5 w-3.5 text-sky-600" />
                     </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[10px] font-bold text-sky-800 uppercase tracking-wider">Total Iuran / Bulan</p>
-                        <p class="text-lg font-black text-sky-950 leading-tight truncate">
-                            {{ formatRupiah(kpiStats.totalIuranBulan) }}
-                        </p>
-                        <p class="text-[9.5px] text-sky-700 mt-0.5">Akumulasi iuran bulanan aktif</p>
-                    </div>
+                    <p class="text-xs sm:text-base font-bold text-sky-950 mt-1 truncate" :title="formatRupiah(kpiStats.totalIuranBulan)">
+                        {{ formatRupiah(kpiStats.totalIuranBulan) }}
+                    </p>
+                    <p class="text-[10px] text-sky-700 font-semibold mt-0.5 truncate">
+                        Total premi akumulasi bulanan
+                    </p>
                 </div>
 
                 <!-- Card 4: Iuran Periodik (14 Hari) -->
-                <div class="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center gap-3">
-                    <div class="p-2.5 rounded-lg bg-indigo-50 text-indigo-600">
-                        <HeartPulse class="h-5 w-5" />
+                <div class="p-2.5 sm:p-3.5 rounded-xl bg-sky-50/70 border border-sky-300 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[10px] sm:text-[11px] font-bold text-sky-800 uppercase tracking-wider">Iuran Periodik (14 Hari)</p>
+                        <HeartPulse class="h-3.5 w-3.5 text-sky-700" />
                     </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Iuran Periodik (14 Hari)</p>
-                        <p class="text-base font-bold text-indigo-900 leading-tight truncate">
-                            {{ formatRupiah(kpiStats.totalIuranPeriodik) }}
-                        </p>
-                        <p class="text-[9.5px] text-slate-500 mt-0.5">Proporsional per siklus 2 minggu</p>
-                    </div>
+                    <p class="text-xs sm:text-base font-black text-sky-950 mt-1 truncate" :title="formatRupiah(kpiStats.totalIuranPeriodik)">
+                        {{ formatRupiah(kpiStats.totalIuranPeriodik) }}
+                    </p>
+                    <p class="text-[10px] text-sky-700 font-semibold mt-0.5 truncate">
+                        Proporsional per siklus 2 minggu
+                    </p>
                 </div>
             </div>
 
-            <!-- ─── BARIS FILTER PENCARIAN ─── -->
-            <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div class="relative w-full sm:w-72">
-                    <Search class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <!-- ─── BARIS FILTER PENCARIAN (Style Rekap Bonus) ─── -->
+            <div class="p-3 sm:p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-2.5 sm:gap-3">
+                <!-- Search Box -->
+                <div class="relative w-full md:w-64">
+                    <Search class="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                         v-model="searchQuery"
                         type="text"
-                        placeholder="Cari nama atau NIK..."
-                        class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
+                        placeholder="Cari personil, NIK, divisi / jabatan..."
+                        class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs"
                     />
                 </div>
 
-                <div class="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+                <!-- Dropdown Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto md:flex md:items-center">
+                    <!-- Dropdown Filter Divisi / Jabatan -->
                     <select
                         v-model="filterJabatan"
-                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-48 bg-white cursor-pointer"
+                        class="w-full md:w-auto px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs cursor-pointer"
                     >
-                        <option value="all">Semua Jabatan / Divisi ({{ props.daftarJabatan.length }})</option>
-                        <option v-for="jab in props.daftarJabatan" :key="jab" :value="jab">
-                            {{ jab }}
-                        </option>
+                        <option value="all">Semua Divisi / Jabatan</option>
+                        <option v-for="j in props.daftarJabatan" :key="j" :value="j">{{ j }}</option>
                     </select>
 
+                    <!-- Dropdown Status Asuransi -->
                     <select
                         v-model="filterBpjsStatus"
-                        class="py-1.5 px-2.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-44 bg-white cursor-pointer"
+                        class="w-full md:w-auto px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs cursor-pointer"
                     >
-                        <option value="all">Status: Semua</option>
+                        <option value="all">Status Asuransi: Semua</option>
                         <option value="terdaftar">Terdaftar BPJS (> 0)</option>
                         <option value="belum">Belum Terdaftar (0)</option>
+                    </select>
+
+                    <!-- Dropdown Status Pegawai -->
+                    <select
+                        v-model="filterStatusPegawai"
+                        class="w-full md:w-auto px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium focus:ring-1 focus:ring-primary focus:border-primary outline-hidden bg-white shadow-2xs cursor-pointer"
+                    >
+                        <option value="all">Semua Status</option>
+                        <option value="Aktif">Personil Aktif</option>
+                        <option value="Nonaktif">Nonaktif</option>
                     </select>
                 </div>
             </div>
 
-            <!-- ─── TABEL REKAP BPJS TK ─── -->
+            <!-- ─── TABEL REKAP ASURANSI (Style Rekap Bonus) ─── -->
             <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
                 <!-- Mobile Swipe Hint -->
                 <div class="sm:hidden px-3.5 py-1.5 bg-sky-50/70 border-b border-sky-100 flex items-center justify-between text-[11px] text-sky-800 font-medium">
@@ -391,18 +413,45 @@ function getJabatanBadgeClass(jabatan) {
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs min-w-[950px]">
+                    <table class="w-full text-left border-collapse text-xs min-w-[980px]">
                         <thead>
-                            <tr class="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-bold">
-                                <th class="py-2.5 px-3 text-center w-12 border-r border-slate-200">No</th>
-                                <th class="py-2.5 px-3 min-w-[200px] border-r border-slate-200">Nama Petugas & NIK</th>
-                                <th class="py-2.5 px-2 text-center w-14 border-r border-slate-200">L/P</th>
-                                <th class="py-2.5 px-3 min-w-[140px] border-r border-slate-200">Tgl Lahir / Usia</th>
-                                <th class="py-2.5 px-3 min-w-[160px] border-r border-slate-200">Divisi / Jabatan</th>
-                                <th class="py-2.5 px-2 text-center w-20 border-r border-slate-200">Status</th>
-                                <th class="py-2.5 px-3 text-right min-w-[150px] border-r border-slate-200">Iuran BPJS TK / Bulan</th>
-                                <th class="py-2.5 px-3 min-w-[150px] border-r border-slate-200">Cakupan Program</th>
-                                <th class="py-2.5 px-2 text-center w-16">Aksi</th>
+                            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                                <!-- Col 1: No (Sticky Left) -->
+                                <th class="py-2.5 px-2.5 w-10 text-center sticky left-0 bg-slate-100 z-30 border-r border-slate-200 font-bold">
+                                    No
+                                </th>
+                                <!-- Col 2: Personil & Divisi (Sticky Left) -->
+                                <th class="py-2.5 px-3 min-w-[200px] sm:min-w-[240px] sticky left-10 bg-slate-100 z-30 border-r border-slate-200 font-bold">
+                                    Personil & Divisi
+                                </th>
+                                <!-- Col 3: L/P -->
+                                <th class="py-2.5 px-2 text-center w-12 border-r border-slate-200 font-bold">
+                                    L/P
+                                </th>
+                                <!-- Col 4: Tgl Lahir / Usia -->
+                                <th class="py-2.5 px-3 min-w-[130px] border-r border-slate-200 font-bold">
+                                    Tgl Lahir / Usia
+                                </th>
+                                <!-- Col 5: Status Asuransi -->
+                                <th class="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 font-bold">
+                                    Status Asuransi
+                                </th>
+                                <!-- Col 6: Iuran / Bulan -->
+                                <th class="py-2.5 px-3 text-right min-w-[140px] border-r border-slate-200 font-bold">
+                                    Iuran / Bulan
+                                </th>
+                                <!-- Col 7: Iuran Periodik (14 Hari) -->
+                                <th class="py-2.5 px-3 text-right min-w-[140px] border-r border-slate-200 font-bold">
+                                    Iuran 14 Hari
+                                </th>
+                                <!-- Col 8: Cakupan Program -->
+                                <th class="py-2.5 px-3 min-w-[140px] border-r border-slate-200 font-bold">
+                                    Cakupan Program
+                                </th>
+                                <!-- Col 9: Aksi -->
+                                <th class="py-2.5 px-2 text-center w-14 font-bold">
+                                    Aksi
+                                </th>
                             </tr>
                         </thead>
 
@@ -415,69 +464,81 @@ function getJabatanBadgeClass(jabatan) {
                                     p.status === 'Nonaktif' ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/80',
                                 ]"
                             >
-                                <td class="py-2.5 px-3 text-center font-medium text-slate-500 border-r border-slate-200">
+                                <!-- No (Sticky Left) -->
+                                <td class="py-2.5 px-2.5 text-center font-medium text-slate-500 border-r border-slate-200 sticky left-0 bg-white z-10">
                                     {{ idx + 1 }}
                                 </td>
 
-                                <td class="py-2.5 px-3 border-r border-slate-200">
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                        <p class="font-bold text-slate-900 leading-snug">{{ p.nama }}</p>
-                                        <span
-                                            v-if="p.status === 'Nonaktif'"
-                                            class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600 border border-slate-300 leading-none shrink-0"
-                                        >
-                                            Berhenti
-                                        </span>
+                                <!-- Personil & Divisi (Sticky Left - Style Rekap Bonus) -->
+                                <td class="py-2.5 px-3 sticky left-10 bg-white z-10 border-r border-slate-200">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center justify-between gap-1">
+                                            <p class="font-bold text-slate-900 truncate leading-snug text-xs">
+                                                {{ p.nama }}
+                                            </p>
+                                        </div>
+                                        <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                                            <span
+                                                v-for="jab in parseJabatanList(p.jabatan)"
+                                                :key="jab"
+                                                :class="['px-1.5 py-0.5 rounded text-[9px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                            >
+                                                {{ jab }}
+                                            </span>
+                                            <span
+                                                v-if="p.status === 'Nonaktif'"
+                                                class="px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 font-semibold"
+                                            >
+                                                Nonaktif
+                                            </span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-400 font-mono mt-0.5">NIK: {{ p.nik }}</p>
                                     </div>
-                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">NIK: {{ p.nik }}</p>
                                 </td>
 
+                                <!-- L/P -->
                                 <td class="py-2.5 px-2 text-center font-semibold text-slate-700 border-r border-slate-200">
-                                    {{ p.jenis_kelamin }}
+                                    {{ p.jenis_kelamin || '-' }}
                                 </td>
 
-                                <td class="py-2.5 px-3 text-slate-600 border-r border-slate-200 text-[11px]">
+                                <!-- Tgl Lahir / Usia -->
+                                <td class="py-2.5 px-3 text-slate-600 border-r border-slate-200 text-xs">
                                     <p class="font-medium text-slate-800">{{ formatTanggalIndo(p.tanggal_lahir) }}</p>
                                     <p class="text-[10px] text-slate-400 mt-0.5">{{ p.umur ? `${p.umur} tahun` : '-' }}</p>
                                 </td>
 
-                                <td class="py-2.5 px-3 border-r border-slate-200">
-                                    <div class="flex flex-wrap gap-1">
-                                        <span
-                                            v-for="jab in parseJabatanList(p.jabatan)"
-                                            :key="jab"
-                                            :class="[
-                                                'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border font-medium',
-                                                getJabatanBadgeClass(jab)
-                                            ]"
-                                        >
-                                            {{ jab }}
-                                        </span>
-                                        <span v-if="parseJabatanList(p.jabatan).length === 0" class="text-[11px] text-slate-400 italic">
-                                            -
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <td class="py-2.5 px-2 text-center border-r border-slate-200">
+                                <!-- Status Asuransi -->
+                                <td class="py-2.5 px-3 text-center border-r border-slate-200">
                                     <span
                                         :class="[
-                                            'px-1.5 py-0.5 rounded text-[10px] font-bold',
-                                            p.status === 'Aktif' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600',
+                                            'px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 leading-tight',
+                                            (parseInt(p.iuran_bpjs_tk) || 0) > 0
+                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                : 'bg-slate-100 text-slate-600 border border-slate-200',
                                         ]"
                                     >
-                                        {{ p.status }}
+                                        <span class="h-1.5 w-1.5 rounded-full" :class="(parseInt(p.iuran_bpjs_tk) || 0) > 0 ? 'bg-emerald-600' : 'bg-slate-400'"></span>
+                                        {{ (parseInt(p.iuran_bpjs_tk) || 0) > 0 ? 'Terdaftar' : 'Belum' }}
                                     </span>
                                 </td>
 
+                                <!-- Iuran Bulanan -->
                                 <td class="py-2.5 px-3 text-right font-bold border-r border-slate-200">
-                                    <span :class="p.iuran_bpjs_tk > 0 ? 'text-sky-900' : 'text-slate-400 font-normal italic'">
+                                    <span :class="(parseInt(p.iuran_bpjs_tk) || 0) > 0 ? 'text-sky-950 font-mono' : 'text-slate-400 font-normal italic'">
                                         {{ formatRupiah(p.iuran_bpjs_tk) }}
                                     </span>
                                 </td>
 
+                                <!-- Iuran Periodik (14 Hari) -->
+                                <td class="py-2.5 px-3 text-right font-bold border-r border-slate-200">
+                                    <span :class="(parseInt(p.iuran_bpjs_tk) || 0) > 0 ? 'text-indigo-950 font-mono' : 'text-slate-400 font-normal italic'">
+                                        {{ formatRupiah(Math.round((parseInt(p.iuran_bpjs_tk) || 0) / 2)) }}
+                                    </span>
+                                </td>
+
+                                <!-- Cakupan Program -->
                                 <td class="py-2.5 px-3 border-r border-slate-200">
-                                    <div v-if="p.iuran_bpjs_tk > 0" class="flex items-center gap-1.5">
+                                    <div v-if="(parseInt(p.iuran_bpjs_tk) || 0) > 0" class="flex items-center gap-1.5">
                                         <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-800 border border-sky-200">
                                             <Check class="h-3 w-3" /> JKK & JKM
                                         </span>
@@ -487,6 +548,7 @@ function getJabatanBadgeClass(jabatan) {
                                     </span>
                                 </td>
 
+                                <!-- Aksi Edit -->
                                 <td class="py-2.5 px-2 text-center">
                                     <button
                                         type="button"
@@ -494,7 +556,7 @@ function getJabatanBadgeClass(jabatan) {
                                         class="p-1 rounded-md text-sky-600 hover:text-sky-900 hover:bg-sky-50 transition-colors cursor-pointer"
                                         title="Ubah Nominal Iuran BPJS TK"
                                     >
-                                        <Edit3 class="h-4 w-4" />
+                                        <Edit3 class="h-3.5 w-3.5" />
                                     </button>
                                 </td>
                             </tr>
@@ -507,16 +569,20 @@ function getJabatanBadgeClass(jabatan) {
                             </tr>
                         </tbody>
 
-                        <tfoot class="bg-slate-100/90 text-slate-800 border-t-2 border-slate-300 font-bold">
+                        <!-- Footer Summary Row (Style Rekap Bonus) -->
+                        <tfoot class="bg-slate-100 text-slate-800 border-t-2 border-slate-300 font-bold text-xs">
                             <tr>
-                                <td colspan="6" class="py-3 px-3 text-right uppercase tracking-wider text-xs border-r border-slate-300">
-                                    Total Iuran Premi Bulanan (Aktif):
+                                <td colspan="5" class="py-3 px-3 text-right uppercase tracking-wider border-r border-slate-300 font-black">
+                                    Total Iuran Premi Petugas Aktif:
                                 </td>
-                                <td class="py-3 px-3 text-right text-sky-900 text-xs font-black border-r border-slate-300">
+                                <td class="py-3 px-3 text-right text-sky-900 font-black border-r border-slate-300 font-mono">
                                     {{ formatRupiah(kpiStats.totalIuranBulan) }}
                                 </td>
-                                <td colspan="2" class="py-3 px-3 text-slate-500 font-normal text-[11px]">
-                                    {{ kpiStats.terdaftar }} dari {{ kpiStats.totalPetugas }} personil terdaftar
+                                <td class="py-3 px-3 text-right text-indigo-900 font-black border-r border-slate-300 font-mono">
+                                    {{ formatRupiah(kpiStats.totalIuranPeriodik) }}
+                                </td>
+                                <td colspan="2" class="py-3 px-3 text-slate-600 font-normal text-[11px]">
+                                    {{ kpiStats.terdaftar }} dari {{ kpiStats.totalPetugas }} personil terdaftar ({{ kpiStats.coverage }}%)
                                 </td>
                             </tr>
                         </tfoot>

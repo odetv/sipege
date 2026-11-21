@@ -370,8 +370,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         // Backup & Restore Database
         Route::get('/backup-restore', [BackupRestoreController::class, 'index'])->name('backup-restore.index');
 
-        // Layanan Terpadu (Database, Storage, Mail, AI)
-        Route::prefix('layanan')->name('layanan.')->group(function () {
+        // Layanan Terpadu (Database, Storage, Mail, AI - Khusus Superadmin Platform)
+        Route::prefix('layanan')->name('layanan.')->middleware('superadmin')->group(function () {
             Route::get('/', [\App\Http\Controllers\LayananController::class, 'index'])->name('index');
             Route::post('/database', [\App\Http\Controllers\LayananController::class, 'updateDatabase'])->name('update-database');
             Route::post('/storage', [\App\Http\Controllers\LayananController::class, 'updateStorage'])->name('update-storage');

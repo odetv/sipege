@@ -18,7 +18,18 @@ class PenggunaController extends Controller
      */
     public function index(Request $request): Response
     {
+        $currentUser = $request->user();
         $query = User::with('unitSppg');
+
+        // Scoping Multi-tenant: Tenant Admin hanya melihat pengguna di Unit SPPG-nya sendiri
+        if (!$currentUser->isSuperAdmin()) {
+            $unitId = $currentUser->unit_sppg_id ?? $currentUser->getCachedUnitSppg()?->id;
+            if ($unitId) {
+                $query->where('unit_sppg_id', $unitId);
+            } else {
+                $query->where('id', $currentUser->id);
+            }
+        }
 
         // Pencarian (Nama, Email, NIK, Telepon, ID SPPG, Nama Unit)
         if ($search = $request->input('search')) {
@@ -130,20 +141,30 @@ class PenggunaController extends Controller
             ];
         });
 
-        // Ringkasan Statistik Monitoring
+        // Ringkasan Statistik Monitoring (Scoped jika bukan Superadmin)
+        $statsBase = User::query();
+        if (!$currentUser->isSuperAdmin()) {
+            $unitId = $currentUser->unit_sppg_id ?? $currentUser->getCachedUnitSppg()?->id;
+            if ($unitId) {
+                $statsBase->where('unit_sppg_id', $unitId);
+            } else {
+                $statsBase->where('id', $currentUser->id);
+            }
+        }
+
         $stats = [
-            'total_users' => User::count(),
-            'total_administrators' => User::where('role', User::ROLE_ADMINISTRATOR)->count(),
-            'total_members' => User::where('role', User::ROLE_MEMBER)->count(),
-            'total_guests' => User::where('role', User::ROLE_GUEST)->count(),
-            'total_verified_emails' => User::whereNotNull('email_verified_at')->count(),
-            'total_unverified_emails' => User::whereNull('email_verified_at')->count(),
-            'total_onboarded' => User::where('status_onboarding', 'selesai')->count(),
-            'total_pending_onboarding' => User::where('status_onboarding', '!=', 'selesai')->count(),
-            'paket_free' => User::where('paket_langganan', User::PAKET_FREE)->count(),
-            'paket_basic' => User::where('paket_langganan', User::PAKET_BASIC)->count(),
-            'paket_standart' => User::where('paket_langganan', User::PAKET_STANDART)->count(),
-            'paket_pro' => User::where('paket_langganan', User::PAKET_PRO)->count(),
+            'total_users' => (clone $statsBase)->count(),
+            'total_administrators' => (clone $statsBase)->whereIn('role', [User::ROLE_ADMINISTRATOR, User::ROLE_SUPERADMIN])->count(),
+            'total_members' => (clone $statsBase)->where('role', User::ROLE_MEMBER)->count(),
+            'total_guests' => (clone $statsBase)->where('role', User::ROLE_GUEST)->count(),
+            'total_verified_emails' => (clone $statsBase)->whereNotNull('email_verified_at')->count(),
+            'total_unverified_emails' => (clone $statsBase)->whereNull('email_verified_at')->count(),
+            'total_onboarded' => (clone $statsBase)->where('status_onboarding', 'selesai')->count(),
+            'total_pending_onboarding' => (clone $statsBase)->where('status_onboarding', '!=', 'selesai')->count(),
+            'paket_free' => (clone $statsBase)->where('paket_langganan', User::PAKET_FREE)->count(),
+            'paket_basic' => (clone $statsBase)->where('paket_langganan', User::PAKET_BASIC)->count(),
+            'paket_standart' => (clone $statsBase)->where('paket_langganan', User::PAKET_STANDART)->count(),
+            'paket_pro' => (clone $statsBase)->where('paket_langganan', User::PAKET_PRO)->count(),
         ];
 
         return Inertia::render('Admin/Pengguna/Index', [
@@ -164,7 +185,7 @@ class PenggunaController extends Controller
     }
 
     /**
-     * Ubah role dan status akun pengguna secara manual oleh Administrator.
+     * Ubah role dan status akun pengguna secara manual oleh Administrator / Superadmin.
      */
     public function updateRole(Request $request, User $user): RedirectResponse
     {
@@ -175,12 +196,38 @@ class PenggunaController extends Controller
             return back()->with('error', 'Anda tidak dapat mengedit akun Anda sendiri melalui panel ini.');
         }
 
+        // Isolasi tenant: Cegah edit user dari tenant lain
+        if (!$currentUser->isSuperAdmin()) {
+            $myUnitId = $currentUser->unit_sppg_id ?? $currentUser->getCachedUnitSppg()?->id;
+            $targetUnitId = $user->unit_sppg_id ?? $user->getCachedUnitSppg()?->id;
+            if (!$myUnitId || $myUnitId !== $targetUnitId) {
+                abort(403, 'Anda tidak memiliki izin mengelola pengguna dari SPPG lain.');
+            }
+        }
+
+        $allowedRoles = $currentUser->isSuperAdmin()
+            ? ['superadmin', 'administrator', 'staf_gizi', 'staf_keuangan', 'petugas_keamanan', 'member', 'guest']
+            : ['administrator', 'staf_gizi', 'staf_keuangan', 'petugas_keamanan', 'member', 'guest'];
+
         $validated = $request->validate([
-            'role' => ['required', 'string', 'in:administrator,member,guest'],
+            'role' => ['required', 'string', Rule::in($allowedRoles)],
             'paket_langganan' => ['nullable', 'string', 'in:free,basic,standart,pro'],
             'status_pembayaran' => ['nullable', 'string', 'in:lunas,belum_bayar,menunggu_pembayaran'],
             'status_onboarding' => ['nullable', 'string', 'in:selesai,menunggu_data,belum_mulai'],
         ]);
+
+        if (($validated['status_pembayaran'] ?? '') === 'lunas') {
+            if (!$user->tgl_pembayaran) {
+                $validated['tgl_pembayaran'] = now();
+            }
+            if (!$user->tgl_berakhir_langganan) {
+                $validated['tgl_berakhir_langganan'] = match ($user->siklus_langganan) {
+                    User::SIKLUS_TRIAL_3_HARI => now()->addDays(3),
+                    User::SIKLUS_TAHUNAN => now()->addYear(),
+                    default => now()->addMonth(),
+                };
+            }
+        }
 
         $user->update($validated);
 
@@ -192,6 +239,17 @@ class PenggunaController extends Controller
      */
     public function verifyEmailManual(Request $request, User $user): RedirectResponse
     {
+        $currentUser = $request->user();
+
+        // Isolasi tenant
+        if (!$currentUser->isSuperAdmin()) {
+            $myUnitId = $currentUser->unit_sppg_id ?? $currentUser->getCachedUnitSppg()?->id;
+            $targetUnitId = $user->unit_sppg_id ?? $user->getCachedUnitSppg()?->id;
+            if (!$myUnitId || $myUnitId !== $targetUnitId) {
+                abort(403, 'Anda tidak memiliki izin memverifikasi email pengguna SPPG lain.');
+            }
+        }
+
         if ($user->hasVerifiedEmail()) {
             return back()->with('info', 'Email pengguna ini sudah terverifikasi sebelumnya.');
         }
@@ -202,7 +260,7 @@ class PenggunaController extends Controller
     }
 
     /**
-     * Hapus akun pengguna oleh Administrator (dengan proteksi akun sendiri).
+     * Hapus akun pengguna oleh Administrator (dengan proteksi akun sendiri & isolasi tenant).
      */
     public function destroy(Request $request, User $user): RedirectResponse
     {
@@ -212,12 +270,26 @@ class PenggunaController extends Controller
             return back()->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
         }
 
+        // Isolasi tenant
+        if (!$currentUser->isSuperAdmin()) {
+            $myUnitId = $currentUser->unit_sppg_id ?? $currentUser->getCachedUnitSppg()?->id;
+            $targetUnitId = $user->unit_sppg_id ?? $user->getCachedUnitSppg()?->id;
+            if (!$myUnitId || $myUnitId !== $targetUnitId) {
+                abort(403, 'Anda tidak memiliki izin menghapus pengguna dari SPPG lain.');
+            }
+        }
+
         $nama = $user->nama;
         $email = $user->email;
 
-        // Hapus unit SPPG jika ada
-        if ($user->unitSppg) {
-            $user->unitSppg->delete();
+        // Hanya hapus unit SPPG jika user adalah pemilik tunggal dan tidak ada pengguna lain dalam unit tersebut
+        if ($user->unit_sppg_id) {
+            $otherUsersCount = User::where('unit_sppg_id', $user->unit_sppg_id)
+                ->where('id', '!=', $user->id)
+                ->count();
+            if ($otherUsersCount === 0 && $currentUser->isSuperAdmin()) {
+                UnitSppg::where('id', $user->unit_sppg_id)->delete();
+            }
         }
 
         $user->delete();

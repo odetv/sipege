@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToTenant;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Petugas extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToTenant;
 
     public const JABATAN_ADMIN = 'admin';
     public const JABATAN_KEPALA_SPPG = 'kepala_sppg';

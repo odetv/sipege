@@ -15,8 +15,8 @@ class SupplierController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $suppliers = [];
         $summary = [
@@ -65,8 +65,8 @@ class SupplierController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -98,8 +98,8 @@ class SupplierController extends Controller
      */
     public function update(Request $request, $id): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');
@@ -131,8 +131,8 @@ class SupplierController extends Controller
      */
     public function destroy(Request $request, $id): RedirectResponse
     {
-        $user = $request->user()->load('unitSppg');
-        $unitSppg = $user->unitSppg;
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG tidak ditemukan.');

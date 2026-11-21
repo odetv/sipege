@@ -33,6 +33,7 @@ import {
     HelpCircle,
     ArrowLeftRight,
     BookOpen,
+    Truck,
 } from "lucide-vue-next";
 import MiniGoogleMap from "./Partials/MiniGoogleMap.vue";
 
@@ -633,12 +634,57 @@ const isSubmitting = ref(false);
 const submitSuccess = ref(false);
 const successText = ref("");
 
+// Helper Parser Multi-Jabatan (Sinkron dengan Rekap Bonus)
+function parseJabatanList(str) {
+    if (!str || str === "-") return [];
+    if (Array.isArray(str)) return str;
+    const normalized = String(str)
+        .replace(/\(a\.k\.a\.?\s*([^)]+)\)/gi, ", $1")
+        .replace(/\ba\.k\.a\.?\s+/gi, ", ")
+        .replace(/\((Koordinator[^)]*)\)/gi, ", $1")
+        .replace(/\bKoordinator\s*[12]\b/gi, "Koordinator");
+    const parts = normalized.split(/[,&/]/);
+    return parts
+        .map((s) => s.trim().replace(/^[\s()]+|[\s()]+$/g, ""))
+        .filter(Boolean);
+}
+
+function formatPetugasJabatan(str) {
+    const list = parseJabatanList(str);
+    return list.length ? list.join(", ") : "Petugas SPPG";
+}
+
+function formatWaktuWita(val) {
+    if (!val) return "-";
+    const clean = String(val).replace(/\s*WITA/gi, "").trim();
+    return clean ? `${clean} WITA` : "-";
+}
+
+function getJabatanBadgeClass(jabatan) {
+    if (!jabatan) return "bg-slate-100 text-slate-700 border-slate-200";
+    const j = jabatan.toLowerCase();
+    if (j.includes("kepala sppg")) return "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold";
+    if (j.includes("pengawas gizi") || j.includes("pengawas keuangan") || j.includes("plog") || j.includes("plok")) return "bg-teal-50 text-teal-700 border-teal-200 font-semibold";
+    if (j.includes("lapangan")) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (j === "koordinator" || j.startsWith("koordinator ")) return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
+    if (j.includes("chef") || j.includes("koki")) return "bg-amber-50 text-amber-700 border-amber-200";
+    if (j.includes("pengolahan") || j.includes("masak")) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (j.includes("persiapan") || j.includes("potong")) return "bg-yellow-50 text-yellow-800 border-yellow-200";
+    if (j.includes("pemorsian") || j.includes("packing") || j.includes("pengemasan")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("pengemudi") || j.includes("distribusi") || j.includes("driver") || j.includes("kurir")) return "bg-cyan-50 text-cyan-800 border-cyan-200";
+    if (j.includes("cuci")) return "bg-teal-50 text-teal-700 border-teal-200";
+    if (j.includes("admin") || j.includes("administrasi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    if (j.includes("kebersihan") || j.includes("cleaning")) return "bg-purple-50 text-purple-700 border-purple-200";
+    if (j.includes("keamanan") || j.includes("security")) return "bg-rose-50 text-rose-700 border-rose-200";
+    return "bg-slate-50 text-slate-700 border-slate-200";
+}
+
 // Handler Khusus Kendala Petugas/Relawan
 function onRelawanPetugasChange(it, idx) {
     const found = props.petugasSppgAktif.find((p) => p.id === it.petugas_id);
     if (found) {
         it.petugas_nama = found.nama;
-        it.petugas_jabatan = found.jabatan || "Petugas SPPG";
+        it.petugas_jabatan = formatPetugasJabatan(found.jabatan);
         syncRelawanUraian(it);
     }
     clearErrorPengecekan("relawan_petugas");
@@ -1252,9 +1298,13 @@ const selectedPetugasPengecekanNama = computed(() => {
 });
 
 const countTemuanUmum = computed(() => {
-    return formPengecekan.value.pengecekan_umum.filter(
-        (it) => it.status === "Tidak Aman" || it.status === "Ada",
-    ).length;
+    return formPengecekan.value.pengecekan_umum.filter((it) => {
+        // Kedatangan Supplier & Kunjungan Tamu adalah aktivitas rutin (bukan kendala)
+        if (it.key === "kunjungan_tamu" || it.key === "kedatangan_supplier") {
+            return false;
+        }
+        return it.status === "Tidak Aman" || it.status === "Ada";
+    }).length;
 });
 
 const countTemuanLingkungan = computed(() => {
@@ -1733,7 +1783,7 @@ const formattedTanggalHariIni = computed(() => {
                                 <span
                                     class="text-[10.5px] font-mono font-bold text-slate-500"
                                 >
-                                    Pukul {{ rep.waktu_cek || "-" }} WITA
+                                    Pukul {{ formatWaktuWita(rep.waktu_cek) }}
                                 </span>
                             </div>
                             <div class="flex items-center gap-2 text-[11px]">
@@ -1821,7 +1871,7 @@ const formattedTanggalHariIni = computed(() => {
                                 >
                                 <span
                                     class="text-[10.5px] text-slate-400 block truncate"
-                                    >{{ p.jabatan || "Keamanan SPPG" }}</span
+                                    >{{ formatPetugasJabatan(p.jabatan || "Keamanan") }}</span
                                 >
                             </div>
                         </label>
@@ -1965,10 +2015,11 @@ const formattedTanggalHariIni = computed(() => {
                                 :class="[
                                     errorsPengecekan['umum_' + idx]
                                         ? 'border-rose-500 ring-2 ring-rose-400 bg-rose-50/60'
-                                        : it.status === 'Tidak Aman' ||
-                                            it.status === 'Ada'
+                                        : it.status === 'Tidak Aman' || (it.status === 'Ada' && it.key === 'relawan')
                                           ? 'bg-rose-50/70 border-rose-300'
-                                          : 'bg-slate-50 border-slate-200/80',
+                                          : it.status === 'Ada' && (it.key === 'kunjungan_tamu' || it.key === 'kedatangan_supplier')
+                                            ? 'bg-sky-50/70 border-sky-300'
+                                            : 'bg-slate-50 border-slate-200/80',
                                 ]"
                             >
                                 <div
@@ -2091,13 +2142,17 @@ const formattedTanggalHariIni = computed(() => {
                                                     it.status === 'Ada'
                                                         ? it.key === 'relawan'
                                                             ? 'bg-rose-600 text-white font-bold shadow-xs'
-                                                            : 'bg-amber-600 text-white font-bold shadow-xs'
+                                                            : 'bg-sky-600 text-white font-bold shadow-xs'
                                                         : 'text-slate-600 hover:text-slate-900',
                                                     'py-1.5 px-2 rounded-md text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1',
                                                 ]"
                                             >
                                                 <AlertTriangle
                                                     v-if="it.key === 'relawan'"
+                                                    class="h-3 w-3 shrink-0"
+                                                />
+                                                <Truck
+                                                    v-else-if="it.key === 'kedatangan_supplier'"
                                                     class="h-3 w-3 shrink-0"
                                                 />
                                                 <Users
@@ -2189,13 +2244,24 @@ const formattedTanggalHariIni = computed(() => {
                                                     :key="pet.id"
                                                     :value="pet.id"
                                                 >
-                                                    {{ pet.nama }} -
-                                                    {{
-                                                        pet.jabatan ||
-                                                        "Petugas SPPG"
-                                                    }}
+                                                    {{ pet.nama }} - {{ formatPetugasJabatan(pet.jabatan) }}
                                                 </option>
                                             </select>
+                                        </div>
+
+                                        <!-- Badge Divisi/Jabatan Seragam Style Rekap Bonus -->
+                                        <div
+                                            v-if="it.petugas_id && it.petugas_jabatan"
+                                            class="flex items-center gap-1.5 mt-2 flex-wrap"
+                                        >
+                                            <span class="text-[10px] text-slate-500 font-semibold">Divisi / Jabatan:</span>
+                                            <span
+                                                v-for="jab in parseJabatanList(it.petugas_jabatan)"
+                                                :key="jab"
+                                                :class="['px-1.5 py-0.5 rounded text-[9.5px] border leading-none font-medium', getJabatanBadgeClass(jab)]"
+                                            >
+                                                {{ jab }}
+                                            </span>
                                         </div>
 
                                         <p
@@ -2300,12 +2366,18 @@ const formattedTanggalHariIni = computed(() => {
                                     class="pt-1 animate-in fade-in space-y-1"
                                 >
                                     <label
-                                        class="text-[10.5px] font-bold text-rose-800 flex items-center gap-1"
+                                        class="text-[10.5px] font-bold flex items-center gap-1"
+                                        :class="it.key === 'kedatangan_supplier' || it.key === 'kunjungan_tamu' ? 'text-sky-900' : 'text-rose-800'"
                                     >
-                                        <span
-                                            >Uraian {{ it.label }} (Wajib
-                                            Disertakan):</span
-                                        >
+                                        <span v-if="it.key === 'kedatangan_supplier'">
+                                            Keterangan Kedatangan Supplier (Nama & Barang yang Diantar):
+                                        </span>
+                                        <span v-else-if="it.key === 'kunjungan_tamu'">
+                                            Keterangan Kunjungan Tamu (Nama / Instansi & Keperluan):
+                                        </span>
+                                        <span v-else>
+                                            Uraian {{ it.label }} (Wajib Disertakan):
+                                        </span>
                                         <span class="text-rose-500">*</span>
                                     </label>
                                     <textarea
@@ -2317,18 +2389,20 @@ const formattedTanggalHariIni = computed(() => {
                                         "
                                         rows="2"
                                         :placeholder="
-                                            'Jelaskan keterangan ' +
-                                            it.label.toLowerCase() +
-                                            '...'
+                                            it.key === 'kedatangan_supplier'
+                                                ? 'Contoh: Supplier Sayur mengantar bahan baku (tomat, timun, bumbu)...'
+                                                : it.key === 'kunjungan_tamu'
+                                                  ? 'Contoh: Tamu dari Puskesmas / Dinas melakukan koordinasi gizi...'
+                                                  : 'Jelaskan keterangan ' + it.label.toLowerCase() + '...'
                                         "
-                                        class="w-full text-xs rounded-xl focus:ring-2 focus:ring-rose-500 bg-white p-2.5 text-slate-800 transition-all"
-                                        :class="
-                                            errorsPengecekan[
-                                                'umum_uraian_' + idx
-                                            ]
+                                        class="w-full text-xs rounded-xl bg-white p-2.5 text-slate-800 transition-all border"
+                                        :class="[
+                                            errorsPengecekan['umum_uraian_' + idx]
                                                 ? 'border-rose-500 ring-2 ring-rose-400 bg-rose-50/30'
-                                                : 'border-rose-300'
-                                        "
+                                                : it.key === 'kedatangan_supplier' || it.key === 'kunjungan_tamu'
+                                                  ? 'border-sky-300 focus:border-sky-500 focus:ring-2 focus:ring-sky-200'
+                                                  : 'border-rose-300 focus:border-rose-500 focus:ring-2 focus:ring-rose-200'
+                                        ]"
                                     ></textarea>
                                     <p
                                         v-if="
@@ -2822,7 +2896,7 @@ const formattedTanggalHariIni = computed(() => {
                                 >
                                 <span
                                     class="text-[10.5px] text-slate-400 block truncate"
-                                    >{{ p.jabatan || "Keamanan SPPG" }}</span
+                                    >{{ formatPetugasJabatan(p.jabatan || "Keamanan") }}</span
                                 >
                             </div>
                         </label>
@@ -3133,7 +3207,7 @@ const formattedTanggalHariIni = computed(() => {
                                 >
                                 <span
                                     class="text-[10.5px] text-slate-400 block truncate"
-                                    >{{ p.jabatan || "Keamanan SPPG" }}</span
+                                    >{{ formatPetugasJabatan(p.jabatan || "Keamanan") }}</span
                                 >
                             </div>
                         </label>
@@ -3383,7 +3457,7 @@ const formattedTanggalHariIni = computed(() => {
                                 >
                                 <span
                                     class="text-[10.5px] text-slate-400 block truncate"
-                                    >{{ p.jabatan || "Keamanan SPPG" }}</span
+                                    >{{ formatPetugasJabatan(p.jabatan || "Keamanan") }}</span
                                 >
                             </div>
                         </label>
@@ -3652,7 +3726,7 @@ const formattedTanggalHariIni = computed(() => {
                                 >
                                 <span
                                     class="text-[10.5px] text-slate-400 block truncate"
-                                    >{{ pet.jabatan || "Keamanan SPPG" }}</span
+                                    >{{ formatPetugasJabatan(pet.jabatan || "Keamanan") }}</span
                                 >
                             </div>
                         </label>

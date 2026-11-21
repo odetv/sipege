@@ -392,9 +392,9 @@ class AiResiduService
                 $unitId = $unit?->id;
             }
 
-            if (!$unitId) {
-                $firstUnit = UnitSppg::first();
-                $unitId = $firstUnit?->id;
+            if (!$unitId && Auth::check()) {
+                $unit = Auth::user()->getCachedUnitSppg();
+                $unitId = $unit?->id;
             }
 
             if ($unitId) {

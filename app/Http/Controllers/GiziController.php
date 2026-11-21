@@ -360,7 +360,7 @@ class GiziController extends Controller
     public function storeWorkOrder(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');
@@ -710,7 +710,7 @@ class GiziController extends Controller
     public function duplicateWorkOrder(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return back()->with('error', 'Unit SPPG belum terdaftar.');

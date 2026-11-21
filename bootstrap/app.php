@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'subscription.active' => \App\Http\Middleware\EnsureSubscriptionAndProfileCompleted::class,
             'admin' => \App\Http\Middleware\EnsureUserIsAdministrator::class,
+            'superadmin' => \App\Http\Middleware\EnsureUserIsSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

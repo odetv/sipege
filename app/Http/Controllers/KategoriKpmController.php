@@ -17,7 +17,7 @@ class KategoriKpmController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         // Jika belum ada data kategori KPM di database, inisialisasi default 11 kategori standar BGN
@@ -52,7 +52,7 @@ class KategoriKpmController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
@@ -82,7 +82,7 @@ class KategoriKpmController extends Controller
     public function update(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $kategori = KategoriKpm::when($unitSppg?->id, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))->findOrFail($id);
 
@@ -109,7 +109,7 @@ class KategoriKpmController extends Controller
     public function destroy(Request $request, $id): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         $kategori = KategoriKpm::when($unitSppg?->id, fn($q) => $q->where('unit_sppg_id', $unitSppg->id))->findOrFail($id);
         $nama = $kategori->nama;
@@ -124,7 +124,7 @@ class KategoriKpmController extends Controller
     public function resetDefaults(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         KategoriKpm::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))->delete();

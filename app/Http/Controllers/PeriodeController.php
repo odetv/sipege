@@ -15,9 +15,18 @@ class PeriodeController extends Controller
     /**
      * Tampilkan daftar periode beserta summary cards.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $periodes = Periode::orderBy('nomor_periode')->get()->map(function ($p) {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
+
+        $periodesQuery = Periode::query();
+        if ($unitId) {
+            $periodesQuery->where('unit_sppg_id', $unitId);
+        }
+
+        $periodes = $periodesQuery->orderBy('nomor_periode')->get()->map(function ($p) {
             return [
                 'id'                => $p->id,
                 'nomor_periode'     => $p->nomor_periode,
@@ -33,7 +42,6 @@ class PeriodeController extends Controller
         $today        = Carbon::today();
         $aktif        = $periodes->firstWhere('status', 'aktif');
         $periodeAwal  = $periodes->first();
-        $unitSppg     = UnitSppg::first();
 
         // Hari sejak operasional dimulai = selisih dari tanggal_operasional unit SPPG atau tanggal_mulai Periode 1 ke hari ini
         $tglAwal = $unitSppg?->tanggal_operasional 
@@ -71,6 +79,10 @@ class PeriodeController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
+
         $validated = $request->validate([
             'tanggal_mulai'     => 'required|date',
             'tanggal_selesai'   => 'required|date|after_or_equal:tanggal_mulai',
@@ -81,11 +93,12 @@ class PeriodeController extends Controller
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
 
-        // Cek tumpang tindih dengan periode yang sudah ada
-        $overlap = Periode::where(function ($query) use ($validated) {
-            $query->where('tanggal_mulai', '<=', $validated['tanggal_selesai'])
-                  ->where('tanggal_selesai', '>=', $validated['tanggal_mulai']);
-        })->first();
+        // Cek tumpang tindih dengan periode yang sudah ada milik tenant ini
+        $overlap = Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))
+            ->where(function ($query) use ($validated) {
+                $query->where('tanggal_mulai', '<=', $validated['tanggal_selesai'])
+                      ->where('tanggal_selesai', '>=', $validated['tanggal_mulai']);
+            })->first();
 
         if ($overlap) {
             return back()->withErrors([
@@ -94,7 +107,8 @@ class PeriodeController extends Controller
             ]);
         }
 
-        $nextNomor = (Periode::max('nomor_periode') ?? 0) + 1;
+        $nextNomor = (Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))->max('nomor_periode') ?? 0) + 1;
+        $validated['unit_sppg_id'] = $unitId;
         $validated['nomor_periode'] = $nextNomor;
         $validated['is_penyesuaian'] = $validated['is_penyesuaian'] ?? false;
         $validated['tampilkan_di_list'] = $validated['tampilkan_di_list'] ?? true;
@@ -109,6 +123,10 @@ class PeriodeController extends Controller
      */
     public function update(Request $request, Periode $periode): RedirectResponse
     {
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
+
         $validated = $request->validate([
             'tanggal_mulai'     => 'required|date',
             'tanggal_selesai'   => 'required|date|after_or_equal:tanggal_mulai',
@@ -119,8 +137,9 @@ class PeriodeController extends Controller
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
 
-        // Cek tumpang tindih dengan periode lain
-        $overlap = Periode::where('id', '!=', $periode->id)
+        // Cek tumpang tindih dengan periode lain milik tenant ini
+        $overlap = Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))
+            ->where('id', '!=', $periode->id)
             ->where(function ($query) use ($validated) {
                 $query->where('tanggal_mulai', '<=', $validated['tanggal_selesai'])
                       ->where('tanggal_selesai', '>=', $validated['tanggal_mulai']);
@@ -171,6 +190,10 @@ class PeriodeController extends Controller
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
 
+        $user = $request->user();
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
+
         $nomorPeriode = (int) $validated['nomor_periode'];
         $tglMulai = Carbon::parse($validated['tanggal_mulai']);
         $tglSelesai = Carbon::parse($validated['tanggal_selesai']);
@@ -179,10 +202,12 @@ class PeriodeController extends Controller
             ? trim($validated['keterangan'])
             : "Penyesuaian periode awal sebelum penggunaan aplikasi";
 
-        // Cek apakah ada periode lain yang tanggalnya bertabrakan
-        $existingPeriode = Periode::where('nomor_periode', $nomorPeriode)->first();
+        // Cek apakah ada periode lain milik tenant ini yang tanggalnya bertabrakan
+        $existingPeriode = Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))
+            ->where('nomor_periode', $nomorPeriode)->first();
 
-        $overlap = Periode::when($existingPeriode, function ($q) use ($existingPeriode) {
+        $overlap = Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))
+            ->when($existingPeriode, function ($q) use ($existingPeriode) {
                 return $q->where('id', '!=', $existingPeriode->id);
             }, function ($q) use ($nomorPeriode) {
                 return $q->where('nomor_periode', '!=', $nomorPeriode);
@@ -210,6 +235,7 @@ class PeriodeController extends Controller
             ]);
         } else {
             Periode::create([
+                'unit_sppg_id'      => $unitId,
                 'nomor_periode'     => $nomorPeriode,
                 'tanggal_mulai'     => $tglMulai->toDateString(),
                 'tanggal_selesai'   => $tglSelesai->toDateString(),
@@ -220,12 +246,9 @@ class PeriodeController extends Controller
         }
 
         // Sinkronkan tanggal operasional unit SPPG jika periode ini adalah tanggal paling awal
-        $minTanggal = Periode::min('tanggal_mulai');
-        if ($minTanggal) {
-            $unitSppg = UnitSppg::first();
-            if ($unitSppg) {
-                $unitSppg->update(['tanggal_operasional' => $minTanggal]);
-            }
+        $minTanggal = Periode::when($unitId, fn($q) => $q->where('unit_sppg_id', $unitId))->min('tanggal_mulai');
+        if ($minTanggal && $unitSppg) {
+            $unitSppg->update(['tanggal_operasional' => $minTanggal]);
         }
 
         $statusList = $tampilkanDiList ? 'dimunculkan di daftar pilihan periode' : 'disembunyikan dari daftar pilihan periode';

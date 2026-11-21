@@ -36,6 +36,12 @@ function formatMenitPrint(menit) {
     return `${sisa} Menit`;
 }
 
+function formatWaktuWita(val) {
+    if (!val) return '-';
+    const clean = String(val).replace(/\s*WITA/gi, '').trim();
+    return clean ? `${clean} WITA` : '-';
+}
+
 const formattedTanggal = computed(() => {
     if (!props.mutasi?.tanggal) return '-';
     try {
@@ -165,7 +171,7 @@ const formattedTanggal = computed(() => {
                                         <td class="py-1.5 px-2 text-center font-bold font-mono text-slate-900 whitespace-nowrap">
                                             <div>{{ d.jam }}</div>
                                             <div v-if="d.waktu_cek" class="text-[9px] font-mono text-slate-500 font-normal">
-                                                Pukul {{ d.waktu_cek }} WITA
+                                                Pukul {{ formatWaktuWita(d.waktu_cek) }}
                                             </div>
                                         </td>
                                         <td class="py-1.5 px-2.5 font-semibold text-slate-800">

@@ -29,10 +29,7 @@ class LayananController extends Controller
     public function index(Request $request, AiResiduService $aiService): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : null;
-        if (!$unitSppg) {
-            $unitSppg = UnitSppg::first();
-        }
+        $unitSppg = $user?->getCachedUnitSppg();
 
         // ── 1. Data Layanan AI (Global) ─────────────────────────────
         $supportedProviders = $aiService->getSupportedProviders();
@@ -712,12 +709,8 @@ class LayananController extends Controller
     public function updateAi(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : null;
-        if (!$unitSppg) {
-            $unitSppg = UnitSppg::first();
-        }
-
-        $unitId = $unitSppg ? $unitSppg->id : 1;
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
 
         $validated = $request->validate([
             'provider' => ['required', 'string', 'max:50'],
@@ -768,12 +761,8 @@ class LayananController extends Controller
     public function testKoneksiAi(Request $request, AiResiduService $aiService): JsonResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : null;
-        if (!$unitSppg) {
-            $unitSppg = UnitSppg::first();
-        }
-
-        $unitId = $unitSppg ? $unitSppg->id : 1;
+        $unitSppg = $user?->getCachedUnitSppg();
+        $unitId = $unitSppg?->id;
 
         $provider = strtolower(trim((string) $request->input('provider', 'gemini')));
         $apiKey = trim((string) $request->input('api_key', ''));

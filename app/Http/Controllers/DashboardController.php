@@ -298,7 +298,7 @@ class DashboardController extends Controller
     public function updateUnitSppg(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user->unitSppg;
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if (!$unitSppg) {
             return redirect()->route('dashboard')->with('error', 'Data Unit SPPG tidak ditemukan.');

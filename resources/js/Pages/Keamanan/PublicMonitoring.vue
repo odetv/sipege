@@ -34,6 +34,7 @@ import {
     ChevronUp,
     ListChecks,
     Sparkles,
+    Truck,
 } from "lucide-vue-next";
 import MiniGoogleMap from "./Partials/MiniGoogleMap.vue";
 import KeamananChecklistModal from "./Partials/KeamananChecklistModal.vue";
@@ -50,6 +51,18 @@ const props = defineProps({
     todayDate: {
         type: String,
         default: () => new Date().toISOString().split("T")[0],
+    },
+    hariPertama: {
+        type: String,
+        default: "",
+    },
+    hariKedua: {
+        type: String,
+        default: "",
+    },
+    labelRentangOperasional: {
+        type: String,
+        default: "",
     },
     serverTimeWita: {
         type: String,
@@ -302,9 +315,35 @@ function extractChecklistSummary(dp) {
         .map((a) => a.label);
 
     const highlights = [];
+    const routineActivities = [];
     (dp.pengecekan_umum || []).forEach((u) => {
-        if (u.status === "Tidak Aman" || u.status === "Ada") {
+        const isRoutine =
+            u.key === "kunjungan_tamu" ||
+            u.key === "kedatangan_supplier" ||
+            (u.label &&
+                (u.label.toLowerCase().includes("tamu") ||
+                    u.label.toLowerCase().includes("supplier")));
+
+        if (u.status === "Ada") {
+            if (isRoutine) {
+                // Kedatangan Supplier & Tamu adalah aktivitas rutin (BUKAN kendala)
+                routineActivities.push({
+                    key: u.key,
+                    label: u.label,
+                    status: u.status,
+                    uraian: u.uraian,
+                });
+            } else {
+                highlights.push({
+                    key: u.key,
+                    label: u.label,
+                    status: u.status,
+                    uraian: u.uraian,
+                });
+            }
+        } else if (u.status === "Tidak Aman") {
             highlights.push({
+                key: u.key,
                 label: u.label,
                 status: u.status,
                 uraian: u.uraian,
@@ -313,9 +352,10 @@ function extractChecklistSummary(dp) {
     });
 
     return {
-        allAreasSafe: unsafeAreas.length === 0,
+        allAreasSafe: unsafeAreas.length === 0 && highlights.length === 0,
         unsafeAreas,
         highlights,
+        routineActivities,
         catatanTambahan: dp.catatan_tambahan || "",
     };
 }
@@ -350,6 +390,29 @@ function formatIndoDate(dateStr) {
     } catch {
         return dateStr;
     }
+}
+
+const formattedHariPertama = computed(() => {
+    return formatIndoDate(props.hariPertama || props.todayDate);
+});
+
+const formattedHariKedua = computed(() => {
+    if (!props.hariKedua) return "";
+    return formatIndoDate(props.hariKedua);
+});
+
+const activeSessionItem = computed(() => {
+    return (
+        props.sesiList.find(
+            (s) => s.is_active || s.jam === activeSession.value,
+        ) || null
+    );
+});
+
+function formatWaktuWita(val) {
+    if (!val) return "-";
+    const clean = String(val).replace(/\s*WITA/gi, "").trim();
+    return clean ? `${clean} WITA` : "-";
 }
 
 function formatRelativeTime(str) {
@@ -397,7 +460,7 @@ onBeforeUnmount(() => {
     >
         <Head
             :title="
-                'Monitoring Petugas Keamanan SPPG - ' +
+                'Monitoring Petugas Keamanan - ' +
                 (unitSppg?.nama || 'SPPG')
             "
         />
@@ -433,7 +496,7 @@ onBeforeUnmount(() => {
                             <h1
                                 class="text-sm sm:text-base md:text-lg font-black tracking-tight leading-snug truncate sm:whitespace-normal text-white"
                             >
-                                Monitoring Petugas Keamanan SPPG
+                                Monitoring Petugas Keamanan
                             </h1>
                             <p
                                 class="text-[11px] sm:text-xs text-sky-200 truncate mt-0.5"
@@ -582,92 +645,130 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <!-- 2. Patroli 24 Jam Terlapor -->
+                <!-- 2. Patroli Siklus 24 Jam Terlapor (06.00 - 06.00 WITA) -->
                 <div
                     class="bg-white rounded-2xl border border-slate-200 hover:border-blue-300 p-3.5 sm:p-4 shadow-xs transition-colors flex flex-col justify-between"
                 >
-                    <div
-                        class="flex items-center justify-between text-xs text-slate-500 mb-1"
-                    >
-                        <span
-                            class="font-bold uppercase tracking-wider text-[10px]"
-                            >Pengecekan Terisi Hari Ini</span
-                        >
-                        <Clock class="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div class="text-base sm:text-xl font-black text-slate-900">
-                        {{
-                            summary.total_interval_terisi ??
-                            summary.total_terlapor
-                        }}
-                        <span class="text-xs text-slate-500 font-normal"
-                            >/ 24 Jam</span
-                        >
-                        <span
-                            v-if="
-                                summary.total_terlapor >
-                                (summary.total_interval_terisi ??
-                                    summary.total_terlapor)
-                            "
-                            class="text-[11px] font-bold text-blue-600 block mt-0.5"
-                        >
-                            ({{ summary.total_terlapor }} Total Laporan Masuk)
-                        </span>
-                    </div>
-                    <div
-                        class="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden"
-                    >
+                    <div>
                         <div
-                            class="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
-                            :style="{
-                                width:
-                                    Math.min(
-                                        100,
-                                        Math.round(
-                                            ((summary.total_interval_terisi ??
-                                                summary.total_terlapor) /
-                                                24) *
-                                                100,
-                                        ),
-                                    ) + '%',
-                            }"
-                        ></div>
+                            class="flex items-center justify-between text-xs text-slate-500 mb-1"
+                        >
+                            <span
+                                class="font-bold uppercase tracking-wider text-[10px] text-slate-700 flex items-center gap-1.5"
+                            >
+                                <Clock class="h-3.5 w-3.5 text-blue-600" />
+                                <span>Pengecekan Terisi (06.00 - 06.00 WITA)</span>
+                            </span>
+                            <span
+                                class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200"
+                            >
+                                24 Jam
+                            </span>
+                        </div>
+
+                        <!-- 2 Waktu Tanggal Pelaporan Sesuai Laporan Pengecekan Tiap Jam -->
+                        <div class="flex items-center gap-1.5 flex-wrap text-[10px] sm:text-[10.5px] text-slate-500 font-medium mt-1 mb-2">
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                <Calendar class="h-3 w-3 text-slate-500" />
+                                <span>{{ formattedHariPertama }}</span>
+                            </span>
+                            <span class="text-slate-400 font-bold text-xs">s/d</span>
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                                <span>{{ formattedHariKedua || formattedHariPertama }}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="text-base sm:text-xl font-black text-slate-900">
+                            {{
+                                summary.total_interval_terisi ??
+                                summary.total_terlapor
+                            }}
+                            <span class="text-xs text-slate-500 font-normal"
+                                >/ 24 Sesi Jam</span
+                            >
+                            <span
+                                v-if="
+                                    summary.total_terlapor >
+                                    (summary.total_interval_terisi ??
+                                        summary.total_terlapor)
+                                "
+                                class="text-[11px] font-bold text-blue-600 block mt-0.5"
+                            >
+                                ({{ summary.total_terlapor }} Total Laporan Masuk)
+                            </span>
+                        </div>
+                        <div
+                            class="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden"
+                        >
+                            <div
+                                class="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
+                                :style="{
+                                    width:
+                                        Math.min(
+                                            100,
+                                            Math.round(
+                                                ((summary.total_interval_terisi ??
+                                                    summary.total_terlapor) /
+                                                    24) *
+                                                    100,
+                                            ),
+                                        ) + '%',
+                                }"
+                            ></div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- 3. Sesi Jam Aktif Saat Ini -->
                 <div
-                    class="bg-white rounded-2xl border border-slate-200 hover:border-blue-300 p-3.5 sm:p-4 shadow-xs transition-colors flex flex-col justify-between"
+                    class="bg-white rounded-2xl border border-slate-200 hover:border-emerald-300 p-3.5 sm:p-4 shadow-xs transition-colors flex flex-col justify-between"
                 >
-                    <div
-                        class="flex items-center justify-between text-xs text-slate-500 mb-1"
-                    >
-                        <span
-                            class="font-bold uppercase tracking-wider text-[10px] text-emerald-800 flex items-center gap-1.5"
+                    <div>
+                        <div
+                            class="flex items-center justify-between text-xs text-slate-500 mb-1"
                         >
-                            <span class="relative flex h-2 w-2">
-                                <span
-                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
-                                ></span>
-                                <span
-                                    class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
-                                ></span>
+                            <span
+                                class="font-bold uppercase tracking-wider text-[10px] text-emerald-800 flex items-center gap-1.5"
+                            >
+                                <span class="relative flex h-2 w-2">
+                                    <span
+                                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+                                    ></span>
+                                    <span
+                                        class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
+                                    ></span>
+                                </span>
+                                <span>Sesi Jam Aktif Saat Ini</span>
                             </span>
-                            <span>Sesi Jam Aktif Saat Ini</span>
-                        </span>
-                        <span
-                            class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300"
+                            <span
+                                class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300"
+                            >
+                                WITA
+                            </span>
+                        </div>
+                        <div
+                            class="text-base sm:text-xl font-black text-emerald-950 font-mono tracking-tight"
                         >
-                            WITA
-                        </span>
+                            {{ activeSession || "Memuat Sesi..." }}
+                        </div>
+                        <div
+                            v-if="activeSessionItem"
+                            class="text-[10px] sm:text-[10.5px] font-semibold text-slate-600 flex items-center gap-1.5 mt-1"
+                        >
+                            <span
+                                v-if="activeSessionItem.is_next_day"
+                                class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider"
+                            >
+                                Hari Berikutnya
+                            </span>
+                            <span>🗓️ {{ activeSessionItem.hari_tanggal }}</span>
+                        </div>
                     </div>
+
                     <div
-                        class="text-base sm:text-xl font-black text-emerald-950 font-mono tracking-tight"
-                    >
-                        {{ activeSession || "Memuat Sesi..." }}
-                    </div>
-                    <div
-                        class="flex items-center justify-between gap-1 mt-1 text-[10.5px] sm:text-[11px]"
+                        class="flex items-center justify-between gap-1 mt-2 text-[10.5px] sm:text-[11px]"
                     >
                         <span
                             v-if="
@@ -973,10 +1074,11 @@ onBeforeUnmount(() => {
                                                     >Pukul</span
                                                 >
                                                 {{
-                                                    pet.laporan_terakhir
-                                                        .waktu_cek || "-"
+                                                    formatWaktuWita(
+                                                        pet.laporan_terakhir
+                                                            .waktu_cek,
+                                                    )
                                                 }}
-                                                WITA
                                             </span>
                                         </div>
 
@@ -1083,7 +1185,39 @@ onBeforeUnmount(() => {
                                             </span>
                                         </div>
 
-                                        <!-- Pengecekan Umum Highlights -->
+                                        <!-- Aktivitas Rutin (Kedatangan Supplier / Kunjungan Tamu - BUKAN Kendala) -->
+                                        <div
+                                            v-if="
+                                                extractChecklistSummary(
+                                                    pet.laporan_terakhir
+                                                        .data_pengecekan,
+                                                )?.routineActivities?.length > 0
+                                            "
+                                            class="flex flex-wrap gap-1 pt-1"
+                                        >
+                                            <span
+                                                v-for="(
+                                                    r, rIdx
+                                                ) in extractChecklistSummary(
+                                                    pet.laporan_terakhir
+                                                        .data_pengecekan,
+                                                )?.routineActivities"
+                                                :key="'pet-rout-' + rIdx"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                                            >
+                                                <Truck
+                                                    v-if="r.key === 'kedatangan_supplier' || r.label?.toLowerCase().includes('supplier')"
+                                                    class="h-3 w-3 text-sky-600"
+                                                />
+                                                <Users
+                                                    v-else
+                                                    class="h-3 w-3 text-sky-600"
+                                                />
+                                                <span>{{ r.label }}: {{ r.uraian || 'Tercatat' }}</span>
+                                            </span>
+                                        </div>
+
+                                        <!-- Pengecekan Umum Kendala / Perhatian Khusus -->
                                         <div
                                             v-if="
                                                 extractChecklistSummary(
@@ -1101,14 +1235,13 @@ onBeforeUnmount(() => {
                                                         .data_pengecekan,
                                                 )?.highlights"
                                                 :key="hIdx"
-                                                class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300"
                                             >
-                                                ⚠️ {{ h.label }}: {{ h.status }}
-                                                {{
-                                                    h.uraian
-                                                        ? "(" + h.uraian + ")"
-                                                        : ""
-                                                }}
+                                                <AlertTriangle class="h-3 w-3" />
+                                                <span>
+                                                    {{ h.label }}: {{ h.status }}
+                                                    {{ h.uraian ? "(" + h.uraian + ")" : "" }}
+                                                </span>
                                             </span>
                                         </div>
 
@@ -1314,9 +1447,14 @@ onBeforeUnmount(() => {
                             <span>Laporan Pengecekan Tiap Jam</span>
                         </h2>
                         <p class="text-[11px] text-slate-500 mt-0.5">
-                            Klik tiap sesi untuk melihat rincian lengkap laporan
-                            pengecekan.
+                            Siklus patroli 24 jam (06.00 WITA s/d 06.00 WITA hari berikutnya). Klik tiap sesi untuk melihat rincian laporan.
                         </p>
+                        <span
+                            v-if="props.labelRentangOperasional"
+                            class="inline-block mt-1 text-[10px] sm:text-[10.5px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
+                        >
+                            🗓️ Siklus: {{ props.labelRentangOperasional }}
+                        </span>
                     </div>
 
                     <!-- Tombol Kontrol Cepat: Buka Sesi Aktif, Buka Semua, Tutup Semua -->
@@ -1409,8 +1547,19 @@ onBeforeUnmount(() => {
                                         </span>
 
                                         <span
-                                            class="text-[10px] sm:text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md"
+                                            class="text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-md border"
+                                            :class="
+                                                sesi.is_next_day
+                                                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                                                    : 'text-slate-600 bg-slate-100 border-slate-200'
+                                            "
                                         >
+                                            <span
+                                                v-if="sesi.is_next_day"
+                                                class="font-black text-[9px] uppercase tracking-wider text-indigo-600 mr-1 bg-indigo-100/70 px-1 py-0.5 rounded"
+                                            >
+                                                Hari Berikutnya
+                                            </span>
                                             {{
                                                 sesi.hari_tanggal ||
                                                 formattedToday
@@ -1548,9 +1697,10 @@ onBeforeUnmount(() => {
                                                         }}
                                                         Pukul
                                                         {{
-                                                            rep.waktu_cek || "-"
-                                                        }}
-                                                        WITA</strong
+                                                            formatWaktuWita(
+                                                                rep.waktu_cek,
+                                                            )
+                                                        }}</strong
                                                     >
                                                 </span>
                                             </div>
@@ -1648,7 +1798,37 @@ onBeforeUnmount(() => {
                                             </span>
                                         </div>
 
-                                        <!-- Highlights Umum -->
+                                        <!-- Aktivitas Rutin (Kedatangan Supplier / Kunjungan Tamu - BUKAN Kendala) -->
+                                        <div
+                                            v-if="
+                                                extractChecklistSummary(
+                                                    rep.data_pengecekan,
+                                                )?.routineActivities?.length > 0
+                                            "
+                                            class="flex flex-wrap gap-1"
+                                        >
+                                            <span
+                                                v-for="(
+                                                    r, rIdx
+                                                ) in extractChecklistSummary(
+                                                    rep.data_pengecekan,
+                                                )?.routineActivities"
+                                                :key="'rep-rout-' + rIdx"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                                            >
+                                                <Truck
+                                                    v-if="r.key === 'kedatangan_supplier' || r.label?.toLowerCase().includes('supplier')"
+                                                    class="h-3 w-3 text-sky-600"
+                                                />
+                                                <Users
+                                                    v-else
+                                                    class="h-3 w-3 text-sky-600"
+                                                />
+                                                <span>{{ r.label }}: {{ r.uraian || 'Tercatat' }}</span>
+                                            </span>
+                                        </div>
+
+                                        <!-- Kendala / Perhatian Khusus -->
                                         <div
                                             v-if="
                                                 extractChecklistSummary(
@@ -1664,14 +1844,13 @@ onBeforeUnmount(() => {
                                                     rep.data_pengecekan,
                                                 )?.highlights"
                                                 :key="hIdx"
-                                                class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300"
                                             >
-                                                ⚠️ {{ h.label }}: {{ h.status }}
-                                                {{
-                                                    h.uraian
-                                                        ? "(" + h.uraian + ")"
-                                                        : ""
-                                                }}
+                                                <AlertTriangle class="h-3 w-3" />
+                                                <span>
+                                                    {{ h.label }}: {{ h.status }}
+                                                    {{ h.uraian ? "(" + h.uraian + ")" : "" }}
+                                                </span>
                                             </span>
                                         </div>
 

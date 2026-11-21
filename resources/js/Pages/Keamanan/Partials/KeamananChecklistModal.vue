@@ -52,6 +52,12 @@ function getCuacaIcon(label) {
         default: return Sun;
     }
 }
+
+function formatWaktuWita(val) {
+    if (!val) return '-';
+    const clean = String(val).replace(/\s*WITA/gi, '').trim();
+    return clean ? `${clean} WITA` : '-';
+}
 </script>
 
 <template>
@@ -73,7 +79,7 @@ function getCuacaIcon(label) {
                         <p class="text-[11px] text-slate-300">
                             <span v-if="detail?.hari_tanggal">{{ detail.hari_tanggal }} • </span>
                             Rentang: <strong>{{ detail?.jam }}</strong>
-                            <span v-if="detail?.waktu_cek"> (Pukul {{ detail.waktu_cek }} WITA)</span>
+                            <span v-if="detail?.waktu_cek"> (Pukul {{ formatWaktuWita(detail.waktu_cek) }})</span>
                             • Petugas: <strong>{{ detail?.petugas_nama || '-' }}</strong>
                         </p>
                     </div>
@@ -127,13 +133,25 @@ function getCuacaIcon(label) {
                             v-for="it in pengecekanUmum"
                             :key="it.key"
                             class="p-2.5 rounded-xl border text-xs"
-                            :class="it.status === 'Tidak Aman' || it.status === 'Ada' ? 'bg-rose-50/80 border-rose-300' : 'bg-slate-50 border-slate-200'"
+                            :class="[
+                                it.status === 'Tidak Aman' || (it.status === 'Ada' && it.key === 'relawan')
+                                    ? 'bg-rose-50/80 border-rose-300'
+                                    : it.status === 'Ada' && (it.key === 'kunjungan_tamu' || it.key === 'kedatangan_supplier')
+                                      ? 'bg-sky-50/80 border-sky-300'
+                                      : 'bg-slate-50 border-slate-200',
+                            ]"
                         >
                             <div class="flex items-center justify-between">
                                 <span class="font-bold text-slate-800">{{ it.label }}</span>
                                 <span
                                     class="text-[10.5px] font-extrabold px-2 py-0.5 rounded-md"
-                                    :class="it.status === 'Tidak Aman' || it.status === 'Ada' ? 'bg-rose-600 text-white' : 'bg-emerald-100 text-emerald-800'"
+                                    :class="[
+                                        it.status === 'Tidak Aman' || (it.status === 'Ada' && it.key === 'relawan')
+                                            ? 'bg-rose-600 text-white'
+                                            : it.status === 'Ada' && (it.key === 'kunjungan_tamu' || it.key === 'kedatangan_supplier')
+                                              ? 'bg-sky-600 text-white'
+                                              : 'bg-emerald-100 text-emerald-800',
+                                    ]"
                                 >
                                     {{ it.status }}
                                 </span>
@@ -148,6 +166,13 @@ function getCuacaIcon(label) {
                                     💬 {{ it.catatan || it.uraian }}
                                 </p>
                             </div>
+                            <!-- Kunjungan Tamu / Kedatangan Supplier (Bukan Kendala) -->
+                            <p
+                                v-else-if="it.uraian && (it.key === 'kunjungan_tamu' || it.key === 'kedatangan_supplier')"
+                                class="mt-1 text-[11px] text-sky-800 font-medium bg-sky-50 p-1.5 rounded border border-sky-200"
+                            >
+                                📦 {{ it.uraian }}
+                            </p>
                             <p v-else-if="it.uraian" class="mt-1 text-[11px] text-rose-700 italic bg-white/80 p-1.5 rounded border border-rose-200">
                                 💬 {{ it.uraian }}
                             </p>

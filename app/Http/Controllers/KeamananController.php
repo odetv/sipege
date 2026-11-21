@@ -23,12 +23,16 @@ class KeamananController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         // Tanggal yang sedang aktif dilihat / diinput (default hari ini)
         $tanggal = $request->input('tanggal', Carbon::today()->toDateString());
         $shift = $request->input('shift', '24 Jam');
+
+        $hariPertama = $tanggal;
+        $hariKedua = Carbon::parse($hariPertama)->addDay()->toDateString();
+        $labelRentangOperasional = Carbon::parse($hariPertama)->locale('id')->isoFormat('D MMMM Y') . ' (06.00 WITA) s/d ' . Carbon::parse($hariKedua)->locale('id')->isoFormat('D MMMM Y') . ' (06.00 WITA)';
 
         // Daftar Petugas dengan jabatan Keamanan (Khusus 2 Petugas Keamanan)
         $petugasKeamanan = Petugas::where('unit_sppg_id', $unitId)
@@ -52,12 +56,96 @@ class KeamananController extends Controller
                 ->get(['id', 'nama', 'jabatan', 'no_telp']);
         }
 
-        // Ambil data Mutasi Keamanan pada tanggal yang dipilih
-        $mutasiAktif = MutasiKeamanan::with(['details.petugas', 'petugas', 'izins.petugas', 'serahTerimas.petugas'])
+        // Ambil data Mutasi Keamanan pada siklus 24 jam (Hari Pertama 06.00 s/d Hari Kedua 06.00)
+        $mutasiPertama = MutasiKeamanan::with(['details.petugas', 'petugas', 'izins.petugas', 'serahTerimas.petugas'])
             ->where('unit_sppg_id', $unitId)
-            ->where('tanggal', $tanggal)
+            ->where('tanggal', $hariPertama)
             ->where('shift', $shift)
             ->first();
+
+        $mutasiKedua = MutasiKeamanan::with(['details.petugas', 'petugas', 'izins.petugas', 'serahTerimas.petugas'])
+            ->where('unit_sppg_id', $unitId)
+            ->where('tanggal', $hariKedua)
+            ->where('shift', $shift)
+            ->first();
+
+        // Gabungkan details laporan operasional 24 jam secara teratur
+        $operationalDetails = collect();
+
+        // 1. Ambil baris 06.00 s/d 23.00 dari Hari Pertama
+        if ($mutasiPertama) {
+            foreach ($mutasiPertama->details as $d) {
+                $jam = trim($d->jam ?? '');
+                $hour = null;
+                if (preg_match('/^(\d{1,2})[\.:]/', $jam, $m)) {
+                    $hour = (int) $m[1];
+                }
+                if ($hour !== null && $hour >= 6 && $hour <= 23) {
+                    $d->mutasi_tanggal = $hariPertama;
+                    $d->is_next_day = false;
+                    $operationalDetails->push($d);
+                }
+            }
+        }
+
+        // 2. Ambil baris 00.00 s/d 06.00 dari Hari Kedua
+        $hasDay2Early = false;
+        if ($mutasiKedua) {
+            foreach ($mutasiKedua->details as $d) {
+                $jam = trim($d->jam ?? '');
+                $hour = null;
+                if (preg_match('/^(\d{1,2})[\.:]/', $jam, $m)) {
+                    $hour = (int) $m[1];
+                }
+                if ($hour !== null && $hour >= 0 && $hour < 6) {
+                    $d->mutasi_tanggal = $hariKedua;
+                    $d->is_next_day = true;
+                    $operationalDetails->push($d);
+                    $hasDay2Early = true;
+                }
+            }
+        }
+
+        // Fallback jika belum ada di Hari Kedua namun ada di Hari Pertama (misal riwayat lama single date)
+        if (!$hasDay2Early && $mutasiPertama) {
+            foreach ($mutasiPertama->details as $d) {
+                $jam = trim($d->jam ?? '');
+                $hour = null;
+                if (preg_match('/^(\d{1,2})[\.:]/', $jam, $m)) {
+                    $hour = (int) $m[1];
+                }
+                if ($hour !== null && $hour >= 0 && $hour < 6) {
+                    $d->mutasi_tanggal = $hariPertama;
+                    $d->is_next_day = true;
+                    $operationalDetails->push($d);
+                }
+            }
+        }
+
+        // Gabungkan izins dan serahTerimas pada rentang siklus 24 jam
+        $izinsOperasional = collect();
+        if ($mutasiPertama) {
+            $izinsOperasional = $izinsOperasional->concat($mutasiPertama->izins);
+        }
+        if ($mutasiKedua) {
+            $izinsOperasional = $izinsOperasional->concat($mutasiKedua->izins);
+        }
+
+        $serahTerimasOperasional = collect();
+        if ($mutasiPertama) {
+            $serahTerimasOperasional = $serahTerimasOperasional->concat($mutasiPertama->serahTerimas);
+        }
+        if ($mutasiKedua) {
+            $serahTerimasOperasional = $serahTerimasOperasional->concat($mutasiKedua->serahTerimas);
+        }
+
+        // Tentukan mutasi aktif untuk ditampilkan
+        $mutasiAktif = $mutasiPertama ?: $mutasiKedua;
+        if ($mutasiAktif) {
+            $mutasiAktif->setRelation('details', $operationalDetails);
+            $mutasiAktif->setRelation('izins', $izinsOperasional);
+            $mutasiAktif->setRelation('serahTerimas', $serahTerimasOperasional);
+        }
 
         // Riwayat Mutasi Keamanan (30 hari terakhir atau berpaginasi)
         $riwayatQuery = MutasiKeamanan::with(['petugas', 'details', 'izins'])
@@ -125,6 +213,9 @@ class KeamananController extends Controller
         return Inertia::render('Keamanan/Index', [
             'unitSppg' => $unitSppg,
             'selectedTanggal' => $tanggal,
+            'hariPertama' => $hariPertama,
+            'hariKedua' => $hariKedua,
+            'labelRentangOperasional' => $labelRentangOperasional,
             'selectedShift' => $shift,
             'mutasiAktif' => $mutasiAktif,
             'petugasKeamanan' => $petugasKeamanan,
@@ -156,7 +247,7 @@ class KeamananController extends Controller
     public function storeOrUpdate(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $validated = $request->validate([
@@ -167,7 +258,10 @@ class KeamananController extends Controller
             'status_keseluruhan' => ['nullable', 'string', 'max:30'],
             'catatan_serah_terima' => ['nullable', 'string'],
             'details' => ['nullable', 'array'],
+            'details.*.id' => ['nullable'],
             'details.*.jam' => ['required', 'string', 'max:50'],
+            'details.*.is_next_day' => ['nullable', 'boolean'],
+            'details.*.mutasi_tanggal' => ['nullable', 'date'],
             'details.*.waktu_cek' => ['nullable'],
             'details.*.petugas_id' => ['nullable'],
             'details.*.petugas_nama' => ['nullable', 'string', 'max:255'],
@@ -179,6 +273,9 @@ class KeamananController extends Controller
             'details.*.lokasi_nama' => ['nullable', 'string', 'max:255'],
             'details.*.is_reported' => ['nullable', 'boolean'],
         ]);
+
+        $hariPertama = $validated['tanggal'];
+        $hariKedua = Carbon::parse($hariPertama)->addDay()->toDateString();
 
         // Cari nama petugas jika petugas_id dipilih
         $petugasNama = $validated['petugas_nama'] ?? null;
@@ -194,11 +291,11 @@ class KeamananController extends Controller
         $hasInsiden = $reportedDetails->contains('kondisi', 'Tidak Aman');
         $statusKeseluruhan = $hasInsiden ? 'Tidak Aman' : ($validated['status_keseluruhan'] ?? 'Aman');
 
-        // Simpan / Update Induk Mutasi
-        $mutasi = MutasiKeamanan::updateOrCreate(
+        // Simpan / Update Induk Mutasi Hari Pertama
+        $mutasi1 = MutasiKeamanan::updateOrCreate(
             [
                 'unit_sppg_id' => $unitId,
-                'tanggal' => $validated['tanggal'],
+                'tanggal' => $hariPertama,
                 'shift' => $validated['shift'],
             ],
             [
@@ -210,8 +307,25 @@ class KeamananController extends Controller
             ]
         );
 
-        // Sinkronisasi Detail Log Baris Jam (Hanya simpan/update baris yang dilaporkan)
         $details = $validated['details'] ?? [];
+        $hasNextDayReport = collect($details)->contains(fn($d) => !empty($d['is_next_day']) && (!empty($d['is_reported']) || !empty($d['id'])));
+
+        $mutasi2 = null;
+        if ($hasNextDayReport) {
+            $mutasi2 = MutasiKeamanan::firstOrCreate(
+                [
+                    'unit_sppg_id' => $unitId,
+                    'tanggal' => $hariKedua,
+                    'shift' => $validated['shift'],
+                ],
+                [
+                    'petugas_id' => $validated['petugas_id'] ?? null,
+                    'petugas_nama' => $petugasNama,
+                    'status_keseluruhan' => 'Aman',
+                    'created_by' => $user?->id,
+                ]
+            );
+        }
 
         foreach ($details as $d) {
             $isReported = !empty($d['is_reported']) || !empty($d['waktu_cek']) || !empty($d['data_pengecekan']) || !empty($d['latitude']);
@@ -227,7 +341,7 @@ class KeamananController extends Controller
 
             $detailData = [
                 'waktu_cek' => !empty($d['waktu_cek']) ? $d['waktu_cek'] : Carbon::now()->format('H:i:s'),
-                'petugas_id' => $d['petugas_id'] ?? $mutasi->petugas_id,
+                'petugas_id' => $d['petugas_id'] ?? $mutasi1->petugas_id,
                 'petugas_nama' => $detPetugasNama,
                 'kondisi' => $d['kondisi'] ?: 'Aman',
                 'uraian_kejadian' => $d['uraian_kejadian'] ?? 'Situasi aman terkendali, area steril dan terpantau normal.',
@@ -240,8 +354,9 @@ class KeamananController extends Controller
             if (!empty($d['id'])) {
                 MutasiKeamananDetail::where('id', $d['id'])->update($detailData);
             } else {
+                $targetMutasiId = (!empty($d['is_next_day']) && $mutasi2) ? $mutasi2->id : $mutasi1->id;
                 MutasiKeamananDetail::create(array_merge($detailData, [
-                    'mutasi_keamanan_id' => $mutasi->id,
+                    'mutasi_keamanan_id' => $targetMutasiId,
                     'jam' => $d['jam'],
                 ]));
             }
@@ -250,7 +365,7 @@ class KeamananController extends Controller
         return redirect()->route('keamanan.index', [
             'tanggal' => $validated['tanggal'],
             'shift' => $validated['shift'],
-        ])->with('success', "Laporan Mutasi Keamanan tanggal {$validated['tanggal']} berhasil disimpan.");
+        ])->with('success', "Laporan Mutasi Keamanan siklus 24 jam ({$hariPertama} s/d {$hariKedua}) berhasil disimpan.");
     }
 
     /**
@@ -259,13 +374,14 @@ class KeamananController extends Controller
     public function quickCheck(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $validated = $request->validate([
             'tanggal' => ['required', 'date'],
             'shift' => ['required', 'string'],
             'jam' => ['required', 'string', 'max:50'],
+            'is_next_day' => ['nullable', 'boolean'],
             'petugas_id' => ['nullable'],
             'kondisi' => ['required', 'string', 'in:Aman,Tidak Aman'],
             'uraian_kejadian' => ['required', 'string'],
@@ -277,10 +393,15 @@ class KeamananController extends Controller
         $petugas = !empty($validated['petugas_id']) ? Petugas::find($validated['petugas_id']) : null;
         $petugasNama = $petugas?->nama ?? 'Petugas Keamanan';
 
+        $targetDate = $validated['tanggal'];
+        if (!empty($validated['is_next_day'])) {
+            $targetDate = Carbon::parse($validated['tanggal'])->addDay()->toDateString();
+        }
+
         $mutasi = MutasiKeamanan::firstOrCreate(
             [
                 'unit_sppg_id' => $unitId,
-                'tanggal' => $validated['tanggal'],
+                'tanggal' => $targetDate,
                 'shift' => $validated['shift'],
             ],
             [
@@ -337,7 +458,7 @@ class KeamananController extends Controller
     public function storeIzin(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
         $unitId = $unitSppg?->id;
 
         $validated = $request->validate([
@@ -602,7 +723,7 @@ class KeamananController extends Controller
     public function regenerateToken(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if ($unitSppg) {
             $oldTokens = $unitSppg->old_tokens_keamanan ?? [];
@@ -625,7 +746,7 @@ class KeamananController extends Controller
     public function regenerateMonitoringToken(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $unitSppg = $user ? $user->load('unitSppg')->unitSppg : UnitSppg::first();
+        $unitSppg = $user?->getCachedUnitSppg();
 
         if ($unitSppg) {
             $oldTokens = $unitSppg->old_tokens_monitoring ?? [];
@@ -651,11 +772,14 @@ class KeamananController extends Controller
 
         // Jika token tidak ditemukan di token aktif, periksa apakah token lama atau tidak valid
         if (!$unitSppg) {
-            $unitOld = UnitSppg::whereJsonContains('old_tokens_keamanan', $token)->first() ?? UnitSppg::first();
-            return Inertia::render('Keamanan/LinkBerubah', [
-                'unitSppg' => $unitOld?->only(['id', 'nama', 'kode_sppg', 'alamat_lengkap']),
-                'isOldToken' => true,
-            ]);
+            $unitOld = UnitSppg::whereJsonContains('old_tokens_keamanan', $token)->first();
+            if ($unitOld) {
+                return Inertia::render('Keamanan/LinkBerubah', [
+                    'unitSppg' => $unitOld->only(['id', 'nama', 'kode_sppg', 'alamat_lengkap']),
+                    'isOldToken' => true,
+                ]);
+            }
+            abort(404, 'Tautan formulir keamanan tidak ditemukan atau telah kedaluwarsa.');
         }
 
         $unitId = $unitSppg->id;
@@ -751,16 +875,28 @@ class KeamananController extends Controller
         $lingkunganKerja = $dataPengecekan['lingkungan_kerja'] ?? [];
         $catatanTambahan = trim($dataPengecekan['catatan_tambahan'] ?? '');
 
-        // Evaluasi apakah terdapat item Tidak Aman / Ada Kejadian
+        // Evaluasi apakah terdapat item Tidak Aman / Kendala
         $insidenList = [];
+        $rutinList = [];
+
         foreach ($pengecekanUmum as $item) {
+            $key = $item['key'] ?? '';
             $label = $item['label'] ?? '';
             $status = $item['status'] ?? '';
             $uraian = trim($item['uraian'] ?? '');
+
+            // Kedatangan Supplier dan Kunjungan Tamu adalah aktivitas rutin (BUKAN kendala, tetap aman)
+            $isRoutineActivity = ($key === 'kunjungan_tamu' || $key === 'kedatangan_supplier' ||
+                stripos($label, 'tamu') !== false || stripos($label, 'supplier') !== false);
+
             if ($status === 'Tidak Aman') {
                 $insidenList[] = "{$label} (Tidak Aman" . ($uraian ? ": {$uraian}" : "") . ")";
             } elseif ($status === 'Ada') {
-                $insidenList[] = "{$label} (Ada" . ($uraian ? ": {$uraian}" : "") . ")";
+                if ($isRoutineActivity) {
+                    $rutinList[] = "{$label}: " . ($uraian ?: 'Ada');
+                } else {
+                    $insidenList[] = "{$label} (Ada" . ($uraian ? ": {$uraian}" : "") . ")";
+                }
             }
         }
 
@@ -773,6 +909,7 @@ class KeamananController extends Controller
             }
         }
 
+        // Kedatangan Supplier & Kunjungan Tamu tidak memicu Tidak Aman (Kondisi tetap Aman jika tidak ada insiden)
         $kondisi = count($insidenList) > 0 ? 'Tidak Aman' : 'Aman';
 
         // Susun ringkasan uraian untuk display tabel / cetak
@@ -782,6 +919,9 @@ class KeamananController extends Controller
             $uraianParts[] = "Perhatian: " . implode(', ', $insidenList);
         } else {
             $uraianParts[] = "Kondisi Lingkungan SPPG: Seluruh item aman & kondusif";
+        }
+        if (!empty($rutinList)) {
+            $uraianParts[] = "Aktivitas: " . implode(' | ', $rutinList);
         }
         if (!empty($catatanTambahan)) {
             $uraianParts[] = "Catatan: {$catatanTambahan}";
@@ -1265,7 +1405,23 @@ class KeamananController extends Controller
         $unitId = $unitSppg->id;
         Carbon::setLocale('id');
         $nowWita = Carbon::now('Asia/Makassar');
-        $today = $nowWita->toDateString();
+
+        // Siklus Operasional Keamanan 24 Jam:
+        // Dimulai pukul 06.00 - 07.00 di Hari Pertama s/d 05.00 - 06.00 di Hari Berikutnya (2 waktu tanggal pelaporan)
+        if ($request->has('tanggal')) {
+            $tglAwal = Carbon::parse($request->input('tanggal'), 'Asia/Makassar')->startOfDay();
+        } else {
+            // Jika waktu saat ini antara 00.00 - 05.59 WITA, maka masih bagian dari siklus shift yang dimulai kemarin jam 06.00
+            if ($nowWita->hour < 6) {
+                $tglAwal = $nowWita->copy()->subDay()->startOfDay();
+            } else {
+                $tglAwal = $nowWita->copy()->startOfDay();
+            }
+        }
+
+        $hariPertama = $tglAwal->toDateString();
+        $hariKedua = $tglAwal->copy()->addDay()->toDateString();
+        $today = $hariPertama;
 
         // 2 Petugas Keamanan Resmi SPPG
         $petugasKeamanan = Petugas::where('unit_sppg_id', $unitId)
@@ -1288,23 +1444,27 @@ class KeamananController extends Controller
                 ->get(['id', 'nama', 'jabatan', 'no_telp']);
         }
 
-        // Mutasi Hari Ini
-        $mutasiHariIni = MutasiKeamanan::with(['details', 'izins', 'serahTerimas'])
+        // Ambil data Mutasi pada rentang 2 tanggal operasional (Hari Pertama & Hari Berikutnya)
+        $mutasiList = MutasiKeamanan::with(['details.petugas', 'details.mutasi', 'izins.petugas', 'serahTerimas.petugas'])
             ->where('unit_sppg_id', $unitId)
-            ->where('tanggal', $today)
-            ->first();
+            ->whereIn('tanggal', [$hariPertama, $hariKedua])
+            ->get();
+
+        $allDetails = $mutasiList->flatMap->details;
+        $allIzins = $mutasiList->flatMap->izins;
+        $allSerahTerimas = $mutasiList->flatMap->serahTerimas;
 
         // Format data monitoring masing-masing petugas keamanan
-        $petugasMonitoringList = $petugasKeamanan->map(function ($pet) use ($mutasiHariIni, $unitId, $nowWita, $today) {
-            // 1. Cari laporan terakhir yang diisi petugas ini hari ini
-            $latestDetailHariIni = $mutasiHariIni?->details
+        $petugasMonitoringList = $petugasKeamanan->map(function ($pet) use ($allDetails, $allIzins, $allSerahTerimas, $unitId, $nowWita, $today, $hariKedua) {
+            // 1. Cari laporan terakhir yang diisi petugas ini dalam siklus shift
+            $latestDetailHariIni = $allDetails
                 ->filter(fn($d) => $d->petugas_id == $pet->id && (!empty($d->waktu_cek) || !empty($d->data_pengecekan) || !empty($d->latitude)))
-                ->sortByDesc('waktu_cek')
+                ->sortByDesc('created_at')
                 ->first();
 
             $latestDetail = $latestDetailHariIni;
             if (!$latestDetail) {
-                // Fallback ke detail mutasi terbaru dari petugas ini jika hari ini belum mengisi
+                // Fallback ke detail mutasi terbaru dari petugas ini jika belum mengisi pada siklus shift ini
                 $latestDetail = MutasiKeamananDetail::whereHas('mutasi', fn($q) => $q->where('unit_sppg_id', $unitId))
                     ->where('petugas_id', $pet->id)
                     ->whereNotNull('waktu_cek')
@@ -1312,16 +1472,16 @@ class KeamananController extends Controller
                     ->first();
             }
 
-            // 2. Status Izin / Keberadaan Terkini Hari Ini
-            $latestIzin = $mutasiHariIni?->izins
+            // 2. Status Izin / Keberadaan Terkini
+            $latestIzin = $allIzins
                 ->filter(fn($i) => $i->petugas_id == $pet->id)
                 ->sortByDesc('id')
                 ->first();
 
             $isSedangKeluar = $latestIzin && $latestIzin->status === 'Sedang Keluar';
 
-            // 3. Status Serah Terima Terkini Hari Ini (Masuk Jaga / Lepas Jaga)
-            $latestSerahTerima = $mutasiHariIni?->serahTerimas
+            // 3. Status Serah Terima Terkini (Masuk Jaga / Lepas Jaga)
+            $latestSerahTerima = $allSerahTerimas
                 ->filter(fn($st) => $st->petugas_id == $pet->id)
                 ->sortByDesc('id')
                 ->first();
@@ -1345,12 +1505,12 @@ class KeamananController extends Controller
                 } catch (\Exception $e) {}
             }
 
-            // Total laporan yang diinput petugas ini hari ini
-            $totalLaporanHariIni = $mutasiHariIni?->details
+            // Total laporan yang diinput petugas ini pada siklus shift
+            $totalLaporanHariIni = $allDetails
                 ->filter(fn($d) => $d->petugas_id == $pet->id && (!empty($d->waktu_cek) || !empty($d->data_pengecekan)))
-                ->count() ?? 0;
+                ->count();
 
-            // Tentukan status & posisi tempat terkini persis sesuai apa yang diinput di formulir oleh petugas
+            // Tentukan status & posisi tempat terkini
             $statusKode = 'belum_ada_laporan';
             $statusLabel = 'Belum Ada Laporan';
             $posisiTerkini = null;
@@ -1381,18 +1541,36 @@ class KeamananController extends Controller
                 $posisiTerkini = null;
             }
 
-            $detailTanggal = $latestDetail?->mutasi?->tanggal ?? ($latestDetail?->created_at ? Carbon::parse($latestDetail->created_at)->toDateString() : $today);
+            $detailTanggal = $latestDetail?->mutasi?->tanggal ? Carbon::parse($latestDetail->mutasi->tanggal)->toDateString() : ($latestDetail?->created_at ? Carbon::parse($latestDetail->created_at)->toDateString() : $today);
+
+            // Periksa kondisi apakah aman (supplier/tamu bukan kendala)
+            $isLatestAman = ($latestDetail?->kondisi === 'Aman');
+            if (!$isLatestAman && $latestDetail && !empty($latestDetail->data_pengecekan)) {
+                $dp = $latestDetail->data_pengecekan;
+                $hasUnsafe = collect($dp['lingkungan_kerja'] ?? [])->contains(fn($l) => ($l['status'] ?? '') === 'Tidak Aman');
+                $hasKendala = collect($dp['pengecekan_umum'] ?? [])->contains(function ($u) {
+                    $key = $u['key'] ?? '';
+                    $label = $u['label'] ?? '';
+                    $status = $u['status'] ?? '';
+                    $isRoutine = ($key === 'kunjungan_tamu' || $key === 'kedatangan_supplier' || stripos($label, 'tamu') !== false || stripos($label, 'supplier') !== false);
+                    return !$isRoutine && ($status === 'Tidak Aman' || $status === 'Ada');
+                });
+                if (!$hasUnsafe && !$hasKendala) {
+                    $isLatestAman = true;
+                }
+            }
+
             $laporanTerakhirData = $latestDetail ? [
                 'id' => $latestDetail->id,
                 'jam' => $latestDetail->jam,
                 'waktu_cek' => $latestDetail->waktu_cek,
-                'kondisi' => $latestDetail->kondisi,
+                'kondisi' => $isLatestAman ? 'Aman' : 'Tidak Aman',
                 'uraian_kejadian' => $latestDetail->uraian_kejadian,
                 'data_pengecekan' => $latestDetail->data_pengecekan,
                 'latitude' => $latestDetail->latitude ? (float) $latestDetail->latitude : null,
                 'longitude' => $latestDetail->longitude ? (float) $latestDetail->longitude : null,
                 'lokasi_nama' => $latestDetail->lokasi_nama ?: 'Pos Penjagaan SPPG',
-                'is_today' => ($detailTanggal === $today),
+                'is_today' => ($detailTanggal === $today || $detailTanggal === $hariKedua),
                 'tanggal' => $detailTanggal,
                 'hari_tanggal' => Carbon::parse($detailTanggal)->locale('id')->isoFormat('dddd, D MMMM Y'),
                 'relative_time' => $latestDetail->created_at?->locale('id')->diffForHumans(),
@@ -1401,10 +1579,11 @@ class KeamananController extends Controller
             if ($isSedangKeluar && $latestIzin && ($latestIzin->lat_tujuan || $latestIzin->lat_awal)) {
                 $latKeluar = (float) ($latestIzin->lat_tujuan ?: $latestIzin->lat_awal);
                 $lngKeluar = (float) ($latestIzin->lng_tujuan ?: $latestIzin->lng_awal);
+                $waktuKeluarClean = trim(str_ireplace('WITA', '', $latestIzin->waktu_keluar ?: ''));
                 $laporanTerakhirData = [
                     'id' => $latestIzin->id,
                     'jam' => $latestIzin->waktu_keluar,
-                    'waktu_cek' => $latestIzin->waktu_keluar,
+                    'waktu_cek' => $waktuKeluarClean ?: $latestIzin->waktu_keluar,
                     'kondisi' => 'Aman',
                     'uraian_kejadian' => $latestIzin->keperluan,
                     'data_pengecekan' => null,
@@ -1459,33 +1638,80 @@ class KeamananController extends Controller
             ];
         });
 
-        // Summary Keseluruhan Hari Ini
-        $totalTerlapor = $mutasiHariIni?->details->filter(fn($d) => !empty($d->waktu_cek) || !empty($d->data_pengecekan))->count() ?? 0;
-        $totalIntervalTerisi = $mutasiHariIni?->details->filter(fn($d) => !empty($d->waktu_cek) || !empty($d->data_pengecekan))->pluck('jam')->unique()->count() ?? 0;
-        $totalInsiden = $mutasiHariIni?->details->filter(fn($d) => $d->kondisi === 'Tidak Aman')->count() ?? 0;
-        $countSedangKeluar = $mutasiHariIni?->izins->filter(fn($i) => $i->status === 'Sedang Keluar')->count() ?? 0;
+        // Susun 24 Interval Patroli:
+        // Dimulai dari 06.00 - 07.00 di Hari Pertama s/d 05.00 - 06.00 di Hari Berikutnya (2 waktu tanggal pelaporan)
+        $hoursSequence = [];
+        // Hari Pertama: 06.00 s/d 23.00
+        for ($h = 6; $h <= 23; $h++) {
+            $hoursSequence[] = [
+                'hour' => $h,
+                'tanggal' => $hariPertama,
+                'is_next_day' => false,
+            ];
+        }
+        // Hari Berikutnya: 00.00 s/d 05.00
+        for ($h = 0; $h <= 5; $h++) {
+            $hoursSequence[] = [
+                'hour' => $h,
+                'tanggal' => $hariKedua,
+                'is_next_day' => true,
+            ];
+        }
 
-        // Tentukan Sesi Jam Aktif Saat Ini (WITA)
         $currentHour = $nowWita->hour;
+        $currentDateWita = $nowWita->toDateString();
         $curH1 = str_pad($currentHour, 2, '0', STR_PAD_LEFT);
         $curH2 = str_pad(($currentHour + 1) % 24, 2, '0', STR_PAD_LEFT);
         $currentActiveSession = "{$curH1}.00 - {$curH2}.00 WITA";
 
-        // Susun 24 Sesi Patroli beserta Laporan Lengkap Tiap Sesi
         $sesiList = [];
         $activeSessionReportCount = 0;
 
-        for ($i = 0; $i < 24; $i++) {
+        foreach ($hoursSequence as $seq) {
+            $i = $seq['hour'];
+            $sessionDate = $seq['tanggal'];
             $h1 = str_pad($i, 2, '0', STR_PAD_LEFT);
             $h2 = str_pad(($i + 1) % 24, 2, '0', STR_PAD_LEFT);
             $jamStr = "{$h1}.00 - {$h2}.00 WITA";
             $legacyStr = "{$h1}:00";
 
-            $reportsInInterval = $mutasiHariIni?->details
-                ->filter(fn($d) => ($d->jam === $jamStr || $d->jam === $legacyStr) && (!empty($d->waktu_cek) || !empty($d->data_pengecekan)))
+            $reportsInInterval = $allDetails
+                ->filter(function ($d) use ($jamStr, $legacyStr, $sessionDate) {
+                    $matchesJam = ($d->jam === $jamStr || $d->jam === $legacyStr);
+                    if (!$matchesJam) return false;
+
+                    $hasData = (!empty($d->waktu_cek) || !empty($d->data_pengecekan));
+                    if (!$hasData) return false;
+
+                    $repDate = $d->mutasi?->tanggal
+                        ? Carbon::parse($d->mutasi->tanggal)->toDateString()
+                        : ($d->created_at ? Carbon::parse($d->created_at)->toDateString() : null);
+
+                    return ($repDate === $sessionDate || $repDate === null);
+                })
                 ->sortBy('waktu_cek')
-                ->map(function ($d) use ($today) {
-                    $repTanggal = $d->mutasi?->tanggal ?? ($d->created_at ? Carbon::parse($d->created_at)->toDateString() : $today);
+                ->map(function ($d) use ($sessionDate) {
+                    $repTanggal = $d->mutasi?->tanggal
+                        ? Carbon::parse($d->mutasi->tanggal)->toDateString()
+                        : ($d->created_at ? Carbon::parse($d->created_at)->toDateString() : $sessionDate);
+
+                    // Evaluasi kondisi: Supplier dan Tamu BUKAN kendala (tetap aman)
+                    $isKondisiAman = ($d->kondisi === 'Aman');
+                    if (!$isKondisiAman && !empty($d->data_pengecekan)) {
+                        $dp = $d->data_pengecekan;
+                        $hasUnsafe = collect($dp['lingkungan_kerja'] ?? [])->contains(fn($l) => ($l['status'] ?? '') === 'Tidak Aman');
+                        $hasKendala = collect($dp['pengecekan_umum'] ?? [])->contains(function ($u) {
+                            $key = $u['key'] ?? '';
+                            $label = $u['label'] ?? '';
+                            $status = $u['status'] ?? '';
+                            $isRoutine = ($key === 'kunjungan_tamu' || $key === 'kedatangan_supplier' || stripos($label, 'tamu') !== false || stripos($label, 'supplier') !== false);
+                            return !$isRoutine && ($status === 'Tidak Aman' || $status === 'Ada');
+                        });
+                        if (!$hasUnsafe && !$hasKendala) {
+                            $isKondisiAman = true;
+                        }
+                    }
+
                     return [
                         'id' => $d->id,
                         'jam' => $d->jam,
@@ -1494,7 +1720,7 @@ class KeamananController extends Controller
                         'hari_tanggal' => Carbon::parse($repTanggal)->locale('id')->isoFormat('dddd, D MMMM Y'),
                         'petugas_id' => $d->petugas_id,
                         'petugas_nama' => $d->petugas_nama ?: ($d->petugas?->nama ?? 'Petugas Keamanan'),
-                        'kondisi' => $d->kondisi ?: 'Aman',
+                        'kondisi' => $isKondisiAman ? 'Aman' : 'Tidak Aman',
                         'uraian_kejadian' => $d->uraian_kejadian,
                         'data_pengecekan' => $d->data_pengecekan,
                         'lokasi_nama' => $d->lokasi_nama ?: 'Pos Penjagaan SPPG',
@@ -1506,7 +1732,7 @@ class KeamananController extends Controller
                 ->values()
                 ->all() ?? [];
 
-            $isCurrentActive = ($i === $currentHour);
+            $isCurrentActive = ($i === $currentHour && $sessionDate === $currentDateWita);
             if ($isCurrentActive) {
                 $activeSessionReportCount = count($reportsInInterval);
             }
@@ -1517,8 +1743,9 @@ class KeamananController extends Controller
 
             $sesiList[] = [
                 'jam' => $jamStr,
-                'tanggal' => $today,
-                'hari_tanggal' => Carbon::parse($today)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                'tanggal' => $sessionDate,
+                'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                'is_next_day' => $seq['is_next_day'],
                 'hour_index' => $i,
                 'is_active' => $isCurrentActive,
                 'report_count' => count($reportsInInterval),
@@ -1528,10 +1755,20 @@ class KeamananController extends Controller
             ];
         }
 
+        // Summary Keseluruhan Siklus Shift 24 Jam
+        $allReports = collect($sesiList)->flatMap(fn($s) => $s['reports']);
+        $totalTerlapor = $allReports->count();
+        $totalIntervalTerisi = collect($sesiList)->filter(fn($s) => $s['report_count'] > 0)->count();
+        $totalInsiden = $allReports->filter(fn($r) => $r['kondisi'] === 'Tidak Aman')->count();
+        $countSedangKeluar = $allIzins->filter(fn($i) => $i->status === 'Sedang Keluar')->count();
+
         return Inertia::render('Keamanan/PublicMonitoring', [
             'unitSppg' => $unitSppg->only(['id', 'nama', 'kode_sppg', 'alamat_lengkap', 'latitude', 'longitude']),
             'token' => $token,
             'todayDate' => $today,
+            'hariPertama' => $hariPertama,
+            'hariKedua' => $hariKedua,
+            'labelRentangOperasional' => Carbon::parse($hariPertama)->locale('id')->isoFormat('dddd, D MMMM Y') . ' s/d ' . Carbon::parse($hariKedua)->locale('id')->isoFormat('dddd, D MMMM Y'),
             'serverTimeWita' => $nowWita->format('H:i:s'),
             'currentActiveSession' => $currentActiveSession,
             'sesiList' => $sesiList,

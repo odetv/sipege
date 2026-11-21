@@ -21,7 +21,7 @@ class EnsureUserIsAdministrator
             return redirect()->route('login');
         }
 
-        if ($user->role !== User::ROLE_ADMINISTRATOR && $user->role !== 'superadmin') {
+        if (!$user->isAdministrator()) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Akses ditolak. Area ini hanya untuk Administrator.'], 403);
             }

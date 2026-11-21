@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 class Periode extends Model
 {
+    use BelongsToTenant;
+
     protected $table = 'periodes';
 
     protected $fillable = [
+        'unit_sppg_id',
         'nomor_periode',
         'tanggal_mulai',
         'tanggal_selesai',
@@ -19,6 +23,7 @@ class Periode extends Model
     ];
 
     protected $casts = [
+        'unit_sppg_id'      => 'integer',
         'tanggal_mulai'     => 'date',
         'tanggal_selesai'   => 'date',
         'is_penyesuaian'    => 'boolean',
@@ -34,13 +39,19 @@ class Periode extends Model
     }
 
     /**
-     * Helper untuk mengambil list periode untuk dropdown (mengikuti preferensi tampilkan_di_list pengguna)
+     * Helper untuk mengambil list periode untuk dropdown (mengikuti preferensi tampilkan_di_list pengguna & tenant aktif)
      */
-    public static function getUntukDropdown()
+    public static function getUntukDropdown($unitSppgId = null)
     {
-        $list = static::untukList()->orderBy('nomor_periode', 'asc')->get();
+        $tenantId = $unitSppgId ?: static::resolveCurrentTenantId();
+        if (!$tenantId) {
+            return collect();
+        }
+
+        $query = static::untukList()->where('unit_sppg_id', $tenantId);
+        $list = $query->orderBy('nomor_periode', 'asc')->get();
         if ($list->isEmpty()) {
-            $list = static::orderBy('nomor_periode', 'asc')->get();
+            $list = static::where('unit_sppg_id', $tenantId)->orderBy('nomor_periode', 'asc')->get();
         }
         return $list;
     }
