@@ -1390,7 +1390,13 @@ onBeforeUnmount(() => {
                                                     <Users class="h-4 w-4" />
                                                 </div>
                                                 <div class="min-w-0">
-                                                    <span class="font-bold text-slate-900 block text-xs truncate">{{ it.petugas_nama || 'Petugas Keamanan' }}</span>
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <span class="font-bold text-slate-900 block text-xs truncate">{{ it.petugas_nama || 'Petugas Keamanan' }}</span>
+                                                        <span v-if="it.tipe_laporan === 'izin_keluar'" class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-amber-50 text-amber-800 border border-amber-300">Izin Keluar</span>
+                                                        <span v-else-if="it.tipe_laporan === 'sedang_diluar'" class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-sky-50 text-sky-800 border border-sky-300">Sedang di Luar</span>
+                                                        <span v-else-if="it.tipe_laporan === 'kembali_jaga'" class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">Kembali Jaga</span>
+                                                        <span v-else-if="it.tipe_laporan === 'serah_terima'" class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300">{{ it.kategori_label || 'Serah Terima' }}</span>
+                                                    </div>
                                                     <span class="text-[10px] text-slate-400 block truncate">Divisi Keamanan</span>
                                                 </div>
                                             </div>
@@ -1406,7 +1412,13 @@ onBeforeUnmount(() => {
                                                         #{{ rIdx + 1 }}
                                                     </div>
                                                     <div class="min-w-0">
-                                                        <span class="font-bold text-slate-900 block text-xs truncate">{{ rep.petugas_nama || 'Petugas' }}</span>
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <span class="font-bold text-slate-900 text-xs truncate">{{ rep.petugas_nama || 'Petugas' }}</span>
+                                                            <span v-if="rep.tipe_laporan === 'izin_keluar'" class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-800 border border-amber-300">Izin Keluar</span>
+                                                            <span v-else-if="rep.tipe_laporan === 'sedang_diluar'" class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-50 text-sky-800 border border-sky-300">Sedang di Luar</span>
+                                                            <span v-else-if="rep.tipe_laporan === 'kembali_jaga'" class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">Kembali Jaga</span>
+                                                            <span v-else-if="rep.tipe_laporan === 'serah_terima'" class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300">{{ rep.kategori_label || 'Serah Terima' }}</span>
+                                                        </div>
                                                         <span class="text-[9.5px] text-slate-500 font-mono block">Pukul {{ formatWaktuWita(rep.waktu_cek) }}</span>
                                                     </div>
                                                 </div>
@@ -1577,6 +1589,7 @@ onBeforeUnmount(() => {
                                                             <span>Laporan #{{ rIdx + 1 }} • {{ rep.petugas_nama || 'Petugas' }} (Pukul {{ formatWaktuWita(rep.waktu_cek) }})</span>
                                                         </span>
                                                         <button
+                                                            v-if="rep.data_pengecekan"
                                                             type="button"
                                                             @click="openChecklistModal(rep)"
                                                             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold cursor-pointer transition-colors shadow-2xs shrink-0"

@@ -980,7 +980,7 @@ onBeforeUnmount(() => {
                                         class="text-[11px] font-bold text-slate-800"
                                     >
                                         Pukul
-                                        {{ pet.serah_terima_terkini.waktu }}
+                                        {{ formatWaktuWita(pet.serah_terima_terkini.waktu) }}
                                     </span>
                                     <span
                                         class="text-[10.5px] text-slate-500 font-medium truncate max-w-[150px]"
@@ -1034,7 +1034,7 @@ onBeforeUnmount(() => {
                                 </div>
                                 <p class="text-[11px] text-amber-800/90 italic">
                                     "{{ pet.izin_aktif.keperluan }}" (Keluar
-                                    pukul {{ pet.izin_aktif.waktu_keluar }})
+                                    pukul {{ formatWaktuWita(pet.izin_aktif.waktu_keluar) }})
                                 </p>
                             </div>
                         </div>
@@ -1675,16 +1675,48 @@ onBeforeUnmount(() => {
                                                 #{{ rIdx + 1 }}
                                             </span>
                                             <div>
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span
+                                                        class="font-extrabold text-slate-900 text-xs sm:text-sm"
+                                                    >
+                                                        {{
+                                                            rep.petugas_nama ||
+                                                            "Petugas Keamanan"
+                                                        }}
+                                                    </span>
+
+                                                    <!-- Badge Tipe Laporan (Izin Keluar / Sedang di Luar / Kembali Jaga / Serah Terima) -->
+                                                    <span
+                                                        v-if="rep.tipe_laporan === 'izin_keluar'"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-amber-50 text-amber-800 border border-amber-300"
+                                                    >
+                                                        <LogOut class="h-3 w-3 text-amber-600" />
+                                                        <span>Izin Keluar Jaga</span>
+                                                    </span>
+                                                    <span
+                                                        v-else-if="rep.tipe_laporan === 'sedang_diluar'"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-sky-50 text-sky-800 border border-sky-300"
+                                                    >
+                                                        <Navigation class="h-3 w-3 text-sky-600" />
+                                                        <span>Sedang di Luar Pos</span>
+                                                    </span>
+                                                    <span
+                                                        v-else-if="rep.tipe_laporan === 'kembali_jaga'"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300"
+                                                    >
+                                                        <LogIn class="h-3 w-3 text-emerald-600" />
+                                                        <span>Kembali Jaga ke Pos</span>
+                                                    </span>
+                                                    <span
+                                                        v-else-if="rep.tipe_laporan === 'serah_terima'"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-indigo-50 text-indigo-800 border border-indigo-300"
+                                                    >
+                                                        <ArrowLeftRight class="h-3 w-3 text-indigo-600" />
+                                                        <span>{{ rep.kategori_label || 'Serah Terima Jaga' }}</span>
+                                                    </span>
+                                                </div>
                                                 <span
-                                                    class="font-extrabold text-slate-900 text-xs sm:text-sm block"
-                                                >
-                                                    {{
-                                                        rep.petugas_nama ||
-                                                        "Petugas Keamanan"
-                                                    }}
-                                                </span>
-                                                <span
-                                                    class="text-[10.5px] text-slate-500 font-mono block"
+                                                    class="text-[10.5px] text-slate-500 font-mono block mt-0.5"
                                                 >
                                                     Waktu Rekam:
                                                     <strong
@@ -1874,14 +1906,90 @@ onBeforeUnmount(() => {
                                             }}</span>
                                         </div>
                                     </div>
-                                    <div v-else class="text-xs text-slate-600">
-                                        <span class="font-bold text-slate-900"
-                                            >Keterangan:</span
+                                    <!-- Keterangan & Rincian Laporan Non-Checklist (Izin Keluar / Sedang di Luar / Kembali Jaga / Serah Terima) -->
+                                    <div v-else class="space-y-2 text-xs">
+                                        <!-- Card Izin Keluar -->
+                                        <div
+                                            v-if="rep.tipe_laporan === 'izin_keluar'"
+                                            class="p-3 bg-amber-50/70 rounded-xl border border-amber-200/90 space-y-1.5 text-xs"
                                         >
-                                        <span class="ml-1">{{
-                                            rep.uraian_kejadian ||
-                                            "Situasi aman terkendali."
-                                        }}</span>
+                                            <div class="flex items-start justify-between gap-2 flex-wrap">
+                                                <div>
+                                                    <span class="text-[10px] text-amber-800 font-black uppercase tracking-wider block">Tujuan Izin Keluar</span>
+                                                    <span class="font-extrabold text-slate-900 text-sm">{{ rep.lokasi_nama || 'Dinas Luar Pos SPPG' }}</span>
+                                                </div>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                                    {{ rep.status_izin || 'Sedang Keluar' }}
+                                                </span>
+                                            </div>
+                                            <div v-if="rep.keperluan">
+                                                <span class="text-slate-500 font-medium">Keperluan:</span>
+                                                <p class="font-bold text-slate-800 italic mt-0.5">"{{ rep.keperluan }}"</p>
+                                            </div>
+                                            <p v-if="rep.laporan_kegiatan" class="text-[11px] text-slate-600 border-t border-amber-200/60 pt-1.5 mt-1">
+                                                <strong>Catatan / Laporan:</strong> {{ rep.laporan_kegiatan }}
+                                            </p>
+                                        </div>
+
+                                        <!-- Card Sedang Diluar -->
+                                        <div
+                                            v-else-if="rep.tipe_laporan === 'sedang_diluar'"
+                                            class="p-3 bg-sky-50/70 rounded-xl border border-sky-200/90 space-y-1.5 text-xs"
+                                        >
+                                            <div class="flex items-start justify-between gap-2 flex-wrap">
+                                                <div>
+                                                    <span class="text-[10px] text-sky-800 font-black uppercase tracking-wider block">Lokasi Pantauan di Luar</span>
+                                                    <span class="font-extrabold text-slate-900 text-sm">{{ rep.lokasi_nama || 'Sedang di Luar Pos SPPG' }}</span>
+                                                </div>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-900 border border-sky-300">
+                                                    Sedang di Luar Pos
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span class="text-slate-500 font-medium">Laporan Posisi:</span>
+                                                <p class="font-bold text-slate-800 mt-0.5">{{ rep.uraian_kejadian }}</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Card Kembali Jaga -->
+                                        <div
+                                            v-else-if="rep.tipe_laporan === 'kembali_jaga'"
+                                            class="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200/90 space-y-1.5 text-xs"
+                                        >
+                                            <div class="flex items-start justify-between gap-2 flex-wrap">
+                                                <div>
+                                                    <span class="text-[10px] text-emerald-800 font-black uppercase tracking-wider block">Kembali Jaga di Pos</span>
+                                                    <span class="font-extrabold text-slate-900 text-sm">{{ rep.lokasi_nama || 'Pos Penjagaan SPPG' }}</span>
+                                                </div>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                    ✓ Sudah Kembali di Pos
+                                                </span>
+                                            </div>
+                                            <div v-if="rep.durasi_keluar_text" class="text-[11px] text-emerald-900 font-bold">
+                                                ⏱️ Total Durasi Dinas Luar: <span class="font-extrabold text-emerald-950">{{ rep.durasi_keluar_text }}</span>
+                                            </div>
+                                            <p v-if="rep.uraian_kejadian" class="text-[11px] text-slate-700 border-t border-emerald-200/60 pt-1.5 mt-1">
+                                                {{ rep.uraian_kejadian }}
+                                            </p>
+                                        </div>
+
+                                        <!-- Card Serah Terima -->
+                                        <div
+                                            v-else-if="rep.tipe_laporan === 'serah_terima'"
+                                            class="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200/90 space-y-1 text-xs"
+                                        >
+                                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                                <span class="font-extrabold text-slate-900">{{ rep.kategori_label }}</span>
+                                                <span class="text-[11px] font-mono text-indigo-700 font-semibold">{{ rep.lokasi_nama }}</span>
+                                            </div>
+                                            <p class="text-slate-700">{{ rep.uraian_kejadian }}</p>
+                                        </div>
+
+                                        <!-- Fallback Keterangan Biasa -->
+                                        <div v-else class="text-xs text-slate-600">
+                                            <span class="font-bold text-slate-900">Keterangan:</span>
+                                            <span class="ml-1">{{ rep.uraian_kejadian || "Situasi aman terkendali." }}</span>
+                                        </div>
                                     </div>
 
                                     <!-- Lokasi & Peta Google Mini -->
@@ -1913,7 +2021,9 @@ onBeforeUnmount(() => {
                                             </span>
                                         </div>
 
+                                        <!-- Tombol Checklist hanya tampil bila ada data pengecekan checklist -->
                                         <button
+                                            v-if="rep.data_pengecekan"
                                             type="button"
                                             @click="openChecklist(rep)"
                                             class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 border border-indigo-200 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs self-start sm:self-auto"

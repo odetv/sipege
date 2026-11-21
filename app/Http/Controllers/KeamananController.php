@@ -139,6 +139,104 @@ class KeamananController extends Controller
             $serahTerimasOperasional = $serahTerimasOperasional->concat($mutasiKedua->serahTerimas);
         }
 
+        // Tambahkan juga laporan izin keluar/sedang diluar/kembali jaga ke dalam operationalDetails agar tampil pada tabel per jam supervisor
+        foreach ($izinsOperasional as $iz) {
+            $tglKeluar = $iz->tanggal_keluar ? Carbon::parse($iz->tanggal_keluar)->toDateString() : ($iz->tanggal_izin ? Carbon::parse($iz->tanggal_izin)->toDateString() : null);
+            $wktKeluar = $iz->waktu_keluar ?: $iz->waktu_izin;
+            $hKeluar = $this->parseHourFromWaktuStr($wktKeluar);
+
+            if ($hKeluar !== null && ($tglKeluar === $hariPertama || $tglKeluar === $hariKedua)) {
+                $isNextDayKeluar = ($tglKeluar === $hariKedua);
+                $h1 = str_pad($hKeluar, 2, '0', STR_PAD_LEFT);
+                $h2 = str_pad(($hKeluar + 1) % 24, 2, '0', STR_PAD_LEFT);
+                $jamStrKeluar = "{$h1}.00 - {$h2}.00 WITA";
+
+                $izDet = new MutasiKeamananDetail([
+                    'mutasi_keamanan_id' => $iz->mutasi_keamanan_id,
+                    'jam' => $jamStrKeluar,
+                    'waktu_cek' => $wktKeluar,
+                    'petugas_id' => $iz->petugas_id,
+                    'petugas_nama' => $iz->petugas_nama,
+                    'kondisi' => 'Aman',
+                    'uraian_kejadian' => "Izin Keluar ke {$iz->lokasi_tujuan}" . ($iz->keperluan ? ": \"{$iz->keperluan}\"" : ''),
+                    'lokasi_nama' => $iz->lokasi_tujuan ?: 'Dinas Luar Pos',
+                    'latitude' => $iz->lat_tujuan ?: $iz->lat_awal,
+                    'longitude' => $iz->lng_tujuan ?: $iz->lng_awal,
+                ]);
+                $izDet->id = 'iz-k-' . $iz->id;
+                $izDet->tipe_laporan = 'izin_keluar';
+                $izDet->kategori_label = 'Izin Keluar / Dinas Luar';
+                $izDet->keperluan = $iz->keperluan;
+                $izDet->status_izin = $iz->status;
+                $izDet->is_next_day = $isNextDayKeluar;
+                $izDet->mutasi_tanggal = $tglKeluar;
+                $operationalDetails->push($izDet);
+            }
+
+            if ($iz->waktu_kembali) {
+                $tglKembali = $iz->tanggal_kembali ? Carbon::parse($iz->tanggal_kembali)->toDateString() : $tglKeluar;
+                $hKembali = $this->parseHourFromWaktuStr($iz->waktu_kembali);
+                if ($hKembali !== null && ($tglKembali === $hariPertama || $tglKembali === $hariKedua)) {
+                    $isNextDayKembali = ($tglKembali === $hariKedua);
+                    $h1 = str_pad($hKembali, 2, '0', STR_PAD_LEFT);
+                    $h2 = str_pad(($hKembali + 1) % 24, 2, '0', STR_PAD_LEFT);
+                    $jamStrKembali = "{$h1}.00 - {$h2}.00 WITA";
+
+                    $izKembaliDet = new MutasiKeamananDetail([
+                        'mutasi_keamanan_id' => $iz->mutasi_keamanan_id,
+                        'jam' => $jamStrKembali,
+                        'waktu_cek' => $iz->waktu_kembali,
+                        'petugas_id' => $iz->petugas_id,
+                        'petugas_nama' => $iz->petugas_nama,
+                        'kondisi' => 'Aman',
+                        'uraian_kejadian' => "Petugas telah kembali jaga di " . ($iz->lokasi_kembali ?: 'Pos Penjagaan SPPG') . ($iz->durasi_keluar_menit ? " (Durasi: {$iz->durasi_keluar_menit} menit)" : ''),
+                        'lokasi_nama' => $iz->lokasi_kembali ?: 'Pos Penjagaan SPPG',
+                        'latitude' => $iz->lat_kembali ?: $iz->lat_awal,
+                        'longitude' => $iz->lng_kembali ?: $iz->lng_awal,
+                    ]);
+                    $izKembaliDet->id = 'iz-m-' . $iz->id;
+                    $izKembaliDet->tipe_laporan = 'kembali_jaga';
+                    $izKembaliDet->kategori_label = 'Kembali Jaga';
+                    $izKembaliDet->durasi_keluar_text = $iz->durasi_keluar_menit ? "{$iz->durasi_keluar_menit} Menit" : null;
+                    $izKembaliDet->status_izin = 'Sudah Kembali';
+                    $izKembaliDet->is_next_day = $isNextDayKembali;
+                    $izKembaliDet->mutasi_tanggal = $tglKembali;
+                    $operationalDetails->push($izKembaliDet);
+                }
+            }
+        }
+
+        // Tambahkan juga laporan serah terima (Masuk Jaga / Lepas Jaga)
+        foreach ($serahTerimasOperasional as $st) {
+            $stDate = $st->tanggal ? Carbon::parse($st->tanggal)->toDateString() : null;
+            $stHour = $this->parseHourFromWaktuStr($st->waktu);
+            if ($stHour !== null && ($stDate === $hariPertama || $stDate === $hariKedua)) {
+                $isNextDaySt = ($stDate === $hariKedua);
+                $h1 = str_pad($stHour, 2, '0', STR_PAD_LEFT);
+                $h2 = str_pad(($stHour + 1) % 24, 2, '0', STR_PAD_LEFT);
+                $jamStrSt = "{$h1}.00 - {$h2}.00 WITA";
+
+                $stDet = new MutasiKeamananDetail([
+                    'mutasi_keamanan_id' => $st->mutasi_keamanan_id,
+                    'jam' => $jamStrSt,
+                    'waktu_cek' => $st->waktu,
+                    'petugas_id' => $st->petugas_id,
+                    'petugas_nama' => $st->petugas_nama,
+                    'kondisi' => 'Aman',
+                    'uraian_kejadian' => "Laporan {$st->jenis} di " . ($st->lokasi_nama ?: 'Pos SPPG') . ($st->catatan ? " (Catatan: {$st->catatan})" : ''),
+                    'lokasi_nama' => $st->lokasi_nama ?: 'Pos Penjagaan SPPG',
+                    'latitude' => $st->latitude,
+                    'longitude' => $st->longitude,
+                ]);
+                $stDet->id = 'st-' . $st->id;
+                $stDet->tipe_laporan = 'serah_terima';
+                $stDet->kategori_label = 'Serah Terima: ' . $st->jenis;
+                $stDet->is_next_day = $isNextDaySt;
+                $stDet->mutasi_tanggal = $stDate;
+                $operationalDetails->push($stDet);
+            }
+        }
+
         // Tentukan mutasi aktif untuk ditampilkan
         $mutasiAktif = $mutasiPertama ?: $mutasiKedua;
         if ($mutasiAktif) {
@@ -333,6 +431,14 @@ class KeamananController extends Controller
                 continue; // Jangan simpan baris kosong yang belum dilaporkan
             }
 
+            // Abaikan baris sintesis izin atau serah terima (hanya simpan data checklist pos asli)
+            if (!empty($d['id']) && (!is_numeric($d['id']) || str_starts_with((string)$d['id'], 'iz-') || str_starts_with((string)$d['id'], 'st-'))) {
+                continue;
+            }
+            if (!empty($d['tipe_laporan']) && $d['tipe_laporan'] !== 'pengecekan') {
+                continue;
+            }
+
             $detPetugasNama = $d['petugas_nama'] ?? $petugasNama;
             if (!empty($d['petugas_id'])) {
                 $dp = Petugas::find($d['petugas_id']);
@@ -450,6 +556,16 @@ class KeamananController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    protected function parseHourFromWaktuStr(?string $waktuStr): ?int
+    {
+        if (!$waktuStr) return null;
+        $clean = trim(str_ireplace('WITA', '', $waktuStr));
+        if (preg_match('/^(\d{1,2})[\.:](\d{2})/', $clean, $m)) {
+            return (int) $m[1];
+        }
+        return null;
     }
 
     /**
@@ -1675,7 +1791,10 @@ class KeamananController extends Controller
             $jamStr = "{$h1}.00 - {$h2}.00 WITA";
             $legacyStr = "{$h1}:00";
 
-            $reportsInInterval = $allDetails
+            $reportsCollector = collect();
+
+            // 1. Data Pengecekan Lingkungan (Form Checklist)
+            $detailReports = $allDetails
                 ->filter(function ($d) use ($jamStr, $legacyStr, $sessionDate) {
                     $matchesJam = ($d->jam === $jamStr || $d->jam === $legacyStr);
                     if (!$matchesJam) return false;
@@ -1689,7 +1808,6 @@ class KeamananController extends Controller
 
                     return ($repDate === $sessionDate || $repDate === null);
                 })
-                ->sortBy('waktu_cek')
                 ->map(function ($d) use ($sessionDate) {
                     $repTanggal = $d->mutasi?->tanggal
                         ? Carbon::parse($d->mutasi->tanggal)->toDateString()
@@ -1714,6 +1832,8 @@ class KeamananController extends Controller
 
                     return [
                         'id' => $d->id,
+                        'tipe_laporan' => 'pengecekan',
+                        'kategori_label' => 'Pengecekan Lingkungan',
                         'jam' => $d->jam,
                         'waktu_cek' => $d->waktu_cek,
                         'tanggal' => $repTanggal,
@@ -1728,9 +1848,178 @@ class KeamananController extends Controller
                         'longitude' => $d->longitude ? (float) $d->longitude : null,
                         'relative_time' => $d->created_at?->locale('id')->diffForHumans(),
                     ];
-                })
-                ->values()
-                ->all() ?? [];
+                });
+
+            $reportsCollector = $reportsCollector->concat($detailReports);
+
+            // 2. Laporan Izin Keluar, Sedang di Luar, dan Kembali Jaga
+            foreach ($allIzins as $iz) {
+                $tglKeluar = $iz->tanggal_keluar ? Carbon::parse($iz->tanggal_keluar)->toDateString() : ($iz->tanggal_izin ? Carbon::parse($iz->tanggal_izin)->toDateString() : ($iz->created_at ? Carbon::parse($iz->created_at)->toDateString() : null));
+                $wktKeluar = $iz->waktu_keluar ?: $iz->waktu_izin;
+                $hKeluar = $this->parseHourFromWaktuStr($wktKeluar);
+
+                $tglKembali = $iz->tanggal_kembali ? Carbon::parse($iz->tanggal_kembali)->toDateString() : $tglKeluar;
+                $wktKembali = $iz->waktu_kembali;
+                $hKembali = $this->parseHourFromWaktuStr($wktKembali);
+
+                // A. Laporan Izin Keluar (pada jam keberangkatan)
+                if ($tglKeluar === $sessionDate && $hKeluar === $i) {
+                    $reportsCollector->push([
+                        'id' => 'izin-keluar-' . $iz->id,
+                        'tipe_laporan' => 'izin_keluar',
+                        'kategori_label' => 'Izin Keluar / Dinas Luar',
+                        'jam' => $jamStr,
+                        'waktu_cek' => $wktKeluar,
+                        'tanggal' => $sessionDate,
+                        'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                        'petugas_id' => $iz->petugas_id,
+                        'petugas_nama' => $iz->petugas_nama ?: ($iz->petugas?->nama ?? 'Petugas Keamanan'),
+                        'kondisi' => 'Aman',
+                        'keperluan' => $iz->keperluan,
+                        'lokasi_nama' => $iz->lokasi_tujuan ?: 'Dinas Luar Pos',
+                        'latitude' => $iz->lat_tujuan ? (float) $iz->lat_tujuan : ($iz->lat_awal ? (float) $iz->lat_awal : null),
+                        'longitude' => $iz->lng_tujuan ? (float) $iz->lng_tujuan : ($iz->lng_awal ? (float) $iz->lng_awal : null),
+                        'status_izin' => $iz->status,
+                        'durasi_keluar_text' => $iz->durasi_keluar_menit ? "{$iz->durasi_keluar_menit} Menit" : null,
+                        'uraian_kejadian' => "Izin Keluar ke {$iz->lokasi_tujuan}" . ($iz->keperluan ? ": \"{$iz->keperluan}\"" : ''),
+                        'laporan_kegiatan' => $iz->laporan_kegiatan,
+                        'data_pengecekan' => null,
+                        'relative_time' => $iz->created_at?->locale('id')->diffForHumans(),
+                    ]);
+                }
+
+                // B. Checkpoint Sedang Diluar (jika ada catatan [HH.MM WITA] di laporan_kegiatan)
+                if ($iz->laporan_kegiatan && $tglKeluar === $sessionDate) {
+                    if (preg_match_all('/\[(\d{1,2})[\.:](\d{2})\s*(?:WITA)?\]\s*(.+)/i', $iz->laporan_kegiatan, $cpMatches, PREG_SET_ORDER)) {
+                        foreach ($cpMatches as $cp) {
+                            $cpHour = (int) $cp[1];
+                            $cpTime = $cp[1] . '.' . $cp[2] . ' WITA';
+                            $cpText = trim($cp[3]);
+                            if ($cpHour === $i && $cpHour !== $hKeluar && $cpHour !== $hKembali) {
+                                $reportsCollector->push([
+                                    'id' => 'izin-checkpoint-' . $iz->id . '-' . $cpHour,
+                                    'tipe_laporan' => 'sedang_diluar',
+                                    'kategori_label' => 'Sedang di Luar Pos',
+                                    'jam' => $jamStr,
+                                    'waktu_cek' => $cpTime,
+                                    'tanggal' => $sessionDate,
+                                    'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                                    'petugas_id' => $iz->petugas_id,
+                                    'petugas_nama' => $iz->petugas_nama ?: ($iz->petugas?->nama ?? 'Petugas Keamanan'),
+                                    'kondisi' => 'Aman',
+                                    'keperluan' => $iz->keperluan,
+                                    'lokasi_nama' => $iz->lokasi_tujuan ?: 'Sedang di Luar Pos',
+                                    'latitude' => $iz->lat_tujuan ? (float) $iz->lat_tujuan : null,
+                                    'longitude' => $iz->lng_tujuan ? (float) $iz->lng_tujuan : null,
+                                    'status_izin' => $iz->status,
+                                    'durasi_keluar_text' => null,
+                                    'uraian_kejadian' => $cpText,
+                                    'laporan_kegiatan' => $iz->laporan_kegiatan,
+                                    'data_pengecekan' => null,
+                                    'relative_time' => $iz->updated_at?->locale('id')->diffForHumans(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+
+                // C. Sedang Keluar di Jam Antara Keluar dan Kembali (bila belum ada laporan lain di jam tersebut)
+                if ($tglKeluar === $sessionDate && $hKeluar !== null && $i > $hKeluar) {
+                    $isStillOutInThisHour = false;
+                    if ($iz->status === 'Sedang Keluar') {
+                        if ($sessionDate === $currentDateWita) {
+                            $isStillOutInThisHour = ($i <= $currentHour);
+                        } else {
+                            $isStillOutInThisHour = true;
+                        }
+                    } elseif ($wktKembali && $tglKembali === $sessionDate && $hKembali !== null) {
+                        $isStillOutInThisHour = ($i < $hKembali);
+                    }
+
+                    if ($isStillOutInThisHour) {
+                        $alreadyHasReport = $reportsCollector->contains(fn($r) => $r['petugas_id'] == $iz->petugas_id);
+                        if (!$alreadyHasReport) {
+                            $reportsCollector->push([
+                                'id' => 'izin-active-out-' . $iz->id . '-' . $i,
+                                'tipe_laporan' => 'sedang_diluar',
+                                'kategori_label' => 'Sedang di Luar Pos',
+                                'jam' => $jamStr,
+                                'waktu_cek' => str_pad($i, 2, '0', STR_PAD_LEFT) . '.00 WITA',
+                                'tanggal' => $sessionDate,
+                                'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                                'petugas_id' => $iz->petugas_id,
+                                'petugas_nama' => $iz->petugas_nama ?: ($iz->petugas?->nama ?? 'Petugas Keamanan'),
+                                'kondisi' => 'Aman',
+                                'keperluan' => $iz->keperluan,
+                                'lokasi_nama' => $iz->lokasi_tujuan ?: 'Sedang di Luar Pos SPPG',
+                                'latitude' => $iz->lat_tujuan ? (float) $iz->lat_tujuan : ($iz->lat_awal ? (float) $iz->lat_awal : null),
+                                'longitude' => $iz->lng_tujuan ? (float) $iz->lng_tujuan : ($iz->lng_awal ? (float) $iz->lng_awal : null),
+                                'status_izin' => 'Sedang Keluar',
+                                'durasi_keluar_text' => null,
+                                'uraian_kejadian' => "Petugas sedang bertugas di luar pos menuju: {$iz->lokasi_tujuan}" . ($iz->keperluan ? " (Keperluan: {$iz->keperluan})" : ''),
+                                'laporan_kegiatan' => $iz->laporan_kegiatan,
+                                'data_pengecekan' => null,
+                                'relative_time' => $iz->updated_at?->locale('id')->diffForHumans(),
+                            ]);
+                        }
+                    }
+                }
+
+                // D. Laporan Kembali Jaga (pada jam kepulangan)
+                if ($wktKembali && $tglKembali === $sessionDate && $hKembali === $i) {
+                    $reportsCollector->push([
+                        'id' => 'izin-kembali-' . $iz->id,
+                        'tipe_laporan' => 'kembali_jaga',
+                        'kategori_label' => 'Kembali Jaga',
+                        'jam' => $jamStr,
+                        'waktu_cek' => $wktKembali,
+                        'tanggal' => $sessionDate,
+                        'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                        'petugas_id' => $iz->petugas_id,
+                        'petugas_nama' => $iz->petugas_nama ?: ($iz->petugas?->nama ?? 'Petugas Keamanan'),
+                        'kondisi' => 'Aman',
+                        'keperluan' => $iz->keperluan,
+                        'lokasi_nama' => $iz->lokasi_kembali ?: 'Pos Penjagaan SPPG',
+                        'latitude' => $iz->lat_kembali ? (float) $iz->lat_kembali : ($iz->lat_awal ? (float) $iz->lat_awal : null),
+                        'longitude' => $iz->lng_kembali ? (float) $iz->lng_kembali : ($iz->lng_awal ? (float) $iz->lng_awal : null),
+                        'status_izin' => 'Sudah Kembali',
+                        'durasi_keluar_text' => $iz->durasi_keluar_menit ? "{$iz->durasi_keluar_menit} Menit" : null,
+                        'uraian_kejadian' => "Petugas telah kembali jaga di " . ($iz->lokasi_kembali ?: 'Pos Penjagaan SPPG') . ($iz->durasi_keluar_menit ? " (Durasi: {$iz->durasi_keluar_menit} menit)" : '') . ($iz->laporan_kegiatan ? ". Laporan: {$iz->laporan_kegiatan}" : ''),
+                        'laporan_kegiatan' => $iz->laporan_kegiatan,
+                        'data_pengecekan' => null,
+                        'relative_time' => $iz->updated_at?->locale('id')->diffForHumans(),
+                    ]);
+                }
+            }
+
+            // 3. Laporan Serah Terima (Masuk Jaga / Lepas Jaga)
+            foreach ($allSerahTerimas as $st) {
+                $stDate = $st->tanggal ? Carbon::parse($st->tanggal)->toDateString() : null;
+                $stHour = $this->parseHourFromWaktuStr($st->waktu);
+                if ($stDate === $sessionDate && $stHour === $i) {
+                    $reportsCollector->push([
+                        'id' => 'serah-terima-' . $st->id,
+                        'tipe_laporan' => 'serah_terima',
+                        'kategori_label' => 'Serah Terima: ' . $st->jenis,
+                        'jam' => $jamStr,
+                        'waktu_cek' => $st->waktu,
+                        'tanggal' => $sessionDate,
+                        'hari_tanggal' => Carbon::parse($sessionDate)->locale('id')->isoFormat('dddd, D MMMM Y'),
+                        'petugas_id' => $st->petugas_id,
+                        'petugas_nama' => $st->petugas_nama ?: ($st->petugas?->nama ?? 'Petugas Keamanan'),
+                        'kondisi' => 'Aman',
+                        'lokasi_nama' => $st->lokasi_nama ?: 'Pos Penjagaan SPPG',
+                        'latitude' => $st->latitude ? (float) $st->latitude : null,
+                        'longitude' => $st->longitude ? (float) $st->longitude : null,
+                        'uraian_kejadian' => "Laporan {$st->jenis} di " . ($st->lokasi_nama ?: 'Pos SPPG') . ($st->catatan ? " (Catatan: {$st->catatan})" : ''),
+                        'catatan' => $st->catatan,
+                        'data_pengecekan' => null,
+                        'relative_time' => $st->created_at?->locale('id')->diffForHumans(),
+                    ]);
+                }
+            }
+
+            $reportsInInterval = $reportsCollector->sortBy('waktu_cek')->values()->all();
 
             $isCurrentActive = ($i === $currentHour && $sessionDate === $currentDateWita);
             if ($isCurrentActive) {
